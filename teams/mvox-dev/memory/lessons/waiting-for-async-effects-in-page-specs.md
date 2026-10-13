@@ -1,7 +1,7 @@
 ---
 summary: For asserting state a page reaches after an async effect, without hangs.
 learned: '2026-08-10'
-ref: teams/mvox-dev/memory/tallis.md
+ref: urls/mem-tallis-9d2803d
 enforcement: recognition
 ---
 # Wait for async effects with real timers

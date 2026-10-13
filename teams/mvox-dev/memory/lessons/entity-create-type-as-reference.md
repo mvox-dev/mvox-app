@@ -1,7 +1,7 @@
 ---
 summary: Writing or reviewing code that creates an Entu entity, so the _type wire shape is right.
 learned: '2026-06-01'
-ref: teams/mvox-dev/memory/architecture-decisions.md
+ref: teams/mvox-dev/docs/architecture-decisions.md
 enforcement: recognition
 ---
 # Entity create needs _type as a reference

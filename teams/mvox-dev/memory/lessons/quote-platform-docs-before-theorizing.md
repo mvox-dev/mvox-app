@@ -1,7 +1,7 @@
 ---
 summary: "Grounding any doc, spec or decision about an Entu platform mechanic before acting on it."
 learned: '2026-06-15'
-ref: teams/mvox-dev/memory/team-lead-archive.md
+ref: urls/mem-team-lead-archive-9d2803d
 enforcement: recognition
 ---
 # Quote the platform docs before theorizing

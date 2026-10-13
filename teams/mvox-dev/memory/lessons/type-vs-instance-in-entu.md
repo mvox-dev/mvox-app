@@ -1,7 +1,7 @@
 ---
 summary: For reasoning about what an Entu type, parent or child passes on, before calling something a gap.
 learned: '2026-05-19'
-ref: teams/mvox-dev/memory/team-lead-archive.md
+ref: urls/mem-team-lead-archive-9d2803d
 enforcement: recognition
 ---
 # Type and instance in Entu are separate entities

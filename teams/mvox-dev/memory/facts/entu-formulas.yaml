@@ -30,11 +30,11 @@ facts:
     verified: "2026-09-21"
 
   - fact: "A stored formula value re-evaluates on a change to the formula expression, any non-formula POST on the instance, or a write to a source property."
-    ref: teams/mvox-dev/memory/perotin.md
+    ref: urls/mem-perotin-9d2803d
     refute: "Change a source and read the formula value back."
     verified: "2026-09-21"
 
   - fact: "To turn a formula property into a plain one, DELETE /property/{_id} of the formula value on the property-definition entity."
-    ref: teams/mvox-dev/memory/perotin.md
+    ref: urls/mem-perotin-9d2803d
     refute: "=ref"
     verified: "2026-09-21"

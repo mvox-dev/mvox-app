@@ -110,6 +110,13 @@ Nothing is demoted to `facts`: the rulings already live there (`facts/rulings-*.
 The 20 situational norms became lessons (17 new files; ledger `04-conv-R.tsv`). Three came
 back as questions: n=236 (probe on polyphony) died with the row above; n=100 (#289 inventory
 gate, #289 closed) and n=177 (`git add -N` before gates, now that changedFiles reads
-untracked files, #568) wait in 02-needs-judgment.md batch 3.
+untracked files, #568) went to batch 3 and were approved.
+
+Review fix (Bentham YELLOW on PR #901): 29 norms marked "stays in …" had no instruction-file
+source — they lived only in memory items moving to the fallback, so "stays" would have
+dropped them. Each now sits where its destination said: 4 in common-prompt.md, 13 in a new
+"Working Norms" section of prompts/palestrina.md, 8 in prompts/josquin.md "Test Habits",
+2 in prompts/bentham.md, 1 each in prompts/perotin.md and prompts/finn.md. The destination
+column of 04-rule-candidates.tsv says "added to … (cutover fix)" for them.
 
 (*MVOX:memkit*)

@@ -1,7 +1,7 @@
 ---
 summary: For firing a review trigger whose text names a function or symbol.
 learned: '2026-09-03'
-ref: 'teams/mvox-dev/memory/architecture-decisions.md'
+ref: 'teams/mvox-dev/docs/architecture-decisions.md'
 enforcement: recognition
 ---
 # Checking a trigger symbol still exists

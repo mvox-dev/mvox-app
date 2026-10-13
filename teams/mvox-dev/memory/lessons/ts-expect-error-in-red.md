@@ -1,7 +1,7 @@
 ---
 summary: For writing type-level RED proofs with @ts-expect-error, and when not to.
 learned: '2026-06-01'
-ref: teams/mvox-dev/memory/tallis.md
+ref: urls/mem-tallis-9d2803d
 enforcement: recognition
 ---
 # @ts-expect-error in RED tests

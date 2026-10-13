@@ -1,7 +1,7 @@
 ---
 summary: "Changing a spec while a TDD chain is already running on it."
 learned: '2026-05-31'
-ref: teams/mvox-dev/memory/team-lead-archive.md
+ref: urls/mem-team-lead-archive-9d2803d
 enforcement: recognition
 ---
 # Freeze the spec before dispatching the chain

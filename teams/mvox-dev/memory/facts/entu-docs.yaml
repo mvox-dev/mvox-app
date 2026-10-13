@@ -8,8 +8,8 @@ facts:
     ref: urls/entu-www-repo
     refute: "git -C ~/projects/entu-www branch --show-current"
     verified: "2026-10-14"
-  - fact: "Schema design history is in entu/research under docs/schema/v4E/; mvox's applied decisions are in teams/mvox-dev/memory/architecture-decisions.md."
-    ref: teams/mvox-dev/memory/architecture-decisions.md
+  - fact: "Schema design history is in entu/research under docs/schema/v4E/; mvox's applied decisions are in teams/mvox-dev/docs/architecture-decisions.md."
+    ref: teams/mvox-dev/docs/architecture-decisions.md
     refute: "ls ~/projects/entu-research/docs/schema/v4E"
     verified: "2026-09-21"
 
@@ -18,10 +18,10 @@ facts:
     refute: "git -C ~/projects/entu-www show origin/main:src/overview/entities/index.md"
     verified: "2026-10-14"
   - fact: "v4E schema design history lives in entu/research at ~/projects/entu-research; it is reference only, not a sync target."
-    ref: teams/mvox-dev/memory/team-lead-archive.md
+    ref: urls/mem-team-lead-archive-9d2803d
     refute: "ls ~/projects/entu-research"
     verified: "2026-10-14"
-  - fact: "mvox applied architecture decisions are recorded in teams/mvox-dev/memory/architecture-decisions.md in the app repo."
-    ref: teams/mvox-dev/memory/architecture-decisions.md
+  - fact: "mvox applied architecture decisions are recorded in teams/mvox-dev/docs/architecture-decisions.md in the app repo."
+    ref: teams/mvox-dev/docs/architecture-decisions.md
     refute: "=ref"
     verified: "2026-10-14"

@@ -124,7 +124,7 @@ team-lead-archive#31	team-lead-archive.md	history	dead	GATE 1
 team-lead-archive#32	team-lead-archive.md	history	dead	GATE 1
 team-lead-archive#33	team-lead-archive.md	history	dead	GATE 1
 team-lead-archive#34	team-lead-archive.md	history	dead	GATE 1
-team-lead-archive#35	team-lead-archive.md	rule	phase4	rule candidate
+team-lead-archive#35	team-lead-archive.md	rule	rule	added to prompts/josquin.md Test Habits (cutover fix); stays in prompts/<role>.md
 team-lead-archive#36	team-lead-archive.md	history	dead	GATE 1
 team-lead-archive#37	team-lead-archive.md	history	dead	GATE 1
 team-lead-archive#38	team-lead-archive.md	history	dead	GATE 1
@@ -223,8 +223,8 @@ team-lead-archive#130	team-lead-archive.md	history	dead	GATE 1
 team-lead-archive#131	team-lead-archive.md	history	dead	GATE 1
 team-lead-archive#132	team-lead-archive.md	history	dead	GATE 1
 bentham#1	bentham.md	history	dead	GATE 1
-bentham#2	bentham.md	rule	phase4	rule candidate
-bentham#3	bentham.md	rule	phase4	rule candidate
+bentham#2	bentham.md	rule	rule	rules.yaml row 6; stays in common-prompt.md / palestrina.md
+bentham#3	bentham.md	rule	rule	added to prompts/bentham.md Review Habits (cutover fix)
 bentham#4	bentham.md	lesson	converted	lessons/gating-a-branch-that-may-move.md,lessons/when-team-lead-contradicts-my-read.md,lessons/reporting-a-gate-result.md
 bentham#5	bentham.md	ruling	converted	facts/rulings-process.yaml
 bentham#6	bentham.md	fact+lesson	converted	facts/rulings-process.yaml,facts/pnpm-gates.yaml
@@ -271,7 +271,7 @@ bentham#46	bentham.md	lesson	converted	lessons/moving-mock-handles-to-shared-mod
 bentham#47	bentham.md	fact	converted	facts/vitest.yaml,lessons/moving-mock-handles-to-shared-modules.md
 bentham#48	bentham.md	lesson	converted	lessons/verifying-a-comments-only-or-moved-code-claim.md
 bentham#49	bentham.md	ruling	converted	facts/rulings-process.yaml
-bentham#50	bentham.md	rule	phase4	rule candidate
+bentham#50	bentham.md	rule	rule	rules.yaml row 2
 bentham#51	bentham.md	lesson	converted	lessons/verifying-a-comments-only-or-moved-code-claim.md
 bentham#52	bentham.md	lesson	converted	lessons/approving-removal-of-an-unread-fixture-row.md,lessons/moving-mock-handles-to-shared-modules.md
 bentham#53	bentham.md	lesson	converted	lessons/checking-the-reject-path-of-a-multi-request-create.md
@@ -310,7 +310,7 @@ byrd#25	byrd.md	lesson	converted	lessons/testing-library-cleanup-with-globals-fa
 byrd#26	byrd.md	lesson	dead	batch 1B
 byrd#27	byrd.md	lesson	dead	batch 1B
 byrd#28	byrd.md	history	dead	GATE 1
-byrd#29	byrd.md	lesson	phase4	rule candidate (batch 1B)
+byrd#29	byrd.md	lesson	rule	added to prompts/josquin.md Test Habits (cutover fix)
 byrd#30	byrd.md	lesson	dead	batch 1B
 byrd#31	byrd.md	lesson	dead	batch 1B
 byrd#32	byrd.md	history	dead	GATE 1
@@ -410,7 +410,7 @@ byrd#125	byrd.md	lesson	dead	batch 1B
 byrd#126	byrd.md	lesson	dead	batch 1B
 byrd#127	byrd.md	history	dead	GATE 1
 byrd#128	byrd.md	lesson	dead	batch 1B
-byrd#129	byrd.md	lesson	phase4	rule candidate (batch 1B)
+byrd#129	byrd.md	lesson	rule	rules.yaml row 3
 byrd#130	byrd.md	history	dead	GATE 1
 byrd#131	byrd.md	fact	dead	batch 1B
 byrd#132	byrd.md	lesson	dead	batch 1B
@@ -433,7 +433,7 @@ byrd#148	byrd.md	lesson	dead	batch 1B
 byrd#149	byrd.md	lesson	converted	facts/rulings-product.yaml
 byrd#150	byrd.md	history	dead	GATE 1
 byrd#151	byrd.md	history	dead	GATE 1
-byrd#152	byrd.md	lesson	phase4	rule candidate (batch 1B)
+byrd#152	byrd.md	lesson	rule	lesson
 byrd#153	byrd.md	lesson	dead	batch 1B
 byrd#154	byrd.md	lesson	dead	batch 1B
 byrd#155	byrd.md	ruling	dead	batch 1B
@@ -532,10 +532,10 @@ comenius#75	comenius.md	lesson	dead	batch 1B
 comenius#76	comenius.md	history	dead	GATE 1
 finn#1	finn.md	history	dead	GATE 1
 finn#2	finn.md	lesson	converted	lessons/entu-write-gates-vs-read-gates.md,judgment
-finn#3	finn.md	rule	phase4	rule candidate
+finn#3	finn.md	rule	rule	added to prompts/finn.md (cutover fix); stays in common-prompt.md / palestrina.md
 finn#4	finn.md	fact	converted	facts/repos.yaml
 finn#5	finn.md	superseded	dead	GATE 1
-finn#6	finn.md	rule	phase4	rule candidate
+finn#6	finn.md	rule	rule	added to common-prompt.md (cutover fix); rules.yaml row 12
 finn#7	finn.md	fact	converted	facts/polyphony-prototype.yaml
 finn#8	finn.md	fact	converted	facts/entu-platform.yaml,urls/entu-api-repo
 finn#9	finn.md	fact	converted	facts/deploy.yaml
@@ -583,7 +583,7 @@ josquin#12	josquin.md	url	converted	facts/repos.yaml
 perotin#1	perotin.md	header	converted	perotin.yaml:header
 perotin#2	perotin.md	fact	converted	facts/repos.yaml
 perotin#3	perotin.md	lesson	converted	facts/entu-entities.yaml,facts/entu-rights.yaml,facts/entu-properties.yaml,facts/entu-formulas.yaml,facts/entu-auth.yaml,facts/repos.yaml
-perotin#4	perotin.md	rule	phase4	rule candidate
+perotin#4	perotin.md	rule	rule	added to common-prompt.md (cutover fix); added to prompts/perotin.md (cutover fix); lesson; rules.yaml row 11
 perotin#5	perotin.md	fact	converted	facts/privacy-boundary.yaml
 perotin#6	perotin.md	current	converted	perotin.yaml:current
 perotin#7	perotin.md	lesson	converted	lessons/live-sweep-guards.md,lessons/shared-working-tree-branch-guard.md
@@ -591,7 +591,7 @@ session-mvox19-pickup-log#1	session-mvox19-pickup-log.md	history	dead	GATE 1
 session-mvox19-pickup-log#2	session-mvox19-pickup-log.md	history	dead	GATE 1
 session-mvox19-pickup-log#3	session-mvox19-pickup-log.md	history	dead	GATE 1
 session-mvox19-pickup-log#4	session-mvox19-pickup-log.md	ruling	converted	facts/rulings-product.yaml,facts/rulings-schema.yaml,facts/rulings-process.yaml
-session-mvox19-pickup-log#5	session-mvox19-pickup-log.md	rule	phase4	rule candidate
+session-mvox19-pickup-log#5	session-mvox19-pickup-log.md	rule	rule	rules.yaml row 11; stays in common-prompt.md / palestrina.md; stays in prompts/<role>.md
 session-mvox19-pickup-log#6	session-mvox19-pickup-log.md	history	dead	GATE 1
 session-mvox19-pickup-log#7	session-mvox19-pickup-log.md	history	dead	GATE 1
 session-mvox19-pickup-log#8	session-mvox19-pickup-log.md	ruling	converted	facts/rulings-product.yaml
@@ -615,15 +615,15 @@ session-mvox19-pickup-log#25	session-mvox19-pickup-log.md	superseded	dead	GATE 1
 session-mvox19-pickup-log#26	session-mvox19-pickup-log.md	history	dead	GATE 1
 tallis#1	tallis.md	header	dead	batch 1B
 tallis#2	tallis.md	header	dead	batch 1B
-tallis#3	tallis.md	lesson	phase4	rule candidate (batch 1B)
-tallis#4	tallis.md	lesson	phase4	rule candidate (batch 1B)
+tallis#3	tallis.md	lesson	rule	added to prompts/josquin.md Test Habits (cutover fix)
+tallis#4	tallis.md	lesson	rule	added to prompts/josquin.md Test Habits (cutover fix)
 tallis#5	tallis.md	lesson	converted	lessons/ts-expect-error-in-red.md
-tallis#6	tallis.md	lesson	phase4	rule candidate (batch 1B)
-tallis#7	tallis.md	lesson	phase4	rule candidate (batch 1B)
+tallis#6	tallis.md	lesson	rule	added to prompts/josquin.md Test Habits (cutover fix)
+tallis#7	tallis.md	lesson	rule	added to prompts/josquin.md Test Habits (cutover fix)
 tallis#8	tallis.md	lesson	converted	lessons/ts-expect-error-in-red.md
-tallis#9	tallis.md	lesson	phase4	rule candidate (batch 1B)
+tallis#9	tallis.md	lesson	rule	added to prompts/josquin.md Test Habits (cutover fix)
 tallis#10	tallis.md	superseded	dead	GATE 1
-tallis#11	tallis.md	lesson	phase4	rule candidate (batch 1B)
+tallis#11	tallis.md	lesson	rule	added to prompts/josquin.md Test Habits (cutover fix)
 tallis#12	tallis.md	fact	converted	facts/entu-entities.yaml
 tallis#13	tallis.md	fact	dead	batch 1B
 tallis#14	tallis.md	lesson	converted	lessons/waiting-for-async-effects-in-page-specs.md
@@ -661,18 +661,18 @@ feedback_acceptance_via_gama#1	feedback_acceptance_via_gama.md	ruling	converted	
 feedback_agent_spawn_prompt#1	feedback_agent_spawn_prompt.md	lesson	converted	lessons/background-subagent-silent-on-permission.md,urls/claude-code-issue-61315
 feedback_app_not_docs#1	feedback_app_not_docs.md	ruling	converted	facts/rulings-process.yaml
 feedback_atomic_git_chaining#1	feedback_atomic_git_chaining.md	lesson	converted	lessons/git-steps-on-the-shared-tree.md
-feedback_attribution_only#1	feedback_attribution_only.md	rule	phase4	rule candidate
+feedback_attribution_only#1	feedback_attribution_only.md	rule	rule	rules.yaml row 5
 feedback_auth_gate_routing#1	feedback_auth_gate_routing.md	lesson	converted	lessons/relaying-a-live-authorization.md
-feedback_authorization_gate#1	feedback_authorization_gate.md	rule	phase4	rule candidate
-feedback_auto_pickup#1	feedback_auto_pickup.md	rule	phase4	rule candidate
-feedback_board_state_labels#1	feedback_board_state_labels.md	rule	phase4	rule candidate
-feedback_closes_n_pattern#1	feedback_closes_n_pattern.md	rule	phase4	rule candidate
-feedback_communication_tone#1	feedback_communication_tone.md	rule	phase4	rule candidate
-feedback_context_efficiency#1	feedback_context_efficiency.md	rule	phase4	rule candidate
-feedback_context_health_at_seams#1	feedback_context_health_at_seams.md	rule	phase4	rule candidate
+feedback_authorization_gate#1	feedback_authorization_gate.md	rule	rule	rules.yaml row 11
+feedback_auto_pickup#1	feedback_auto_pickup.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix)
+feedback_board_state_labels#1	feedback_board_state_labels.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix); lesson; stays in common-prompt.md / palestrina.md
+feedback_closes_n_pattern#1	feedback_closes_n_pattern.md	rule	rule	lesson; rules.yaml row 17
+feedback_communication_tone#1	feedback_communication_tone.md	rule	rule	added to common-prompt.md (cutover fix)
+feedback_context_efficiency#1	feedback_context_efficiency.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix); stays in common-prompt.md / palestrina.md
+feedback_context_health_at_seams#1	feedback_context_health_at_seams.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix)
 feedback_decision_vs_permission#1	feedback_decision_vs_permission.md	lesson	converted	lessons/blocked-command-ask-for-clearance-only.md
-feedback_dynamic_workflow_explicit_models#1	feedback_dynamic_workflow_explicit_models.md	rule	phase4	rule candidate
-feedback_entity_id_readability#1	feedback_entity_id_readability.md	rule	phase4	rule candidate
+feedback_dynamic_workflow_explicit_models#1	feedback_dynamic_workflow_explicit_models.md	rule	rule	rules.yaml row 18
+feedback_entity_id_readability#1	feedback_entity_id_readability.md	rule	rule	added to common-prompt.md (cutover fix)
 feedback_epic_label_mirrors_tasks#1	feedback_epic_label_mirrors_tasks.md	ruling	converted	facts/rulings-process.yaml
 feedback_fail_loudly_over_fallbacks#1	feedback_fail_loudly_over_fallbacks.md	ruling	converted	facts/rulings-product.yaml
 feedback_finn_parallel_research#1	feedback_finn_parallel_research.md	dup	dead	GATE 1
@@ -682,44 +682,44 @@ feedback_identical_duplicate_values_ok#1	feedback_identical_duplicate_values_ok.
 feedback_in_process_agents#1	feedback_in_process_agents.md	lesson	converted	lessons/teammate-looks-hung.md
 feedback_issue_standard_s9_s10#1	feedback_issue_standard_s9_s10.md	ruling	converted	facts/rulings-comms.yaml
 feedback_josquin_model_by_issue#1	feedback_josquin_model_by_issue.md	ruling	converted	facts/rulings-process.yaml
-feedback_keep_collecting_mail#1	feedback_keep_collecting_mail.md	rule	phase4	rule candidate
-feedback_landing_notice#1	feedback_landing_notice.md	rule	phase4	rule candidate
-feedback_machine_timestamps_only#1	feedback_machine_timestamps_only.md	rule	phase4	rule candidate
+feedback_keep_collecting_mail#1	feedback_keep_collecting_mail.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix)
+feedback_landing_notice#1	feedback_landing_notice.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix); rules.yaml row 16
+feedback_machine_timestamps_only#1	feedback_machine_timestamps_only.md	rule	rule	stays in common-prompt.md / palestrina.md
 feedback_mvox_hybrid_aesthetic#1	feedback_mvox_hybrid_aesthetic.md	ruling	converted	facts/rulings-product.yaml
-feedback_mvox_merge_skill#1	feedback_mvox_merge_skill.md	rule	phase4	rule candidate
+feedback_mvox_merge_skill#1	feedback_mvox_merge_skill.md	rule	rule	stays in its procedure doc
 feedback_mvox_visual_personality#1	feedback_mvox_visual_personality.md	ruling	converted	facts/rulings-product.yaml
 feedback_native_form_controls#1	feedback_native_form_controls.md	ruling	converted	facts/rulings-product.yaml
 feedback_native_issue_types#1	feedback_native_issue_types.md	ruling	converted	facts/rulings-process.yaml
 feedback_negative_from_the_instrument#1	feedback_negative_from_the_instrument.md	lesson	converted	lessons/empty-result-from-a-check.md
 feedback_no_assessment_before_the_probe#1	feedback_no_assessment_before_the_probe.md	lesson	converted	lessons/diagnosis-while-a-live-probe-runs.md
-feedback_no_broad_sweeps_in_foreground#1	feedback_no_broad_sweeps_in_foreground.md	rule	phase4	rule candidate
-feedback_no_commits_during_live_pipeline#1	feedback_no_commits_during_live_pipeline.md	rule	phase4	rule candidate
+feedback_no_broad_sweeps_in_foreground#1	feedback_no_broad_sweeps_in_foreground.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix)
+feedback_no_commits_during_live_pipeline#1	feedback_no_commits_during_live_pipeline.md	rule	rule	rules.yaml row 20; rules.yaml row 3
 feedback_no_concurrent_hand_edits#1	feedback_no_concurrent_hand_edits.md	lesson	converted	lessons/read-back-mismatch-during-a-live-run.md
 feedback_no_loose_text_pins#1	feedback_no_loose_text_pins.md	ruling	converted	facts/rulings-tooling.yaml
 feedback_no_over_theorizing#1	feedback_no_over_theorizing.md	lesson	converted	lessons/explaining-a-platform-rule.md
-feedback_no_parallel_branches#1	feedback_no_parallel_branches.md	rule	phase4	rule candidate
+feedback_no_parallel_branches#1	feedback_no_parallel_branches.md	rule	rule	rules.yaml row 4
 feedback_no_parallel_dispatch#1	feedback_no_parallel_dispatch.md	superseded	dead	GATE 1
-feedback_no_signature_in_conversation#1	feedback_no_signature_in_conversation.md	rule	phase4	rule candidate
+feedback_no_signature_in_conversation#1	feedback_no_signature_in_conversation.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix)
 feedback_nothing_in_comments#1	feedback_nothing_in_comments.md	ruling	converted	facts/rulings-comms.yaml
 feedback_one_authorization_per_job#1	feedback_one_authorization_per_job.md	ruling	converted	facts/rulings-data.yaml
 feedback_partial_assertions_hide_bugs#1	feedback_partial_assertions_hide_bugs.md	lesson	converted	lessons/tests-green-but-bugs-shipped.md
-feedback_plan_execution_mode_baked_in#1	feedback_plan_execution_mode_baked_in.md	rule	phase4	rule candidate
+feedback_plan_execution_mode_baked_in#1	feedback_plan_execution_mode_baked_in.md	rule	rule	lesson
 feedback_polyphony_uk_spec_source#1	feedback_polyphony_uk_spec_source.md	ruling	converted	facts/rulings-product.yaml,urls/polyphony-uk
-feedback_pull_app_before_wake_read#1	feedback_pull_app_before_wake_read.md	rule	phase4	rule candidate
-feedback_ready_label_gate#1	feedback_ready_label_gate.md	rule	phase4	rule candidate
-feedback_request_manual_mode_on_block#1	feedback_request_manual_mode_on_block.md	rule	phase4	rule candidate
+feedback_pull_app_before_wake_read#1	feedback_pull_app_before_wake_read.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix)
+feedback_ready_label_gate#1	feedback_ready_label_gate.md	rule	rule	rules.yaml row 15
+feedback_request_manual_mode_on_block#1	feedback_request_manual_mode_on_block.md	rule	rule	lesson
 feedback_research_and_dev_run_in_parallel#1	feedback_research_and_dev_run_in_parallel.md	ruling	converted	facts/rulings-process.yaml
 feedback_ruling_vs_platform_authority#1	feedback_ruling_vs_platform_authority.md	lesson	converted	lessons/briefing-a-po-ruling-about-platform-behavior.md
-feedback_schema_design_pacing#1	feedback_schema_design_pacing.md	rule	phase4	rule candidate
+feedback_schema_design_pacing#1	feedback_schema_design_pacing.md	rule	rule	lesson
 feedback_single_workflow_slices#1	feedback_single_workflow_slices.md	lesson	converted	lessons/packing-a-slice-into-one-workflow.md
 feedback_task_dispatch_ordering#1	feedback_task_dispatch_ordering.md	lesson	converted	lessons/dispatching-work-to-a-teammate.md
-feedback_team_lead_direct_probes#1	feedback_team_lead_direct_probes.md	rule	phase4	rule candidate
+feedback_team_lead_direct_probes#1	feedback_team_lead_direct_probes.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix)
 feedback_test_review_rule#1	feedback_test_review_rule.md	ruling	converted	facts/rulings-tooling.yaml
-feedback_ui_parallels_with_seed#1	feedback_ui_parallels_with_seed.md	rule	phase4	rule candidate
+feedback_ui_parallels_with_seed#1	feedback_ui_parallels_with_seed.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix)
 feedback_ultracode_team_roles#1	feedback_ultracode_team_roles.md	lesson	dead	batch 1A
-feedback_use_team_not_oneshots#1	feedback_use_team_not_oneshots.md	rule	phase4	rule candidate
-feedback_use_template_not_adhoc#1	feedback_use_template_not_adhoc.md	rule	phase4	rule candidate
-feedback_visual_companion_tailnet_default#1	feedback_visual_companion_tailnet_default.md	rule	phase4	rule candidate
+feedback_use_team_not_oneshots#1	feedback_use_team_not_oneshots.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix); lesson; rules.yaml row 14
+feedback_use_template_not_adhoc#1	feedback_use_template_not_adhoc.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix)
+feedback_visual_companion_tailnet_default#1	feedback_visual_companion_tailnet_default.md	rule	rule	lesson
 project_cf_pages_git_connected#1	project_cf_pages_git_connected.md	fact	converted	facts/mvox-deploy.yaml,urls/mvox-about
 project_cf_pages_wrangler_vars#1	project_cf_pages_wrangler_vars.md	fact	dead	batch 1A
 project_cf_workers_process_env#1	project_cf_workers_process_env.md	lesson	dead	batch 1A

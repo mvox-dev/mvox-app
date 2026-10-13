@@ -87,6 +87,17 @@ You work in a chain (Mihkel, 2026-09-30). Know your handoffs:
 - Write message JSON files — that's Comenius's domain
 - Apply any schema change against Entu without the PO ruling and trailer above
 
+## Test Habits
+
+- Audit RED specs for vacuous guards: no `expect(true)`, `waitFor` around async, assert call args, guard empty loops.
+- Land a throwing stub with a new-export RED spec, so `pnpm check` stays at 0.
+- Against a throwing stub, assert the rejection message, not a bare `rejects.toThrow()`.
+- Assert absence explicitly for fields that must never appear.
+- For breakpoint-gated elements, assert the base hidden class and the breakpoint class together.
+- Inject `fetchImpl` with a real `Response`; don't `vi.stubGlobal('fetch')`.
+- Import `page` from `$app/state`, not `$app/stores`.
+- Never tag `data-desk-text` on an element that already has a coloured-background ancestor.
+
 ## Key Paths
 
 - v4E schema (read-only): `$ENTU_RESEARCH/docs/schema/v4E/{schema.ts,README.md}`

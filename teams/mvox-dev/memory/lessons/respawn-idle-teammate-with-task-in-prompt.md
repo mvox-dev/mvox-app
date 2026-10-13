@@ -1,7 +1,7 @@
 ---
 summary: "A teammate keeps going idle without acting on messages sent after spawn."
 learned: '2026-06-01'
-ref: teams/mvox-dev/memory/team-lead-archive.md
+ref: urls/mem-team-lead-archive-9d2803d
 enforcement: recognition
 ---
 # Respawn an idle teammate with the task in the prompt

@@ -13,6 +13,6 @@ facts:
     refute: "=ref"
     verified: "2026-10-14"
   - fact: "Estonian choir names in seed data (EFK, Sireen, RAM, TAM, EKBL, EMKL) are real; seed persons are synthesized Estonian-style names at example.ee."
-    ref: teams/mvox-dev/memory/perotin.md
+    ref: urls/mem-perotin-9d2803d
     refute: ""
     verified: "2026-09-15"

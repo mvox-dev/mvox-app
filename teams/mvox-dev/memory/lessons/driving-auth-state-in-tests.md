@@ -1,7 +1,7 @@
 ---
 summary: For tests that set authStore directly, so they match how auth really arrives.
 learned: '2026-06-01'
-ref: teams/mvox-dev/memory/byrd.md
+ref: urls/mem-byrd-9d2803d
 enforcement: recognition
 ---
 # Drive auth state the way the app sees it

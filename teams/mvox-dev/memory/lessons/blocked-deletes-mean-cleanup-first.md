@@ -1,7 +1,7 @@
 ---
 summary: "Reading blocked deletes in a migration report."
 learned: '2026-05-20'
-ref: teams/mvox-dev/memory/team-lead-archive.md
+ref: urls/mem-team-lead-archive-9d2803d
 enforcement: recognition
 ---
 # Blocked deletes mean clean up first

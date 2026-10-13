@@ -25,19 +25,19 @@ facts:
     refute: "=ref"
     verified: "2026-05-23"
   - fact: "All dropdowns are native select elements and all inputs are native controls; a custom widget where a native one serves is a YELLOW review finding."
-    ref: teams/mvox-dev/memory/architecture-decisions.md
+    ref: teams/mvox-dev/docs/architecture-decisions.md
     refute: "=ref"
     verified: "2026-10-14"
   - fact: "An in-place edit field activates on a click anywhere in the field and on Tab, including always-editable inputs such as profile name and email."
-    ref: teams/mvox-dev/memory/architecture-decisions.md
+    ref: teams/mvox-dev/docs/architecture-decisions.md
     refute: "=ref"
     verified: "2026-10-14"
   - fact: "Times show 24h unless the profile picks AM/PM, weeks start on Monday, and dates use YYYY-MM-DD; overriding native locale rendering for these is the one sanctioned custom control."
-    ref: teams/mvox-dev/memory/architecture-decisions.md
+    ref: teams/mvox-dev/docs/architecture-decisions.md
     refute: "=ref"
     verified: "2026-10-14"
   - fact: "User stories are drafted after checking the legacy app at urls/polyphony-uk, which is the spec source for how features were conceived."
-    ref: teams/mvox-dev/memory/architecture-decisions.md
+    ref: teams/mvox-dev/docs/architecture-decisions.md
     refute: "=ref"
     verified: "2026-10-14"
   - fact: "Fallbacks are a last resort: when a primary mechanism fails, the code throws, blocks the feature or reports it, unless the PO has accepted a fallback and it is documented."
@@ -63,6 +63,6 @@ facts:
     verified: "2026-05-17"
 
   - fact: "While a write for an item is in flight, its control is disabled; a second tap is never coalesced into a later write."
-    ref: teams/mvox-dev/memory/byrd.md
+    ref: urls/mem-byrd-9d2803d
     refute: "=ref"
     verified: "2026-08-07"

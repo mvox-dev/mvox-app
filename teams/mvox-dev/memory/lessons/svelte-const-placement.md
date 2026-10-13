@@ -1,7 +1,7 @@
 ---
 summary: For placing a {@const} in a Svelte 5 template without a compile error.
 learned: '2026-06-01'
-ref: teams/mvox-dev/memory/comenius.md
+ref: urls/mem-comenius-9d2803d
 enforcement: recognition
 ---
 # Where {@const} is allowed

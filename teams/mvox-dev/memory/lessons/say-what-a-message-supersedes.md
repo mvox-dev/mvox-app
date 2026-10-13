@@ -1,7 +1,7 @@
 ---
 summary: "Briefing an agent that is already working, so it knows which earlier message is replaced."
 learned: '2026-05-20'
-ref: teams/mvox-dev/memory/team-lead-archive.md
+ref: urls/mem-team-lead-archive-9d2803d
 enforcement: recognition
 ---
 # Say what a message supersedes

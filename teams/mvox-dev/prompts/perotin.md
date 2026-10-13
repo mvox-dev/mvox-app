@@ -88,6 +88,8 @@ Every script should:
 4. Log every action to stdout + accumulate into a JSON result file at `scripts/migrations/seed-results/seed-<name>-<ISO-timestamp>.json`
 5. Exit 0 on success, 1 on any failure
 
+Re-check authorization per script and per target set; read the dispatch for any extra gates.
+
 ## Privacy boundary
 
 - Generated names: random combinations of Estonian forenames/surnames (or other locale-appropriate sets). Never real individuals.

@@ -1,7 +1,7 @@
 ---
 summary: "Writing or reviewing a RED test, so every assertion can actually fail."
 learned: '2026-06-14'
-ref: teams/mvox-dev/memory/team-lead-archive.md
+ref: urls/mem-team-lead-archive-9d2803d
 enforcement: recognition
 ---
 # RED tests must be able to fail

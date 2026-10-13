@@ -1,7 +1,7 @@
 ---
 summary: "Trusting a cheap subagent line-number citation, especially into large JSON."
 learned: '2026-09-12'
-ref: teams/mvox-dev/memory/finn.md
+ref: urls/mem-finn-9d2803d
 enforcement: recognition
 ---
 # Spot-check subagent line citations

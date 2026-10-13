@@ -1,7 +1,7 @@
 ---
 summary: "Designing anything that needs to know who the user is outside the browser."
 learned: '2026-06-13'
-ref: teams/mvox-dev/memory/team-lead-archive.md
+ref: urls/mem-team-lead-archive-9d2803d
 enforcement: recognition
 ---
 # No server-side use of a user Entu token

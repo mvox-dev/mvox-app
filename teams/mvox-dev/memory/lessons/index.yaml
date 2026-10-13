@@ -20,7 +20,7 @@ lessons:
 - slug: adding-message-keys
   summary: For adding or editing i18n message keys in messages/*.json without breaking check or the JSON.
   learned: '2026-06-01'
-  ref: teams/mvox-dev/memory/comenius.md
+  ref: urls/mem-comenius-9d2803d
   enforcement: recognition
 - slug: agent-worktrees-leak
   summary: Spawning agents that may commit, so nobody reaches for worktree isolation again.
@@ -30,7 +30,7 @@ lessons:
 - slug: aggregate-counts-via-entu-formulas
   summary: Showing counts across entities a reader may not see, with no server.
   learned: '2026-06-13'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: approving-a-ci-path-skip
   summary: For approving a CI change that skips runs for some paths.
@@ -45,7 +45,7 @@ lessons:
 - slug: assert-base-display-with-responsive-class
   summary: 'Testing elements with sm:/md:/lg: display classes, since jsdom cannot compute layout.'
   learned: '2026-05-31'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: auditing-consumers-of-a-truncation-flag
   summary: For reviewing a producer that starts reporting a truncated or partial flag beside its rows.
@@ -65,7 +65,7 @@ lessons:
 - slug: bind-this-ref-in-effect-use-untrack
   summary: Calling a bind:this component ref inside a Svelte effect.
   learned: '2026-10-11'
-  ref: teams/mvox-dev/memory/josquin.md
+  ref: urls/mem-josquin-9d2803d
   enforcement: recognition
 - slug: blank-collective-name-is-not-a-finding
   summary: For reviewing copy that interpolates the collective name.
@@ -80,7 +80,7 @@ lessons:
 - slug: blocked-deletes-mean-cleanup-first
   summary: Reading blocked deletes in a migration report.
   learned: '2026-05-20'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: briefing-a-po-ruling-about-platform-behavior
   summary: For writing a doc or brief where a PO ruling touches how Entu itself behaves.
@@ -100,17 +100,17 @@ lessons:
 - slug: changing-a-message-signature
   summary: For planning a change to an i18n message's parameters across locales.
   learned: '2026-08-08'
-  ref: teams/mvox-dev/memory/byrd.md
+  ref: urls/mem-byrd-9d2803d
   enforcement: recognition
 - slug: check-issue-closed-after-merge
   summary: 'After a merge whose body says Closes #N, confirming the issue really closed.'
   learned: '2026-05-31'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: checking-a-trigger-symbol-still-exists
   summary: For firing a review trigger whose text names a function or symbol.
   learned: '2026-09-03'
-  ref: teams/mvox-dev/memory/architecture-decisions.md
+  ref: teams/mvox-dev/docs/architecture-decisions.md
   enforcement: recognition
 - slug: checking-every-endpoint-against-stated-pagination
   summary: For reviewing a module whose header states a pagination rule.
@@ -165,7 +165,7 @@ lessons:
 - slug: delete-endpoint-entity-vs-property-value
   summary: Choosing the DELETE endpoint for an Entu _id, so entity and property-value deletes go to the right route.
   learned: '2026-05-20'
-  ref: teams/mvox-dev/memory/architecture-decisions.md
+  ref: teams/mvox-dev/docs/architecture-decisions.md
   enforcement: recognition
 - slug: diagnosis-while-a-live-probe-runs
   summary: For answering a "is this data or code?" question while a live probe is still running.
@@ -180,7 +180,7 @@ lessons:
 - slug: driving-auth-state-in-tests
   summary: For tests that set authStore directly, so they match how auth really arrives.
   learned: '2026-06-01'
-  ref: teams/mvox-dev/memory/byrd.md
+  ref: urls/mem-byrd-9d2803d
   enforcement: recognition
 - slug: edit-form-patch-only-changed-fields
   summary: For building the save payload of an edit form so untouched fields are not overwritten.
@@ -190,7 +190,7 @@ lessons:
 - slug: effect-edge-detection-on-a-store
   summary: For reacting in a Svelte 5 effect when a store enters one state, without a loop.
   learned: '2026-06-01'
-  ref: teams/mvox-dev/memory/byrd.md
+  ref: urls/mem-byrd-9d2803d
   enforcement: recognition
 - slug: empty-result-from-a-check
   summary: For deciding whether a sweep, query, guard or test that found nothing really means all clear.
@@ -200,12 +200,12 @@ lessons:
 - slug: entity-create-type-as-reference
   summary: Writing or reviewing code that creates an Entu entity, so the _type wire shape is right.
   learned: '2026-06-01'
-  ref: teams/mvox-dev/memory/architecture-decisions.md
+  ref: teams/mvox-dev/docs/architecture-decisions.md
   enforcement: recognition
 - slug: entu-write-gates-vs-read-gates
   summary: Reasoning about Entu rights, keeping who-may-write separate from who-sees-which-field.
   learned: '2026-09-07'
-  ref: teams/mvox-dev/memory/finn.md
+  ref: urls/mem-finn-9d2803d
   enforcement: recognition
 - slug: explaining-a-platform-rule
   summary: For writing or changing a doc or spec line about how Entu (or any platform) behaves.
@@ -215,7 +215,7 @@ lessons:
 - slug: freeze-spec-before-dispatching-chain
   summary: Changing a spec while a TDD chain is already running on it.
   learned: '2026-05-31'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: gating-a-branch-that-may-move
   summary: For running review gates on a shared tree where HEAD or the checkout can change under you.
@@ -240,7 +240,7 @@ lessons:
 - slug: implementer-gates-and-commits
   summary: Running gates and committing as an implementer on an mvox issue.
   learned: '2026-10-11'
-  ref: teams/mvox-dev/memory/josquin.md
+  ref: urls/mem-josquin-9d2803d
   enforcement: recognition
 - slug: keyed-each-on-foreign-ids
   summary: For reviewing a keyed Svelte each block whose keys come from data.
@@ -250,7 +250,7 @@ lessons:
 - slug: landing-notice-per-merge-in-packed-runs
   summary: For sending a landing notice for each merge while one pipeline run lands several issues.
   learned: '2026-09-10'
-  ref: teams/mvox-dev/memory/session-mvox19-pickup-log.md
+  ref: urls/mem-session-mvox19-pickup-log-9d2803d
   enforcement: recognition
 - slug: line-cap-step-consolidation
   summary: For the consolidation run at each file-size ladder step.
@@ -265,12 +265,12 @@ lessons:
 - slug: live-sweep-guards
   summary: Guarding a live write sweep and its ledger against drift and false success.
   learned: '2026-09-15'
-  ref: teams/mvox-dev/memory/perotin.md
+  ref: urls/mem-perotin-9d2803d
   enforcement: recognition
 - slug: mock-and-prop-pitfalls
   summary: Writing Svelte page tests with mocks, seams and props.
   learned: '2026-10-11'
-  ref: teams/mvox-dev/memory/josquin.md
+  ref: urls/mem-josquin-9d2803d
   enforcement: recognition
 - slug: moving-mock-handles-to-shared-modules
   summary: For reviewing test refactors that move or prune vi.fn mock handles.
@@ -280,17 +280,17 @@ lessons:
 - slug: no-own-assumptions-inside-an-authorization
   summary: Writing an authorization or brief for a live run, so it carries only what the PO directed.
   learned: '2026-06-15'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: no-server-side-use-of-user-entu-token
   summary: Designing anything that needs to know who the user is outside the browser.
   learned: '2026-06-13'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: one-off-live-ops-as-scripts
   summary: Choosing how to do a one-off live op such as seeding, a probe or cleanup.
   learned: '2026-05-20'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: opening-the-checkpoint-pr
   summary: For the session checkpoint commit, before its PR is opened.
@@ -310,7 +310,7 @@ lessons:
 - slug: persist-per-op-failure-detail
   summary: Designing a script that continues after failures, so its report keeps per-op errors.
   learned: '2026-05-20'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: pipeline-template-edit-breaks-roadmap
   summary: Editing the tdd-slice-pipeline template, so the roadmap deploy job keeps passing.
@@ -340,7 +340,7 @@ lessons:
 - slug: quote-platform-docs-before-theorizing
   summary: Grounding any doc, spec or decision about an Entu platform mechanic before acting on it.
   learned: '2026-06-15'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: read-back-mismatch-during-a-live-run
   summary: For preparing a live Entu run and for the first question when its read-back fails.
@@ -355,17 +355,17 @@ lessons:
 - slug: recheck-page-state-after-await
   summary: Moving an async handler, so post-await reads still check whether the page closed.
   learned: '2026-10-11'
-  ref: teams/mvox-dev/memory/josquin.md
+  ref: urls/mem-josquin-9d2803d
   enforcement: recognition
 - slug: red-author-sets-the-green-contract
   summary: Keeping the team lead from proposing implementation shape that belongs in the RED contract.
   learned: '2026-05-20'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: red-tests-that-can-fail
   summary: Writing or reviewing a RED test, so every assertion can actually fail.
   learned: '2026-06-14'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: relayed-operator-line-derails-subagents
   summary: Mihkel types a short line while workflows run, so a sudden agent abort is read correctly.
@@ -400,7 +400,7 @@ lessons:
 - slug: respawn-idle-teammate-with-task-in-prompt
   summary: A teammate keeps going idle without acting on messages sent after spawn.
   learned: '2026-06-01'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: reviewing-a-checksum-fence
   summary: For reviewing a hash pin over a document region, or a re-derived pin.
@@ -440,7 +440,7 @@ lessons:
 - slug: run-guard-specs-by-path
   summary: Running fence and pin specs that test:changed does not select.
   learned: '2026-10-11'
-  ref: teams/mvox-dev/memory/josquin.md
+  ref: urls/mem-josquin-9d2803d
   enforcement: recognition
 - slug: running-the-breaks-a-pr-did-not-name
   summary: For testing guards and pins the PR's own break list did not cover.
@@ -455,7 +455,7 @@ lessons:
 - slug: say-what-a-message-supersedes
   summary: Briefing an agent that is already working, so it knows which earlier message is replaced.
   learned: '2026-05-20'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: shared-loader-merging-a-callers-live-map
   summary: For reviewing a shared loader that merges into a caller's live map.
@@ -465,12 +465,12 @@ lessons:
 - slug: shared-working-tree-branch-guard
   summary: Committing in the single shared working tree while others may be on a feature branch.
   learned: '2026-05-20'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: shut-down-teammates-before-session-end
   summary: For ending a session or restarting the team without leaving teammate processes running.
   learned: '2026-06-01'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: splitting-a-page-into-mounted-children
   summary: For reviewing page splits that move an open/close form or write queue into a child component.
@@ -480,7 +480,7 @@ lessons:
 - slug: spot-check-subagent-line-citations
   summary: Trusting a cheap subagent line-number citation, especially into large JSON.
   learned: '2026-09-12'
-  ref: teams/mvox-dev/memory/finn.md
+  ref: urls/mem-finn-9d2803d
   enforcement: recognition
 - slug: standing-down-a-finding
   summary: For deciding not to press a finding, and for reusing an old stand-down.
@@ -495,12 +495,12 @@ lessons:
 - slug: stub-new-modules-in-red
   summary: Writing a RED commit that imports a module or component that does not exist yet.
   learned: '2026-05-31'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: svelte-const-placement
   summary: For placing a {@const} in a Svelte 5 template without a compile error.
   learned: '2026-06-01'
-  ref: teams/mvox-dev/memory/comenius.md
+  ref: urls/mem-comenius-9d2803d
   enforcement: recognition
 - slug: teammate-looks-hung
   summary: For deciding whether a spawned teammate is hung, working, or waiting on you.
@@ -515,12 +515,12 @@ lessons:
 - slug: testid-prefix-selectors
   summary: For choosing data-testid names and prefix selectors that will not match nested elements.
   learned: '2026-06-01'
-  ref: teams/mvox-dev/memory/byrd.md
+  ref: urls/mem-byrd-9d2803d
   enforcement: recognition
 - slug: testing-a-stale-request-guard
   summary: For writing a test that proves a request-id stale guard drops an old response.
   learned: '2026-06-01'
-  ref: teams/mvox-dev/memory/byrd.md
+  ref: urls/mem-byrd-9d2803d
   enforcement: recognition
 - slug: testing-library-cleanup-with-globals-false
   summary: For page specs that find stale elements from earlier tests in the same file.
@@ -535,22 +535,22 @@ lessons:
 - slug: ts-expect-error-in-red
   summary: For writing type-level RED proofs with @ts-expect-error, and when not to.
   learned: '2026-06-01'
-  ref: teams/mvox-dev/memory/tallis.md
+  ref: urls/mem-tallis-9d2803d
   enforcement: recognition
 - slug: type-vs-instance-in-entu
   summary: For reasoning about what an Entu type, parent or child passes on, before calling something a gap.
   learned: '2026-05-19'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: unverified-wire-shape-is-yellow
   summary: Reviewing a new Entu verb+path that mocks pass but no live call has exercised.
   learned: '2026-05-20'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: verify-claims-before-asserting-or-relaying
   summary: Checking a SHA, count, error or agent report yourself before you assert it or act on it.
   learned: '2026-05-31'
-  ref: teams/mvox-dev/memory/team-lead-archive.md
+  ref: urls/mem-team-lead-archive-9d2803d
   enforcement: recognition
 - slug: verifying-a-comments-only-or-moved-code-claim
   summary: For checking that moved or comment-only changes did not change behaviour.
@@ -560,7 +560,7 @@ lessons:
 - slug: vitest-module-mock-isolation
   summary: For mocking part of a module in vitest, especially one that imports $env.
   learned: '2026-06-01'
-  ref: teams/mvox-dev/memory/byrd.md
+  ref: urls/mem-byrd-9d2803d
   enforcement: recognition
 - slug: waiting-for-a-live-authorization
   summary: For a data manager whose dry run is clean but whose live-run authorization has not come.
@@ -570,12 +570,12 @@ lessons:
 - slug: waiting-for-async-effects-in-page-specs
   summary: For asserting state a page reaches after an async effect, without hangs.
   learned: '2026-08-10'
-  ref: teams/mvox-dev/memory/tallis.md
+  ref: urls/mem-tallis-9d2803d
   enforcement: recognition
 - slug: when-team-lead-contradicts-my-read
   summary: For when another agent's report conflicts with a clean read of my own.
   learned: '2026-05-31'
-  ref: teams/mvox-dev/memory/architecture-decisions.md
+  ref: teams/mvox-dev/docs/architecture-decisions.md
   enforcement: recognition
 - slug: workflow-agent-background-gate-aborts
   summary: Writing workflow agent prompts, so gates run in the foreground and the pipeline does not abort.

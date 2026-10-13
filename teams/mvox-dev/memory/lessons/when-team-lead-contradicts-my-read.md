@@ -1,7 +1,7 @@
 ---
 summary: For when another agent's report conflicts with a clean read of my own.
 learned: '2026-05-31'
-ref: 'teams/mvox-dev/memory/architecture-decisions.md'
+ref: 'teams/mvox-dev/docs/architecture-decisions.md'
 enforcement: recognition
 ---
 # When team-lead contradicts my read

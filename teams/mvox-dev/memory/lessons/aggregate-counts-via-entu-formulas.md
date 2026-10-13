@@ -1,7 +1,7 @@
 ---
 summary: "Showing counts across entities a reader may not see, with no server."
 learned: '2026-06-13'
-ref: teams/mvox-dev/memory/team-lead-archive.md
+ref: urls/mem-team-lead-archive-9d2803d
 enforcement: recognition
 ---
 # Aggregate counts through Entu formulas

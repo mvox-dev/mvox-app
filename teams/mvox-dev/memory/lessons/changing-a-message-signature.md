@@ -1,7 +1,7 @@
 ---
 summary: For planning a change to an i18n message's parameters across locales.
 learned: '2026-08-08'
-ref: teams/mvox-dev/memory/byrd.md
+ref: urls/mem-byrd-9d2803d
 enforcement: recognition
 ---
 # Changing a message signature

@@ -34,22 +34,22 @@ facts:
     verified: "2026-09-21"
 
   - fact: "A property value is exposed at a sharing level only if the property definition, the type definition and the instance all allow it; the type definition caps the level."
-    ref: teams/mvox-dev/memory/perotin.md
+    ref: urls/mem-perotin-9d2803d
     refute: "Set two of the three to public and read the value anonymously."
     verified: "2026-09-21"
 
   - fact: "Sharing buckets are written when a value is written; fixing a property definition does not move existing values until the value or the instance _sharing is rewritten."
-    ref: teams/mvox-dev/memory/perotin.md
+    ref: urls/mem-perotin-9d2803d
     refute: "Change a prop-def _sharing and read an old instance anonymously."
     verified: "2026-09-21"
 
   - fact: "A file property is two steps: POST announcing filename, filesize and filetype (all required), then PUT to a signed upload URL valid for about 60 seconds."
-    ref: teams/mvox-dev/memory/perotin.md
+    ref: urls/mem-perotin-9d2803d
     refute: "git -C ~/projects/entu-www show origin/main:src/api/best-practices/index.md"
     verified: "2026-09-21"
 
   - fact: "A signed file URL answers HEAD with 403 because the signature is method-scoped; use GET. Replacing a file always mints a new property _id."
-    ref: teams/mvox-dev/memory/perotin.md
+    ref: urls/mem-perotin-9d2803d
     refute: "HEAD and GET the same signed URL."
     verified: "2026-09-21"
 
@@ -59,11 +59,11 @@ facts:
     verified: "2026-09-14"
 
   - fact: "List responses are {entities, count, limit, skip} with skip paging and no cursor."
-    ref: teams/mvox-dev/memory/perotin.md
+    ref: urls/mem-perotin-9d2803d
     refute: "git -C ~/projects/entu-www show origin/main:src/api/best-practices/index.md"
     verified: "2026-10-14"
 
   - fact: "name.string=X matches the exact NFC value; q=X is a case-insensitive substring search over properties marked search."
-    ref: teams/mvox-dev/memory/perotin.md
+    ref: urls/mem-perotin-9d2803d
     refute: "git -C ~/projects/entu-www show origin/main:src/api/query-reference/index.md"
     verified: "2026-10-14"

@@ -1,7 +1,7 @@
 ---
 summary: "Calling a bind:this component ref inside a Svelte effect."
 learned: '2026-10-11'
-ref: teams/mvox-dev/memory/josquin.md
+ref: urls/mem-josquin-9d2803d
 enforcement: recognition
 ---
 # A bind:this ref read in an effect re-runs it

@@ -56,6 +56,8 @@ Use your scratchpad for:
 4. Collect results, deduplicate, format as markdown
 5. Send the consolidated report back to the requester
 
+Open every research subagent prompt with the repo guard: `git remote get-url origin` must end in `mvox-app.git`.
+
 ## Tools You Use Most
 
 - **Agent tool** (subagent_type: Explore, model: haiku) — for parallel research

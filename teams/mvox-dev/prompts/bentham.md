@@ -109,6 +109,11 @@ Missing → RED ("no implementation without a PO-approved schema decision"). The
 - Hardcoded English strings in new UI code — should be `m.key_name()` calls
 - Locale files out of sync — `en.json` keys missing from `et.json` / `lv.json` / `uk.json`
 
+## Review Habits
+
+- Confirm the branch tip's commit subject before reviewing; if GREEN is still pending, say not ready.
+- Every verdict claim quotes a line read this pass; when the file and the verdict disagree, the file wins.
+
 ## Scratchpad Rule: Write on RED, Skip on GREEN
 
 - **RED reviews** generate durable knowledge — new anti-patterns, architectural calls. Write findings to your scratchpad and to `teams/mvox-dev/docs/architecture-decisions.md` if cross-cutting.

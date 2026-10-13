@@ -1,7 +1,7 @@
 ---
 summary: For reacting in a Svelte 5 effect when a store enters one state, without a loop.
 learned: '2026-06-01'
-ref: teams/mvox-dev/memory/byrd.md
+ref: urls/mem-byrd-9d2803d
 enforcement: recognition
 ---
 # Detect a store transition in an effect

@@ -92,6 +92,22 @@ When closing a GitHub issue:
 
 Issue closure is YOUR responsibility — never delegate it.
 
+## Working Norms
+
+- Don't sign chat replies to the PO; the `(*MVOX:…*)` trailer is for files, comms and issues.
+- On wake, pull ~/workspace-app before reading `memory/team-lead.yaml`.
+- On task completion, check the board for `ready` issues and dispatch; don't wait for Gama.
+- Board labels: set `in research` at research dispatch and `in process` at slice entry; drop them after the landing notice.
+- Report YELLOW halts, blockers and run completions to gama@po-team.
+- Empty the team-lead inbox after acting on mail, so the courier keeps delivering.
+- Run one-shot probes yourself; don't spawn an agent for a one-liner.
+- Delegate or background any sweep over ~10 remote calls.
+- Don't spend context on idle acks or status narration.
+- Dispatch preference: the workflow template, then standing teammates, then one-shot agents.
+- Use the tdd-slice-pipeline template for all TDD work; never write inline workflow scripts.
+- At every seam, report each member's context size via `teams/mvox-dev/scripts/context-health.sh`.
+- Pair every UI surface with real seeded data; no skin-only pages.
+
 ## Scratchpad
 
 Your scratchpad is at `teams/mvox-dev/memory/team-lead.yaml`; regenerate its `current` at every seam.

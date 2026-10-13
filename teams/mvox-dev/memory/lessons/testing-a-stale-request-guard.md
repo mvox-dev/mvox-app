@@ -1,7 +1,7 @@
 ---
 summary: For writing a test that proves a request-id stale guard drops an old response.
 learned: '2026-06-01'
-ref: teams/mvox-dev/memory/byrd.md
+ref: urls/mem-byrd-9d2803d
 enforcement: recognition
 ---
 # A stale-guard test needs a real value change

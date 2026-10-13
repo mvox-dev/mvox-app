@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Final state of every unit after the rulings so far: 03-state.tsv + arithmetic.
 Inputs in this directory: 02-ledger.tsv (Phase 2 dispositions), 02-conv.tsv (converter
-ledgers), 02-screen.tsv (Phase 3 screen, accepted as is at batch 1).
+ledgers), 02-screen.tsv (Phase 3 screen, accepted as is at batch 1), 04-rule-candidates.tsv
+(GATE 2 destinations of rule-class items).
 Usage: settle.py"""
-import collections, csv
+import collections, csv, re
 
 DESIGN_NOTES = "teams/mvox-dev/docs/design-notes/"
 DEAD_1A = {"project_cf_pages_wrangler_vars#1", "project_cf_workers_process_env#1",
@@ -17,6 +18,15 @@ MOVES = {"architecture-decisions.md": "teams/mvox-dev/docs/architecture-decision
          "i18n-conventions.md": "teams/mvox-dev/docs/i18n-conventions.md"}
 
 rd = lambda f: list(csv.DictReader(open(f), delimiter="\t"))
+CANDS = rd("04-rule-candidates.tsv")
+
+
+def rule_outcome(i):
+    """GATE 2 outcome of a rule-class item: the destinations of the norms citing it."""
+    pat = re.compile(r"(^|[ ,(])" + re.escape(i) + r"($|[ ,)])")
+    dests = sorted({c["destination"] for c in CANDS if pat.search(c["sources"])})
+    assert dests, f"{i}: no rule candidate cites it"
+    return "; ".join(dests)
 conv = {}
 for r in rd("02-conv.tsv"):
     conv[r["src_id"]] = r["target"]          # K1 rows come last and win
@@ -29,7 +39,7 @@ for r in rd("02-ledger.tsv"):
     elif d == "dead":
         st, where = "dead", "GATE 1"
     elif d == "phase4":
-        st, where = "phase4", "rule candidate"
+        st, where = "rule", rule_outcome(i)
     elif i in MEMKIT:
         st, where = "converted", MEMKIT[i]
     elif i in DEAD_1A:
@@ -41,7 +51,7 @@ for r in rd("02-ledger.tsv"):
         if rec == "dead":
             st, where = "dead", "batch 1B"
         elif rec == "keep:rule":
-            st, where = "phase4", "rule candidate (batch 1B)"
+            st, where = "rule", rule_outcome(i)
         elif rec == "keep:longform":
             st, where = "moved", DESIGN_NOTES
         else:

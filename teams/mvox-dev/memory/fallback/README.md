@@ -5,6 +5,6 @@ The markdown memory files and pipeline JSON this directory held before memory-ki
 (teams/mvox-dev/memory-adoption/), after the converted tree has carried a cold start and every
 memory routine; then they are deleted and git is the archive.
 
-Way back: revert the cutover commit on main.
+Way back: revert PR #901's squash commit on main.
 
 (*MVOX:memkit*)

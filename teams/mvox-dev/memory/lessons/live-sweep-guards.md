@@ -1,7 +1,7 @@
 ---
 summary: "Guarding a live write sweep and its ledger against drift and false success."
 learned: '2026-09-15'
-ref: teams/mvox-dev/memory/perotin.md
+ref: urls/mem-perotin-9d2803d
 enforcement: recognition
 ---
 # Live sweep guards

@@ -16,8 +16,8 @@ current:
   - label: DEFERRED
     record: "After adoption, file an experience report on the memory-kit issue tracker"
     ref: mihkel:2026-10-14
-  - label: WARNING
-    record: "Passepartout's hub address is unknown; team name household was rejected"
+  - label: LEARNED
+    record: "Passepartout's hub address is passepartout (household was rejected)"
     ref: "2026-10-14"
   - label: DECISION
     record: "About page (urls/mvox-about) is the public baseline for publishers; it names no partner or dispute"

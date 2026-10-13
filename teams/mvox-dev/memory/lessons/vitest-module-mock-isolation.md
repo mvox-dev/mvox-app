@@ -1,7 +1,7 @@
 ---
 summary: For mocking part of a module in vitest, especially one that imports $env.
 learned: '2026-06-01'
-ref: teams/mvox-dev/memory/byrd.md
+ref: urls/mem-byrd-9d2803d
 enforcement: recognition
 ---
 # Partial module mocks still load the real module

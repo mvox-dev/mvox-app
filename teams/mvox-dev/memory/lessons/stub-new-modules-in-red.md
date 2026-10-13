@@ -1,7 +1,7 @@
 ---
 summary: "Writing a RED commit that imports a module or component that does not exist yet."
 learned: '2026-05-31'
-ref: teams/mvox-dev/memory/team-lead-archive.md
+ref: urls/mem-team-lead-archive-9d2803d
 enforcement: recognition
 ---
 # Stub new modules in RED

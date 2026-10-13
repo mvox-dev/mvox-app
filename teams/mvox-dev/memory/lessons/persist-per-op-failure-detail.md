@@ -1,7 +1,7 @@
 ---
 summary: "Designing a script that continues after failures, so its report keeps per-op errors."
 learned: '2026-05-20'
-ref: teams/mvox-dev/memory/team-lead-archive.md
+ref: urls/mem-team-lead-archive-9d2803d
 enforcement: recognition
 ---
 # Persist per-op failure detail

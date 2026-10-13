@@ -1,7 +1,7 @@
 ---
 summary: "Choosing how to do a one-off live op such as seeding, a probe or cleanup."
 learned: '2026-05-20'
-ref: teams/mvox-dev/memory/team-lead-archive.md
+ref: urls/mem-team-lead-archive-9d2803d
 enforcement: recognition
 ---
 # One-off live ops as small scripts

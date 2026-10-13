@@ -1,7 +1,7 @@
 ---
 summary: For ending a session or restarting the team without leaving teammate processes running.
 learned: '2026-06-01'
-ref: teams/mvox-dev/memory/team-lead-archive.md
+ref: urls/mem-team-lead-archive-9d2803d
 enforcement: recognition
 ---
 # Shut teammates down before the session ends

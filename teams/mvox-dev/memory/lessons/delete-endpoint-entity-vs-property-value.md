@@ -1,7 +1,7 @@
 ---
 summary: Choosing the DELETE endpoint for an Entu _id, so entity and property-value deletes go to the right route.
 learned: '2026-05-20'
-ref: teams/mvox-dev/memory/architecture-decisions.md
+ref: teams/mvox-dev/docs/architecture-decisions.md
 enforcement: recognition
 ---
 # Entity _id and property-value _id use different DELETE routes

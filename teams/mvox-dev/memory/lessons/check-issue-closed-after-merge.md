@@ -1,7 +1,7 @@
 ---
 summary: "After a merge whose body says Closes #N, confirming the issue really closed."
 learned: '2026-05-31'
-ref: teams/mvox-dev/memory/team-lead-archive.md
+ref: urls/mem-team-lead-archive-9d2803d
 enforcement: recognition
 ---
 # Check the issue closed after merge

@@ -1,10 +1,10 @@
 # 03 — Ruled dead (not deleted)
 
-Every unit the gates ruled dead. Nothing here is deleted before GATE 3; the sources stay in
-git at their old paths until cutover moves them to the fallback. Generated from
-`03-state.tsv` (`python3 settle.py`); the full text of any id regenerates with `split.py`.
+Every unit the gates ruled dead. Nothing here is deleted before GATE 3; the sources sit in
+`teams/mvox-dev/memory/fallback/` (and the lead's auto-memory fallback) until then. Generated
+by `python3 settle.py && python3 dead.py`; the full text of any id regenerates with `split.py`.
 
-Total: 548.
+Total: 549.
 
 | ruled at | source | count | tiers |
 |---|---|---:|---|
@@ -30,6 +30,7 @@ Total: 548.
 | batch 1B | tallis.md | 3 | fact 1, header 2 |
 | batch 1B | team-lead-archive.md | 1 | longform 1 |
 | batch 1B | victoria.md | 12 | current 6, fact 1, header 1, lesson 3, ruling 1 |
+| batch 2 | byrd.md | 1 | lesson 1 |
 
 ## Test gaps still holding (batch 1C: dead, no issues; e2e is a product decision)
 
@@ -66,5 +67,6 @@ Total: 548.
 - **batch 1B / tallis.md**: tallis#1, tallis#2, tallis#13
 - **batch 1B / team-lead-archive.md**: team-lead-archive#1
 - **batch 1B / victoria.md**: victoria#1, victoria#3, victoria#4, victoria#5, victoria#6, victoria#8, victoria#10, victoria#12, victoria#14, victoria#16, victoria#17, victoria#22
+- **batch 2 / byrd.md**: byrd#113
 
 (*MVOX:memkit*)

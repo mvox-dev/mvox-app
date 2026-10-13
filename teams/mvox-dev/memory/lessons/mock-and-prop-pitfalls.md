@@ -1,7 +1,7 @@
 ---
 summary: "Writing Svelte page tests with mocks, seams and props."
 learned: '2026-10-11'
-ref: teams/mvox-dev/memory/josquin.md
+ref: urls/mem-josquin-9d2803d
 enforcement: recognition
 ---
 # Mock and prop pitfalls

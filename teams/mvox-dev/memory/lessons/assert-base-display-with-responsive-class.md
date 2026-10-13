@@ -1,7 +1,7 @@
 ---
 summary: "Testing elements with sm:/md:/lg: display classes, since jsdom cannot compute layout."
 learned: '2026-05-31'
-ref: teams/mvox-dev/memory/team-lead-archive.md
+ref: urls/mem-team-lead-archive-9d2803d
 enforcement: recognition
 ---
 # Assert the base display class too

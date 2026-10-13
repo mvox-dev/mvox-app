@@ -1,7 +1,7 @@
 ---
 summary: For choosing data-testid names and prefix selectors that will not match nested elements.
 learned: '2026-06-01'
-ref: teams/mvox-dev/memory/byrd.md
+ref: urls/mem-byrd-9d2803d
 enforcement: recognition
 ---
 # Prefix selectors match nested test ids too

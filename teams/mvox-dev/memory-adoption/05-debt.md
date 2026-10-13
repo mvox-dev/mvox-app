@@ -38,7 +38,7 @@ Moved aside, not deleted: `teams/mvox-dev/memory/fallback/` holds the 14 old mar
 files plus `pipeline-args/` (89 JSON) and `research/` (53 JSON), unchanged. The lint does not
 read it; the polyphony fence and CI notes-only path already cover `teams/mvox-dev/memory/`.
 The lead's harness auto-memory files move to a fallback directory beside them (lead's step;
-see the report). Way back: revert the cutover merge on main.
+see the report). Way back: revert PR #901's squash commit on main.
 
 ## Events that must happen before GATE 3
 

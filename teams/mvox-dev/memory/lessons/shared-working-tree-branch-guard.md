@@ -1,7 +1,7 @@
 ---
 summary: "Committing in the single shared working tree while others may be on a feature branch."
 learned: '2026-05-20'
-ref: teams/mvox-dev/memory/team-lead-archive.md
+ref: urls/mem-team-lead-archive-9d2803d
 enforcement: recognition
 ---
 # Guard the branch in the shared working tree

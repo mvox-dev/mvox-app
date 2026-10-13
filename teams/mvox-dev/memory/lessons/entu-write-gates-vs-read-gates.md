@@ -1,7 +1,7 @@
 ---
 summary: "Reasoning about Entu rights, keeping who-may-write separate from who-sees-which-field."
 learned: '2026-09-07'
-ref: teams/mvox-dev/memory/finn.md
+ref: urls/mem-finn-9d2803d
 enforcement: recognition
 ---
 # Entu write gates and read gates are separate

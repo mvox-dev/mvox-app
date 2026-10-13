@@ -1,7 +1,7 @@
 ---
 summary: "Moving an async handler, so post-await reads still check whether the page closed."
 learned: '2026-10-11'
-ref: teams/mvox-dev/memory/josquin.md
+ref: urls/mem-josquin-9d2803d
 enforcement: recognition
 ---
 # Re-check page state after every await

@@ -1,7 +1,7 @@
 ---
 summary: "Writing an authorization or brief for a live run, so it carries only what the PO directed."
 learned: '2026-06-15'
-ref: teams/mvox-dev/memory/team-lead-archive.md
+ref: urls/mem-team-lead-archive-9d2803d
 enforcement: recognition
 ---
 # Keep your own assumptions out of an authorization

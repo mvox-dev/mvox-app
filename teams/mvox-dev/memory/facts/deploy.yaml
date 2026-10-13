@@ -9,7 +9,7 @@ facts:
     refute: "find ~/workspace-app/src -name '+server.ts'"
     verified: "2026-10-14"
   - fact: "The mvox.eu apex points at multivox.pages.dev, a git-connected Cloudflare Pages project."
-    ref: teams/mvox-dev/memory/finn.md
+    ref: urls/mem-finn-9d2803d
     refute: "dig +short mvox.eu"
     verified: "2026-09-12"
   - fact: "common-prompt.md's Stack table still names @sveltejs/adapter-cloudflare; the app actually uses adapter-static."

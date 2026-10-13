@@ -1,7 +1,7 @@
 ---
 summary: For adding or editing i18n message keys in messages/*.json without breaking check or the JSON.
 learned: '2026-06-01'
-ref: teams/mvox-dev/memory/comenius.md
+ref: urls/mem-comenius-9d2803d
 enforcement: recognition
 ---
 # Adding message keys

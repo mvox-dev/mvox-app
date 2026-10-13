@@ -35,6 +35,6 @@ facts:
     verified: "2026-05-17"
 
   - fact: "mvox creates organizations with explicit _inheritrights false and entities under an organization with explicit _inheritrights true."
-    ref: teams/mvox-dev/memory/team-lead-archive.md
+    ref: urls/mem-team-lead-archive-9d2803d
     refute: "=ref"
     verified: "2026-10-14"

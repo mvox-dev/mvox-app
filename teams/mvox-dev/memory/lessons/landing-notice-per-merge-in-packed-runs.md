@@ -1,7 +1,7 @@
 ---
 summary: For sending a landing notice for each merge while one pipeline run lands several issues.
 learned: '2026-09-10'
-ref: teams/mvox-dev/memory/session-mvox19-pickup-log.md
+ref: urls/mem-session-mvox19-pickup-log-9d2803d
 enforcement: recognition
 ---
 # Landing notice per merge in packed runs

@@ -3,7 +3,7 @@ n	rule	sources	scope	kind	destination
 2	Sign persistent text (files, PRs, issues, scratchpads, comms) with (*MVOX:<Name>*)	common-prompt.md:L39, workspace/CLAUDE.md:L30, prompts/palestrina.md:L98 (trailer use)	all	standing	stays in common-prompt.md / palestrina.md
 3	Sign an issue body at filing time, not in a later edit	common-prompt.md:L39	all	standing	stays in common-prompt.md / palestrina.md
 4	Keep another team's author trailer on a file unless you substantially rewrite it	workspace/CLAUDE.md:L30	all	standing	stays in common-prompt.md / palestrina.md
-5	Do not sign chat replies to the PO; the trailer is for files, comms and issues	feedback_no_signature_in_conversation#1	lead	standing	stays in common-prompt.md / palestrina.md
+5	Do not sign chat replies to the PO; the trailer is for files, comms and issues	feedback_no_signature_in_conversation#1	lead	standing	added to prompts/palestrina.md Working Norms (cutover fix)
 6	End commits and PR bodies with only (*MVOX:Name*): no Co-authored-by, email or session link	workspace/CLAUDE.md:L31, common-prompt.md:L175, feedback_attribution_only#1	all	standing	rules.yaml row 5
 7	Use pnpm, never npm	workspace/CLAUDE.md:L29, common-prompt.md:L91, startup.md:L155	all	standing	stays in common-prompt.md / palestrina.md
 8	Spare words and avoid jargon in every message	~/.claude/CLAUDE.md:L44-46	all	standing	stays in common-prompt.md / palestrina.md
@@ -14,17 +14,17 @@ n	rule	sources	scope	kind	destination
 13	Keep teammate replies to 5 lines and reports to Mihkel to 10	~/.claude/CLAUDE.md:L59-60	all	standing	rules.yaml row 13
 14	Tag claims not checked this turn: [unverified] for checkable facts, [speculative] for inferences	~/.claude/CLAUDE.md:L64-71, finn#6, startup.md:L64,L68	all	standing	rules.yaml row 12
 15	Verify a checkable claim rather than label it, when you can	~/.claude/CLAUDE.md:L68	all	standing	stays in common-prompt.md / palestrina.md
-16	Never round traced-with-assumptions up to verified; name every unchecked assumption	finn#6	all	standing	stays in common-prompt.md / palestrina.md
-17	Use no urgency words (urgent, blocked, critical) in team messages; state facts and the ask	feedback_communication_tone#1	all	standing	stays in common-prompt.md / palestrina.md
+16	Never round traced-with-assumptions up to verified; name every unchecked assumption	finn#6	all	standing	added to common-prompt.md (cutover fix)
+17	Use no urgency words (urgent, blocked, critical) in team messages; state facts and the ask	feedback_communication_tone#1	all	standing	added to common-prompt.md (cutover fix)
 18	Copy times from date, hook lines or git stamps; never hand-type a time; prefer UTC with Z	feedback_machine_timestamps_only#1, startup.md:L133, prompts/perotin.md:L177	all	standing	stays in common-prompt.md / palestrina.md
-19	Give an Entu entity's human-readable name beside its raw id, everywhere	feedback_entity_id_readability#1	all	standing	stays in common-prompt.md / palestrina.md
+19	Give an Entu entity's human-readable name beside its raw id, everywhere	feedback_entity_id_readability#1	all	standing	added to common-prompt.md (cutover fix)
 20	Back any Entu rights/visibility claim with an ER id, a file:line, or [unverified]	facts/rulings-comms.yaml	all	standing	stays in common-prompt.md / palestrina.md
 21	Avoid absolute home paths in new content; use $REPO / $ENTU_RESEARCH	common-prompt.md:L25	all	standing	stays in common-prompt.md / palestrina.md
 22	Launch Claude from ~/workspace/	~/.claude/CLAUDE.md:L5	lead	standing	stays in common-prompt.md / palestrina.md
 23	On the first message run startup.md at once; do not ask what to do	~/.claude/CLAUDE.md:L9-13, startup.md:L23-25	lead	standing	stays in common-prompt.md / palestrina.md
 24	Startup: orient, pull, (no team create), restore inboxes, restore tasks, spawn, ready	~/.claude/CLAUDE.md:L15-22, startup.md:L29-146	lead	procedure	stays in its procedure doc
 25	State each startup phase name before executing it	startup.md:L25	lead	procedure	stays in its procedure doc
-26	Pull ~/workspace-app before reading team-lead.md on wake	feedback_pull_app_before_wake_read#1	lead	procedure	stays in its procedure doc
+26	Pull ~/workspace-app before reading team-lead.md on wake	feedback_pull_app_before_wake_read#1	lead	procedure	added to prompts/palestrina.md Working Norms (cutover fix)
 27	Do not call TeamCreate or TeamDelete; teams are implicit	~/.claude/CLAUDE.md:L18, startup.md:L52,L154, tool absent on CLI 2.1.211	lead	derivable	stays enforced by its test/CI
 28	Restore non-completed snapshot tasks verbatim on a fresh start; skip on warm /clear	startup.md:L95-103, ~/.claude/CLAUDE.md:L20	lead	procedure	stays in its procedure doc
 29	Before spawning, check config.json; message a live same-name member instead of re-spawning	startup.md:L58,L119-121,L139	lead	procedure	stays in its procedure doc
@@ -48,9 +48,9 @@ n	rule	sources	scope	kind	destination
 47	Small pattern-following issues: Josquin on Sonnet with a full brief; pattern-setting: Opus	facts/rulings-process.yaml	lead	standing	stays in common-prompt.md / palestrina.md
 48	Carry lessons in briefs and scratchpads, not in long-lived context	common-prompt.md:L8	lead	standing	stays in common-prompt.md / palestrina.md
 49	Pick up only issues labeled ready; the rest is backlog	feedback_ready_label_gate#1	lead	standing	rules.yaml row 15
-50	On task completion check the board for ready issues and dispatch; don't wait for Gama	feedback_auto_pickup#1	lead	standing	stays in common-prompt.md / palestrina.md
+50	On task completion check the board for ready issues and dispatch; don't wait for Gama	feedback_auto_pickup#1	lead	standing	added to prompts/palestrina.md Working Norms (cutover fix)
 51	Launch a prepped issue as soon as its args exist; never hold it for research packing	facts/rulings-process.yaml	lead	standing	stays in common-prompt.md / palestrina.md
-52	Set 'in research' at research dispatch, 'in process' at slice entry; drop after landing notice	feedback_board_state_labels#1	lead	procedure	stays in its procedure doc
+52	Set 'in research' at research dispatch, 'in process' at slice entry; drop after landing notice	feedback_board_state_labels#1	lead	procedure	added to prompts/palestrina.md Working Norms (cutover fix)
 53	Set a label only after the fact; confirm per issue with gh issue view before acting on labels	feedback_board_state_labels#1	lead	situational	lesson
 54	Mark researched when research lands, prepped only when the brief/args are on file	facts/rulings-process.yaml, feedback_board_state_labels#1	lead	standing	stays in common-prompt.md / palestrina.md
 55	Never set epic labels; label only issues you pick; never pass epics to research-pack args	facts/rulings-process.yaml	lead	standing	stays in common-prompt.md / palestrina.md
@@ -73,8 +73,8 @@ n	rule	sources	scope	kind	destination
 72	Escalate to Mihkel only when Gama defers or the item is outside Gama's scope	facts/rulings-comms.yaml	lead	standing	stays in common-prompt.md / palestrina.md
 73	Address Gama as gama@po-team, never bare gama	facts/rulings-comms.yaml	lead	standing	stays in common-prompt.md / palestrina.md
 74	Send a one-line notice to gama@po-team at slice entry and at every merge	feedback_landing_notice#1	lead	standing	rules.yaml row 16
-75	Report YELLOW halts, blockers and run completions to gama@po-team	feedback_landing_notice#1	lead	standing	stays in common-prompt.md / palestrina.md
-76	Empty the team-lead inbox after acting on mail so the courier keeps delivering	feedback_keep_collecting_mail#1	lead	standing	stays in common-prompt.md / palestrina.md
+75	Report YELLOW halts, blockers and run completions to gama@po-team	feedback_landing_notice#1	lead	standing	added to prompts/palestrina.md Working Norms (cutover fix)
+76	Empty the team-lead inbox after acting on mail so the courier keeps delivering	feedback_keep_collecting_mail#1	lead	standing	added to prompts/palestrina.md Working Norms (cutover fix)
 77	Put schema decisions to the PO one at a time; never batch questions	feedback_schema_design_pacing#1	lead	situational	lesson
 78	Escalate to PO: prod backend, deploys, architecture, scope, priority, external comms, team	common-prompt.md:L114-121, facts/rulings-comms.yaml, prompts/victoria.md:L39-46	lead	standing	stays in common-prompt.md / palestrina.md
 79	Team-lead decides routing, lifecycle, branch naming, dev env, merge timing, issues, review	common-prompt.md:L105-112	lead	standing	stays in common-prompt.md / palestrina.md
@@ -82,22 +82,22 @@ n	rule	sources	scope	kind	destination
 81	Team-lead never edits code, runs builds or tests, or commits code; delegate	common-prompt.md:L255-261, prompts/palestrina.md:L15,L41-50, feedback_use_team_not_oneshots#1	lead	standing	rules.yaml row 14
 82	Remind team-lead when you see it editing code, running builds/tests, or committing	common-prompt.md:L257	all	standing	stays in common-prompt.md / palestrina.md
 83	Team-lead does not edit agent prompts; it proposes changes	prompts/palestrina.md:L48	lead	standing	stays in common-prompt.md / palestrina.md
-84	Team-lead runs one-shot probes itself; don't spawn an agent for a one-liner	feedback_team_lead_direct_probes#1	lead	standing	stays in common-prompt.md / palestrina.md
-85	Delegate or background any sweep over ~10 remote calls	feedback_no_broad_sweeps_in_foreground#1	lead	standing	stays in common-prompt.md / palestrina.md
-86	Don't spend team-lead context on idle acks or status narration	feedback_context_efficiency#1	lead	standing	stays in common-prompt.md / palestrina.md
-87	Dispatch preference: workflow template, then standing teammates, then one-shot agents	feedback_use_team_not_oneshots#1	lead	standing	stays in common-prompt.md / palestrina.md
+84	Team-lead runs one-shot probes itself; don't spawn an agent for a one-liner	feedback_team_lead_direct_probes#1	lead	standing	added to prompts/palestrina.md Working Norms (cutover fix)
+85	Delegate or background any sweep over ~10 remote calls	feedback_no_broad_sweeps_in_foreground#1	lead	standing	added to prompts/palestrina.md Working Norms (cutover fix)
+86	Don't spend team-lead context on idle acks or status narration	feedback_context_efficiency#1	lead	standing	added to prompts/palestrina.md Working Norms (cutover fix)
+87	Dispatch preference: workflow template, then standing teammates, then one-shot agents	feedback_use_team_not_oneshots#1	lead	standing	added to prompts/palestrina.md Working Norms (cutover fix)
 88	Don't SendMessage-reply to a workflow subagent; let it resolve or fail, then step in	feedback_use_team_not_oneshots#1	lead	situational	lesson
-89	Use the tdd-slice-pipeline template for all TDD work; never write inline workflow scripts	feedback_use_template_not_adhoc#1	lead	standing	stays in common-prompt.md / palestrina.md
+89	Use the tdd-slice-pipeline template for all TDD work; never write inline workflow scripts	feedback_use_template_not_adhoc#1	lead	standing	added to prompts/palestrina.md Working Norms (cutover fix)
 90	Every delegation names the task, context (branch, paths), constraints and expected report	prompts/palestrina.md:L18,L63-72	lead	standing	stays in common-prompt.md / palestrina.md
 91	Decide execution mode before writing a plan; default to the team TDD chain	feedback_plan_execution_mode_baked_in#1	lead	situational	lesson
-92	Report each member's context size at every seam via context-health.sh	feedback_context_health_at_seams#1	lead	procedure	stays in its procedure doc
+92	Report each member's context size at every seam via context-health.sh	feedback_context_health_at_seams#1	lead	procedure	added to prompts/palestrina.md Working Norms (cutover fix)
 93	Merge team-lead PRs via /mvox-merge, one command per Bash call	feedback_mvox_merge_skill#1	lead	procedure	stays in its procedure doc
 94	No team-lead commits in workspace-app during a live pipeline; guard branch==main in-call	feedback_no_commits_during_live_pipeline#1	lead	standing	rules.yaml row 20
 95	Run one feature branch through the chain at a time, and one active task per branch	feedback_no_parallel_branches#1, common-prompt.md:L130	lead	standing	rules.yaml row 4
-96	Pair every UI surface with real seeded data; no skin-only pages	feedback_ui_parallels_with_seed#1	lead	standing	stays in common-prompt.md / palestrina.md
+96	Pair every UI surface with real seeded data; no skin-only pages	feedback_ui_parallels_with_seed#1	lead	standing	added to prompts/palestrina.md Working Norms (cutover fix)
 97	Start the visual companion with --host 0.0.0.0 and the tailnet --url-host	feedback_visual_companion_tailnet_default#1	lead	situational	lesson
 98	On a permission/threat classifier block stop and ask for manual mode; rephrase mechanical ones	feedback_request_manual_mode_on_block#1, perotin#4	all	situational	lesson
-99	Never retry a blocked action split into smaller pieces	perotin#4	all	standing	stays in common-prompt.md / palestrina.md
+99	Never retry a blocked action split into smaller pieces	perotin#4	all	standing	added to common-prompt.md (cutover fix)
 100	#289: its inventory gates sub-issue cutting; the remote team-lead cuts them	facts/rulings-process.yaml	lead	situational	lesson
 101	At each line-cap step, merge IDENTICAL duplicates as code-only; send DIFFERS to the PO	common-prompt.md:L66	lead	situational	lesson
 102	Skip Comenius only when the story has no user-facing strings; team-lead decides at assignment	common-prompt.md:L146, prompts/comenius.md:L52	lead	standing	stays in common-prompt.md / palestrina.md
@@ -135,8 +135,8 @@ n	rule	sources	scope	kind	destination
 134	Write only inside your role's MAY-WRITE paths (see each prompt's scope list)	common-prompt.md:L137, prompts/byrd.md:L62-75, prompts/josquin.md:L87-99, prompts/tallis.md:L69-83, prompts/comenius.md:L64-77, prompts/victoria.md:L71-82, prompts/perotin.md:L106-124, prompts/bentham.md:L127-137	all	standing	stays in common-prompt.md / palestrina.md
 135	Don't run wrangler without team-lead approval	prompts/byrd.md:L74	implementer	standing	stays in prompts/<role>.md
 136	Bentham runs pnpm check + test on the branch's own bytes and quotes output before any verdict	prompts/bentham.md:L139, facts/rulings-process.yaml x2	reviewer	standing	stays in prompts/<role>.md
-137	Quote a line read this pass for every verdict claim; the file wins over the verdict	bentham#3	reviewer	standing	stays in prompts/<role>.md
-138	Confirm the branch tip's commit subject before reviewing; if GREEN is pending say not ready	bentham#3	reviewer	procedure	stays in its procedure doc
+137	Quote a line read this pass for every verdict claim; the file wins over the verdict	bentham#3	reviewer	standing	added to prompts/bentham.md Review Habits (cutover fix)
+138	Confirm the branch tip's commit subject before reviewing; if GREEN is pending say not ready	bentham#3	reviewer	procedure	added to prompts/bentham.md Review Habits (cutover fix)
 139	Bentham: verdict RED/YELLOW/GREEN with rationale and who fixes; never fixes code or merges	prompts/bentham.md:L54,L134-141, common-prompt.md:L171, facts/rulings-process.yaml	reviewer	standing	stays in prompts/<role>.md
 140	RED for security, broken build/tests, data-loss risk, TDD violation; never RED for style	prompts/bentham.md:L16-17,L29-47	reviewer	standing	stays in prompts/<role>.md
 141	RED when tests are missing or committed after the implementation	prompts/bentham.md:L58-65,L35	reviewer	standing	stays in prompts/<role>.md
@@ -159,12 +159,12 @@ n	rule	sources	scope	kind	destination
 158	Board sort test checks behaviour; a sort-site comment names the label coupling	facts/rulings-tooling.yaml, #310 board sort spec	implementer	derivable	stays enforced by its test/CI
 159	Map every acceptance criterion to at least one test	prompts/tallis.md:L26, prompts/bentham.md:L64	implementer	standing	stays in prompts/<role>.md
 160	Colocate unit specs beside their source file	common-prompt.md:L64,L136, prompts/tallis.md:L23,L87	implementer	standing	stays in prompts/<role>.md
-161	Audit REDs for vacuous guards: no expect(true), waitFor async, assert call args, guard empty loops	tallis#3	implementer	standing	stays in prompts/<role>.md
-162	Land a throwing stub with a new-export RED spec so pnpm check stays at 0	tallis#4	implementer	standing	stays in prompts/<role>.md
-163	Against a throwing stub, assert the rejection message, not a bare rejects.toThrow()	tallis#7	implementer	standing	stays in prompts/<role>.md
-164	Assert absence explicitly for fields that must never appear	tallis#6	implementer	standing	stays in prompts/<role>.md
-165	Assert base hidden and the breakpoint class together for breakpoint-gated elements	tallis#9	implementer	standing	stays in prompts/<role>.md
-166	Inject fetchImpl with a real Response; don't vi.stubGlobal('fetch')	tallis#11	implementer	standing	stays in prompts/<role>.md
+161	Audit REDs for vacuous guards: no expect(true), waitFor async, assert call args, guard empty loops	tallis#3	implementer	standing	added to prompts/josquin.md Test Habits (cutover fix)
+162	Land a throwing stub with a new-export RED spec so pnpm check stays at 0	tallis#4	implementer	standing	added to prompts/josquin.md Test Habits (cutover fix)
+163	Against a throwing stub, assert the rejection message, not a bare rejects.toThrow()	tallis#7	implementer	standing	added to prompts/josquin.md Test Habits (cutover fix)
+164	Assert absence explicitly for fields that must never appear	tallis#6	implementer	standing	added to prompts/josquin.md Test Habits (cutover fix)
+165	Assert base hidden and the breakpoint class together for breakpoint-gated elements	tallis#9	implementer	standing	added to prompts/josquin.md Test Habits (cutover fix)
+166	Inject fetchImpl with a real Response; don't vi.stubGlobal('fetch')	tallis#11	implementer	standing	added to prompts/josquin.md Test Habits (cutover fix)
 167	Mock Entu at src/lib/entu/request.ts; gated controls use rights fixtures, not membership	prompts/tallis.md:L52	implementer	standing	stays in prompts/<role>.md
 168	Use describe.each / it.each for data-driven cases	prompts/tallis.md:L57	implementer	standing	stays in prompts/<role>.md
 169	No D1 mocks; delete createMockDb leftovers	prompts/tallis.md:L58	implementer	standing	stays in prompts/<role>.md
@@ -183,7 +183,7 @@ n	rule	sources	scope	kind	destination
 182	Reassign arrays/objects to trigger reactivity	common-prompt.md:L208, prompts/byrd.md:L33	implementer	standing	stays in prompts/<role>.md
 183	Never put overflow on ancestors of position: sticky elements	common-prompt.md:L210, prompts/byrd.md:L35	implementer	standing	stays in prompts/<role>.md
 184	Use $derived for option arrays containing m.*() calls	prompts/byrd.md:L34, prompts/comenius.md:L26	implementer	standing	stays in prompts/<role>.md
-185	Import page from $app/state, not $app/stores	byrd#29	implementer	standing	stays in prompts/<role>.md
+185	Import page from $app/state, not $app/stores	byrd#29	implementer	standing	added to prompts/josquin.md Test Habits (cutover fix)
 186	Tailwind: full class names only, no dynamic template literals	common-prompt.md:L92, prompts/byrd.md:L88	implementer	standing	stays in prompts/<role>.md
 187	Use class: for conditional classes; design mobile-first	prompts/byrd.md:L89-90	implementer	standing	stays in prompts/<role>.md
 188	No server code: no src/lib/server, +page.server.ts, +server.ts, $env/static/private	prompts/bentham.md:L84, prompts/byrd.md:L40, common-prompt.md:L93,L137,L209 (stale: server dirs), prompts/tallis.md:L53 (stale)	implementer	standing	stays in prompts/<role>.md
@@ -212,7 +212,7 @@ n	rule	sources	scope	kind	destination
 211	Show 24h time unless the profile picks AM/PM; weeks start Monday; dates YYYY-MM-DD	facts/rulings-product.yaml	implementer	standing	stays in prompts/<role>.md
 212	A list renders by default; hiding it while loading is an explicit, proven opt-in	facts/rulings-product.yaml	implementer	standing	stays in prompts/<role>.md
 213	Every text sits on a coloured background except data-desk-text marginalia and display titles	team-lead-archive#35 (tests/bg-rule.spec.ts named but absent)	implementer	standing	stays in prompts/<role>.md
-214	Never tag data-desk-text on an element that already has a coloured-background ancestor	team-lead-archive#35	implementer	standing	stays in prompts/<role>.md
+214	Never tag data-desk-text on an element that already has a coloured-background ancestor	team-lead-archive#35	implementer	standing	added to prompts/josquin.md Test Habits (cutover fix)
 215	Build on the season surface as built; no respec	facts/rulings-product.yaml	implementer	situational	lesson
 216	Design library/licensing so publishers see federations as a legitimate channel	facts/rulings-product.yaml	all	standing	stays in common-prompt.md / palestrina.md
 217	Lend a score copy only within its own organization; enforce it in app code	facts/rulings-product.yaml x2	implementer	standing	stays in prompts/<role>.md
@@ -241,7 +241,7 @@ n	rule	sources	scope	kind	destination
 240	Run live mutations only after team-lead's explicit 'I authorize this run'	prompts/perotin.md:L44,L122, perotin#4, feedback_authorization_gate#1, session-mvox19-pickup-log#5	data	standing	rules.yaml row 11
 241	Dry-run clean or Bentham GREEN is never authorization	prompts/perotin.md:L44, perotin#4, feedback_authorization_gate#1	data	standing	rules.yaml row 11
 242	One authorization covers aborts, retries, resumes and cleanup; ask again on scope change	facts/rulings-data.yaml	data	standing	stays in prompts/<role>.md
-243	Re-check authorization per script and target set; read the dispatch for extra gates	perotin#4	data	standing	stays in prompts/<role>.md
+243	Re-check authorization per script and target set; read the dispatch for extra gates	perotin#4	data	standing	added to prompts/perotin.md (cutover fix)
 244	Ping team-lead after 15 min waiting for authorization; never self-authorize	prompts/perotin.md:L53, perotin#4	data	situational	lesson
 245	Real personal data into crede needs Mihkel's explicit say-so each time	facts/rulings-data.yaml, workspace/CLAUDE.md:L34	data	standing	stays in prompts/<role>.md
 246	Never send probes or synthetic data to crede	facts/rulings-data.yaml	data	standing	stays in prompts/<role>.md
@@ -263,5 +263,5 @@ n	rule	sources	scope	kind	destination
 262	Name AC-scenario seeds seed-ac-<issue>-<scenario>.ts	prompts/perotin.md:L138	data	standing	stays in prompts/<role>.md
 263	Finn is read-only except its own scratchpad	prompts/finn.md:L30-43	implementer	standing	stays in prompts/<role>.md
 264	Finn acts on research requests at once, spawning parallel subagents in the same turn	prompts/finn.md:L28,L51-57	implementer	standing	stays in prompts/<role>.md
-265	Open every research subagent prompt with the repo guard (origin must end mvox-app.git)	finn#3	implementer	standing	stays in prompts/<role>.md
+265	Open every research subagent prompt with the repo guard (origin must end mvox-app.git)	finn#3	implementer	standing	added to prompts/finn.md (cutover fix)
 266	Finn delivers raw data as structured markdown, without interpretation	prompts/finn.md:L65-67	implementer	standing	stays in prompts/<role>.md

@@ -1,7 +1,7 @@
 ---
 summary: "Checking a SHA, count, error or agent report yourself before you assert it or act on it."
 learned: '2026-05-31'
-ref: teams/mvox-dev/memory/team-lead-archive.md
+ref: urls/mem-team-lead-archive-9d2803d
 enforcement: recognition
 ---
 # Verify before asserting or relaying

@@ -17,7 +17,7 @@ facts:
     refute: "=ref"
     verified: "2026-09-09"
   - fact: "Entu docs say a POST without _id always adds a value; for rights tiers this conflicts with observed replacement and is an open vendor question."
-    ref: teams/mvox-dev/memory/architecture-decisions.md
+    ref: teams/mvox-dev/docs/architecture-decisions.md
     refute: "git -C ~/projects/entu-www show origin/main:src/api/properties/index.md"
     verified: "2026-10-14"
   - fact: "An entity read returns one bucket: a caller with any right gets private, with all properties including rights; others get domain or public content without rights properties."
@@ -46,11 +46,11 @@ facts:
     verified: "2026-09-15"
 
   - fact: "Only _owner can delete an entity; _editor can list, read, add property values and delete ordinary property values."
-    ref: teams/mvox-dev/memory/perotin.md
+    ref: urls/mem-perotin-9d2803d
     refute: "git -C ~/projects/entu-www show origin/main:src/overview/entities/index.md"
     verified: "2026-10-14"
 
   - fact: "A list response's count equals the caller's visible subset, not the total number of matching entities."
-    ref: teams/mvox-dev/memory/perotin.md
+    ref: urls/mem-perotin-9d2803d
     refute: "Compare count for an owner and a viewer on the same query."
     verified: "2026-09-21"

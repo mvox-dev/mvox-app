@@ -34,6 +34,12 @@ When prompts or memory cite `$REPO/...` or `$ENTU_RESEARCH/...`, resolve relativ
 
 Standing rules: teams/mvox-dev/memory/rules.yaml — read on spawn.
 
+Also, for everyone:
+- Never round "traced with assumptions" up to "verified"; name every unchecked assumption.
+- No urgency words (urgent, blocked, critical) in team messages; state the facts and the ask.
+- Give an Entu entity's human-readable name beside its raw id, everywhere.
+- Never retry a blocked action by splitting it into smaller pieces.
+
 ## Author Attribution
 
 All persistent text output (architecture decisions, PR descriptions, shared knowledge files, scratchpad entries, **issue bodies — at file time, not as a later edit**) must carry the author's name: `(*MVOX:<AgentName>*)`. Place on a new line below the block, or next to the section heading if you wrote the entire section.
