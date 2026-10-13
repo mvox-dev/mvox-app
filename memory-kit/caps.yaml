@@ -2,7 +2,7 @@
 # The TypeScript interfaces are the canon; this is the flat extract the lint reads,
 # so a home needs python3 and nothing else to lint its memory.
 
-version: 0.1.0-alpha.2
+version: 0.1.0-alpha.3
 
 scratchpad:
   current_rows: 15

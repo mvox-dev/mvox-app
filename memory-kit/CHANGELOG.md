@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## v0.1.0-alpha.3 -- 2026-10-14 -- first adapter: Claude Code obligations pane
+
+- **First adapter tool: `adapters/claude-code/obligations-pane/`** -- a read-only Claude Code
+  side pane over `memory/obligations.yaml`: due-date order, expired/due-in-7-days counts, stable
+  per-actor colours, `urls/` refs as clickable links, footer with agent names, model letters and
+  context weight -- per subagent too, from each loop's latest turn.step usage; refresh every 20 s; mouse-wheel scrolling, one item per burst (150 ms throttle), header and footer fixed. Spec by the PO (Mihkel), built by the workshop home
+  (Paertel), proven there first: validate clean, 30/30 tests. API facts it found are in its README.
+- README: adapters may carry harness-bound tools in `adapters/<harness>/<tool>/`.
+- `adapters/claude-code/` is a plugin marketplace (folder source): a home installs the pane with
+  `claude plugin marketplace add ./memory-kit/adapters/claude-code` and
+  `claude plugin install obligations-pane@memory-kit`; a subtree pull updates it in place.
+- Pane, final shape (PO-accepted 14.10): footer separated by one rule (no frame), mouse-wheel
+  scrolling one item per burst, per-subagent context load, figures never truncated. 40/40 tests.
+
 ## v0.1.0-alpha.2 -- 2026-10-13 -- lessons index generator; event-gated cutover
 
 Proven first in the household (Passepartout, adopted 2026-10-13); answers GitHub #1 (hr2).

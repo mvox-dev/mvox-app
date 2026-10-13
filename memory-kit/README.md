@@ -55,6 +55,8 @@ Binding consequences:
   `~/.<vendor>/...`. Examples are marked as examples.
 - **Adapters, where a harness must be named.** One file per harness, outside the core
   (`adapters/<harness>.md`), carrying that harness's hard facts. Pattern proven in ai-locum.
+  Harness-bound tools go beside it in `adapters/<harness>/<tool>/` -- e.g.
+  `adapters/claude-code/obligations-pane/`, a read-only side pane over the obligations tier.
 - **Tooling stays language-level**, not model-level: python3 + PyYAML, awk, git. Nothing that
   assumes a particular assistant is reading.
 

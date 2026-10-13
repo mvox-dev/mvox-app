@@ -2,7 +2,7 @@
 # memory-kit adoption. (*MVOX:memkit*)
 
 facts:
-  - fact: "Team memory is teams/mvox-dev/memory/, in memory-kit shape; the kit is vendored at memory-kit/ (git subtree) pinned to v0.1.0-alpha.2."
+  - fact: "Team memory is teams/mvox-dev/memory/, in memory-kit shape; the kit is vendored at memory-kit/ (git subtree) pinned to v0.1.0-alpha.3."
     ref: memory-kit/VERSION
     refute: "cat memory-kit/VERSION"
     verified: "2026-10-14"
@@ -25,4 +25,8 @@ facts:
   - fact: "The pre-kit markdown memory sits in teams/mvox-dev/memory/fallback/ until GATE 3 rules its deletion; nothing reads it."
     ref: teams/mvox-dev/memory/fallback/README.md
     refute: "=ref"
+    verified: "2026-10-14"
+  - fact: "A squash merge drops git subtree's metadata, so an upgrade removes memory-kit/ and re-adds it at the new tag with git subtree add --squash."
+    ref: teams/mvox-dev/memory-adoption/06-report.md
+    refute: "git subtree pull --prefix memory-kit <kit-url> <tag> --squash"
     verified: "2026-10-14"
