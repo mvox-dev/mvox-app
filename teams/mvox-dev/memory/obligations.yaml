@@ -3,4 +3,10 @@
 # a resolution check and an expiry instead of a refutation address.
 # Resolved obligations are deleted; if the resolution mattered it became a fact or a lesson.
 
-obligations: []
+obligations:
+  - obligation: "File the memory-kit adoption experience report (06-report.md) on the kit tracker"
+    actor: Palestrina
+    since: 2026-10-13
+    check: "codeberg.org/mitselek/memory-kit/issues: an mvox-dev experience report is open"
+    expires: 2026-10-28
+    ref: passepartout:2026-10-13
