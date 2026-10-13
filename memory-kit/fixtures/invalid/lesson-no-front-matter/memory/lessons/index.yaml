@@ -1,0 +1,6 @@
+lessons:
+  - slug: bare
+    summary: "A lesson whose file carries no front matter."
+    learned: "2026-10-13"
+    ref: types/memory-lessons.ts
+    enforcement: recognition
