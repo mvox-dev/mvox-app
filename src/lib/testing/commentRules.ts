@@ -233,5 +233,8 @@ export function changedFiles(options: { git?: GitRunner; diffFilter?: string } =
 	const base = git(['merge-base', 'origin/main', 'HEAD']).trim();
 	const diff = git(['diff', '--name-only', `--diff-filter=${options.diffFilter ?? 'd'}`, base]);
 	const untracked = git(['ls-files', '--others', '--exclude-standard']);
-	return `${diff}\n${untracked}`.split('\n').filter((line) => line.length > 0);
+	// memory-kit/ is a vendored subtree that is never edited here.
+	return `${diff}\n${untracked}`
+		.split('\n')
+		.filter((line) => line.length > 0 && !line.startsWith('memory-kit/'));
 }

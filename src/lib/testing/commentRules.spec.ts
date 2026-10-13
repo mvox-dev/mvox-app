@@ -324,6 +324,12 @@ describe('changedFiles — the changed set against main', () => {
 		]);
 	});
 
+	it('leaves out the vendored memory-kit/ subtree', () => {
+		const git = (args: string[]): string =>
+			args[0] === 'merge-base' ? 'abc123\n' : 'memory-kit/types/caps.ts\nsrc/a.ts\n';
+		expect(changedFiles({ git })).toEqual(['src/a.ts', 'src/a.ts']);
+	});
+
 	it('runs against the real repository without throwing', () => {
 		const files = changedFiles();
 		expect(Array.isArray(files)).toBe(true);
