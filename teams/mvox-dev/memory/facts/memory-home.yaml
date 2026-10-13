@@ -2,7 +2,7 @@
 # memory-kit adoption. (*MVOX:memkit*)
 
 facts:
-  - fact: "Team memory is teams/mvox-dev/memory/, in memory-kit shape; the kit is vendored at memory-kit/ (git subtree) pinned to v0.1.0-alpha.3."
+  - fact: "Team memory is teams/mvox-dev/memory/, in memory-kit shape; the kit is vendored at memory-kit/ (git subtree) pinned to v0.1.0-alpha.4."
     ref: memory-kit/VERSION
     refute: "cat memory-kit/VERSION"
     verified: "2026-10-14"
