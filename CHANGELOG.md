@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## v0.1.0-alpha.4 -- 2026-10-14 -- the lint and the pane find a home from outside it
+
+Reported by the po-team home (Henry), whose lead session runs outside its memory repo.
+
+- **Fix: the lint honours `memory_dir`.** It read `memory-kit.conf` for the mode only and always
+  linted `<home>/memory`. It now reads `memory_dir` from `<home>/memory-kit.conf`; a path that
+  ends in `memory` is still taken as the memory directory itself. Fixture:
+  `valid/conf-memory-dir`.
+- **Fix: a missing memory directory fails in every mode.** Under `--report` it printed "no such
+  memory directory" and exited 0, so a wrong path passed silently. It now exits 2 in gate and
+  report mode alike. Fixture: `invalid/missing-memory-dir`; `run-fixtures.sh` also runs it
+  under `--report`.
+- **Pane 0.2.0: `memoryDir` option.** A path to the memory directory, for a session that runs
+  outside its home; relative paths resolve against the working directory. Empty keeps the old
+  lookup (`<cwd>/memory-kit.conf`, then `<cwd>/memory`). 44/44 tests.
+- **ADOPTION Phase 5: where the gate and the pane look**, and why a second `memory-kit.conf`
+  outside the home is wrong (it claims that folder is a home).
+- **Skeleton scratchpad:** the comments no longer contain `current:` or `staging:`, so a tool
+  editing the keys by string replace cannot hit a comment.
+
 ## v0.1.0-alpha.3 -- 2026-10-14 -- first adapter: Claude Code obligations pane
 
 - **First adapter tool: `adapters/claude-code/obligations-pane/`** -- a read-only Claude Code
