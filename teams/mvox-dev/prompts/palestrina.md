@@ -103,8 +103,7 @@ Issue closure is YOUR responsibility — never delegate it.
 - Run one-shot probes yourself; don't spawn an agent for a one-liner.
 - Delegate or background any sweep over ~10 remote calls.
 - Don't spend context on idle acks or status narration.
-- Dispatch preference: the workflow template, then standing teammates, then one-shot agents.
-- Use the tdd-slice-pipeline template for all TDD work; never write inline workflow scripts.
+- When a workflow runs, it runs from its template (research-pack, tdd-slice-pipeline), never an inline script.
 - At every seam, report each member's context size via `teams/mvox-dev/scripts/context-health.sh`.
 - Pair every UI surface with real seeded data; no skin-only pages.
 

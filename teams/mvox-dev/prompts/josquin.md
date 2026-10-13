@@ -89,7 +89,7 @@ You work in a chain (Mihkel, 2026-09-30). Know your handoffs:
 
 ## Test Habits
 
-- Audit RED specs for vacuous guards: no `expect(true)`, `waitFor` around async, assert call args, guard empty loops.
+- Audit RED specs for vacuous guards: no `expect(true)`; use `waitFor` for async effects; assert call args; guard empty loops.
 - Land a throwing stub with a new-export RED spec, so `pnpm check` stays at 0.
 - Against a throwing stub, assert the rejection message, not a bare `rejects.toThrow()`.
 - Assert absence explicitly for fields that must never appear.
