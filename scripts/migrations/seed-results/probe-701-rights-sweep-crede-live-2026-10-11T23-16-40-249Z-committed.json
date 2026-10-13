@@ -1,0 +1,119 @@
+{
+  "dryRun": false,
+  "db": "mvox_crede",
+  "sensitive": true,
+  "committed": true,
+  "countsByType": [
+    {
+      "type": "admin_member_record",
+      "count": 20
+    },
+    {
+      "type": "attendance",
+      "count": 74
+    },
+    {
+      "type": "database",
+      "count": 1
+    },
+    {
+      "type": "edition",
+      "count": 9
+    },
+    {
+      "type": "entity",
+      "count": 26
+    },
+    {
+      "type": "event",
+      "count": 46
+    },
+    {
+      "type": "event_series",
+      "count": 1
+    },
+    {
+      "type": "feedback",
+      "count": 2
+    },
+    {
+      "type": "library",
+      "count": 1
+    },
+    {
+      "type": "link",
+      "count": 4
+    },
+    {
+      "type": "member",
+      "count": 21
+    },
+    {
+      "type": "menu",
+      "count": 19
+    },
+    {
+      "type": "mvox_collective",
+      "count": 1
+    },
+    {
+      "type": "person",
+      "count": 23
+    },
+    {
+      "type": "plugin",
+      "count": 4
+    },
+    {
+      "type": "profile",
+      "count": 22
+    },
+    {
+      "type": "program_item",
+      "count": 5
+    },
+    {
+      "type": "property",
+      "count": 205
+    },
+    {
+      "type": "repertoire_item",
+      "count": 7
+    },
+    {
+      "type": "rsvp",
+      "count": 238
+    },
+    {
+      "type": "schedule_item",
+      "count": 5
+    },
+    {
+      "type": "season",
+      "count": 1
+    },
+    {
+      "type": "section",
+      "count": 6
+    },
+    {
+      "type": "work",
+      "count": 9
+    }
+  ],
+  "inheritanceOutliers": [],
+  "sharingOutliers": [],
+  "unexplainedGrants": [],
+  "library": [
+    {
+      "id": "6a92a587ca67df980f4156f7",
+      "inheritrights": true
+    }
+  ],
+  "noRightsReadable": [],
+  "grantValues": {
+    "inherited": 7745,
+    "direct": 4063
+  },
+  "authorizedBy": "Mihkel, team-lead conversation 2026-10-11T23:16:17Z"
+}
