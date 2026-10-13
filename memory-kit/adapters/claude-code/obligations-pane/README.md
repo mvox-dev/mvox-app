@@ -48,9 +48,17 @@ columns, 110 once asked), otherwise it waits. `/obligations` opens it at any wid
 
 ## Data source
 
-- `<cwd>/<memory_dir>/obligations.yaml`, where `<cwd>` is the session's working directory.
-  `memory_dir` comes from `<cwd>/memory-kit.conf` and defaults to `memory`. One install
-  therefore serves every kit home.
+- `<memory dir>/obligations.yaml`. The memory directory is, in order:
+  1. the `memoryDir` option, when set. A relative path resolves against the session's working
+     directory. For a lead session that runs outside its home (a team folder, a sibling repo).
+  2. `<cwd>/<memory_dir>`, with `memory_dir` read from `<cwd>/memory-kit.conf`.
+  3. `<cwd>/memory`.
+
+  Left empty, one install therefore serves every kit home. The value is stored in settings under
+  `pluginConfigs`; set in the user's settings, it points every session at that one home. Whether
+  a project's own settings can carry it for that project alone is untested (alpha.4) -- check
+  before relying on it. Do not add a second `memory-kit.conf` outside the home to steer the
+  pane: that file says "this folder is a home", and the lint will believe it.
 - Shape: `memory-kit/types/memory-obligations.ts`, a list of
   `{obligation, actor, since, check, expires, ref}`.
 - Links: `memory/urls/<name>` holds one URL on line 1 (`memory-kit/types/memory-urls.ts`). The

@@ -28,5 +28,13 @@ for d in "$KIT"/fixtures/invalid/*/; do
   fi
 done
 
+# A missing memory directory must fail even under --report: a lint that found no tree has
+# checked nothing. (finding 17: --report exited 0 on "no such memory directory")
+if "$DIR/memory-lint.sh" "$KIT/fixtures/invalid/missing-memory-dir/" --report >/dev/null 2>&1; then
+  fail=$((fail+1)); echo "UNEXPECTED PASS  invalid/missing-memory-dir under --report"
+else
+  pass=$((pass+1))
+fi
+
 echo "fixtures: $pass passed, $fail failed"
 [ "$fail" -eq 0 ] || exit 1

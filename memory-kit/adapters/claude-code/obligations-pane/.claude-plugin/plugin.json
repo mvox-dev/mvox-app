@@ -1,6 +1,6 @@
 {
   "name": "obligations-pane",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Side pane showing the memory-kit obligations tier (memory/obligations.yaml), soonest expiry first; read-only",
   "author": {
     "name": "Mihkel Putrinš"
@@ -11,6 +11,12 @@
       "type": "string",
       "title": "Agent name",
       "description": "The name the footer shows for this session's main agent. Empty uses the working directory's name.",
+      "default": ""
+    },
+    "memoryDir": {
+      "type": "string",
+      "title": "Memory directory",
+      "description": "The kit home's memory directory, for a session that runs outside the home. Relative paths resolve against the session's working directory. Empty reads memory_dir from <cwd>/memory-kit.conf, else <cwd>/memory.",
       "default": ""
     },
     "autoOpen": {

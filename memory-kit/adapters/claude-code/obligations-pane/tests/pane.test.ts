@@ -127,6 +127,52 @@ describe('empty states', () => {
   })
 })
 
+describe('the memoryDir option', () => {
+  const dates = async (ui: Parameters<typeof textOf>[0]) =>
+    (await textOf(ui)).filter(t => /^\d{4}-\d{2}-\d{2}$/.test(t))
+
+  test('an absolute memoryDir wins over the cwd memory-kit.conf', { options: { memoryDir: '/srv/home/memory' } }, async ($, on) => {
+    worldOf(on, {
+      'memory-kit.conf': 'memory_dir: notes\n',
+      'notes/obligations.yaml': 'obligations: []\n',
+      '/srv/home/memory/obligations.yaml': WORKSHOP_YAML,
+    })
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    expect(await dates(ui)).toHaveLength(6)
+    expect((await textOf(ui)).some(t => t.startsWith('no obligations file here'))).toBe(false)
+    await ui.unmount()
+  })
+
+  test('a relative memoryDir resolves against the working directory', { options: { memoryDir: 'kit-home/memory' } }, async ($, on) => {
+    worldOf(on, { 'kit-home/memory/obligations.yaml': WORKSHOP_YAML })
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    expect(await dates(ui)).toHaveLength(6)
+    await ui.unmount()
+  })
+
+  test('a blank memoryDir falls back to the cwd conf', { options: { memoryDir: '   ' } }, async ($, on) => {
+    worldOf(on, { 'memory-kit.conf': 'memory_dir: notes\n', 'notes/obligations.yaml': WORKSHOP_YAML })
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    expect(await dates(ui)).toHaveLength(6)
+    await ui.unmount()
+  })
+
+  test('a memoryDir pointing nowhere says where it looked', { options: { memoryDir: '/nowhere/memory' } }, async ($, on) => {
+    worldOf(on, { 'memory/obligations.yaml': WORKSHOP_YAML })
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    expect((await textOf(ui)).some(t => t.includes('/nowhere/memory/obligations.yaml'))).toBe(true)
+    await ui.unmount()
+  })
+})
+
 describe('refresh', () => {
   test('every 20 s: the file and the clock', async ($, on) => {
     const world = worldOf(on, KIT)

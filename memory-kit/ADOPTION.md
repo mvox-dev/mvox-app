@@ -93,6 +93,19 @@ each for what would have to change.
 A gate must pass on the tree it is introduced to. A lint that fails on day one teaches the
 home to bypass it, and the kit is finished there.
 
+**Where the gate and the pane look.** The home is the folder holding `memory-kit.conf`; its
+`memory_dir` (default `memory`) names the memory directory inside it. Neither tool follows the
+session's folder on its own:
+
+- The lint takes the home as its argument -- `memory-kit/lint/memory-lint.sh <home> --gate` --
+  and works from any folder. Give the path in every hook and script that calls it. A missing
+  memory directory fails in every mode, `--report` included, so a wrong path cannot pass as
+  "clean".
+- The obligations pane reads `<cwd>/memory-kit.conf`, so it finds the home only when the
+  session starts at the home root. A lead session that runs elsewhere (a team folder, a
+  sibling repo) sets the pane's `memoryDir` option to the home's memory directory instead. Do
+  not put a second `memory-kit.conf` in that folder: it would pretend the folder is a home.
+
 Then cut over on the home's main line: a home in daily use proves nothing on a branch. Keep the
 old tooling and the converted originals as a fallback -- moved aside, not deleted, with a stated
 way back (one revert) -- until the converted tree has carried the **events that exercise it**: at
