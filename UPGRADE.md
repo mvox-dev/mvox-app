@@ -70,8 +70,17 @@ A major means data shape changed. The kit ships `migrations/<version>/` for exac
   `memoryDir` option to the home's memory directory (stored in settings under
   `pluginConfigs`), then `/reload-plugins`.
 
+- **0.1.0-alpha.4 -> 0.1.0-alpha.5:** no data step. Pull, run the lint, then `/reload-plugins` for
+  pane 0.2.1: it now stays on the home the session started in, even after a shell `cd`. If your
+  home's adoption PR was squash-merged, `git subtree pull` will refuse; see "Always" below. A home
+  more than one version behind: read every step from its version on, then pull once.
+
 ## Always
 
 - The home's config for the kit lives outside the subtree; a pull must never clobber it.
+- Merge the kit's subtree commits into the home with a merge commit, never a squash merge. A
+  squash merge of a pull request drops git-subtree's metadata, and the next `git subtree pull`
+  refuses. (`--squash` on the subtree command itself is fine; it is the PR merge that must not
+  squash.) Repair: re-add the kit at the pinned version and merge that with a merge commit.
 - If an upgrade requires the assistant to re-read the home's whole memory to make sense of it,
   that is a finding worth reporting: the kit has leaked into the home's data.

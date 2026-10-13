@@ -54,6 +54,8 @@ declare module 'claude-code' {
       loads: Record<string, AgentLoad>
       /** The model id the main loop's latest step reported ('' before one). */
       mainModel: string
+      /** The session's working directory at its first session.start: the home the pane reads. */
+      startCwd: string
     }
   }
 }

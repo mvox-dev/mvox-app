@@ -53,6 +53,7 @@ const index = atom({ plugin: 'obligations-pane', key: 'index' } as const, 0)
 const models = atom({ plugin: 'obligations-pane', key: 'models' } as const, {})
 const loads = atom({ plugin: 'obligations-pane', key: 'loads' } as const, {})
 const mainModel = atom({ plugin: 'obligations-pane', key: 'mainModel' } as const, '')
+const startCwd = atom({ plugin: 'obligations-pane', key: 'startCwd' } as const, '')
 
 /**
  * The memory directory: the memoryDir option when set, else <cwd>/<memory_dir> from
@@ -121,7 +122,9 @@ async function resolveUrls($: EngineInterface, root: string, items: readonly Obl
 /** Gathers everything the pane draws and writes it to state in one go. */
 export async function refresh($: EngineInterface, agentName: string, memoryDir = ''): Promise<void> {
   const now = await $.clock.now()
-  const cwd = await $.session.cwd()
+  // The home is where the session started (kit issue #3): a shell cd into another repo
+  // mid-session must not switch the ledger. $.session.cwd() only when no start was seen.
+  const cwd = (await read($, startCwd)) || (await $.session.cwd())
   const root = await memoryRoot($, cwd, memoryDir)
   const path = `${root}/obligations.yaml`
   const ledger = await readObligations($, path)
@@ -196,6 +199,9 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     const started = await next(e)
+    // Kept in $.state, which outlives a reload: a reload fires session.start again with the
+    // directory the session is in by then, so only the first start sets it.
+    if ((await read($, startCwd)) === '') await $.state.set({ plugin: 'obligations-pane', key: 'startCwd' }, e.cwd)
     await $.command.register({ name: 'obligations', description: 'Open the obligations pane (memory/obligations.yaml)' })
     await safeRefresh($, agentName, memoryDir)
     timer?.cancel()
