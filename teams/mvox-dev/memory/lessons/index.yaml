@@ -7,6 +7,16 @@ lessons:
   learned: '2026-10-01'
   ref: '#558'
   enforcement: recognition
+- slug: acting-on-board-labels
+  summary: For setting motion labels on issues, and for reading labels before deciding to act.
+  learned: '2026-09-09'
+  ref: mihkel:2026-09-09
+  enforcement: recognition
+- slug: adding-a-verified-email
+  summary: For a request to let a user add another verified email or login.
+  learned: '2026-08-07'
+  ref: teams/mvox-dev/prompts/josquin.md
+  enforcement: recognition
 - slug: adding-message-keys
   summary: For adding or editing i18n message keys in messages/*.json without breaking check or the JSON.
   learned: '2026-06-01'
@@ -77,10 +87,20 @@ lessons:
   learned: '2026-09-15'
   ref: '2026-09-15'
   enforcement: recognition
+- slug: building-on-the-season-surface
+  summary: For new work that touches the season pages.
+  learned: '2026-09-09'
+  ref: '#277'
+  enforcement: recognition
 - slug: cf-pages-missing-file-404
   summary: Making missing /_app/* files answer a real 404 on Cloudflare Pages.
   learned: '2026-10-07'
   ref: '#832'
+  enforcement: recognition
+- slug: changing-a-message-signature
+  summary: For planning a change to an i18n message's parameters across locales.
+  learned: '2026-08-08'
+  ref: teams/mvox-dev/memory/byrd.md
   enforcement: recognition
 - slug: check-issue-closed-after-merge
   summary: 'After a merge whose body says Closes #N, confirming the issue really closed.'
@@ -111,6 +131,21 @@ lessons:
   summary: For quoting Entu docs or sweep results about who can read rights properties.
   learned: '2026-10-02'
   ref: '#468'
+  enforcement: recognition
+- slug: classifier-block-by-kind
+  summary: For deciding what to do when the auto-mode classifier blocks a command.
+  learned: '2026-09-12'
+  ref: mihkel:2026-09-12
+  enforcement: recognition
+- slug: closing-an-issue-on-a-relayed-acceptance
+  summary: For closing an issue when po-team relays that Mihkel accepted it.
+  learned: '2026-10-10'
+  ref: mihkel:2026-10-10
+  enforcement: recognition
+- slug: closing-yellows-met-by-merged-work
+  summary: For the shutdown sweep of open follow-up issues that merged work already satisfied.
+  learned: '2026-05-22'
+  ref: mihkel:2026-05-22
   enforcement: recognition
 - slug: comment-rules-cover-whole-touched-file
   summary: Touching an old file that now falls under the comment-rules spec.
@@ -192,6 +227,11 @@ lessons:
   learned: '2026-05-22'
   ref: '2026-05-22'
   enforcement: recognition
+- slug: home-unset-in-a-shell
+  summary: For a shell where $HOME comes up empty and paths under ~ stop resolving.
+  learned: '2026-08-05'
+  ref: teams/mvox-dev/startup.md
+  enforcement: recognition
 - slug: identical-duplicate-values-on-read-back
   summary: For a live read-back that shows the same Entu value twice.
   learned: '2026-09-22'
@@ -211,6 +251,11 @@ lessons:
   summary: For sending a landing notice for each merge while one pipeline run lands several issues.
   learned: '2026-09-10'
   ref: teams/mvox-dev/memory/session-mvox19-pickup-log.md
+  enforcement: recognition
+- slug: line-cap-step-consolidation
+  summary: For the consolidation run at each file-size ladder step.
+  learned: '2026-09-30'
+  ref: '#524'
   enforcement: recognition
 - slug: live-crede-run-blocked-in-teammate
   summary: An authorized live crede run is classifier-blocked in a teammate, so it still gets run correctly.
@@ -247,6 +292,11 @@ lessons:
   learned: '2026-05-20'
   ref: teams/mvox-dev/memory/team-lead-archive.md
   enforcement: recognition
+- slug: opening-the-checkpoint-pr
+  summary: For the session checkpoint commit, before its PR is opened.
+  learned: '2026-09-22'
+  ref: teams/mvox-dev/common-prompt.md
+  enforcement: recognition
 - slug: packing-a-slice-into-one-workflow
   summary: For deciding whether to run a multi-task slice as one workflow run or task by task.
   learned: '2026-08-10'
@@ -281,6 +331,11 @@ lessons:
   summary: For running probes during review without leaving files in the repo.
   learned: '2026-09-07'
   ref: '#274'
+  enforcement: recognition
+- slug: putting-design-decisions-to-the-po
+  summary: For pacing schema or design questions to the PO.
+  learned: '2026-05-17'
+  ref: mihkel:2026-05-17
   enforcement: recognition
 - slug: quote-platform-docs-before-theorizing
   summary: Grounding any doc, spec or decision about an Entu platform mechanic before acting on it.
@@ -351,6 +406,11 @@ lessons:
   summary: For reviewing a hash pin over a document region, or a re-derived pin.
   learned: '2026-09-15'
   ref: '#369'
+  enforcement: recognition
+- slug: reviewing-a-destructive-script-before-run
+  summary: For deciding whether a data script needs review before it runs live.
+  learned: '2026-08-07'
+  ref: teams/mvox-dev/prompts/perotin.md
   enforcement: recognition
 - slug: reviewing-a-fix-that-adds-an-await
   summary: For reviewing a change that adds a suspension point to a guarded async handler.
@@ -427,6 +487,11 @@ lessons:
   learned: '2026-09-11'
   ref: '#255'
   enforcement: recognition
+- slug: starting-the-visual-companion
+  summary: For launching the brainstorming visual companion or any loopback dev server for Mihkel.
+  learned: '2026-05-31'
+  ref: mihkel:2026-05-31
+  enforcement: recognition
 - slug: stub-new-modules-in-red
   summary: Writing a RED commit that imports a module or component that does not exist yet.
   learned: '2026-05-31'
@@ -497,6 +562,11 @@ lessons:
   learned: '2026-06-01'
   ref: teams/mvox-dev/memory/byrd.md
   enforcement: recognition
+- slug: waiting-for-a-live-authorization
+  summary: For a data manager whose dry run is clean but whose live-run authorization has not come.
+  learned: '2026-09-15'
+  ref: teams/mvox-dev/prompts/perotin.md
+  enforcement: recognition
 - slug: waiting-for-async-effects-in-page-specs
   summary: For asserting state a page reaches after an async effect, without hangs.
   learned: '2026-08-10'
@@ -522,6 +592,16 @@ lessons:
   learned: '2026-09-02'
   ref: mihkel:2026-09-11
   enforcement: recognition
+- slug: workflow-subagent-messages-the-lead
+  summary: For when an agent inside a running workflow sends the team-lead a message.
+  learned: '2026-08-13'
+  ref: mihkel:2026-08-13
+  enforcement: recognition
+- slug: working-on-the-link-entity
+  summary: For code or schema work on the link entity.
+  learned: '2026-09-09'
+  ref: '#256'
+  enforcement: recognition
 - slug: write-gate-page-owns-writes
   summary: Adding a write path to a page under the write-gate coverage spec.
   learned: '2026-10-11'
@@ -531,4 +611,9 @@ lessons:
   summary: For shaping a proposal so the PO can rule on each point.
   learned: '2026-09-11'
   ref: '#255'
+  enforcement: recognition
+- slug: writing-an-implementation-plan
+  summary: For writing an implementation plan from a spec, so it names the right executors.
+  learned: '2026-05-24'
+  ref: mihkel:2026-05-24
   enforcement: recognition

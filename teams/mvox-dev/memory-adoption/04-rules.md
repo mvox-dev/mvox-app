@@ -97,6 +97,19 @@ Nothing is demoted to `facts`: the rulings already live there (`facts/rulings-*.
 
 ## GATE 2 — ruling
 
-_Pending._
+2026-10-14, Palestrina (delegated by Mihkel 2026-10-14):
+
+- The 20 rows approved as proposed. Row 12 keeps its blank ref (a finding for 06).
+- ~/.claude/CLAUDE.md stays as is.
+- ~/workspace/CLAUDE.md is the schema repo: its edit is its own PR there, after the app PR merges.
+- Cutover items 1 and 2 approved, including dropping the older polyphony-probe row (done as
+  the kit's genus lesson asks: the row is replaced by one dated line naming what ended it).
+
+## After the gate
+
+The 20 situational norms became lessons (17 new files; ledger `04-conv-R.tsv`). Three came
+back as questions: n=236 (probe on polyphony) died with the row above; n=100 (#289 inventory
+gate, #289 closed) and n=177 (`git add -N` before gates, now that changedFiles reads
+untracked files, #568) wait in 02-needs-judgment.md batch 3.
 
 (*MVOX:memkit*)

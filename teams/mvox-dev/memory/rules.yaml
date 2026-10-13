@@ -1,5 +1,47 @@
-# This home's standing rules. Shape: types/memory-rules.ts. READ ON SPAWN -- keep it short.
-# Capped: every row costs every session forever. A rule that needs a why is a lesson.
-# The kit's own shipped rules are separate, in memory-kit/memory/rules.yaml.
+# mvox-dev standing rules. Read on every spawn by every member, after the kit's own 8
+# (memory-kit/memory/rules.yaml). Capped at 20; a rule that needs a why is a lesson.
+# Role rules live in prompts/<role>.md. Ruled at GATE 2, 2026-10-14. (*MVOX:memkit*)
 
-rules: []
+rules:
+  # -- everyone
+  - rule: "Report to team-lead by SendMessage when a task ends; never go idle unreported."
+    ref: teams/mvox-dev/common-prompt.md
+  - rule: "Run gates in the foreground. Commit and push before you report."
+    ref: mihkel:2026-09-30
+  - rule: "Check the branch in the same call before any edit, commit or push; wrong branch: stop."
+    ref: teams/mvox-dev/common-prompt.md
+  - rule: "One feature branch at a time across the team. Every merge goes through a PR."
+    ref: teams/mvox-dev/common-prompt.md
+  - rule: "End commits and PR bodies with only (*MVOX:<Name>*): no co-author, email or link."
+    ref: mihkel:2026-10-01
+  - rule: "Tests check what the user gets: not CSS classes, source text or call order."
+    ref: mihkel:2026-10-05
+  - rule: "Fail loudly. A fallback needs the PO's yes."
+    ref: mihkel:2026-06-12
+  - rule: "Call Entu only through src/lib/entu/; read the JWT only in src/lib/auth/storage.ts."
+    ref: teams/mvox-dev/prompts/bentham.md
+  - rule: "New entity types, shapes or rights need a PO ruling on the issue + a PO-Approved: trailer."
+    ref: mihkel:2026-09-06
+  - rule: "polyphony db is frozen history. Every live crede op needs its own authorization."
+    ref: mihkel:2026-09-18
+  - rule: "Live writes run only on team-lead's 'I authorize this run'; dry-run or review GREEN is not it."
+    ref: teams/mvox-dev/prompts/perotin.md
+  - rule: "Tag claims not checked this turn: [unverified] if checkable, [speculative] if inferred."
+    ref: ""   # user-level CLAUDE.md, outside any repo
+  - rule: "Plain words, no coined terms. Teammate replies <= 5 lines, reports to Mihkel <= 10."
+    ref: mihkel:2026-09-09
+  # -- team-lead
+  - rule: "Lead: never edit code, run builds or tests, or commit code. Delegate."
+    ref: teams/mvox-dev/prompts/palestrina.md
+  - rule: "Lead: pick up only issues labelled ready; product questions go to gama@po-team first."
+    ref: mihkel:2026-08-22
+  - rule: "Lead: one-line notice to gama@po-team at slice entry and at every merge."
+    ref: mihkel:2026-09-11
+  - rule: "Lead: squash body carries Closes #N for every issue the work satisfies."
+    ref: teams/mvox-dev/common-prompt.md
+  - rule: "Lead: set the model explicitly on every spawn; never inherit by omission."
+    ref: mihkel:2026-09-06
+  - rule: "Lead: fresh implementer per issue from scratchpad/brief-<N>.md; release it after merge."
+    ref: mihkel:2026-09-30
+  - rule: "Lead: no commits in workspace-app while a pipeline runs on the shared tree."
+    ref: mihkel:2026-09-12

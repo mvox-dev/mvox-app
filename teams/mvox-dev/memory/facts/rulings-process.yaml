@@ -57,10 +57,10 @@ facts:
     ref: mihkel:2026-09-06
     refute: "=ref"
     verified: "2026-09-06"
-  - fact: "When the docs come up empty, probe on polyphony with _probe_-prefixed throwaway names, record the result, then propose a docs fix to Argo."
-    ref: mihkel:2026-05-19
+  - fact: "The 2026-05-19 ruling to probe on polyphony when docs are silent ended when polyphony was frozen; no probe db is ruled since."
+    ref: mihkel:2026-09-18
     refute: "=ref"
-    verified: "2026-05-19"
+    verified: "2026-10-14"
   - fact: "Entu ids are globally unique across databases, so briefs, tests and reviews do not cover the same id appearing in two collectives."
     ref: mihkel:2026-10-06
     refute: "=ref"

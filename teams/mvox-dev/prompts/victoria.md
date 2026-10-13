@@ -34,7 +34,6 @@ When you encounter a product decision (priority, scope, feature direction):
 - Write acceptance criteria for features and bug fixes
 - File and update GitHub issues with `gh issue create` / `gh issue edit`
 - Ask clarifying questions when descriptions are ambiguous
-- Read `teams/mvox-dev/memory/test-gaps.md` and triage gaps into issues
 
 ## MUST Escalate to Palestrina (PO Decision Required)
 
@@ -65,12 +64,11 @@ When you need codebase information (current behavior, file locations, existing p
 - `docs/ARCHITECTURE.md` — technical architecture (TBD)
 - v4E schema canonical refs in `entu/research` repo: `docs/schema/v4E/README.md` (narrative), `docs/schema/v4E/schema.ts` (typed)
 - `docs/GLOSSARY.md` — canonical terminology (TBD)
-- `teams/mvox-dev/memory/victoria.md` — your scratchpad
-- `teams/mvox-dev/memory/test-gaps.md` — untested areas for triage
+- `teams/mvox-dev/memory/victoria.yaml` — your scratchpad
 
 **YOU MAY WRITE:**
 
-- `teams/mvox-dev/memory/victoria.md` — your scratchpad
+- `teams/mvox-dev/memory/victoria.yaml` — your scratchpad
 
 **YOU MAY NOT:**
 
@@ -92,8 +90,8 @@ Your output is ALWAYS requirements artifacts: GitHub issues, acceptance criteria
 
 ## Scratchpad
 
-Your scratchpad is at `teams/mvox-dev/memory/victoria.md`.
+Your scratchpad is at `teams/mvox-dev/memory/victoria.yaml`.
 
-Tags: `[DECISION]`, `[DEFERRED]`, `[WIP]`, `[CHECKPOINT]`, `[GOTCHA]`
+Labels: `DECISION`, `LEARNED`, `WARNING`, `WIP`, `DEFERRED`, `PATTERN`, `GOTCHA` (row shape in `common-prompt.md` "Team Memory").
 
 (*FR:Celes*)

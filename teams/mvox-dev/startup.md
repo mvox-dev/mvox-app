@@ -24,7 +24,7 @@ All paths derived from two anchors:
 
 Execute in order. State each phase name before executing.
 
-**Task scope (implicit teams).** The active task list is **session-scoped for the whole session** — `~/.claude/tasks/session-<id>/`. There is no `TeamCreate` and no mid-startup switch to a team-scoped list: verified 2026-08-05, no `~/.claude/tasks/mvox-dev/` exists, only `session-<id>` dirs. Tasks do **not** survive a restart, so cross-session continuity relies on the `memory/task-list-snapshot.md` shutdown/restore ceremony (Phase 4). It's still fine to defer formal `TaskCreate` until you're routing real work in Phase 4/5.
+**Task scope (implicit teams).** The active task list is **session-scoped for the whole session** — `~/.claude/tasks/session-<id>/`. There is no `TeamCreate` and no mid-startup switch to a team-scoped list: verified 2026-08-05, no `~/.claude/tasks/mvox-dev/` exists, only `session-<id>` dirs. Tasks do **not** survive a restart, so cross-session continuity relies on `memory/team-lead.yaml` `current`, regenerated at each seam and restored in Phase 4. It's still fine to defer formal `TaskCreate` until you're routing real work in Phase 4/5.
 
 ### Phase 0: Orient
 
@@ -33,8 +33,8 @@ Read these files in order:
 1. This file (`startup.md`)
 2. `roster.json` (roster — team members, models, roles)
 3. `common-prompt.md` (mission, standards, shutdown protocol)
-4. `memory/team-lead.md` (your scratchpad — prior session state)
-5. `memory/task-list-snapshot.md` (prior session's task state, if exists)
+4. `memory/rules.yaml` (standing rules — after the kit's 8 in `memory-kit/memory/rules.yaml`)
+5. `memory/team-lead.yaml` (your scratchpad — `current` holds prior session state and open tasks)
 
 **Expected outcome:** You know the team, the mission, and where you left off.
 
@@ -61,7 +61,7 @@ What to know instead:
 
 **CRITICAL:** it's still fine to hold formal `TaskCreate` until you're routing real work (Phase 4/5) — see the task-scope note at the top of this file.
 
-> `[unverified]` The exact cross-session **restore target paths** below (Phase 3 inbox restore, Phase 4 task restore) were written for the old stable `~/.claude/teams/mvox-dev/` runtime. Under a rotating `session-<id>` dir they need re-confirming against a live restart (which cannot be tested mid-session). The persistence *intent* — repo inboxes + task snapshot carry state across sessions — still holds; the concrete destination path is the open detail. Confirm on the next real restart before relying on the Phase 3 script verbatim.
+> `[unverified]` The exact cross-session **restore target paths** below (Phase 3 inbox restore, Phase 4 task restore) were written for the old stable `~/.claude/teams/mvox-dev/` runtime. Under a rotating `session-<id>` dir they need re-confirming against a live restart (which cannot be tested mid-session). The persistence *intent* — repo inboxes + `team-lead.yaml` `current` carry state across sessions — still holds; the concrete destination path is the open detail. Confirm on the next real restart before relying on the Phase 3 script verbatim.
 
 ### Phase 3: Restore inboxes
 
@@ -96,11 +96,11 @@ fi
 
 **Skip if teammates are already alive from this same process** (a `/clear` warm continuation — the session task list is untouched).
 
-**Run on a fresh CLI start** — the task list is session-scoped and starts empty, so `memory/task-list-snapshot.md` is the only source of prior task state. Recreate the active rows from it:
+**Run on a fresh CLI start** — the task list is session-scoped and starts empty, so `memory/team-lead.yaml` `current` is the only source of prior task state. Recreate the active tasks from it:
 
-1. Read `teams/mvox-dev/memory/task-list-snapshot.md`.
-2. For each non-completed row, call `TaskCreate(subject, description)` with the snapshot's subject + description verbatim.
-3. Completed rows from the snapshot are NOT recreated. The recreated task list starts with fresh IDs; original numbering is lost — note this in your scratchpad if the originals are referenced anywhere (commits, PRs, prior agent messages).
+1. Read `current` in `teams/mvox-dev/memory/team-lead.yaml`.
+2. For each open item (`WIP`, `DEFERRED`, or anything awaiting action), call `TaskCreate(subject, description)` from its record and ref.
+3. Rows that only record state or decisions are NOT recreated as tasks. The recreated task list starts with fresh IDs; original numbering is lost — note this in your scratchpad if the originals are referenced anywhere (commits, PRs, prior agent messages).
 
 **Expected outcome:** Active tasks from the prior session are visible to teammates. Lost ID numbering is acceptable collateral (closed-issue history lives in GitHub, not the local task list).
 
@@ -108,13 +108,13 @@ fi
 
 Spawn order:
 
-1. **finn** + **bentham** (parallel — always-on roles, intros are independent) — wait for both intros before phase 2
-2. **tallis** + **byrd** + **josquin** (parallel if working on independent issues)
+1. **finn** + **bentham** (parallel — intros are independent)
+2. **josquin-<N>** — one fresh implementer per issue, spawned from `~/workspace/scratchpad/brief-<N>.md` when the issue is picked up
 3. **comenius** (only if i18n work is needed this session)
 4. **victoria** (only if requirements analysis is needed this session)
 5. **perotin** (only if seeding / data refresh / write-probe / data-quality work is needed this session — on-demand specialist)
 
-Phase 1 is a gate: do not spawn implementer agents until finn + bentham have introed (research and review infrastructure must be ready).
+No intro wait: implementers are spawned fresh per issue from a brief; they do not wait for finn or bentham to intro.
 
 **Before each spawn:** Check `config.json` for existing members with the same name.
 - If agent already registered → `SendMessage` with the new task. Do NOT re-spawn.
@@ -128,7 +128,7 @@ Phase 1 is a gate: do not spawn implementer agents until finn + bentham have int
 You are **<Name>**, <role> for mvox-dev (<model>).
 1. Read your full prompt: ~/workspace-app/teams/mvox-dev/prompts/<name>.md
 2. Read common-prompt: ~/workspace-app/teams/mvox-dev/common-prompt.md
-3. Read your scratchpad: ~/workspace-app/teams/mvox-dev/memory/<name>.md
+3. Read your scratchpad: ~/workspace-app/teams/mvox-dev/memory/<name>.yaml (if it exists)
 4. Follow the STARTUP INSTRUCTIONS in your prompt file.
 5. Send a timestamped intro (date '+%Y-%m-%d %H:%M') to team-lead when ready.
 ```

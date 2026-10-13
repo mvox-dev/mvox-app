@@ -1,0 +1,28 @@
+# Where this team's memory lives and where it stops. Written by memkit 2026-10-14 at
+# memory-kit adoption. (*MVOX:memkit*)
+
+facts:
+  - fact: "Team memory is teams/mvox-dev/memory/, in memory-kit shape; the kit is vendored at memory-kit/ (git subtree) pinned to v0.1.0-alpha.2."
+    ref: memory-kit/VERSION
+    refute: "cat memory-kit/VERSION"
+    verified: "2026-10-14"
+  - fact: "The kit's config for this home is teams/mvox-dev/memory-kit.conf, outside the subtree; mode is gate."
+    ref: teams/mvox-dev/memory-kit.conf
+    refute: "=ref"
+    verified: "2026-10-14"
+  - fact: "CI runs the memory lint with --gate on every run, notes-only PRs included."
+    ref: .github/workflows/ci.yml
+    refute: "grep -n memory-lint .github/workflows/ci.yml"
+    verified: "2026-10-14"
+  - fact: "The lead's harness auto-memory directory is outside the kit; the harness writes there, but its index is only a pointer to this home and nothing there is a source."
+    ref: teams/mvox-dev/memory-adoption/01-map.md
+    refute: "Read the harness auto-memory index; it must hold only the pointer."
+    verified: "2026-10-14"
+  - fact: "Long-form knowledge (design rationale, conventions, design notes, audits) lives in teams/mvox-dev/docs/ and docs/, not in memory; it accumulates, it does not rot."
+    ref: teams/mvox-dev/docs
+    refute: "ls teams/mvox-dev/docs docs"
+    verified: "2026-10-14"
+  - fact: "The pre-kit markdown memory sits in teams/mvox-dev/memory/fallback/ until GATE 3 rules its deletion; nothing reads it."
+    ref: teams/mvox-dev/memory/fallback/README.md
+    refute: "=ref"
+    verified: "2026-10-14"

@@ -58,6 +58,12 @@ jobs:
         run: |
           echo "notes_only=$(git diff --name-only --no-renames origin/${{ github.base_ref }}...HEAD | scripts/ci/notes-only.sh)" >> "$GITHUB_OUTPUT"
 
+      # Team memory follows memory-kit; its lint gates every run, notes-only PRs included.
+      - name: Memory lint
+        run: |
+          python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --user --break-system-packages pyyaml
+          sh memory-kit/lint/memory-lint.sh teams/mvox-dev/memory --gate
+
       - name: Setup pnpm
         if: steps.scope.outputs.notes_only != 'true'
         uses: pnpm/action-setup@v6

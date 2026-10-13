@@ -10,6 +10,7 @@ DEAD_1A = {"project_cf_pages_wrangler_vars#1", "project_cf_workers_process_env#1
            "project_wrangler_deploy_auth#1", "project_pnpm_not_on_path#1",
            "project_polyphony_no_domain_sharing#1", "team-lead-archive#18",
            "team-lead-archive#92", "finn#10", "finn#12", "feedback_ultracode_team_roles#1"}
+DEAD_2 = {"byrd#113"}
 MEMKIT = {"team-lead#1": "team-lead.yaml:header", "team-lead#2": "team-lead.yaml:current",
           "task-list-snapshot#1": "team-lead.yaml:current"}
 MOVES = {"architecture-decisions.md": "teams/mvox-dev/docs/architecture-decisions.md",
@@ -33,6 +34,8 @@ for r in rd("02-ledger.tsv"):
         st, where = "converted", MEMKIT[i]
     elif i in DEAD_1A:
         st, where = "dead", "batch 1A"
+    elif i in DEAD_2:
+        st, where = "dead", "batch 2"
     elif i in screen:
         rec = screen[i]["recommendation"]
         if rec == "dead":

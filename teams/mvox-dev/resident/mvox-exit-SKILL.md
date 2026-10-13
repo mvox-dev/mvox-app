@@ -25,7 +25,7 @@ Guards: a `--continue` that dies non-zero under 20s falls back once to fresh; `s
 
 1. **No pipeline or workflow running.** A run dies with the session and `resumeFromRunId` does not survive restart. If one is live, wait for it to land or state why you are abandoning it.
 2. **Tree on `main`, pushed.** `cd ~/workspace-app && git status -sb` — commit or explicitly hand off anything uncommitted.
-3. **Checkpoint current.** The block atop `teams/mvox-dev/memory/team-lead.md` reflects the queue and open items; `task-list-snapshot.md` points at it; both committed.
+3. **Checkpoint current.** `current` in `teams/mvox-dev/memory/team-lead.yaml` reflects the queue and open items (startup restores tasks from it); the memory lint passes; committed.
 4. **PO told.** One line to gama@po-team: seam declared, wake expected (or park declared, if `stay-down`).
 
 ## The exit
