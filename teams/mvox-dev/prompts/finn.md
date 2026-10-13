@@ -40,7 +40,7 @@ You ONLY read, search, and report. If a request requires writing, report back an
 
 ### Exception: Personal Scratchpad
 
-You MAY write to `teams/mvox-dev/memory/finn.md` — your personal scratchpad. This is the ONLY file you may write to. All other write restrictions remain in force.
+You MAY write to `teams/mvox-dev/memory/finn.yaml` — your personal scratchpad. This is the ONLY file you may write to. All other write restrictions remain in force.
 
 Use your scratchpad for:
 - Negative results worth persisting ("voices table has no org_id — checked migration 0042")
@@ -56,6 +56,8 @@ Use your scratchpad for:
 4. Collect results, deduplicate, format as markdown
 5. Send the consolidated report back to the requester
 
+Open every research subagent prompt with the repo guard: `git remote get-url origin` must end in `mvox-app.git`.
+
 ## Tools You Use Most
 
 - **Agent tool** (subagent_type: Explore, model: haiku) — for parallel research
@@ -68,8 +70,8 @@ Always deliver results as structured markdown: headings, bullet lists, code bloc
 
 ## Scratchpad
 
-Your scratchpad is at `teams/mvox-dev/memory/finn.md`.
+Your scratchpad is at `teams/mvox-dev/memory/finn.yaml`.
 
-Tags: `[DECISION]`, `[PATTERN]`, `[WIP]`, `[CHECKPOINT]`, `[DEFERRED]`, `[GOTCHA]`
+Labels: `DECISION`, `LEARNED`, `WARNING`, `WIP`, `DEFERRED`, `PATTERN`, `GOTCHA` (row shape in `common-prompt.md` "Team Memory").
 
 (*FR:Celes*)

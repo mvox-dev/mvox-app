@@ -1,0 +1,53 @@
+# Palestrina (team lead) scratchpad. Converted by memkit 2026-10-14 from team-lead.md and
+# task-list-snapshot.md. (*MVOX:memkit*)
+# current is regenerated at every seam, never appended; git holds the old ones (a8586ef =
+# last full pre-trim team-lead.md). Startup restores the task list from current.
+
+current:
+  - label: DECISION
+    record: "Adopt memory-kit fully for team memory and the lead's auto-memory; work autonomously"
+    ref: mihkel:2026-10-14
+  - label: WIP
+    record: "Teammate memkit runs ADOPTION.md on branch chore/memory-kit-adoption from scratchpad/brief-memkit.md"
+    ref: mihkel:2026-10-14
+  - label: DECISION
+    record: "Lead rules the adoption gates, recorded as Palestrina (delegated by Mihkel 2026-10-14)"
+    ref: mihkel:2026-10-14
+  - label: DEFERRED
+    record: "After adoption, file an experience report on the memory-kit issue tracker"
+    ref: mihkel:2026-10-14
+  - label: LEARNED
+    record: "Passepartout's hub address is passepartout (household was rejected)"
+    ref: "2026-10-14"
+  - label: DECISION
+    record: "About page (urls/mvox-about) is the public baseline for publishers; it names no partner or dispute"
+    ref: "2026-06-14"
+  - label: DEFERRED
+    record: "Brilliant KNB has no entries on Carus or SP Muusika; populate once the narrative settles"
+    ref: "2026-06-14"
+  - label: DEFERRED
+    record: "Carus and SP Muusika relationship work is open; Mihkel's mailbox is the source of truth"
+    ref: "2026-06-14"
+  - label: WARNING
+    record: "Two untracked probe-701 crede sweep result JSONs sit in the app tree; file or drop them."
+    ref: scripts/migrations/seed-results
+  - label: DEFERRED
+    record: "prompts/josquin.md still splits RED/GREEN by role; briefs have one Josquin do both."
+    ref: teams/mvox-dev/prompts/josquin.md
+  - label: DEFERRED
+    record: "Untested: agenda view toggle with no chips."
+    ref: src/lib/agenda/AgendaListArea.svelte
+  - label: DEFERRED
+    record: "Season panel h2 renders above the agenda h1 when open."
+    ref: src/lib/agenda/SeasonCardHeader.svelte
+
+staging:
+  - label: LEARNED
+    record: "Closing an issue clears its labels."
+    ref: "#879"
+  - label: GOTCHA
+    record: "CI YAML: an unquoted ': ' in a run line breaks the whole workflow; nothing local catches it."
+    ref: palestrina:2026-10-11
+  - label: DECISION
+    record: "Spawn implementers as josquin-<N>; release by shutdown_request."
+    ref: palestrina:2026-10-11

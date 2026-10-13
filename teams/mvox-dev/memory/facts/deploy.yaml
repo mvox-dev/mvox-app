@@ -1,0 +1,18 @@
+# How mvox.eu is built and served. Converted by memkit 2026-10-14. (*MVOX:memkit*)
+facts:
+  - fact: "mvox.eu is a static SPA built with @sveltejs/adapter-static and fallback index.html, with no hooks.server.ts and no wrangler config."
+    ref: svelte.config.js
+    refute: "ls ~/workspace-app/src/hooks.server.ts ~/workspace-app/wrangler.*"
+    verified: "2026-10-14"
+  - fact: "The only +server.ts is src/routes/version.json/+server.ts, prerendered at build time to a static /version.json carrying branch and commit SHA."
+    ref: "#350"
+    refute: "find ~/workspace-app/src -name '+server.ts'"
+    verified: "2026-10-14"
+  - fact: "The mvox.eu apex points at multivox.pages.dev, a git-connected Cloudflare Pages project."
+    ref: urls/mem-finn-9d2803d
+    refute: "dig +short mvox.eu"
+    verified: "2026-09-12"
+  - fact: "common-prompt.md's Stack table still names @sveltejs/adapter-cloudflare; the app actually uses adapter-static."
+    ref: teams/mvox-dev/common-prompt.md
+    refute: "grep -n adapter-cloudflare ~/workspace-app/teams/mvox-dev/common-prompt.md"
+    verified: "2026-10-14"

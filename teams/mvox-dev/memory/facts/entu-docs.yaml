@@ -1,0 +1,27 @@
+# Facts about where Entu documentation lives and how to read it. Converted by memkit 2026-10-14. (*MVOX:memkit*)
+facts:
+  - fact: "Entu platform mechanics are documented in the entu/www repo, cloned at ~/projects/entu-www; English pages sit under src/, Estonian under src/et/."
+    ref: urls/entu-www-repo
+    refute: "git -C ~/projects/entu-www ls-tree --name-only origin/main src/"
+    verified: "2026-10-14"
+  - fact: "The local entu-www clone may sit on a feature branch; read docs with git fetch origin main, then git show origin/main:<path>."
+    ref: urls/entu-www-repo
+    refute: "git -C ~/projects/entu-www branch --show-current"
+    verified: "2026-10-14"
+  - fact: "Schema design history is in entu/research under docs/schema/v4E/; mvox's applied decisions are in teams/mvox-dev/docs/architecture-decisions.md."
+    ref: teams/mvox-dev/docs/architecture-decisions.md
+    refute: "ls ~/projects/entu-research/docs/schema/v4E"
+    verified: "2026-09-21"
+
+  - fact: "Entu platform mechanics are documented in entu/www, checked out at ~/projects/entu-www; start with src/overview/entities/index.md and src/overview/properties/index.md, read via git show origin/main."
+    ref: urls/entu-www-repo
+    refute: "git -C ~/projects/entu-www show origin/main:src/overview/entities/index.md"
+    verified: "2026-10-14"
+  - fact: "v4E schema design history lives in entu/research at ~/projects/entu-research; it is reference only, not a sync target."
+    ref: urls/mem-team-lead-archive-9d2803d
+    refute: "ls ~/projects/entu-research"
+    verified: "2026-10-14"
+  - fact: "mvox applied architecture decisions are recorded in teams/mvox-dev/docs/architecture-decisions.md in the app repo."
+    ref: teams/mvox-dev/docs/architecture-decisions.md
+    refute: "=ref"
+    verified: "2026-10-14"

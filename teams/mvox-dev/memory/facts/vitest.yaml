@@ -1,0 +1,12 @@
+# Facts about vitest mock behaviour in this repo. Converted by memkit 2026-10-14. (*MVOX:memkit*)
+
+facts:
+  - fact: "In vitest 4.1.10, mockReset() restores the implementation given to vi.fn(impl) but drops mockResolvedValue and mockImplementation, so the mock returns undefined."
+    ref: package.json
+    refute: "In a scratch spec, set mockResolvedValue on a vi.fn, call mockReset, await the call."
+    verified: "2026-10-03"
+
+  - fact: "In vitest 4.1.10, vi.clearAllMocks() clears recorded calls only and keeps resolved values."
+    ref: package.json
+    refute: "In a scratch spec, set mockResolvedValue, call vi.clearAllMocks, await the call."
+    verified: "2026-10-03"

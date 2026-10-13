@@ -1,0 +1,20 @@
+38	lessons/home-unset-in-a-shell.md	new
+53	lessons/acting-on-board-labels.md	new; complements ready-label-sweep-returns-zero
+64	lessons/closing-an-issue-on-a-relayed-acceptance.md	new; ruling stays in facts/rulings-comms.yaml
+66	lessons/closing-yellows-met-by-merged-work.md	new; check-issue-closed-after-merge covers only the merged issue
+77	lessons/putting-design-decisions-to-the-po.md	new; differs from writing-a-proposal-the-po-can-rule-on (one per turn)
+88	lessons/workflow-subagent-messages-the-lead.md	new
+91	lessons/writing-an-implementation-plan.md	new
+97	lessons/starting-the-visual-companion.md	new
+98	lessons/classifier-block-by-kind.md	new; merges perotin no-split-retry rule
+100	judgment	#289 is CLOSED; is this ruling still needed, or retire the fact too?
+101	lessons/line-cap-step-consolidation.md	new
+106	lessons/opening-the-checkpoint-pr.md	new
+177	judgment	changedFiles now includes untracked via ls-files; is the git add -N rule (and common-prompt line) stale?
+196	lessons/adding-a-verified-email.md	new; entu/api#39 status not rechecked
+197	lessons/changing-a-message-signature.md	new
+215	lessons/building-on-the-season-surface.md	new
+228	lessons/working-on-the-link-entity.md	new; link type confirmed in mvox-schema-extensions.ts
+236	judgment	polyphony is frozen (#407); where do _probe_ probes run now, if anywhere?
+244	lessons/waiting-for-a-live-authorization.md	new; data-manager side of relaying-a-live-authorization
+255	lessons/reviewing-a-destructive-script-before-run.md	new

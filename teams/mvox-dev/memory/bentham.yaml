@@ -1,0 +1,37 @@
+# Bentham's scratchpad (reviewer): open stand-downs and residuals. Converted by memkit 2026-10-14. (*MVOX:memkit*)
+# Shape: memory-kit/types/memory-scratchpad.ts. A claim about sources, never a source.
+# Review lessons live in lessons/; rulings in facts/rulings-process.yaml.
+
+current: []
+
+staging:
+  - label: WARNING
+    record: "ER-1 and ER-7 have no hash pin in rights-model-identifiers.spec.ts; only presence tests guard them."
+    ref: src/rights-model-identifiers.spec.ts
+  - label: PATTERN
+    record: "Pin an ER block in the slice that edits it; adding a pin also needs the fences.spec.ts repin."
+    ref: 6aad0a7
+  - label: DEFERRED
+    record: "#468 owner picker: re-open only if someone holding _owner sees no picker on the live roster."
+    ref: "#468"
+  - label: LEARNED
+    record: "Any grant-holder on a member row reads its full ownerIds; the gate checks the reader's own id."
+    ref: "#468"
+  - label: DECISION
+    record: "Do not filter ownerIds to the reader's own id: the gate reads the same and gets harder to follow."
+    ref: "#468"
+  - label: DEFERRED
+    record: "Eraser reach ignores a stroke's own w; re-open when any producer emits a non-default w."
+    ref: src/lib/components/StrokeSurface.svelte
+  - label: PATTERN
+    record: "Eraser fix shape when re-opened: reach = stroke.w/2 + 0.004 per stroke inside pathHits."
+    ref: "#394"
+  - label: LEARNED
+    record: "readCache full-scan-per-put and missing onversionchange stand-down is closed: META running total."
+    ref: f856d98
+  - label: DEFERRED
+    record: "afterNavigate cache-flag clear holds while root layout load is synchronous; re-open if it awaits."
+    ref: "#434"
+  - label: DEFERRED
+    record: "Re-open #434 s6 too if a cached page calls goto on its own route (use replaceState instead)."
+    ref: "#434"

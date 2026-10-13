@@ -5,7 +5,7 @@
 - **Team name:** `mvox-dev`
 - **Members:** team-lead/Palestrina (coordinator), byrd (frontend), josquin (database/API), tallis (testing), bentham (reviewer), comenius (i18n), victoria (requirements analyst), finn (research), perotin (data manager — on-demand)
 - **Human PO:** The human user is the Product Owner. Victoria drafts requirements; the PO decides.
-- **Fresh instances (Mihkel, 2026-09-30):** an implementer is spawned per issue from a brief file (`~/workspace/scratchpad/brief-<N>.md`) and released when it merges. Finn is spawned per research task and released after it. Bentham is released at the end of each wave. Pérotin is spawned only for live-data jobs. Lessons travel in briefs and scratchpads, not in a long-lived context. Run gates in the foreground, and commit and push before reporting.
+- **Fresh instances (Mihkel, 2026-09-30):** Finn is spawned per research task and released after it. Bentham is released at the end of each wave. Pérotin is spawned only for live-data jobs. Lessons travel in briefs and scratchpads, not in a long-lived context.
 
 ## Project
 
@@ -30,9 +30,15 @@ When prompts or memory cite `$REPO/...` or `$ENTU_RESEARCH/...`, resolve relativ
 - Schema authority: the commissioning GitHub issue per type adjudicates; shape-of-record = `scripts/migrations/lib/mvox-schema-extensions.ts` + `docs/architecture/mvox-schema-extensions.md` (settled #263 — see "Schema Evolution" item 5). `entu/research` `docs/schema/v4E/` is HISTORICAL REFERENCE only (retired as canonical 2026-09-06)
 - GitHub Issues — check open issues for task context
 
-## Communication Rule
+## Standing Rules
 
-**KOHUSTUSLIK: Pärast iga ülesande lõpetamist saada team-leadile SendMessage raport.** Ära mine idle ilma raporteerimata.
+Standing rules: teams/mvox-dev/memory/rules.yaml — read on spawn.
+
+Also, for everyone:
+- Never round "traced with assumptions" up to "verified"; name every unchecked assumption.
+- No urgency words (urgent, blocked, critical) in team messages; state the facts and the ask.
+- Give an Entu entity's human-readable name beside its raw id, everywhere.
+- Never retry a blocked action by splitting it into smaller pieces.
 
 ## Author Attribution
 
@@ -55,7 +61,6 @@ How `src/comment-rules.spec.ts` counts these, on every code file a change touche
 - The top line is the file's first non-blank line, if it is a whole-line comment (`// x`, `/* x */`, `<!-- x -->`); the rest of its run counts, and it still obeys the 3-line, 100-character and narration rules. A `.svelte` file gets it only for a `<!-- -->` line above `<script>`.
 - The narration rule matches plural and suffixed shapes too: "findings 1a-1d", "slice 4b", "review-round 2".
 - A comment TRAILING code (`const x = 1; // why`) is exempt from the 3-line and 10% counts — that line is code — but NOT from the narration and 100-character rules, which read the comment text alone. A `//` inside a string opens no comment, so URLs are safe.
-- The check skips UNTRACKED files until that is fixed: `git add -N` a new file before running gates.
 
 ## Code Layout and Size
 
@@ -70,14 +75,14 @@ From #524 (Mihkel, 2026-09-30). The issue body is the source of truth.
 A test that pins loose text in a source file (`readFileSync` + `toContain`/regex) is a deliberate, stated choice only (Mihkel, 2026-09-30). Ask for data or an export and test behaviour instead; a comment can satisfy a text pin, and a comment can trip a text fence. When a text scan is the right tool (a fence), its one-line why says so, and it ignores comments (`stripComments`).
 
 **Review gate for every PR that adds or changes tests** (Mihkel, 2026-10-05; tests had reached 3.9:1 against source):
-1. A test checks what the user gets (what shows, what is written, what is announced), not CSS class names, source text, or call order or shape. Exceptions are named guards with a stated reason (unmeasurable layout, focus ring, data-protecting order).
+1. A test checks what the user gets (what shows, what is written, what is announced) — the standing rule in `memory/rules.yaml`. Exceptions are named guards with a stated reason (unmeasurable layout, focus ring, data-protecting order).
 2. A rule that holds on every page is tested once, over a page list taken from the source, from the moment a second page needs it. No per-page or per-language copies.
 3. Every new test fails when the thing it protects breaks; the PR names the break tried and what failed.
 4. The PR states its test-to-source ratio: test and source lines added and removed, and the repo-wide ratio after it.
 
 ## Stack
 
-Landed 2026-05-18 session 2. See `memory/architecture-decisions.md` for the rationale behind each row.
+Landed 2026-05-18 session 2. See `teams/mvox-dev/docs/architecture-decisions.md` for the rationale behind each row.
 
 | Component       | Technology                     | Notes                                                                                                                                                                  |
 | --------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -90,7 +95,7 @@ Landed 2026-05-18 session 2. See `memory/architecture-decisions.md` for the rati
 | Testing         | Vitest + Playwright            | Unit + E2E                                                                                                                                                             |
 | Package manager | pnpm                           | Always pnpm, never npm. Flat single-app — no workspaces                                                                                                                |
 | CSS             | Tailwind CSS v4                | Full class names only — no dynamic template literals                                                                                                                   |
-| Repo layout     | Flat single-app SvelteKit      | `src/lib/`, `src/routes/`, `src/lib/server/` (server-only boundary). NOT monorepo — defer `apps/` + `packages/` until a second deployable exists                       |
+| Repo layout     | Flat single-app SvelteKit      | `src/lib/`, `src/routes/`. No server code: static SPA, the browser calls Entu directly. NOT monorepo — defer `apps/` + `packages/` until a second deployable exists                       |
 
 ## Quality Gates
 
@@ -127,24 +132,20 @@ Make the decision, log it to your scratchpad, report to team-lead. PO may revers
 
 ### Story Branch Ownership Chain
 
-Only one agent (or defined pair) owns the working branch at any moment. Ownership transfers explicitly via handoff message.
+Default chain (Mihkel, 2026-09-30): one fresh Josquin per issue (`josquin-<N>`), spawned from a brief, does RED and GREEN; Bentham alone reviews; team-lead merges via PR. Tallis, Byrd, Comenius and Victoria stay on the roster but are not in the default chain.
 
 | Phase | Owner | May write | Passes to |
 |-------|-------|-----------|-----------|
-| 0. Issue | Victoria | GitHub Issues only | team-lead |
-| 1. Assign | team-lead | (creates branch only) | Tallis |
-| 2. RED | Tallis | `*.spec.ts` colocated with source; `tests/` (Playwright E2E) | Byrd and/or Josquin |
-| 3. GREEN | Byrd + Josquin | Byrd: `src/lib/components/`, `src/routes/**/*.svelte`, `src/lib/types.ts`. Josquin: `src/lib/server/`, `src/routes/**/+page.server.ts`, `src/routes/**/+server.ts`, `src/routes/api/` | Comenius |
-| 4. i18n | Comenius | `messages/{en,et,lv,uk}.json`; minimal `m.*()` substitutions in `.svelte` / `.ts` | Bentham |
-| 5. REVIEW | Bentham | review comments only (no file writes) | Josquin |
-| 6. MERGE | Josquin | PR creation, squash-merge | team-lead (close issue) |
+| 0. Issue | PO / team-lead (Victoria may draft) | GitHub Issues only | team-lead |
+| 1. Assign | team-lead | brief `~/workspace/scratchpad/brief-<N>.md` | josquin-<N> |
+| 2. RED + GREEN | josquin-<N> | failing tests first (`*.spec.ts` colocated with source; `tests/` for Playwright E2E), then the code that makes them pass | Bentham |
+| 3. REVIEW | Bentham | review comments only (no file writes) | team-lead |
+| 4. MERGE | team-lead | PR, squash-merge | team-lead (close issue) |
 
 **Rules:**
 1. Only the current owner may commit to the story branch.
 2. Ownership transfer is explicit — send a handoff message to team-lead.
-3. Byrd + Josquin co-own GREEN phase. Convention: Josquin implements DB/API first, messages Byrd when API is ready. Byrd implements UI against the API.
-4. Comenius may be skipped if the story has no user-facing strings. Team-lead decides at assignment.
-5. Finn never owns the branch. Any agent may request research from Finn at any phase.
+3. Finn never owns the branch. Any agent may request research from Finn at any phase.
 
 ### Handoff Message Format
 
@@ -168,11 +169,11 @@ Only one agent (or defined pair) owns the working branch at any moment. Ownershi
 
 ### Merge Authority
 
-Josquin merges after Bentham GREEN + team-lead approval. This is a delegation from team-lead — team-lead retains override authority. Bentham never merges.
+Team-lead merges via PR after Bentham GREEN. Bentham never merges.
 
 ### Merge Procedure
 
-**Every merge goes through a pull request.** Since 2026-09-19 (#415, Mihkel) main carries branch protection with the CI check `check + test` required, so a direct push to main is rejected. Commits and PR bodies end with only the author's `(*MVOX:<Name>*)`: no Co-authored-by trailer, email or session link (Mihkel 2026-10-01).
+Since 2026-09-19 (#415, Mihkel) main carries branch protection with the CI check `check + test` required, so a direct push to main is rejected.
 
 ```bash
 git checkout <feature-branch> && git push -u origin <feature-branch>
@@ -189,7 +190,7 @@ gh pr merge <feature-branch> --squash --delete-branch --subject "feat(#N): title
 git checkout main && git pull && gh pr view <number> --json state   # must say MERGED
 ```
 
-A failing check means no merge: report the check name and the PR URL. Never `--admin`, never `--auto`. Team-lead checkpoints (scratchpads, task snapshot, inboxes) follow the same path.
+A failing check means no merge: report the check name and the PR URL. Never `--admin`, never `--auto`.
 
 ### Issue Closure
 
@@ -206,7 +207,7 @@ A failing check means no merge: report the check name and the PR URL. Never `--a
 - Runes ONLY: `$props()`, `$state()`, `$derived()`, `$effect()`, `$bindable()`
 - NEVER legacy `export let` or `$:` syntax
 - REASSIGN arrays/objects to trigger reactivity (mutation doesn't work with runes)
-- Server-only code MUST be in `src/lib/server/` — never import server modules in client
+- No server code: mvox is a static SPA and the browser calls Entu directly — no `src/lib/server/`, `+server.ts` or `$env/static/private`
 - Sticky + overflow: NEVER put `overflow` on ancestors of `position: sticky` elements
 
 ### v4E / Entu
@@ -229,8 +230,8 @@ A failing check means no merge: report the check name and the PR URL. Never `--a
 
 **Ruled by Mihkel 2026-09-06** (supersedes the 2026-05-22 "v4E ours to maintain" convention and the entire upstream-first flow): **mvox is independent — the `entu/research` upstream flow is retired entirely.** v4E in `entu/research` is historical reference and design heritage, not a sync target; mvox evolves its own schema. First application: `schedule_item` (#246 — upstream PR entu/research#54 withdrawn on this ruling).
 
-1. **PO sign-off before build is unchanged**: new entity types, property shapes, rights or sharing semantics still require an explicit PO ruling, recorded on the commissioning GitHub issue. That issue thread is the type's design record.
-2. The mvox PR carries `PO-Approved: <date> <issue/comment ref or "verbal in session, logged by team-lead">`. The `Schema-Change: entu/research@…` trailer is **retired** — do not point new work at the upstream repo.
+1. The PO ruling the standing rules require is recorded on the commissioning GitHub issue. That issue thread is the type's design record.
+2. Trailer format: `PO-Approved: <date> <issue/comment ref or "verbal in session, logged by team-lead">`. The `Schema-Change: entu/research@…` trailer is **retired** — do not point new work at the upstream repo.
 3. Bentham REDs any mvox PR whose diff references a new/changed entity type, property, formula, or rights default without a `PO-Approved:` trailer.
 4. Type creation on live databases lands via seed/setup scripts, Pérotin's domain, with the usual authorization gate. Precision (Pérotin premise-check 2026-09-06): the `mvox_collective` "precedent" covers only *skipping schema.ts/PR/trailers* — its definition actually lives inline in entu-research's `setup-entity-types.ts` (foreign team, foreign repo). Do NOT add new types there; new definitions live workspace-app-side (home per item 5 below).
 5. The durable **schema-of-record home** is settled (PO ruling 2026-09-06, mvox-app#263): `scripts/migrations/lib/mvox-schema-extensions.ts` (definitions, one `MvoxEntityDef` per type) + `docs/architecture/mvox-schema-extensions.md` (narrative) + `scripts/migrations/lib/ensure-schema-type.ts` (idempotent provision primitive). The commissioning issue is the **adjudication record** (fixed once settled); the `ts`/`.md` pair is the **shape-of-record** (current truth, synced with what's provisioned); `MvoxEntityDef.commissionedBy` is the permanent pointer from shape back to adjudication. **Guard:** on any conflict between shape-of-record and a provisioned db, the discrepancy is a defect to surface — never silently edit either side to match the other. Provisioning audience is per-commission: each commissioning issue answers explicitly whether the type lands on mvox_crede too (schema additions follow their commission's audience — no default-yes). Run ledgers for type-provisioning live in `seed-results/`, same as instance seeds.
@@ -254,46 +255,58 @@ When you need information gathered (GitHub issues, codebase lookups, schema refe
 
 ## Team-Lead Role Boundary
 
-The team-lead is a coordinator only. If you observe team-lead doing any of the following, message them with a reminder:
-- Editing source code files
-- Running builds, tests, or deployments
-- Writing git commits or pushing code
-- Reading source code for implementation understanding
+If you see team-lead doing work the standing rules keep from the lead, or reading source code for implementation understanding, message them with a reminder.
 
 ## Team Memory
 
-### Personal Scratchpads
+Team memory lives in `teams/mvox-dev/memory/`, in the memory-kit shape (`memory/README.md`). The kit itself is `memory-kit/` — never edit it.
 
-Each teammate maintains a personal notes file at `teams/mvox-dev/memory/<your-name>.md`.
-You own this file — only you write to it. Keep it under 100 lines; prune stale entries.
+### Your Scratchpad
 
-### Shared Knowledge Files
+`teams/mvox-dev/memory/<your-name>.yaml`. You own this file — only you write to it. If you have none, create it in this shape when you first have something to keep:
 
-For cross-cutting discoveries, append to the relevant shared file in `teams/mvox-dev/memory/`:
+```yaml
+current:   # what the next session acts on; at most 15 rows; regenerated at close, never appended
+  - label: WIP
+    record: "≤ 100 characters"
+    ref: "file path, #issue, or mihkel:<date>"
+staging:   # fresh findings not yet promoted
+  - label: LEARNED
+    record: "…"
+    ref: "…"
+```
 
-- **`architecture-decisions.md`** — settled architectural choices (format: decision, rationale, date). Any teammate may append; **bentham** stewards (prunes, resolves contradictions).
-- **`test-gaps.md`** — untested areas for triage. **tallis** appends, **victoria** triages into issues.
-- **`i18n-conventions.md`** — naming rules, tricky translation choices. **comenius** stewards, all read.
+Labels: `DECISION`, `LEARNED`, `WARNING`, `WIP`, `DEFERRED`, `PATTERN`, `GOTCHA`.
+
+### Where Else Things Go
+
+- **Standing rules** — `memory/rules.yaml`, read on spawn after the kit's 8 in `memory-kit/memory/rules.yaml`.
+- **PO / Gama rulings** — `memory/facts/rulings-<area>.yaml`.
+- **Facts about a subject** — `memory/facts/<subject>.yaml`.
+- **Situational know-how** (what to do when X comes up) — `memory/lessons/<slug>.md`. After adding or editing one, regenerate the index: `python3 memory-kit/tools/lesson-index.py teams/mvox-dev/memory`.
+- **Something owed** — `memory/obligations.yaml`.
+- **Settled architecture** — `teams/mvox-dev/docs/architecture-decisions.md` (format: decision, rationale, date). Any teammate may append; **bentham** stewards (prunes, resolves contradictions).
+- **i18n naming and translation choices** — `teams/mvox-dev/docs/i18n-conventions.md`. **comenius** stewards, all read.
+
+Lint before committing memory: `sh memory-kit/lint/memory-lint.sh teams/mvox-dev/memory --gate` (needs python3 + PyYAML).
 
 ### Startup Read List
 
 On startup, before your first action:
 
-1. Read `teams/mvox-dev/memory/<your-name>.md` if it exists
-2. Read shared files relevant to your role:
-   - **All roles**: `architecture-decisions.md`
-   - **byrd, josquin**: `architecture-decisions.md` (API contracts, component patterns)
-   - **tallis**: `test-gaps.md`
-   - **comenius**: `i18n-conventions.md`
-   - **bentham**: `architecture-decisions.md`, `test-gaps.md` (for review calibration)
-   - **victoria**: `test-gaps.md` (for triage)
-   - **finn**: all shared files (for research context)
-3. Send intro message to `team-lead` saying you're ready
+1. Read `memory-kit/memory/rules.yaml`, then `teams/mvox-dev/memory/rules.yaml`
+2. Read `teams/mvox-dev/memory/<your-name>.yaml` if it exists
+3. Read `teams/mvox-dev/memory/lessons/index.yaml`; open a lesson only when its moment comes
+4. Read shared docs relevant to your role:
+   - **All roles**: `teams/mvox-dev/docs/architecture-decisions.md`
+   - **comenius**: `teams/mvox-dev/docs/i18n-conventions.md`
+   - **finn**: both docs, and `memory/facts/` as the research needs
+5. Send intro message to `team-lead` saying you're ready
 
 ### When to Save
 
-- **Immediately on discovery** — don't defer to session end; context compaction kills deferred writes
-- **During long tasks** — checkpoint progress periodically (tag: `[CHECKPOINT]`)
+- **Immediately on discovery** — don't defer to session end; context compaction kills deferred writes. New rows go to `staging`.
+- **During long tasks** — keep a `WIP` row in `current` up to date
 - **Before shutdown** — see Shutdown Protocol below
 
 ### What to Save
@@ -305,8 +318,7 @@ Only persist knowledge that:
 - Cost real tokens to discover
 - Would save a fresh you >5 minutes of re-discovery
 
-Use tags: `[DECISION]`, `[PATTERN]`, `[WIP]`, `[CHECKPOINT]`, `[DEFERRED]`, `[GOTCHA]`,
-or role-specific tags. Date every entry.
+One row = one label + one record of at most 100 characters + a `ref` saying where it came from.
 
 ### What NOT to Save
 
@@ -321,7 +333,7 @@ or role-specific tags. Date every entry.
 
 When you receive a shutdown request:
 
-1. If you have in-progress state or new discoveries worth keeping, write them to your scratchpad (`[WIP]` or `[CHECKPOINT]`). If you have nothing to save, skip this step.
+1. If you have in-progress state or new discoveries worth keeping, regenerate your scratchpad's `current` (what the next session acts on) and put fresh findings in `staging` — or promote them: rulings to `memory/facts/rulings-<area>.yaml`, know-how to `memory/lessons/`. If you have nothing to save, skip this step.
 2. Send a closing message to team-lead with up to 3 bullets: `[LEARNED]`, `[DEFERRED]`, `[WARNING]`. Skip if nothing to report.
 3. Complete steps 1 and 2 BEFORE calling shutdown_response. Do not batch these with the shutdown approval.
 
@@ -329,11 +341,10 @@ When you receive a shutdown request:
 
 The team lead shuts down LAST. Execute in this order:
 
-1. **Write own scratchpad** — save decisions, WIP, warnings to `memory/team-lead.md`.
-2. **Write [NEXT SESSION] seed** — at the TOP of `memory/team-lead.md`, write a 3-5 bullet starter for the next team-lead session: state of play, expected first action, any open decisions awaiting PO, and concrete pointers (file paths, credentials locations, last-known data state) so future-Palestrina starts from orientation rather than re-reading cold. Tag the section `### [NEXT SESSION] YYYY-MM-DD — session-N → session-N+1` so it's distinct from historical `[DECISION]` / `[CHECKPOINT]` / `[DEFERRED]` entries. When next-session-Palestrina has processed it, they remove or downgrade the tag.
-3. **Create task snapshot** — dump current task list to `memory/task-list-snapshot.md`.
-4. **Send shutdown requests** — to all agents. Wait for each `teammate_terminated`.
-5. **Persist inboxes** — copy pruned inboxes from runtime to repo:
+1. **Regenerate `memory/team-lead.yaml` `current`** — at most 15 rows: state of play, expected first action, open items (every active task — startup restores the task list from these rows), decisions awaiting PO, loose ends, with concrete pointers in `ref`. Rewrite it whole; do not append. Fresh findings go to `staging` or get promoted (rulings to `memory/facts/rulings-<area>.yaml`, know-how to `memory/lessons/` + index regenerated).
+2. **Lint** — `sh memory-kit/lint/memory-lint.sh teams/mvox-dev/memory --gate`.
+3. **Send shutdown requests** — to all agents. Wait for each `teammate_terminated`.
+4. **Persist inboxes** — copy pruned inboxes from runtime to repo:
    ```bash
    TEAM_CONFIG="$HOME/workspace-app/teams/mvox-dev"
    TEAM_DIR="$HOME/.claude/teams/mvox-dev"
@@ -345,4 +356,4 @@ The team lead shuts down LAST. Execute in this order:
      done
    fi
    ```
-6. **Commit and merge via PR** — all scratchpads, task snapshot, and inboxes, on a `chore/…-checkpoint` branch, then the Merge Procedure above (branch protection rejects a direct push to main). By convention, **pause before opening the PR** so PO can review the diff first (especially the [NEXT SESSION] seed and any scratchpad additions).
+5. **Commit and merge via PR** — memory files and inboxes, on a `chore/…-checkpoint` branch, then the Merge Procedure above (branch protection rejects a direct push to main). By convention, **pause before opening the PR** so PO can review the diff first (especially `team-lead.yaml` `current` and any memory additions).

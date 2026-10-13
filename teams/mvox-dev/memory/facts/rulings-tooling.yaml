@@ -1,0 +1,26 @@
+# PO rulings on tests and test review. Converted by memkit 2026-10-14. (*MVOX:memkit*)
+facts:
+  - fact: "Tests check what the user gets, not CSS classes, source text or call order; exceptions are named guards with a stated reason."
+    ref: teams/mvox-dev/common-prompt.md
+    refute: "=ref"
+    verified: "2026-10-14"
+  - fact: "A rule that holds on every page is tested once, over a page list derived from source, as soon as a second page needs it."
+    ref: teams/mvox-dev/common-prompt.md
+    refute: "=ref"
+    verified: "2026-10-14"
+  - fact: "Every new test must fail when what it protects breaks, and the PR names the break tried and what failed."
+    ref: teams/mvox-dev/common-prompt.md
+    refute: "=ref"
+    verified: "2026-10-14"
+  - fact: "A PR that changes tests states its test-to-source ratio: test and source lines added and removed, and the repo-wide ratio after it."
+    ref: teams/mvox-dev/common-prompt.md
+    refute: "=ref"
+    verified: "2026-10-14"
+  - fact: "A test that reads a source file and checks its text is a deliberate, stated choice only; such a check ignores comments."
+    ref: teams/mvox-dev/common-prompt.md
+    refute: "=ref"
+    verified: "2026-10-14"
+  - fact: "The board sort test checks behaviour (in process, then in research, then neither, number ascending), and a comment at the sort site names the label coupling; no text pin or API guard."
+    ref: "#310"
+    refute: "=ref"
+    verified: "2026-09-10"

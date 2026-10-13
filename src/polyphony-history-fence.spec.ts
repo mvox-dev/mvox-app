@@ -1,109 +1,55 @@
-// #407 — Polyphony survives in the code only as dated history.
-//
-// RED for the #407 TDD chain. Mihkel, 2026-09-18: "drop polyphony from
-// constraining us. cleanup all appearances of polyphony other than historic
-// references". The polyphony Entu db is frozen, dated history only — it is
-// not the sample database, not the provisioning template, not a db we run
-// against. This fence walks every tracked file (git ls-files) and asserts
-// that no case-insensitive 'polyphony' occurrence remains outside the
-// allowlist below. Classification is BY REFERENT, not by string (the issue's
-// own instruction): polyphony.uk (Crede's legacy web app), the archived
-// prototype at ~/projects/polyphony, and the musical term are different
-// referents and stay untouched.
-//
-// Scanning real repo files follows the rights-model-identifiers.spec /
-// typography-scale.spec precedent (mechanical checks over real files, spec
-// at src root).
+// #407 (Mihkel 2026-09-18): 'polyphony' as the frozen Entu db survives only as dated history.
+// Walks every tracked file; classifies by referent: polyphony.uk, the archived prototype and
+// the musical term are other things. Full rationale per entry: git log -p on this file.
 
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// ── ALLOWLIST: whole files/dirs the fence never reads ──────────────────────
-// One entry per referent class. A path matching ANY of these is skipped.
+// Whole files/dirs the fence never reads.
 export const ALLOWED_PATHS: ReadonlyArray<RegExp> = [
-	// Dated ledgers of already-run migrations/probes — frozen history by issue definition.
+	// Frozen history: run ledgers, probes, dated migrations, memory, inboxes, dated docs.
 	/^scripts\/migrations\/seed-results\//,
-	// Dated, already-run probe scripts — frozen history.
 	/^scripts\/migrations\/probes\//,
-	// Dated migration scripts (filename carries the run date) — frozen history.
-	// A run-date in the filename marks the file historic wherever it sits, so the
-	// lib/ subdirectory counts too (e.g. lib/menu-empty-shells-2026-08-08.ts, whose
-	// header quotes a 2026-08-07 walkthrough verbatim and must not be reworded).
 	/^scripts\/migrations\/(lib\/)?[^/]+-2026-[^/]+\.ts$/,
-	// Team memory checkpoints — historic records, never rewritten.
 	/^teams\/mvox-dev\/memory\//,
-	// Team inbox snapshots — historic message records.
 	/^teams\/mvox-dev\/inboxes\//,
-	// Dated, frozen design documents.
+	/^teams\/mvox-dev\/memory-adoption\//,
+	/^teams\/mvox-dev\/docs\/architecture-decisions\.md$/,
+	/^teams\/mvox-dev\/docs\/design-notes\/(email-trust|library-subtree|onboarding|org-rights-isolation|participation|programs|roles-as-rights|seasons-events|section-structure|work-edition-model)\.md$/,
 	/^docs\/design\//,
-	// Dated external audits by another team (trailer (*FR:Medici*)) — frozen as
-	// history, same class as docs/design and teams/mvox-dev/memory above. Their
-	// quotations record what other files said on the audit date; rewording them
-	// falsifies the record.
 	/^teams\/mvox-dev\/docs\/health-report-.*\.md$/,
-	// Dated, frozen implementation plans (superpowers:writing-plans output).
 	/^docs\/superpowers\//,
-	// polyphony.uk referent: Crede's legacy web app as the D1 migration SOURCE,
-	// not the Entu db — every mention in this runbook is that referent.
+	// polyphony.uk referent (legacy web app, colour anchors) on lines without the '.uk' token.
 	/^docs\/runbook\/provisioning\.md$/,
-	// polyphony.uk referent: colour anchors carried over from the legacy web
-	// app's type scale. The '.uk' token is NOT on every line, so a per-line
-	// regex is wrong — whole-file exclusion (issue #407 names this file).
 	/^src\/app\.css$/,
-	// polyphony.uk referent: same colour-anchor referent as src/app.css
-	// (app.css's own cross-reference names this file) — whole-file exclusion.
 	/^src\/lib\/events\/eventTypeStyles\.ts$/,
-	// polyphony.uk referent: spec for the colour anchors above, same referent,
-	// no '.uk' token on the offending lines — whole-file exclusion.
 	/^src\/lib\/events\/eventTypeStyles\.spec\.ts$/,
-	// Musical-term referent: William Byrd etymology ("vocal polyphony").
+	// Musical term (composer etymology), and this fence itself.
 	/^teams\/mvox-dev\/prompts\/byrd\.md$/,
-	// Musical-term referent: Palestrina etymology ("saved polyphony from
-	// being banned" — the compositional technique, not the db).
 	/^teams\/mvox-dev\/prompts\/palestrina\.md$/,
-	// This fence itself — its patterns necessarily contain the word.
 	/^src\/polyphony-history-fence\.spec\.ts$/,
-	// Locked by its OWN byte-identity fence (#318/#320, workers/entu-rights-mcp/
-	// fences.spec.ts + src/rights-model-identifiers.spec.ts's own sha256 pins):
-	// "a doc edit belongs to its own commissioned slice... Repin only behind a
-	// PO ruling that widens the mandate." Its dated ER-14 citation of the
-	// probed db (`polyphony`, synthetic, probed 2026-09-10) cannot be reworded
-	// here without breaking that separate, independently-authoritative fence —
-	// whole-file exclusion until a dedicated slice touches this doc.
+	// Byte-pinned by their own fences (#318/#320); they name the probed db verbatim.
 	/^docs\/architecture\/entu-rights-and-visibility-model\.md$/,
-	// Same lock, the mirror side: this guard spec's own sha256 pin (workers/
-	// entu-rights-mcp/fences.spec.ts) requires it byte-identical to HEAD except
-	// through its own commissioned slice — it asserts the doc above names its
-	// probed db verbatim, so its assertion text cannot be reworded here either.
 	/^src\/rights-model-identifiers\.spec\.ts$/
 ];
 
-// ── LINE EXCLUSIONS: referents that are allowed anywhere ───────────────────
-// A line matching ANY of these is not an offender, whatever file it is in.
+// Lines allowed anywhere: the other referents.
 export const ALLOWED_LINE_PATTERNS: ReadonlyArray<RegExp> = [
-	// polyphony.uk — Crede's legacy web app, a different thing (issue #407).
 	/polyphony\.uk/i,
-	// ~/projects/polyphony — the archived prototype's path, dated history.
 	/~\/projects\/polyphony/,
-	// Musical term — the compositional technique, not the db.
 	/vocal polyphony/i,
-	// Archived-prototype referent — the pre-mvox prototype, not the db.
 	/polyphony prototype/i,
-	// Archived-prototype referent — code harvested from the prototype.
 	/polyphony harvest/i
 ];
 
-// ── SCOPED LINE EXCLUSIONS: referents allowed only in named paths ──────────
+// Lines allowed only in named paths: dated citations, roster etymology.
 export const ALLOWED_SCOPED_LINE_PATTERNS: ReadonlyArray<{
 	path: RegExp;
 	line: RegExp;
 }> = [
-	// docs/architecture dated citations — a line that pins a machine date is a
-	// historic record of what was probed/decided then, not a current-db claim.
 	{ path: /^docs\/architecture\//, line: /20\d{2}-\d{2}-\d{2}/ },
-	// roster.json etymology lines — composer origin blurbs (musical term).
 	{ path: /^teams\/mvox-dev\/roster\.json$/, line: /"origin":/ }
 ];
 

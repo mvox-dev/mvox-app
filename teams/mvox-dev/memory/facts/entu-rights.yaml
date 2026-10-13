@@ -1,0 +1,56 @@
+# Facts about Entu rights: grants, inheritance and what rights-holders can read. Converted by memkit 2026-10-14. (*MVOX:memkit*)
+facts:
+  - fact: "Creating an entity writes one direct _owner value for the creator; the aggregate view shows it under _owner, _editor, _expander and _viewer with the same _id."
+    ref: "#294"
+    refute: "Create an entity on polyphony and count the creator's rights values by _id."
+    verified: "2026-09-09"
+  - fact: "A reference holds at most one direct rights tier per entity: a new direct grant retires the previous one, even when the new tier is lower."
+    ref: mihkel:2026-09-09
+    refute: "=ref"
+    verified: "2026-09-09"
+  - fact: "Granting an entity's creator any explicit tier replaces the _owner written at create, so a lower grant silently demotes the creator."
+    ref: "2026-09-09"
+    refute: "Create an entity, grant the creator _editor, read back _owner."
+    verified: "2026-09-09"
+  - fact: "Aggregate rights combine inherited and direct grants; a parent grant never overwrites a child's direct grant."
+    ref: mihkel:2026-09-09
+    refute: "=ref"
+    verified: "2026-09-09"
+  - fact: "Entu docs say a POST without _id always adds a value; for rights tiers this conflicts with observed replacement and is an open vendor question."
+    ref: teams/mvox-dev/docs/architecture-decisions.md
+    refute: "git -C ~/projects/entu-www show origin/main:src/api/properties/index.md"
+    verified: "2026-10-14"
+  - fact: "An entity read returns one bucket: a caller with any right gets private, with all properties including rights; others get domain or public content without rights properties."
+    ref: "#68"
+    refute: "entu-api entity.js cleanupEntity"
+    verified: "2026-08-09"
+  - fact: "An empty _owner in an API response means the caller holds no right on the entity, not that the entity has no owner."
+    ref: "#68"
+    refute: "Read the entity as its owner and compare."
+    verified: "2026-08-09"
+  - fact: "Any entity-level right, even _viewer alone, reads properties shared as private in full; property-level sharing does not filter rights-holders."
+    ref: "#294"
+    refute: "Read a private-tier property as a _viewer-only identity."
+    verified: "2026-09-08"
+  - fact: "An anonymous caller with no rights gets 403 'No accessible properties' on a private entity, not a 200 with fields left out."
+    ref: "#294"
+    refute: "GET a private entity without a token."
+    verified: "2026-09-08"
+  - fact: "Deleting values of _owner, _editor, _expander, _viewer, _noaccess, _sharing, _inheritrights or _parent needs _owner; the docs state no tier for ordinary properties."
+    ref: urls/entu-docs-properties
+    refute: "git -C ~/projects/entu-www show origin/main:src/api/properties/index.md"
+    verified: "2026-10-14"
+  - fact: "A reference value's .string carries the referenced person's name and email even when only rights properties are requested, and /history lookups do the same."
+    ref: "#369"
+    refute: "scripts/migrations/probes/probe-369-crede-self-editor-diagnosis-2026-09-15.ts"
+    verified: "2026-09-15"
+
+  - fact: "Only _owner can delete an entity; _editor can list, read, add property values and delete ordinary property values."
+    ref: urls/mem-perotin-9d2803d
+    refute: "git -C ~/projects/entu-www show origin/main:src/overview/entities/index.md"
+    verified: "2026-10-14"
+
+  - fact: "A list response's count equals the caller's visible subset, not the total number of matching entities."
+    ref: urls/mem-perotin-9d2803d
+    refute: "Compare count for an owner and a viewer on the same query."
+    verified: "2026-09-21"

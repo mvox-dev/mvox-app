@@ -1,0 +1,10 @@
+# Entu platform behaviour checked against entu-api source or docs. Converted by memkit 2026-10-14. (*MVOX:memkit*)
+facts:
+  - fact: "Entu invite redemption writes only the private entu_user property; nothing admin-readable records invited versus redeemed state."
+    ref: urls/entu-api-repo
+    refute: "grep -n -A12 'async function replaceInviteWithCredentials' ~/projects/entu-api/routes/auth/index.get.js"
+    verified: "2026-09-08"
+  - fact: "Entu auto-provisions name, email and rights for a new account only on the non-invite sign-in path (createUserForAccount, when no invite was attempted)."
+    ref: urls/entu-api-repo
+    refute: "grep -n 'inviteAttempted' ~/projects/entu-api/routes/auth/index.get.js"
+    verified: "2026-10-14"

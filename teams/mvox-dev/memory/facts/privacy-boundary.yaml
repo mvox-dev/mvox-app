@@ -1,0 +1,18 @@
+# Which Entu databases hold real personal data. Converted by memkit 2026-10-14. (*MVOX:memkit*)
+facts:
+  - fact: "The polyphony database is synthetic end to end, apart from a few real team fixtures (db-root, Mihkel's OAuth identity, a Test User, one walkthrough signup)."
+    ref: mihkel:2026-08-05
+    refute: "=ref"
+    verified: "2026-09-15"
+  - fact: "The crede database is a real choir pilot with real names and emails; any crede-targeting script or ledger is real PII by default."
+    ref: mihkel:2026-09-06
+    refute: "=ref"
+    verified: "2026-09-15"
+  - fact: "writeLedger with sensitive: true routes a ledger to the gitignored scripts/migrations/seed-results/crede-instance/ directory."
+    ref: scripts/migrations/lib/ledger-writer.spec.ts
+    refute: "=ref"
+    verified: "2026-10-14"
+  - fact: "Estonian choir names in seed data (EFK, Sireen, RAM, TAM, EKBL, EMKL) are real; seed persons are synthesized Estonian-style names at example.ee."
+    ref: urls/mem-perotin-9d2803d
+    refute: ""
+    verified: "2026-09-15"

@@ -1,0 +1,924 @@
+id	file	tier	state	where
+architecture-decisions#1	architecture-decisions.md	longform	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#2	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#3	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#4	architecture-decisions.md	rule	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#5	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#6	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#7	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#8	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#9	architecture-decisions.md	history	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#10	architecture-decisions.md	rule	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#11	architecture-decisions.md	longform	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#12	architecture-decisions.md	rule	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#13	architecture-decisions.md	rule	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#14	architecture-decisions.md	history	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#15	architecture-decisions.md	rule	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#16	architecture-decisions.md	history	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#17	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#18	architecture-decisions.md	rule	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#19	architecture-decisions.md	superseded	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#20	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#21	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#22	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#23	architecture-decisions.md	superseded	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#24	architecture-decisions.md	fact	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#25	architecture-decisions.md	superseded	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#26	architecture-decisions.md	fact	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#27	architecture-decisions.md	superseded	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#28	architecture-decisions.md	superseded	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#29	architecture-decisions.md	superseded	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#30	architecture-decisions.md	superseded	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#31	architecture-decisions.md	ruling	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#32	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#33	architecture-decisions.md	longform	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#34	architecture-decisions.md	superseded	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#35	architecture-decisions.md	fact	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#36	architecture-decisions.md	fact	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#37	architecture-decisions.md	longform	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#38	architecture-decisions.md	rule	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#39	architecture-decisions.md	longform	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#40	architecture-decisions.md	history	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#41	architecture-decisions.md	superseded	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#42	architecture-decisions.md	superseded	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#43	architecture-decisions.md	superseded	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#44	architecture-decisions.md	superseded	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#45	architecture-decisions.md	superseded	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#46	architecture-decisions.md	superseded	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#47	architecture-decisions.md	superseded	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#48	architecture-decisions.md	superseded	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#49	architecture-decisions.md	superseded	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#50	architecture-decisions.md	rule	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#51	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#52	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#53	architecture-decisions.md	rule	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#54	architecture-decisions.md	fact	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#55	architecture-decisions.md	superseded	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#56	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#57	architecture-decisions.md	ruling	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#58	architecture-decisions.md	ruling	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#59	architecture-decisions.md	ruling	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#60	architecture-decisions.md	ruling	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#61	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#62	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#63	architecture-decisions.md	ruling	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#64	architecture-decisions.md	ruling	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#65	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#66	architecture-decisions.md	rule	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#67	architecture-decisions.md	rule	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#68	architecture-decisions.md	rule	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#69	architecture-decisions.md	ruling	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#70	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#71	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#72	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#73	architecture-decisions.md	rule	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#74	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#75	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#76	architecture-decisions.md	ruling	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#77	architecture-decisions.md	ruling	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#78	architecture-decisions.md	rule	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#79	architecture-decisions.md	ruling	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#80	architecture-decisions.md	ruling	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#81	architecture-decisions.md	ruling	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#82	architecture-decisions.md	rule	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#83	architecture-decisions.md	rule	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#84	architecture-decisions.md	history	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#85	architecture-decisions.md	ruling	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#86	architecture-decisions.md	longform	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#87	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#88	architecture-decisions.md	rule	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#89	architecture-decisions.md	history	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#90	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+architecture-decisions#91	architecture-decisions.md	lesson	moved	teams/mvox-dev/docs/architecture-decisions.md
+team-lead-archive#1	team-lead-archive.md	longform	dead	batch 1B
+team-lead-archive#2	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#3	team-lead-archive.md	lesson	converted	facts/entu-entities.yaml,facts/rulings-schema.yaml
+team-lead-archive#4	team-lead-archive.md	fact	converted	facts/entu-docs.yaml,urls/entu-www-repo
+team-lead-archive#5	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#6	team-lead-archive.md	lesson	converted	lessons/quote-platform-docs-before-theorizing.md
+team-lead-archive#7	team-lead-archive.md	superseded	dead	GATE 1
+team-lead-archive#8	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#9	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#10	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#11	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#12	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#13	team-lead-archive.md	superseded	dead	GATE 1
+team-lead-archive#14	team-lead-archive.md	superseded	dead	GATE 1
+team-lead-archive#15	team-lead-archive.md	lesson	converted	lessons/quote-platform-docs-before-theorizing.md,lessons/no-own-assumptions-inside-an-authorization.md,lessons/verify-claims-before-asserting-or-relaying.md
+team-lead-archive#16	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#17	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#18	team-lead-archive.md	lesson	dead	batch 1A
+team-lead-archive#19	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#20	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#21	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#22	team-lead-archive.md	lesson	converted	lessons/red-tests-that-can-fail.md,judgment
+team-lead-archive#23	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#24	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#25	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#26	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#27	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#28	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#29	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#30	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#31	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#32	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#33	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#34	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#35	team-lead-archive.md	rule	rule	added to prompts/josquin.md Test Habits (cutover fix); stays in prompts/<role>.md
+team-lead-archive#36	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#37	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#38	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#39	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#40	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#41	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#42	team-lead-archive.md	lesson	converted	lessons/no-server-side-use-of-user-entu-token.md
+team-lead-archive#43	team-lead-archive.md	lesson	converted	lessons/aggregate-counts-via-entu-formulas.md
+team-lead-archive#44	team-lead-archive.md	superseded	dead	GATE 1
+team-lead-archive#45	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#46	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#47	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#48	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#49	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#50	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#51	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#52	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#53	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#54	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#55	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#56	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#57	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#58	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#59	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#60	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#61	team-lead-archive.md	lesson	converted	lessons/respawn-idle-teammate-with-task-in-prompt.md
+team-lead-archive#62	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#63	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#64	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#65	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#66	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#67	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#68	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#69	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#70	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#71	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#72	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#73	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#74	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#75	team-lead-archive.md	lesson	converted	lessons/verify-claims-before-asserting-or-relaying.md
+team-lead-archive#76	team-lead-archive.md	lesson	converted	lessons/freeze-spec-before-dispatching-chain.md
+team-lead-archive#77	team-lead-archive.md	lesson	converted	lessons/check-issue-closed-after-merge.md
+team-lead-archive#78	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#79	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#80	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#81	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#82	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#83	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#84	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#85	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#86	team-lead-archive.md	lesson	converted	lessons/assert-base-display-with-responsive-class.md,lessons/stub-new-modules-in-red.md,judgment
+team-lead-archive#87	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#88	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#89	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#90	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#91	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#92	team-lead-archive.md	lesson	dead	batch 1A
+team-lead-archive#93	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#94	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#95	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#96	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#97	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#98	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#99	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#100	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#101	team-lead-archive.md	lesson	converted	lessons/shut-down-teammates-before-session-end.md
+team-lead-archive#102	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#103	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#104	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#105	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#106	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#107	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#108	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#109	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#110	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#111	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#112	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#113	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#114	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#115	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#116	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#117	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#118	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#119	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#120	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#121	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#122	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#123	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#124	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#125	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#126	team-lead-archive.md	lesson	converted	lessons/shared-working-tree-branch-guard.md,lessons/say-what-a-message-supersedes.md,lessons/verify-claims-before-asserting-or-relaying.md,lessons/red-author-sets-the-green-contract.md,lessons/stub-new-modules-in-red.md,lessons/persist-per-op-failure-detail.md,lessons/unverified-wire-shape-is-yellow.md,lessons/blocked-deletes-mean-cleanup-first.md,lessons/one-off-live-ops-as-scripts.md,judgment
+team-lead-archive#127	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#128	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#129	team-lead-archive.md	superseded	dead	GATE 1
+team-lead-archive#130	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#131	team-lead-archive.md	history	dead	GATE 1
+team-lead-archive#132	team-lead-archive.md	history	dead	GATE 1
+bentham#1	bentham.md	history	dead	GATE 1
+bentham#2	bentham.md	rule	rule	rules.yaml row 6; stays in common-prompt.md / palestrina.md
+bentham#3	bentham.md	rule	rule	added to prompts/bentham.md Review Habits (cutover fix)
+bentham#4	bentham.md	lesson	converted	lessons/gating-a-branch-that-may-move.md,lessons/when-team-lead-contradicts-my-read.md,lessons/reporting-a-gate-result.md
+bentham#5	bentham.md	ruling	converted	facts/rulings-process.yaml
+bentham#6	bentham.md	fact+lesson	converted	facts/rulings-process.yaml,facts/pnpm-gates.yaml
+bentham#7	bentham.md	lesson	converted	lessons/checking-a-trigger-symbol-still-exists.md
+bentham#8	bentham.md	lesson	converted	lessons/blank-collective-name-is-not-a-finding.md,lessons/standing-down-a-finding.md
+bentham#9	bentham.md	lesson	converted	lessons/writing-a-proposal-the-po-can-rule-on.md
+bentham#10	bentham.md	lesson	converted	lessons/salvaging-memory-files-off-a-feature-branch.md
+bentham#11	bentham.md	lesson	converted	lessons/auditing-scripts-migrations-by-path.md
+bentham#12	bentham.md	lesson	converted	lessons/reviewing-dedup-by-delete.md
+bentham#13	bentham.md	lesson	converted	lessons/reviewing-a-fix-that-adds-an-await.md
+bentham#14	bentham.md	lesson	converted	lessons/reporting-a-gate-result.md
+bentham#15	bentham.md	lesson	converted	lessons/probing-without-polluting-the-tree.md
+bentham#16	bentham.md	lesson	converted	lessons/reviewing-a-recursive-redactor.md
+bentham#17	bentham.md	lesson	converted	lessons/prescribing-a-fix-for-a-class.md
+bentham#18	bentham.md	lesson	converted	lessons/reviewing-a-hierarchy-dedup.md,lessons/comments-that-claim-a-property.md
+bentham#19	bentham.md	lesson	converted	lessons/checking-every-endpoint-against-stated-pagination.md
+bentham#20	bentham.md	lesson	converted	lessons/deciding-if-a-rule-needs-a-qualifications-line.md
+bentham#21	bentham.md	lesson	converted	lessons/reviewing-a-checksum-fence.md
+bentham#22	bentham.md	staging	converted	bentham.yaml:staging
+bentham#23	bentham.md	lesson	converted	lessons/reviewing-a-checksum-fence.md
+bentham#24	bentham.md	lesson	converted	lessons/reviewing-a-checksum-fence.md
+bentham#25	bentham.md	lesson	converted	lessons/auditing-consumers-of-a-truncation-flag.md
+bentham#26	bentham.md	lesson	converted	lessons/auditing-consumers-of-a-truncation-flag.md,lessons/standing-down-a-finding.md
+bentham#27	bentham.md	lesson	converted	lessons/auditing-consumers-of-a-truncation-flag.md,lessons/replaying-red-against-pre-fix-code.md
+bentham#28	bentham.md	staging	converted	bentham.yaml:staging
+bentham#29	bentham.md	lesson	converted	lessons/citing-entu-rights-docs.md
+bentham#30	bentham.md	nofit	dead	GATE 1
+bentham#31	bentham.md	lesson	converted	lessons/keyed-each-on-foreign-ids.md,lessons/comments-that-claim-a-property.md
+bentham#32	bentham.md	lesson	converted	lessons/gating-a-branch-that-may-move.md
+bentham#33	bentham.md	staging	converted	bentham.yaml:staging
+bentham#34	bentham.md	lesson	converted	lessons/gating-a-branch-that-may-move.md
+bentham#35	bentham.md	staging	converted	bentham.yaml:staging
+bentham#36	bentham.md	staging	converted	bentham.yaml:staging
+bentham#37	bentham.md	lesson	converted	lessons/splitting-a-page-into-mounted-children.md
+bentham#38	bentham.md	lesson	converted	lessons/splitting-a-page-into-mounted-children.md
+bentham#39	bentham.md	lesson	converted	lessons/probing-a-text-scan-guard.md
+bentham#40	bentham.md	lesson	converted	lessons/replaying-red-against-pre-fix-code.md,lessons/verifying-a-comments-only-or-moved-code-claim.md,lessons/removing-a-bail-for-writes-only.md,lessons/reporting-a-gate-result.md
+bentham#41	bentham.md	lesson	converted	lessons/accounting-for-a-test-count-delta.md,lessons/verifying-a-comments-only-or-moved-code-claim.md
+bentham#42	bentham.md	lesson	converted	lessons/reporting-a-gate-result.md,lessons/shared-loader-merging-a-callers-live-map.md,lessons/running-the-breaks-a-pr-did-not-name.md
+bentham#43	bentham.md	lesson	converted	lessons/probing-a-text-scan-guard.md
+bentham#44	bentham.md	lesson	converted	lessons/reviewing-a-fix-that-adds-an-await.md,lessons/probing-a-text-scan-guard.md,lessons/citing-entu-rights-docs.md
+bentham#45	bentham.md	lesson	converted	lessons/moving-mock-handles-to-shared-modules.md
+bentham#46	bentham.md	lesson	converted	lessons/moving-mock-handles-to-shared-modules.md
+bentham#47	bentham.md	fact	converted	facts/vitest.yaml,lessons/moving-mock-handles-to-shared-modules.md
+bentham#48	bentham.md	lesson	converted	lessons/verifying-a-comments-only-or-moved-code-claim.md
+bentham#49	bentham.md	ruling	converted	facts/rulings-process.yaml
+bentham#50	bentham.md	rule	rule	rules.yaml row 2
+bentham#51	bentham.md	lesson	converted	lessons/verifying-a-comments-only-or-moved-code-claim.md
+bentham#52	bentham.md	lesson	converted	lessons/approving-removal-of-an-unread-fixture-row.md,lessons/moving-mock-handles-to-shared-modules.md
+bentham#53	bentham.md	lesson	converted	lessons/checking-the-reject-path-of-a-multi-request-create.md
+bentham#54	bentham.md	ruling	converted	facts/rulings-process.yaml
+bentham#55	bentham.md	lesson	converted	lessons/comments-that-claim-a-property.md,lessons/gating-a-branch-that-may-move.md,lessons/running-the-breaks-a-pr-did-not-name.md,lessons/reporting-a-gate-result.md
+bentham#56	bentham.md	dup	dead	GATE 1
+bentham#57	bentham.md	lesson	converted	lessons/reviewing-sonnet-built-prs.md,lessons/running-the-breaks-a-pr-did-not-name.md,lessons/replaying-red-against-pre-fix-code.md
+bentham#58	bentham.md	lesson	converted	lessons/running-the-breaks-a-pr-did-not-name.md
+bentham#59	bentham.md	lesson	converted	lessons/replaying-red-against-pre-fix-code.md
+bentham#60	bentham.md	lesson	converted	lessons/running-the-breaks-a-pr-did-not-name.md,lessons/approving-a-ci-path-skip.md
+byrd#1	byrd.md	history	dead	GATE 1
+byrd#2	byrd.md	lesson	dead	batch 1B
+byrd#3	byrd.md	fact	dead	batch 1B
+byrd#4	byrd.md	fact	dead	batch 1B
+byrd#5	byrd.md	history	dead	GATE 1
+byrd#6	byrd.md	history	dead	GATE 1
+byrd#7	byrd.md	fact	dead	batch 1B
+byrd#8	byrd.md	fact	dead	batch 1B
+byrd#9	byrd.md	fact	dead	batch 1B
+byrd#10	byrd.md	lesson	dead	batch 1B
+byrd#11	byrd.md	history	dead	GATE 1
+byrd#12	byrd.md	history	dead	GATE 1
+byrd#13	byrd.md	lesson	dead	batch 1B
+byrd#14	byrd.md	lesson	dead	batch 1B
+byrd#15	byrd.md	history	dead	GATE 1
+byrd#16	byrd.md	lesson	dead	batch 1B
+byrd#17	byrd.md	history	dead	GATE 1
+byrd#18	byrd.md	rule	dead	batch 1B
+byrd#19	byrd.md	rule	dead	batch 1B
+byrd#20	byrd.md	rule	dead	batch 1B
+byrd#21	byrd.md	fact	dead	batch 1B
+byrd#22	byrd.md	lesson	dead	batch 1B
+byrd#23	byrd.md	lesson	dead	batch 1B
+byrd#24	byrd.md	history	dead	GATE 1
+byrd#25	byrd.md	lesson	converted	lessons/testing-library-cleanup-with-globals-false.md
+byrd#26	byrd.md	lesson	dead	batch 1B
+byrd#27	byrd.md	lesson	dead	batch 1B
+byrd#28	byrd.md	history	dead	GATE 1
+byrd#29	byrd.md	lesson	rule	added to prompts/josquin.md Test Habits (cutover fix)
+byrd#30	byrd.md	lesson	dead	batch 1B
+byrd#31	byrd.md	lesson	dead	batch 1B
+byrd#32	byrd.md	history	dead	GATE 1
+byrd#33	byrd.md	fact	dead	batch 1B
+byrd#34	byrd.md	lesson	dead	batch 1B
+byrd#35	byrd.md	lesson	dead	batch 1B
+byrd#36	byrd.md	lesson	dead	batch 1B
+byrd#37	byrd.md	lesson	dead	batch 1B
+byrd#38	byrd.md	history	dead	GATE 1
+byrd#39	byrd.md	lesson	dead	batch 1B
+byrd#40	byrd.md	lesson	dead	batch 1B
+byrd#41	byrd.md	fact	dead	batch 1B
+byrd#42	byrd.md	history	dead	GATE 1
+byrd#43	byrd.md	lesson	converted	lessons/assert-base-display-with-responsive-class.md
+byrd#44	byrd.md	lesson	dead	batch 1B
+byrd#45	byrd.md	lesson	dead	batch 1B
+byrd#46	byrd.md	lesson	dead	batch 1B
+byrd#47	byrd.md	lesson	converted	lessons/assert-base-display-with-responsive-class.md
+byrd#48	byrd.md	lesson	dead	batch 1B
+byrd#49	byrd.md	history	dead	GATE 1
+byrd#50	byrd.md	lesson	dead	batch 1B
+byrd#51	byrd.md	lesson	dead	batch 1B
+byrd#52	byrd.md	lesson	dead	batch 1B
+byrd#53	byrd.md	lesson	dead	batch 1B
+byrd#54	byrd.md	lesson	dead	batch 1B
+byrd#55	byrd.md	history	dead	GATE 1
+byrd#56	byrd.md	fact	dead	batch 1B
+byrd#57	byrd.md	fact	dead	batch 1B
+byrd#58	byrd.md	fact	dead	batch 1B
+byrd#59	byrd.md	lesson	dead	batch 1B
+byrd#60	byrd.md	lesson	dead	batch 1B
+byrd#61	byrd.md	lesson	dead	batch 1B
+byrd#62	byrd.md	fact	dead	batch 1B
+byrd#63	byrd.md	history	dead	GATE 1
+byrd#64	byrd.md	history	dead	GATE 1
+byrd#65	byrd.md	history	dead	GATE 1
+byrd#66	byrd.md	history	dead	GATE 1
+byrd#67	byrd.md	history	dead	GATE 1
+byrd#68	byrd.md	lesson	converted	lessons/vitest-module-mock-isolation.md
+byrd#69	byrd.md	lesson	dead	batch 1B
+byrd#70	byrd.md	lesson	dead	batch 1B
+byrd#71	byrd.md	history	dead	GATE 1
+byrd#72	byrd.md	history	dead	GATE 1
+byrd#73	byrd.md	lesson	dead	batch 1B
+byrd#74	byrd.md	lesson	dead	batch 1B
+byrd#75	byrd.md	history	dead	GATE 1
+byrd#76	byrd.md	history	dead	GATE 1
+byrd#77	byrd.md	lesson	dead	batch 1B
+byrd#78	byrd.md	lesson	dead	batch 1B
+byrd#79	byrd.md	history	dead	GATE 1
+byrd#80	byrd.md	history	dead	GATE 1
+byrd#81	byrd.md	lesson	dead	batch 1B
+byrd#82	byrd.md	lesson	dead	batch 1B
+byrd#83	byrd.md	history	dead	GATE 1
+byrd#84	byrd.md	history	dead	GATE 1
+byrd#85	byrd.md	lesson	dead	batch 1B
+byrd#86	byrd.md	lesson	dead	batch 1B
+byrd#87	byrd.md	lesson	dead	batch 1B
+byrd#88	byrd.md	history	dead	GATE 1
+byrd#89	byrd.md	history	dead	GATE 1
+byrd#90	byrd.md	history	dead	GATE 1
+byrd#91	byrd.md	lesson	converted	lessons/edit-form-patch-only-changed-fields.md
+byrd#92	byrd.md	lesson	dead	batch 1B
+byrd#93	byrd.md	lesson	dead	batch 1B
+byrd#94	byrd.md	lesson	dead	batch 1B
+byrd#95	byrd.md	history	dead	GATE 1
+byrd#96	byrd.md	history	dead	GATE 1
+byrd#97	byrd.md	lesson	dead	batch 1B
+byrd#98	byrd.md	history	dead	GATE 1
+byrd#99	byrd.md	lesson	dead	batch 1B
+byrd#100	byrd.md	lesson	converted	lessons/testid-prefix-selectors.md
+byrd#101	byrd.md	lesson	dead	batch 1B
+byrd#102	byrd.md	lesson	dead	batch 1B
+byrd#103	byrd.md	lesson	dead	batch 1B
+byrd#104	byrd.md	lesson	dead	batch 1B
+byrd#105	byrd.md	lesson	dead	batch 1B
+byrd#106	byrd.md	lesson	dead	batch 1B
+byrd#107	byrd.md	history	dead	GATE 1
+byrd#108	byrd.md	history	dead	GATE 1
+byrd#109	byrd.md	lesson	converted	lessons/adding-message-keys.md,facts/pnpm-gates.yaml
+byrd#110	byrd.md	lesson	dead	batch 1B
+byrd#111	byrd.md	lesson	dead	batch 1B
+byrd#112	byrd.md	lesson	converted	lessons/waiting-for-async-effects-in-page-specs.md
+byrd#113	byrd.md	lesson	dead	batch 2
+byrd#114	byrd.md	lesson	dead	batch 1B
+byrd#115	byrd.md	fact	dead	batch 1B
+byrd#116	byrd.md	lesson	dead	batch 1B
+byrd#117	byrd.md	lesson	dead	batch 1B
+byrd#118	byrd.md	superseded	dead	GATE 1
+byrd#119	byrd.md	lesson	dead	batch 1B
+byrd#120	byrd.md	history	dead	GATE 1
+byrd#121	byrd.md	lesson	dead	batch 1B
+byrd#122	byrd.md	lesson	dead	batch 1B
+byrd#123	byrd.md	history	dead	GATE 1
+byrd#124	byrd.md	lesson	dead	batch 1B
+byrd#125	byrd.md	lesson	dead	batch 1B
+byrd#126	byrd.md	lesson	dead	batch 1B
+byrd#127	byrd.md	history	dead	GATE 1
+byrd#128	byrd.md	lesson	dead	batch 1B
+byrd#129	byrd.md	lesson	rule	rules.yaml row 3
+byrd#130	byrd.md	history	dead	GATE 1
+byrd#131	byrd.md	fact	dead	batch 1B
+byrd#132	byrd.md	lesson	dead	batch 1B
+byrd#133	byrd.md	lesson	converted	lessons/testing-a-stale-request-guard.md
+byrd#134	byrd.md	lesson	dead	batch 1B
+byrd#135	byrd.md	lesson	converted	facts/design-tokens.yaml
+byrd#136	byrd.md	history	dead	GATE 1
+byrd#137	byrd.md	history	dead	GATE 1
+byrd#138	byrd.md	lesson	converted	lessons/effect-edge-detection-on-a-store.md
+byrd#139	byrd.md	lesson	converted	lessons/driving-auth-state-in-tests.md
+byrd#140	byrd.md	history	dead	GATE 1
+byrd#141	byrd.md	lesson	dead	batch 1B
+byrd#142	byrd.md	history	dead	GATE 1
+byrd#143	byrd.md	history	dead	GATE 1
+byrd#144	byrd.md	lesson	converted	lessons/vitest-module-mock-isolation.md
+byrd#145	byrd.md	lesson	dead	batch 1B
+byrd#146	byrd.md	history	dead	GATE 1
+byrd#147	byrd.md	history	dead	GATE 1
+byrd#148	byrd.md	lesson	dead	batch 1B
+byrd#149	byrd.md	lesson	converted	facts/rulings-product.yaml
+byrd#150	byrd.md	history	dead	GATE 1
+byrd#151	byrd.md	history	dead	GATE 1
+byrd#152	byrd.md	lesson	rule	lesson
+byrd#153	byrd.md	lesson	dead	batch 1B
+byrd#154	byrd.md	lesson	dead	batch 1B
+byrd#155	byrd.md	ruling	dead	batch 1B
+byrd#156	byrd.md	current	dead	batch 1B
+byrd#157	byrd.md	history	dead	GATE 1
+byrd#158	byrd.md	lesson	dead	batch 1B
+byrd#159	byrd.md	lesson	dead	batch 1B
+byrd#160	byrd.md	lesson	converted	lessons/driving-auth-state-in-tests.md
+byrd#161	byrd.md	history	dead	GATE 1
+byrd#162	byrd.md	history	dead	GATE 1
+byrd#163	byrd.md	lesson	dead	batch 1B
+byrd#164	byrd.md	fact	dead	batch 1B
+byrd#165	byrd.md	history	dead	GATE 1
+chore-72-state#1	chore-72-state.md	history	dead	GATE 1
+chore-72-state#2	chore-72-state.md	history	dead	GATE 1
+chore-72-state#3	chore-72-state.md	history	dead	GATE 1
+chore-72-state#4	chore-72-state.md	history	dead	GATE 1
+chore-72-state#5	chore-72-state.md	history	dead	GATE 1
+chore-72-state#6	chore-72-state.md	history	dead	GATE 1
+chore-72-state#7	chore-72-state.md	history	dead	GATE 1
+comenius#1	comenius.md	header	dead	batch 1B
+comenius#2	comenius.md	history	dead	GATE 1
+comenius#3	comenius.md	history	dead	GATE 1
+comenius#4	comenius.md	history	dead	GATE 1
+comenius#5	comenius.md	history	dead	GATE 1
+comenius#6	comenius.md	lesson	converted	lessons/adding-message-keys.md
+comenius#7	comenius.md	lesson	dead	batch 1B
+comenius#8	comenius.md	lesson	dead	batch 1B
+comenius#9	comenius.md	lesson	dead	batch 1B
+comenius#10	comenius.md	lesson	dead	batch 1B
+comenius#11	comenius.md	history	dead	GATE 1
+comenius#12	comenius.md	history	dead	GATE 1
+comenius#13	comenius.md	history	dead	GATE 1
+comenius#14	comenius.md	history	dead	GATE 1
+comenius#15	comenius.md	lesson	dead	batch 1B
+comenius#16	comenius.md	lesson	dead	batch 1B
+comenius#17	comenius.md	lesson	dead	batch 1B
+comenius#18	comenius.md	lesson	dead	batch 1B
+comenius#19	comenius.md	history	dead	GATE 1
+comenius#20	comenius.md	history	dead	GATE 1
+comenius#21	comenius.md	history	dead	GATE 1
+comenius#22	comenius.md	lesson	dead	batch 1B
+comenius#23	comenius.md	lesson	dead	batch 1B
+comenius#24	comenius.md	history	dead	GATE 1
+comenius#25	comenius.md	history	dead	GATE 1
+comenius#26	comenius.md	lesson	dead	batch 1B
+comenius#27	comenius.md	lesson	dead	batch 1B
+comenius#28	comenius.md	lesson	dead	batch 1B
+comenius#29	comenius.md	history	dead	GATE 1
+comenius#30	comenius.md	history	dead	GATE 1
+comenius#31	comenius.md	lesson	dead	batch 1B
+comenius#32	comenius.md	lesson	dead	batch 1B
+comenius#33	comenius.md	history	dead	GATE 1
+comenius#34	comenius.md	history	dead	GATE 1
+comenius#35	comenius.md	lesson	dead	batch 1B
+comenius#36	comenius.md	lesson	dead	batch 1B
+comenius#37	comenius.md	history	dead	GATE 1
+comenius#38	comenius.md	history	dead	GATE 1
+comenius#39	comenius.md	lesson	dead	batch 1B
+comenius#40	comenius.md	history	dead	GATE 1
+comenius#41	comenius.md	history	dead	GATE 1
+comenius#42	comenius.md	lesson	dead	batch 1B
+comenius#43	comenius.md	lesson	converted	lessons/adding-message-keys.md
+comenius#44	comenius.md	lesson	dead	batch 1B
+comenius#45	comenius.md	history	dead	GATE 1
+comenius#46	comenius.md	dup	dead	GATE 1
+comenius#47	comenius.md	current	dead	batch 1B
+comenius#48	comenius.md	history	dead	GATE 1
+comenius#49	comenius.md	history	dead	GATE 1
+comenius#50	comenius.md	lesson	dead	batch 1B
+comenius#51	comenius.md	lesson	dead	batch 1B
+comenius#52	comenius.md	history	dead	GATE 1
+comenius#53	comenius.md	history	dead	GATE 1
+comenius#54	comenius.md	lesson	dead	batch 1B
+comenius#55	comenius.md	history	dead	GATE 1
+comenius#56	comenius.md	history	dead	GATE 1
+comenius#57	comenius.md	history	dead	GATE 1
+comenius#58	comenius.md	lesson	converted	lessons/svelte-const-placement.md
+comenius#59	comenius.md	lesson	dead	batch 1B
+comenius#60	comenius.md	lesson	converted	lessons/svelte-const-placement.md
+comenius#61	comenius.md	history	dead	GATE 1
+comenius#62	comenius.md	history	dead	GATE 1
+comenius#63	comenius.md	lesson	dead	batch 1B
+comenius#64	comenius.md	dup	dead	GATE 1
+comenius#65	comenius.md	history	dead	GATE 1
+comenius#66	comenius.md	history	dead	GATE 1
+comenius#67	comenius.md	lesson	dead	batch 1B
+comenius#68	comenius.md	history	dead	GATE 1
+comenius#69	comenius.md	history	dead	GATE 1
+comenius#70	comenius.md	lesson	dead	batch 1B
+comenius#71	comenius.md	lesson	dead	batch 1B
+comenius#72	comenius.md	history	dead	GATE 1
+comenius#73	comenius.md	history	dead	GATE 1
+comenius#74	comenius.md	lesson	dead	batch 1B
+comenius#75	comenius.md	lesson	dead	batch 1B
+comenius#76	comenius.md	history	dead	GATE 1
+finn#1	finn.md	history	dead	GATE 1
+finn#2	finn.md	lesson	converted	lessons/entu-write-gates-vs-read-gates.md,judgment
+finn#3	finn.md	rule	rule	added to prompts/finn.md (cutover fix); stays in common-prompt.md / palestrina.md
+finn#4	finn.md	fact	converted	facts/repos.yaml
+finn#5	finn.md	superseded	dead	GATE 1
+finn#6	finn.md	rule	rule	added to common-prompt.md (cutover fix); rules.yaml row 12
+finn#7	finn.md	fact	converted	facts/polyphony-prototype.yaml
+finn#8	finn.md	fact	converted	facts/entu-platform.yaml,urls/entu-api-repo
+finn#9	finn.md	fact	converted	facts/deploy.yaml
+finn#10	finn.md	fact	dead	batch 1A
+finn#11	finn.md	lesson	converted	lessons/spot-check-subagent-line-citations.md
+finn#12	finn.md	current	dead	batch 1A
+i18n-conventions#1	i18n-conventions.md	longform	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#2	i18n-conventions.md	lesson	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#3	i18n-conventions.md	current	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#4	i18n-conventions.md	rule	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#5	i18n-conventions.md	rule	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#6	i18n-conventions.md	longform	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#7	i18n-conventions.md	rule	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#8	i18n-conventions.md	rule	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#9	i18n-conventions.md	rule	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#10	i18n-conventions.md	rule	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#11	i18n-conventions.md	lesson	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#12	i18n-conventions.md	rule	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#13	i18n-conventions.md	longform	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#14	i18n-conventions.md	longform	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#15	i18n-conventions.md	longform	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#16	i18n-conventions.md	longform	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#17	i18n-conventions.md	rule	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#18	i18n-conventions.md	rule	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#19	i18n-conventions.md	longform	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#20	i18n-conventions.md	longform	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#21	i18n-conventions.md	longform	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#22	i18n-conventions.md	longform	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#23	i18n-conventions.md	longform	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#24	i18n-conventions.md	longform	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#25	i18n-conventions.md	longform	moved	teams/mvox-dev/docs/i18n-conventions.md
+i18n-conventions#26	i18n-conventions.md	longform	moved	teams/mvox-dev/docs/i18n-conventions.md
+josquin#1	josquin.md	header	converted	josquin.yaml:header
+josquin#2	josquin.md	lesson	converted	lessons/implementer-gates-and-commits.md
+josquin#3	josquin.md	lesson	converted	lessons/comment-rules-cover-whole-touched-file.md
+josquin#4	josquin.md	lesson	converted	lessons/recheck-page-state-after-await.md
+josquin#5	josquin.md	lesson	converted	lessons/write-gate-page-owns-writes.md
+josquin#6	josquin.md	lesson	converted	lessons/bind-this-ref-in-effect-use-untrack.md
+josquin#7	josquin.md	lesson	converted	lessons/run-guard-specs-by-path.md
+josquin#8	josquin.md	lesson	converted	lessons/mock-and-prop-pitfalls.md
+josquin#9	josquin.md	lesson	converted	lessons/cf-pages-missing-file-404.md,urls/multivox-branch-preview
+josquin#10	josquin.md	lesson	converted	lessons/part-viewer-fence-and-spies.md
+josquin#11	josquin.md	lesson	converted	lessons/ci-workflow-yaml-edits.md
+josquin#12	josquin.md	url	converted	facts/repos.yaml
+perotin#1	perotin.md	header	converted	perotin.yaml:header
+perotin#2	perotin.md	fact	converted	facts/repos.yaml
+perotin#3	perotin.md	lesson	converted	facts/entu-entities.yaml,facts/entu-rights.yaml,facts/entu-properties.yaml,facts/entu-formulas.yaml,facts/entu-auth.yaml,facts/repos.yaml
+perotin#4	perotin.md	rule	rule	added to common-prompt.md (cutover fix); added to prompts/perotin.md (cutover fix); lesson; rules.yaml row 11
+perotin#5	perotin.md	fact	converted	facts/privacy-boundary.yaml
+perotin#6	perotin.md	current	converted	perotin.yaml:current
+perotin#7	perotin.md	lesson	converted	lessons/live-sweep-guards.md,lessons/shared-working-tree-branch-guard.md
+session-mvox19-pickup-log#1	session-mvox19-pickup-log.md	history	dead	GATE 1
+session-mvox19-pickup-log#2	session-mvox19-pickup-log.md	history	dead	GATE 1
+session-mvox19-pickup-log#3	session-mvox19-pickup-log.md	history	dead	GATE 1
+session-mvox19-pickup-log#4	session-mvox19-pickup-log.md	ruling	converted	facts/rulings-product.yaml,facts/rulings-schema.yaml,facts/rulings-process.yaml
+session-mvox19-pickup-log#5	session-mvox19-pickup-log.md	rule	rule	rules.yaml row 11; stays in common-prompt.md / palestrina.md; stays in prompts/<role>.md
+session-mvox19-pickup-log#6	session-mvox19-pickup-log.md	history	dead	GATE 1
+session-mvox19-pickup-log#7	session-mvox19-pickup-log.md	history	dead	GATE 1
+session-mvox19-pickup-log#8	session-mvox19-pickup-log.md	ruling	converted	facts/rulings-product.yaml
+session-mvox19-pickup-log#9	session-mvox19-pickup-log.md	history	dead	GATE 1
+session-mvox19-pickup-log#10	session-mvox19-pickup-log.md	history	dead	GATE 1
+session-mvox19-pickup-log#11	session-mvox19-pickup-log.md	history	dead	GATE 1
+session-mvox19-pickup-log#12	session-mvox19-pickup-log.md	history	dead	GATE 1
+session-mvox19-pickup-log#13	session-mvox19-pickup-log.md	history	dead	GATE 1
+session-mvox19-pickup-log#14	session-mvox19-pickup-log.md	history	dead	GATE 1
+session-mvox19-pickup-log#15	session-mvox19-pickup-log.md	ruling	converted	facts/rulings-tooling.yaml
+session-mvox19-pickup-log#16	session-mvox19-pickup-log.md	history	dead	GATE 1
+session-mvox19-pickup-log#17	session-mvox19-pickup-log.md	history	dead	GATE 1
+session-mvox19-pickup-log#18	session-mvox19-pickup-log.md	history	dead	GATE 1
+session-mvox19-pickup-log#19	session-mvox19-pickup-log.md	ruling	converted	facts/rulings-product.yaml
+session-mvox19-pickup-log#20	session-mvox19-pickup-log.md	history	dead	GATE 1
+session-mvox19-pickup-log#21	session-mvox19-pickup-log.md	history	dead	GATE 1
+session-mvox19-pickup-log#22	session-mvox19-pickup-log.md	history	dead	GATE 1
+session-mvox19-pickup-log#23	session-mvox19-pickup-log.md	lesson	converted	lessons/landing-notice-per-merge-in-packed-runs.md
+session-mvox19-pickup-log#24	session-mvox19-pickup-log.md	ruling	converted	facts/rulings-process.yaml
+session-mvox19-pickup-log#25	session-mvox19-pickup-log.md	superseded	dead	GATE 1
+session-mvox19-pickup-log#26	session-mvox19-pickup-log.md	history	dead	GATE 1
+tallis#1	tallis.md	header	dead	batch 1B
+tallis#2	tallis.md	header	dead	batch 1B
+tallis#3	tallis.md	lesson	rule	added to prompts/josquin.md Test Habits (cutover fix)
+tallis#4	tallis.md	lesson	rule	added to prompts/josquin.md Test Habits (cutover fix)
+tallis#5	tallis.md	lesson	converted	lessons/ts-expect-error-in-red.md
+tallis#6	tallis.md	lesson	rule	added to prompts/josquin.md Test Habits (cutover fix)
+tallis#7	tallis.md	lesson	rule	added to prompts/josquin.md Test Habits (cutover fix)
+tallis#8	tallis.md	lesson	converted	lessons/ts-expect-error-in-red.md
+tallis#9	tallis.md	lesson	rule	added to prompts/josquin.md Test Habits (cutover fix)
+tallis#10	tallis.md	superseded	dead	GATE 1
+tallis#11	tallis.md	lesson	rule	added to prompts/josquin.md Test Habits (cutover fix)
+tallis#12	tallis.md	fact	converted	facts/entu-entities.yaml
+tallis#13	tallis.md	fact	dead	batch 1B
+tallis#14	tallis.md	lesson	converted	lessons/waiting-for-async-effects-in-page-specs.md
+tallis#15	tallis.md	superseded	dead	GATE 1
+tallis#16	tallis.md	history	dead	GATE 1
+task-list-snapshot#1	task-list-snapshot.md	current	converted	team-lead.yaml:current
+team-lead#1	team-lead.md	header	converted	team-lead.yaml:header
+team-lead#2	team-lead.md	current	converted	team-lead.yaml:current
+team-lead#3	team-lead.md	history	dead	GATE 1
+test-gaps#1	test-gaps.md	header	dead	GATE 1
+test-gaps#2	test-gaps.md	current	dead	GATE 1
+victoria#1	victoria.md	header	dead	batch 1B
+victoria#2	victoria.md	history	dead	GATE 1
+victoria#3	victoria.md	lesson	dead	batch 1B
+victoria#4	victoria.md	ruling	dead	batch 1B
+victoria#5	victoria.md	current	dead	batch 1B
+victoria#6	victoria.md	lesson	dead	batch 1B
+victoria#7	victoria.md	history	dead	GATE 1
+victoria#8	victoria.md	current	dead	batch 1B
+victoria#9	victoria.md	history	dead	GATE 1
+victoria#10	victoria.md	current	dead	batch 1B
+victoria#11	victoria.md	lesson	converted	facts/mvox-roles.yaml
+victoria#12	victoria.md	current	dead	batch 1B
+victoria#13	victoria.md	history	dead	GATE 1
+victoria#14	victoria.md	lesson	dead	batch 1B
+victoria#15	victoria.md	history	dead	GATE 1
+victoria#16	victoria.md	current	dead	batch 1B
+victoria#17	victoria.md	fact	dead	batch 1B
+victoria#18	victoria.md	history	dead	GATE 1
+victoria#19	victoria.md	fact	converted	facts/entu-properties.yaml
+victoria#20	victoria.md	history	dead	GATE 1
+victoria#21	victoria.md	fact	converted	facts/entu-entities.yaml
+victoria#22	victoria.md	current	dead	batch 1B
+feedback_acceptance_via_gama#1	feedback_acceptance_via_gama.md	ruling	converted	facts/rulings-comms.yaml
+feedback_agent_spawn_prompt#1	feedback_agent_spawn_prompt.md	lesson	converted	lessons/background-subagent-silent-on-permission.md,urls/claude-code-issue-61315
+feedback_app_not_docs#1	feedback_app_not_docs.md	ruling	converted	facts/rulings-process.yaml
+feedback_atomic_git_chaining#1	feedback_atomic_git_chaining.md	lesson	converted	lessons/git-steps-on-the-shared-tree.md
+feedback_attribution_only#1	feedback_attribution_only.md	rule	rule	rules.yaml row 5
+feedback_auth_gate_routing#1	feedback_auth_gate_routing.md	lesson	converted	lessons/relaying-a-live-authorization.md
+feedback_authorization_gate#1	feedback_authorization_gate.md	rule	rule	rules.yaml row 11
+feedback_auto_pickup#1	feedback_auto_pickup.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix)
+feedback_board_state_labels#1	feedback_board_state_labels.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix); lesson; stays in common-prompt.md / palestrina.md
+feedback_closes_n_pattern#1	feedback_closes_n_pattern.md	rule	rule	lesson; rules.yaml row 17
+feedback_communication_tone#1	feedback_communication_tone.md	rule	rule	added to common-prompt.md (cutover fix)
+feedback_context_efficiency#1	feedback_context_efficiency.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix); stays in common-prompt.md / palestrina.md
+feedback_context_health_at_seams#1	feedback_context_health_at_seams.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix)
+feedback_decision_vs_permission#1	feedback_decision_vs_permission.md	lesson	converted	lessons/blocked-command-ask-for-clearance-only.md
+feedback_dynamic_workflow_explicit_models#1	feedback_dynamic_workflow_explicit_models.md	rule	rule	rules.yaml row 18
+feedback_entity_id_readability#1	feedback_entity_id_readability.md	rule	rule	added to common-prompt.md (cutover fix)
+feedback_epic_label_mirrors_tasks#1	feedback_epic_label_mirrors_tasks.md	ruling	converted	facts/rulings-process.yaml
+feedback_fail_loudly_over_fallbacks#1	feedback_fail_loudly_over_fallbacks.md	ruling	converted	facts/rulings-product.yaml
+feedback_finn_parallel_research#1	feedback_finn_parallel_research.md	dup	dead	GATE 1
+feedback_fresh_implementer_per_issue#1	feedback_fresh_implementer_per_issue.md	ruling	converted	facts/rulings-process.yaml
+feedback_gama_po_proxy#1	feedback_gama_po_proxy.md	ruling	converted	facts/rulings-comms.yaml
+feedback_identical_duplicate_values_ok#1	feedback_identical_duplicate_values_ok.md	lesson	converted	lessons/identical-duplicate-values-on-read-back.md
+feedback_in_process_agents#1	feedback_in_process_agents.md	lesson	converted	lessons/teammate-looks-hung.md
+feedback_issue_standard_s9_s10#1	feedback_issue_standard_s9_s10.md	ruling	converted	facts/rulings-comms.yaml
+feedback_josquin_model_by_issue#1	feedback_josquin_model_by_issue.md	ruling	converted	facts/rulings-process.yaml
+feedback_keep_collecting_mail#1	feedback_keep_collecting_mail.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix)
+feedback_landing_notice#1	feedback_landing_notice.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix); rules.yaml row 16
+feedback_machine_timestamps_only#1	feedback_machine_timestamps_only.md	rule	rule	stays in common-prompt.md / palestrina.md
+feedback_mvox_hybrid_aesthetic#1	feedback_mvox_hybrid_aesthetic.md	ruling	converted	facts/rulings-product.yaml
+feedback_mvox_merge_skill#1	feedback_mvox_merge_skill.md	rule	rule	stays in its procedure doc
+feedback_mvox_visual_personality#1	feedback_mvox_visual_personality.md	ruling	converted	facts/rulings-product.yaml
+feedback_native_form_controls#1	feedback_native_form_controls.md	ruling	converted	facts/rulings-product.yaml
+feedback_native_issue_types#1	feedback_native_issue_types.md	ruling	converted	facts/rulings-process.yaml
+feedback_negative_from_the_instrument#1	feedback_negative_from_the_instrument.md	lesson	converted	lessons/empty-result-from-a-check.md
+feedback_no_assessment_before_the_probe#1	feedback_no_assessment_before_the_probe.md	lesson	converted	lessons/diagnosis-while-a-live-probe-runs.md
+feedback_no_broad_sweeps_in_foreground#1	feedback_no_broad_sweeps_in_foreground.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix)
+feedback_no_commits_during_live_pipeline#1	feedback_no_commits_during_live_pipeline.md	rule	rule	rules.yaml row 20; rules.yaml row 3
+feedback_no_concurrent_hand_edits#1	feedback_no_concurrent_hand_edits.md	lesson	converted	lessons/read-back-mismatch-during-a-live-run.md
+feedback_no_loose_text_pins#1	feedback_no_loose_text_pins.md	ruling	converted	facts/rulings-tooling.yaml
+feedback_no_over_theorizing#1	feedback_no_over_theorizing.md	lesson	converted	lessons/explaining-a-platform-rule.md
+feedback_no_parallel_branches#1	feedback_no_parallel_branches.md	rule	rule	rules.yaml row 4
+feedback_no_parallel_dispatch#1	feedback_no_parallel_dispatch.md	superseded	dead	GATE 1
+feedback_no_signature_in_conversation#1	feedback_no_signature_in_conversation.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix)
+feedback_nothing_in_comments#1	feedback_nothing_in_comments.md	ruling	converted	facts/rulings-comms.yaml
+feedback_one_authorization_per_job#1	feedback_one_authorization_per_job.md	ruling	converted	facts/rulings-data.yaml
+feedback_partial_assertions_hide_bugs#1	feedback_partial_assertions_hide_bugs.md	lesson	converted	lessons/tests-green-but-bugs-shipped.md
+feedback_plan_execution_mode_baked_in#1	feedback_plan_execution_mode_baked_in.md	rule	rule	lesson
+feedback_polyphony_uk_spec_source#1	feedback_polyphony_uk_spec_source.md	ruling	converted	facts/rulings-product.yaml,urls/polyphony-uk
+feedback_pull_app_before_wake_read#1	feedback_pull_app_before_wake_read.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix)
+feedback_ready_label_gate#1	feedback_ready_label_gate.md	rule	rule	rules.yaml row 15
+feedback_request_manual_mode_on_block#1	feedback_request_manual_mode_on_block.md	rule	rule	lesson
+feedback_research_and_dev_run_in_parallel#1	feedback_research_and_dev_run_in_parallel.md	ruling	converted	facts/rulings-process.yaml
+feedback_ruling_vs_platform_authority#1	feedback_ruling_vs_platform_authority.md	lesson	converted	lessons/briefing-a-po-ruling-about-platform-behavior.md
+feedback_schema_design_pacing#1	feedback_schema_design_pacing.md	rule	rule	lesson
+feedback_single_workflow_slices#1	feedback_single_workflow_slices.md	lesson	converted	lessons/packing-a-slice-into-one-workflow.md
+feedback_task_dispatch_ordering#1	feedback_task_dispatch_ordering.md	lesson	converted	lessons/dispatching-work-to-a-teammate.md
+feedback_team_lead_direct_probes#1	feedback_team_lead_direct_probes.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix)
+feedback_test_review_rule#1	feedback_test_review_rule.md	ruling	converted	facts/rulings-tooling.yaml
+feedback_ui_parallels_with_seed#1	feedback_ui_parallels_with_seed.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix)
+feedback_ultracode_team_roles#1	feedback_ultracode_team_roles.md	lesson	dead	batch 1A
+feedback_use_team_not_oneshots#1	feedback_use_team_not_oneshots.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix); lesson; rules.yaml row 14
+feedback_use_template_not_adhoc#1	feedback_use_template_not_adhoc.md	rule	rule	added to prompts/palestrina.md Working Norms (cutover fix)
+feedback_visual_companion_tailnet_default#1	feedback_visual_companion_tailnet_default.md	rule	rule	lesson
+project_cf_pages_git_connected#1	project_cf_pages_git_connected.md	fact	converted	facts/mvox-deploy.yaml,urls/mvox-about
+project_cf_pages_wrangler_vars#1	project_cf_pages_wrangler_vars.md	fact	dead	batch 1A
+project_cf_workers_process_env#1	project_cf_workers_process_env.md	lesson	dead	batch 1A
+project_crede_real_pii#1	project_crede_real_pii.md	ruling	converted	facts/rulings-data.yaml
+project_entu_api_key_mechanics#1	project_entu_api_key_mechanics.md	fact	converted	facts/entu-auth.yaml,urls/entu-docs-authentication
+project_entu_clear_property_empty_list#1	project_entu_clear_property_empty_list.md	fact	converted	facts/entu-properties.yaml,facts/entu-rights.yaml,urls/entu-docs-properties
+project_entu_create_auto_grants_creator#1	project_entu_create_auto_grants_creator.md	fact	converted	facts/entu-rights.yaml
+project_entu_create_type_reference#1	project_entu_create_type_reference.md	lesson	converted	lessons/entity-create-type-as-reference.md
+project_entu_formula_mechanics#1	project_entu_formula_mechanics.md	fact	converted	facts/entu-formulas.yaml
+project_entu_formula_regex#1	project_entu_formula_regex.md	fact	converted	facts/entu-formulas.yaml,urls/entu-docs-formulas
+project_entu_ids_globally_unique#1	project_entu_ids_globally_unique.md	ruling	converted	facts/rulings-process.yaml
+project_entu_inheritrights_hides_rights#1	project_entu_inheritrights_hides_rights.md	fact	converted	facts/entu-rights.yaml
+project_entu_jwt_ip_bound#1	project_entu_jwt_ip_bound.md	fact	converted	facts/entu-auth.yaml
+project_entu_mandatory_soft#1	project_entu_mandatory_soft.md	fact	converted	facts/entu-properties.yaml
+project_entu_no_bulk_delete#1	project_entu_no_bulk_delete.md	fact	converted	facts/entu-properties.yaml
+project_entu_no_noaccess#1	project_entu_no_noaccess.md	ruling	converted	facts/rulings-schema.yaml
+project_entu_platform_docs_location#1	project_entu_platform_docs_location.md	fact	converted	facts/entu-docs.yaml,urls/entu-www-repo
+project_entu_post_appends_multi_value#1	project_entu_post_appends_multi_value.md	fact	converted	facts/entu-properties.yaml,facts/entu-rights.yaml
+project_entu_probe_first#1	project_entu_probe_first.md	ruling	converted	facts/rulings-process.yaml
+project_entu_reference_string_bakes_pii#1	project_entu_reference_string_bakes_pii.md	fact	converted	facts/entu-rights.yaml
+project_entu_rights_beat_property_sharing#1	project_entu_rights_beat_property_sharing.md	fact	converted	facts/entu-rights.yaml
+project_entu_sharing_create_time#1	project_entu_sharing_create_time.md	fact	converted	facts/entu-entities.yaml,urls/entu-docs-entities
+project_entu_type_rename_free#1	project_entu_type_rename_free.md	fact	converted	facts/entu-entities.yaml
+project_entu_value_created_stamp#1	project_entu_value_created_stamp.md	fact	converted	facts/entu-properties.yaml
+project_entu_way_of_entu#1	project_entu_way_of_entu.md	lesson	converted	lessons/type-vs-instance-in-entu.md
+project_entu_wire_shape_entity_vs_property#1	project_entu_wire_shape_entity_vs_property.md	lesson	converted	lessons/delete-endpoint-entity-vs-property-value.md
+project_gh_label_sweep_eventually_consistent#1	project_gh_label_sweep_eventually_consistent.md	lesson	converted	lessons/ready-label-sweep-returns-zero.md
+project_memory_kit_adoption#1	project_memory_kit_adoption.md	current	converted	team-lead.yaml:current
+project_mvox_carus_publisher_outreach#1	project_mvox_carus_publisher_outreach.md	current	converted	team-lead.yaml:current,urls/mvox-about
+project_mvox_db_from_jwt_accounts#1	project_mvox_db_from_jwt_accounts.md	fact	converted	facts/mvox-deploy.yaml
+project_mvox_federation_publisher_mediation#1	project_mvox_federation_publisher_mediation.md	ruling	converted	facts/rulings-product.yaml
+project_mvox_no_server_spa#1	project_mvox_no_server_spa.md	fact	converted	facts/mvox-deploy.yaml
+project_pnpm_not_on_path#1	project_pnpm_not_on_path.md	lesson	dead	batch 1A
+project_polyphony_bff_rights_pattern#1	project_polyphony_bff_rights_pattern.md	superseded	dead	GATE 1
+project_polyphony_email_trust#1	project_polyphony_email_trust.md	longform	moved	teams/mvox-dev/docs/design-notes/
+project_polyphony_lending_same_org#1	project_polyphony_lending_same_org.md	ruling	converted	facts/rulings-product.yaml
+project_polyphony_library_entity#1	project_polyphony_library_entity.md	ruling	converted	facts/rulings-schema.yaml
+project_polyphony_library_subtree#1	project_polyphony_library_subtree.md	longform	moved	teams/mvox-dev/docs/design-notes/
+project_polyphony_no_domain_sharing#1	project_polyphony_no_domain_sharing.md	ruling	dead	batch 1A
+project_polyphony_onboarding#1	project_polyphony_onboarding.md	longform	moved	teams/mvox-dev/docs/design-notes/
+project_polyphony_org_rights_isolation#1	project_polyphony_org_rights_isolation.md	longform	moved	teams/mvox-dev/docs/design-notes/
+project_polyphony_participation#1	project_polyphony_participation.md	longform	moved	teams/mvox-dev/docs/design-notes/
+project_polyphony_programs#1	project_polyphony_programs.md	longform	moved	teams/mvox-dev/docs/design-notes/
+project_polyphony_roles_as_rights#1	project_polyphony_roles_as_rights.md	longform	moved	teams/mvox-dev/docs/design-notes/
+project_polyphony_seasons_events#1	project_polyphony_seasons_events.md	longform	moved	teams/mvox-dev/docs/design-notes/
+project_polyphony_section_structure#1	project_polyphony_section_structure.md	longform	moved	teams/mvox-dev/docs/design-notes/
+project_polyphony_work_edition_model#1	project_polyphony_work_edition_model.md	longform	moved	teams/mvox-dev/docs/design-notes/
+project_relayed_user_line_derails_subagents#1	project_relayed_user_line_derails_subagents.md	lesson	converted	lessons/relayed-operator-line-derails-subagents.md
+project_research_pack_marker_regex#1	project_research_pack_marker_regex.md	lesson	converted	lessons/research-pack-marker-is-a-regex.md
+project_seed_data_v4e_clean#1	project_seed_data_v4e_clean.md	superseded	dead	GATE 1
+project_spawn_with_worktree_isolation#1	project_spawn_with_worktree_isolation.md	lesson	converted	lessons/agent-worktrees-leak.md
+project_subagent_classifier_survives_manual_mode#1	project_subagent_classifier_survives_manual_mode.md	lesson	converted	lessons/live-crede-run-blocked-in-teammate.md
+project_teammate_subagent_handback_routing#1	project_teammate_subagent_handback_routing.md	lesson	converted	lessons/teammate-subagent-reports-land-on-lead.md
+project_template_edits_run_deploy_gate_spec#1	project_template_edits_run_deploy_gate_spec.md	lesson	converted	lessons/pipeline-template-edit-breaks-roadmap.md
+project_v4e_schema_ours#1	project_v4e_schema_ours.md	ruling	converted	facts/rulings-schema.yaml
+project_workflow_agent_background_gates_fail#1	project_workflow_agent_background_gates_fail.md	lesson	converted	lessons/workflow-agent-background-gate-aborts.md
+project_workflow_cache_prefix_based#1	project_workflow_cache_prefix_based.md	lesson	converted	lessons/workflow-resume-cache-is-prefix.md
+project_workflow_scriptpath_scratchpad#1	project_workflow_scriptpath_scratchpad.md	lesson	converted	lessons/workflow-script-outside-cwd.md
+project_wrangler_deploy_auth#1	project_wrangler_deploy_auth.md	lesson	dead	batch 1A
+reference_line_report#1	reference_line_report.md	url	converted	facts/po-team.yaml
+pipeline-args/args-207.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-208-209-211-214.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-212-213-215-217.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-215-217.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-218.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-219.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-220.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-221.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-222.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-224-232.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-234.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-236.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-237.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-238.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-240-239-241.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-242.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-243.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-247.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-248.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-249.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-250.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-251.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-252.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-253.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-255.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-256-277.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-257.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-258.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-259.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-260.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-261.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-261fix.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-262.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-264.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-266.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-267.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-268.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-269.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-271.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-272.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-273.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-275.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-279-288-300.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-280-244.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-283.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-285.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-286.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-287.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-294.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-297-296.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-301-302.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-303-309-310-312-311.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-304-290.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-305.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-307.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-308.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-313.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-315.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-317.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-318.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-318r.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-318r2.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-320.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-321.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-322.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-330.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-331.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-335.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-337.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-338.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-339.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-340.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-341.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-342.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-343.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-343r.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-345.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-346.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-347.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-347r.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-pack-323-328.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-pack-324-328.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-pack-329-323-328.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-pack-330-318-331.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-pack-337-339.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-pack-340-342-343.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-r1-remainder.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-remainder-318-331.json	pipeline-args/	history	dead	GATE 1
+pipeline-args/args-remainder2-318-331.json	pipeline-args/	history	dead	GATE 1
+research/research-207.json	research/	history	dead	GATE 1
+research/research-208-217.json	research/	history	dead	GATE 1
+research/research-218.json	research/	history	dead	GATE 1
+research/research-219.json	research/	history	dead	GATE 1
+research/research-220.json	research/	history	dead	GATE 1
+research/research-221.json	research/	history	dead	GATE 1
+research/research-222.json	research/	history	dead	GATE 1
+research/research-224-232.json	research/	history	dead	GATE 1
+research/research-234.json	research/	history	dead	GATE 1
+research/research-235.json	research/	history	dead	GATE 1
+research/research-236.json	research/	history	dead	GATE 1
+research/research-237.json	research/	history	dead	GATE 1
+research/research-248.json	research/	history	dead	GATE 1
+research/research-249-247-259.json	research/	history	dead	GATE 1
+research/research-256-277.json	research/	history	dead	GATE 1
+research/research-257-242.json	research/	history	dead	GATE 1
+research/research-261.json	research/	history	dead	GATE 1
+research/research-261fix.json	research/	history	dead	GATE 1
+research/research-262.json	research/	history	dead	GATE 1
+research/research-264.json	research/	history	dead	GATE 1
+research/research-266.json	research/	history	dead	GATE 1
+research/research-267.json	research/	history	dead	GATE 1
+research/research-268.json	research/	history	dead	GATE 1
+research/research-269.json	research/	history	dead	GATE 1
+research/research-272-273-271-283.json	research/	history	dead	GATE 1
+research/research-279-288-300.json	research/	history	dead	GATE 1
+research/research-280-244.json	research/	history	dead	GATE 1
+research/research-285.json	research/	history	dead	GATE 1
+research/research-286-275.json	research/	history	dead	GATE 1
+research/research-287.json	research/	history	dead	GATE 1
+research/research-289-inventory.json	research/	history	dead	GATE 1
+research/research-290-277-289.json	research/	history	dead	GATE 1
+research/research-294.json	research/	history	dead	GATE 1
+research/research-297-296.json	research/	history	dead	GATE 1
+research/research-299-298.json	research/	history	dead	GATE 1
+research/research-301-302.json	research/	history	dead	GATE 1
+research/research-303.json	research/	history	dead	GATE 1
+research/research-304.json	research/	history	dead	GATE 1
+research/research-305.json	research/	history	dead	GATE 1
+research/research-307.json	research/	history	dead	GATE 1
+research/research-308.json	research/	history	dead	GATE 1
+research/research-309.json	research/	history	dead	GATE 1
+research/research-311.json	research/	history	dead	GATE 1
+research/research-312.json	research/	history	dead	GATE 1
+research/research-313.json	research/	history	dead	GATE 1
+research/research-316.json	research/	history	dead	GATE 1
+research/research-320.json	research/	history	dead	GATE 1
+research/research-321.json	research/	history	dead	GATE 1
+research/research-323-328-delta.json	research/	history	dead	GATE 1
+research/research-330.json	research/	history	dead	GATE 1
+research/research-331-v2.json	research/	history	dead	GATE 1
+research/research-pilot-238-243.json	research/	history	dead	GATE 1
+research/research-pilot-b-250-255.json	research/	history	dead	GATE 1
