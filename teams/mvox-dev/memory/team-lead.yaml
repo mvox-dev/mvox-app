@@ -29,12 +29,6 @@ current:
     record: "About page (urls/mvox-about) is the public baseline for publishers; it names no partner or dispute"
     ref: "2026-06-14"
   - label: DEFERRED
-    record: "Brilliant KNB has no entries on Carus or SP Muusika; populate once the narrative settles"
-    ref: "2026-06-14"
-  - label: DEFERRED
-    record: "Carus and SP Muusika relationship work is open; Mihkel's mailbox is the source of truth"
-    ref: "2026-06-14"
-  - label: DEFERRED
     record: "Untested: agenda view toggle with no chips."
     ref: src/lib/agenda/AgendaListArea.svelte
   - label: DEFERRED
