@@ -113,6 +113,24 @@ Gone: 9 of 15 (02-test-gaps-check.tsv).
 
 ## Rulings
 
-_Pending._
+Batch 1, 2026-10-14, Palestrina (delegated by Mihkel 2026-10-14):
+
+- 1A: all 14 recommendations approved (the lead re-checked pnpm: it resolves from ~/.local/bin).
+- 1B: screen accepted as is: 141 dead, 47 keep; the 10 design notes move to
+  `teams/mvox-dev/docs/design-notes/`. No yaml for byrd, comenius, tallis or victoria.
+- 1C: no issues. The 7 holding gaps go to ruled-dead with their evidence: no e2e harness is
+  installed; e2e tests coming back would be a product decision.
+- Fences: memkit edits both, one commit each with its reason (dea2aa4 comment rules skip
+  `memory-kit/`; 55471e8 polyphony fence allows `memory-adoption/` and the exact moved paths).
+  Bentham reviews the whole PR before merge.
+
+Keepers converted after the ruling: 02-conv.tsv rows from batch K1 (31 of 32). State of every
+unit: `03-state.tsv`, from `python3 settle.py`.
+
+## Batch 2
+
+| id | question | recommendation |
+|---|---|---|
+| `byrd#113` | Specs mock paraglide messages strictly, so a missing key throws. The shared `echoMessages` proxy (src/lib/testing/messageMocks.ts) now echoes unknown keys. Is the gotcha obsolete? | dead: the shared mock answers it; specs with hand-rolled strict mocks fail loudly and say why |
 
 (*MVOX:memkit*)

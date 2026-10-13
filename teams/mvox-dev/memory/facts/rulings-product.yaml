@@ -61,3 +61,8 @@ facts:
     ref: mihkel:2026-05-17
     refute: "=ref"
     verified: "2026-05-17"
+
+  - fact: "While a write for an item is in flight, its control is disabled; a second tap is never coalesced into a later write."
+    ref: teams/mvox-dev/memory/byrd.md
+    refute: "=ref"
+    verified: "2026-08-07"

@@ -32,3 +32,8 @@ facts:
     ref: "2026-05-23"
     refute: "Send a request with a token from another IP and inspect the body."
     verified: "2026-05-23"
+
+  - fact: "An API key on a person with no OAuth account exchanges for an anonymous-level token with no real database seat."
+    ref: teams/mvox-dev/memory/perotin.md
+    refute: "Exchange such a key at GET /api/auth and inspect accounts."
+    verified: "2026-09-21"

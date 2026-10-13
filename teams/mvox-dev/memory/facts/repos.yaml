@@ -20,3 +20,8 @@ facts:
     ref: teams/mvox-dev/memory/josquin.md
     refute: "ls -d ~/workspace/scratchpad/{611,615,616,684,711,716,723}"
     verified: "2026-10-14"
+
+  - fact: "Migration scripts using loadCfg need PUBLIC_ENTU_API_BASE exported before node starts and matching ENTU_API_URL; loadCfg normalizes the trailing slash and throws on a mismatch."
+    ref: scripts/migrations/lib/creds.ts
+    refute: "=ref"
+    verified: "2026-10-14"

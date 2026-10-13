@@ -1,0 +1,6 @@
+# Facts about mvox colour tokens. Converted by memkit 2026-10-14. (*MVOX:memkit*)
+facts:
+  - fact: "On the paper colour #f7f1e1, ink-3 (#7a7166) and ink-4 (#a89f91) fail AA for small text; use ink-2 (#4b443a) instead."
+    ref: src/app.css
+    refute: "Compute contrast of ink-3 on #f7f1e1."
+    verified: "2026-10-14"

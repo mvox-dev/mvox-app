@@ -32,3 +32,38 @@ facts:
     ref: "2026-09-21"
     refute: "Read polyphony's database entity _created."
     verified: "2026-09-21"
+
+  - fact: "A property value is exposed at a sharing level only if the property definition, the type definition and the instance all allow it; the type definition caps the level."
+    ref: teams/mvox-dev/memory/perotin.md
+    refute: "Set two of the three to public and read the value anonymously."
+    verified: "2026-09-21"
+
+  - fact: "Sharing buckets are written when a value is written; fixing a property definition does not move existing values until the value or the instance _sharing is rewritten."
+    ref: teams/mvox-dev/memory/perotin.md
+    refute: "Change a prop-def _sharing and read an old instance anonymously."
+    verified: "2026-09-21"
+
+  - fact: "A file property is two steps: POST announcing filename, filesize and filetype (all required), then PUT to a signed upload URL valid for about 60 seconds."
+    ref: teams/mvox-dev/memory/perotin.md
+    refute: "git -C ~/projects/entu-www show origin/main:src/api/best-practices/index.md"
+    verified: "2026-09-21"
+
+  - fact: "A signed file URL answers HEAD with 403 because the signature is method-scoped; use GET. Replacing a file always mints a new property _id."
+    ref: teams/mvox-dev/memory/perotin.md
+    refute: "HEAD and GET the same signed URL."
+    verified: "2026-09-21"
+
+  - fact: "The file bucket's CORS admits mvox.eu and dev.mvox.eu by header, but exposes no ETag; treat this as server-side only until the app's own browser fetch succeeds."
+    ref: "#348"
+    refute: "Fetch a file from the deployed app in a browser."
+    verified: "2026-09-14"
+
+  - fact: "List responses are {entities, count, limit, skip} with skip paging and no cursor."
+    ref: teams/mvox-dev/memory/perotin.md
+    refute: "git -C ~/projects/entu-www show origin/main:src/api/best-practices/index.md"
+    verified: "2026-10-14"
+
+  - fact: "name.string=X matches the exact NFC value; q=X is a case-insensitive substring search over properties marked search."
+    ref: teams/mvox-dev/memory/perotin.md
+    refute: "git -C ~/projects/entu-www show origin/main:src/api/query-reference/index.md"
+    verified: "2026-10-14"

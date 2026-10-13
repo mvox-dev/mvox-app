@@ -7,6 +7,11 @@ lessons:
   learned: '2026-10-01'
   ref: '#558'
   enforcement: recognition
+- slug: adding-message-keys
+  summary: For adding or editing i18n message keys in messages/*.json without breaking check or the JSON.
+  learned: '2026-06-01'
+  ref: teams/mvox-dev/memory/comenius.md
+  enforcement: recognition
 - slug: agent-worktrees-leak
   summary: Spawning agents that may commit, so nobody reaches for worktree isolation again.
   learned: '2026-06-12'
@@ -136,6 +141,21 @@ lessons:
   summary: For ordering the brief and the task-owner update when handing work to a teammate.
   learned: '2026-05-22'
   ref: '2026-05-22'
+  enforcement: recognition
+- slug: driving-auth-state-in-tests
+  summary: For tests that set authStore directly, so they match how auth really arrives.
+  learned: '2026-06-01'
+  ref: teams/mvox-dev/memory/byrd.md
+  enforcement: recognition
+- slug: edit-form-patch-only-changed-fields
+  summary: For building the save payload of an edit form so untouched fields are not overwritten.
+  learned: '2026-06-01'
+  ref: src/lib/seasons/seasonFieldEdit.ts
+  enforcement: recognition
+- slug: effect-edge-detection-on-a-store
+  summary: For reacting in a Svelte 5 effect when a store enters one state, without a loop.
+  learned: '2026-06-01'
+  ref: teams/mvox-dev/memory/byrd.md
   enforcement: recognition
 - slug: empty-result-from-a-check
   summary: For deciding whether a sweep, query, guard or test that found nothing really means all clear.
@@ -387,6 +407,11 @@ lessons:
   learned: '2026-05-20'
   ref: teams/mvox-dev/memory/team-lead-archive.md
   enforcement: recognition
+- slug: shut-down-teammates-before-session-end
+  summary: For ending a session or restarting the team without leaving teammate processes running.
+  learned: '2026-06-01'
+  ref: teams/mvox-dev/memory/team-lead-archive.md
+  enforcement: recognition
 - slug: splitting-a-page-into-mounted-children
   summary: For reviewing page splits that move an open/close form or write queue into a child component.
   learned: '2026-09-30'
@@ -407,6 +432,11 @@ lessons:
   learned: '2026-05-31'
   ref: teams/mvox-dev/memory/team-lead-archive.md
   enforcement: recognition
+- slug: svelte-const-placement
+  summary: For placing a {@const} in a Svelte 5 template without a compile error.
+  learned: '2026-06-01'
+  ref: teams/mvox-dev/memory/comenius.md
+  enforcement: recognition
 - slug: teammate-looks-hung
   summary: For deciding whether a spawned teammate is hung, working, or waiting on you.
   learned: '2026-05-18'
@@ -417,10 +447,35 @@ lessons:
   learned: '2026-10-02'
   ref: '#703'
   enforcement: recognition
+- slug: testid-prefix-selectors
+  summary: For choosing data-testid names and prefix selectors that will not match nested elements.
+  learned: '2026-06-01'
+  ref: teams/mvox-dev/memory/byrd.md
+  enforcement: recognition
+- slug: testing-a-stale-request-guard
+  summary: For writing a test that proves a request-id stale guard drops an old response.
+  learned: '2026-06-01'
+  ref: teams/mvox-dev/memory/byrd.md
+  enforcement: recognition
+- slug: testing-library-cleanup-with-globals-false
+  summary: For page specs that find stale elements from earlier tests in the same file.
+  learned: '2026-06-01'
+  ref: vitest.config.ts
+  enforcement: recognition
 - slug: tests-green-but-bugs-shipped
   summary: For writing or reviewing tests on mutations, store-to-page links and Entu wire calls.
   learned: '2026-06-01'
   ref: ''
+  enforcement: recognition
+- slug: ts-expect-error-in-red
+  summary: For writing type-level RED proofs with @ts-expect-error, and when not to.
+  learned: '2026-06-01'
+  ref: teams/mvox-dev/memory/tallis.md
+  enforcement: recognition
+- slug: type-vs-instance-in-entu
+  summary: For reasoning about what an Entu type, parent or child passes on, before calling something a gap.
+  learned: '2026-05-19'
+  ref: teams/mvox-dev/memory/team-lead-archive.md
   enforcement: recognition
 - slug: unverified-wire-shape-is-yellow
   summary: Reviewing a new Entu verb+path that mocks pass but no live call has exercised.
@@ -436,6 +491,16 @@ lessons:
   summary: For checking that moved or comment-only changes did not change behaviour.
   learned: '2026-10-04'
   ref: '#711'
+  enforcement: recognition
+- slug: vitest-module-mock-isolation
+  summary: For mocking part of a module in vitest, especially one that imports $env.
+  learned: '2026-06-01'
+  ref: teams/mvox-dev/memory/byrd.md
+  enforcement: recognition
+- slug: waiting-for-async-effects-in-page-specs
+  summary: For asserting state a page reaches after an async effect, without hangs.
+  learned: '2026-08-10'
+  ref: teams/mvox-dev/memory/tallis.md
   enforcement: recognition
 - slug: when-team-lead-contradicts-my-read
   summary: For when another agent's report conflicts with a clean read of my own.

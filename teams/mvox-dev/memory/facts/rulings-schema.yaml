@@ -33,3 +33,8 @@ facts:
     ref: mihkel:2026-05-17
     refute: "=ref"
     verified: "2026-05-17"
+
+  - fact: "mvox creates organizations with explicit _inheritrights false and entities under an organization with explicit _inheritrights true."
+    ref: teams/mvox-dev/memory/team-lead-archive.md
+    refute: "=ref"
+    verified: "2026-10-14"

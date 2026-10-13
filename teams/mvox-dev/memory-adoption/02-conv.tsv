@@ -181,3 +181,35 @@ perotin#3	judgment	Platform facts, not lesson; "POST never replaces" contradicts
 perotin#5	facts/privacy-boundary.yaml	four rows
 perotin#6	perotin.yaml:current	two DEFERRED records
 perotin#7	lessons/live-sweep-guards.md,lessons/shared-working-tree-branch-guard.md	
+project_entu_way_of_entu#1	lessons/type-vs-instance-in-entu.md	RULED applied: _sharing-never-propagates row dropped; create-time copy noted
+team-lead-archive#3	facts/entu-entities.yaml,facts/rulings-schema.yaml	RULED: docs version; mvox create rule to schema rulings
+perotin#3	facts/entu-entities.yaml,facts/entu-rights.yaml,facts/entu-properties.yaml,facts/entu-formulas.yaml,facts/entu-auth.yaml,facts/repos.yaml	new rows only; rest dup existing; no-parent-check row dropped, docs need _expander
+team-lead-archive#101	lessons/shut-down-teammates-before-session-end.md	RULED: shutdown only; TeamCreate/TeamDelete dropped
+byrd#25	lessons/testing-library-cleanup-with-globals-false.md	setup.ts gone; specs call cleanup themselves
+byrd#43	lessons/assert-base-display-with-responsive-class.md	dup of existing
+byrd#47	lessons/assert-base-display-with-responsive-class.md	dup of existing
+byrd#68	lessons/vitest-module-mock-isolation.md	merged with byrd#144
+byrd#91	lessons/edit-form-patch-only-changed-fields.md	
+byrd#100	lessons/testid-prefix-selectors.md	
+byrd#109	lessons/adding-message-keys.md,facts/pnpm-gates.yaml	merged with comenius#6, comenius#43
+byrd#112	lessons/waiting-for-async-effects-in-page-specs.md	merged with tallis#14
+byrd#113	judgment	Shared echoMessages proxy now echoes unknown keys; is the missing-key throw gotcha obsolete?
+byrd#133	lessons/testing-a-stale-request-guard.md	
+byrd#135	facts/design-tokens.yaml	hex values checked in src/app.css
+byrd#138	lessons/effect-edge-detection-on-a-store.md	
+byrd#139	lessons/driving-auth-state-in-tests.md	merged with byrd#160
+byrd#144	lessons/vitest-module-mock-isolation.md	merged with byrd#68
+byrd#149	facts/rulings-product.yaml	ruling date unknown; ref byrd.md
+byrd#160	lessons/driving-auth-state-in-tests.md	merged with byrd#139
+bentham#6	facts/rulings-process.yaml,facts/pnpm-gates.yaml	#362 check kept; no-server dup mvox-deploy; prompt flags closed; prune note dropped
+comenius#6	lessons/adding-message-keys.md	merged; key name dropped
+comenius#43	lessons/adding-message-keys.md	merged; jq check replaced, jq dedupes on parse
+comenius#58	lessons/svelte-const-placement.md	merged with comenius#60
+comenius#60	lessons/svelte-const-placement.md	merged with comenius#58
+tallis#5	lessons/ts-expect-error-in-red.md	merged with tallis#8
+tallis#8	lessons/ts-expect-error-in-red.md	merged with tallis#5
+tallis#12	facts/entu-entities.yaml	creator auto-_owner row dup of entu-rights
+tallis#14	lessons/waiting-for-async-effects-in-page-specs.md	merged with byrd#112
+victoria#11	facts/mvox-roles.yaml	
+victoria#19	facts/entu-properties.yaml	dup of existing
+victoria#21	facts/entu-entities.yaml	merged into add_user row; live-observe advice dropped

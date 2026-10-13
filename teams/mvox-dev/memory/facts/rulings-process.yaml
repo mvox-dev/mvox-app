@@ -100,3 +100,13 @@ facts:
     ref: bentham:2026-10-06
     refute: "=ref"
     verified: "2026-10-06"
+
+  - fact: "A UI gate reads Entu's grant on the target entity; a gate that computes access from membership or a stand-in rights check is a YELLOW review finding."
+    ref: "#362"
+    refute: "=ref"
+    verified: "2026-09-18"
+
+  - fact: "RED tests for gated controls use rights fixtures on the target entity, never membership fixtures."
+    ref: "#362"
+    refute: "=ref"
+    verified: "2026-09-18"

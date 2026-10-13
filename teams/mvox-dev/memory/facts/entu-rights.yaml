@@ -44,3 +44,13 @@ facts:
     ref: "#369"
     refute: "scripts/migrations/probes/probe-369-crede-self-editor-diagnosis-2026-09-15.ts"
     verified: "2026-09-15"
+
+  - fact: "Only _owner can delete an entity; _editor can list, read, add property values and delete ordinary property values."
+    ref: teams/mvox-dev/memory/perotin.md
+    refute: "git -C ~/projects/entu-www show origin/main:src/overview/entities/index.md"
+    verified: "2026-10-14"
+
+  - fact: "A list response's count equals the caller's visible subset, not the total number of matching entities."
+    ref: teams/mvox-dev/memory/perotin.md
+    refute: "Compare count for an owner and a viewer on the same query."
+    verified: "2026-09-21"
