@@ -1,0 +1,34 @@
+# Facts about Entu property values: writes, removal and metadata. Converted by memkit 2026-10-14. (*MVOX:memkit*)
+facts:
+  - fact: "A POST of a value without _id adds it beside existing values; to replace one, include that value's _id in the POST or delete it first."
+    ref: urls/entu-docs-properties
+    refute: "git -C ~/projects/entu-www show origin/main:src/api/properties/index.md"
+    verified: "2026-10-14"
+  - fact: "The list flag on a property definition is a UI hint; every non-formula property accepts several values on the wire."
+    ref: "2026-05-20"
+    refute: "POST a second value to a non-list property and read it back."
+    verified: "2026-05-20"
+  - fact: "DELETE /api/{db}/property/{_id} soft-deletes one value; no documented route clears a property by posting an empty list."
+    ref: urls/entu-docs-properties
+    refute: "git -C ~/projects/entu-www show origin/main:src/api/properties/index.md"
+    verified: "2026-10-14"
+  - fact: "Entu has no bulk delete for property values; each needs its own DELETE /property/{_id}, about 50 ms each when run serially."
+    ref: "2026-05-19"
+    refute: "git -C ~/projects/entu-www show origin/main:src/api/properties/index.md"
+    verified: "2026-05-19"
+  - fact: "mandatory: true on a property definition is a UI hint; the API does not enforce it, and existing entities without the value stay valid."
+    ref: mihkel:2026-05-19
+    refute: "Create an entity without a mandatory property via the API."
+    verified: "2026-05-19"
+  - fact: "Entity reads return values without a created stamp; GET /api/{db}/property/{_id} returns created at and by for one value, one request per value."
+    ref: urls/entu-docs-properties
+    refute: "git -C ~/projects/entu-www show origin/main:src/api/properties/index.md"
+    verified: "2026-10-14"
+  - fact: "Filtering entities by author works with _created.reference=<personId>; value-level author filters parse but match nothing."
+    ref: "2026-09-21"
+    refute: "Query polyphony with _created.reference and with name.created.by."
+    verified: "2026-09-21"
+  - fact: "An entity's _created can lack an author (polyphony's database entity has only a datetime), so an author filter silently skips it."
+    ref: "2026-09-21"
+    refute: "Read polyphony's database entity _created."
+    verified: "2026-09-21"

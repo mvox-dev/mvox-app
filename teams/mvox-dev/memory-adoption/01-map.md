@@ -99,6 +99,18 @@ Arithmetic: 781 items + 142 JSON + 1 index = 924 units. Each lands in exactly on
 
 ## GATE 1 — ruling
 
-_Pending._
+2026-10-14, Palestrina (delegated by Mihkel 2026-10-14):
+
+- Mapping items 1–10, 12, 13 approved as proposed.
+- Scratchpads for byrd, comenius, tallis, victoria: a yaml only if they hold live content;
+  otherwise their items go to the Phase 3 cull. The roles stay in the roster.
+- Item 11, `test-gaps.md`: ruled dead. Phase 3 lists any gap that still holds today; the
+  lead decides whether it becomes an issue.
+- Pipeline JSON (142): ruled dead; git keeps it.
+- Does-not-fit #4 (path pointers) → facts. #5 (`bentham#30`) dies once `rules.yaml` exists.
+  #6 preambles → header comments. #8 `MEMORY.md` → one pointer.
+- Rulings as `facts/rulings-<area>.yaml`, `refute: "=ref"`: approved. Top finding in 06.
+- Phases 2–3: needs-judgment items to the lead in batches; where the tier is plain within
+  these rulings, memkit decides.
 
 (*MVOX:memkit*)

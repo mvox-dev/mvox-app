@@ -1,0 +1,30 @@
+# Facts about how mvox-app is built, hosted and finds its databases. Converted by memkit 2026-10-14. (*MVOX:memkit*)
+facts:
+  - fact: "Every push to mvox-app main builds and deploys production on Cloudflare Pages (multivox.pages.dev and mvox.eu); branches and PRs get preview URLs."
+    ref: "#44"
+    refute: "Push a docs commit to main and watch the Pages deployments list."
+    verified: "2026-06-14"
+  - fact: "Cloudflare builds production on its own toolchain, so chunk hashes differ from a local build; verify a deploy by commit, not by hash."
+    ref: "#44"
+    refute: "curl the deployed /version.json and compare with git log."
+    verified: "2026-06-14"
+  - fact: "In the mvox.eu DNS zone only the proxied apex and www CNAMEs serve Pages; the MX, SPF/DKIM TXT and ai.mvox.eu records must never be touched."
+    ref: "#44"
+    refute: "List the mvox.eu zone records in the Cloudflare dashboard."
+    verified: "2026-06-14"
+  - fact: "A Cloudflare Pages project cannot switch from Direct Upload to Git-connected in place; it is deleted and recreated, with the custom domain detached first."
+    ref: "#44"
+    refute: "Cloudflare Pages docs on Git integration."
+    verified: "2026-06-14"
+  - fact: "mvox-app has no per-deployment database: a signed-in person's collectives come from the JWT accounts, so a schema change on one db shows on every deployment."
+    ref: src/lib/collectives/discover.ts
+    refute: "git -C ~/workspace-app grep PUBLIC_ENTU_DB origin/main -- src"
+    verified: "2026-10-14"
+  - fact: "mvox-app is a static SPA (adapter-static, ssr false) calling Entu from the browser with a localStorage JWT; the only +server.ts is the build-time version.json."
+    ref: svelte.config.js
+    refute: "find ~/workspace-app/src -name '+server.ts' -o -name '+page.server.ts'"
+    verified: "2026-10-14"
+  - fact: "common-prompt.md's Stack table still names adapter-cloudflare; the app uses adapter-static, so team-doc lines about a BFF or server gate are stale."
+    ref: teams/mvox-dev/common-prompt.md
+    refute: "grep -n adapter ~/workspace-app/teams/mvox-dev/common-prompt.md"
+    verified: "2026-10-14"

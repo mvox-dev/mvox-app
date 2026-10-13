@@ -1,0 +1,22 @@
+# The team's git repos and scratch script locations. Converted by memkit 2026-10-14. (*MVOX:memkit*)
+facts:
+  - fact: "~/workspace-app (remote mvox-dev/mvox-app) is the live app repo holding all current scripts, probes and team config."
+    ref: teams/mvox-dev/memory/perotin.md
+    refute: "git -C ~/workspace-app remote get-url origin"
+    verified: "2026-10-14"
+  - fact: "~/workspace (remote mvox-dev/mvox_v4e_web) is the legacy schema repo with its own .git; pre-2026-08-07 scripts and docs/migration/findings live only there."
+    ref: teams/mvox-dev/memory/perotin.md
+    refute: "git -C ~/workspace remote get-url origin"
+    verified: "2026-10-14"
+  - fact: "A write to a path not spelled in full under ~/workspace-app can land silently in ~/workspace as an orphaned untracked file."
+    ref: teams/mvox-dev/memory/finn.md
+    refute: ""
+    verified: "2026-10-14"
+  - fact: "The migration audit trail is git log -- scripts/migrations/ plus one committed result artifact per run in scripts/migrations/seed-results/."
+    ref: scripts/migrations/seed-results
+    refute: "git -C ~/workspace-app log --oneline -- scripts/migrations/"
+    verified: "2026-10-14"
+  - fact: "Josquin's mutation runners and split tools live in ~/workspace/scratchpad/ under directories 611, 615, 616, 684, 711, 716 and 723."
+    ref: teams/mvox-dev/memory/josquin.md
+    refute: "ls -d ~/workspace/scratchpad/{611,615,616,684,711,716,723}"
+    verified: "2026-10-14"

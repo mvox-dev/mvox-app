@@ -1,0 +1,22 @@
+# Facts about Entu entities, types and sharing at create. Converted by memkit 2026-10-14. (*MVOX:memkit*)
+facts:
+  - fact: "A new entity takes _sharing from its parents unless the request sets it: public if any parent is public, else domain if any is domain, else none, meaning private."
+    ref: urls/entu-docs-entities
+    refute: "git -C ~/projects/entu-www show origin/main:src/overview/entities/index.md"
+    verified: "2026-10-14"
+  - fact: "_sharing is not live-inherited: changing a parent's _sharing later leaves existing children unchanged, and a deleted _sharing value does not come back."
+    ref: "2026-06-06"
+    refute: "Change a parent's _sharing on polyphony and read a child."
+    verified: "2026-06-06"
+  - fact: "A type definition's _sharing does not reach its instances."
+    ref: "2026-06-06"
+    refute: "git -C ~/projects/entu-www show origin/main:src/overview/entities/index.md"
+    verified: "2026-06-06"
+  - fact: "Renaming an entity type needs no data migration: instances point at the type's _id, and _type.string catches up within about a second."
+    ref: "2026-05-19"
+    refute: "Rename a _probe_ type on polyphony and query by _type.string."
+    verified: "2026-05-19"
+  - fact: "Renaming a property needs a per-instance backfill; existing values stay under the old property name."
+    ref: "2026-05-19"
+    refute: "Rename a _probe_ property definition and read an instance."
+    verified: "2026-05-19"

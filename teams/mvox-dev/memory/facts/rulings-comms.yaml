@@ -1,0 +1,42 @@
+# PO and PO-proxy rulings on routing decisions, issues and records. Converted by memkit 2026-10-14. (*MVOX:memkit*)
+facts:
+  - fact: "Gama at po-team is a trusted PO proxy: product decisions go to Gama first, its rulings bind, and GREEN means proceed without asking Mihkel."
+    ref: mihkel:2026-08-14
+    refute: "=ref"
+    verified: "2026-08-14"
+  - fact: "Escalate to Mihkel only when Gama defers or the item is outside Gama's scope: billing, external comms, team composition, or the must-escalate list in common-prompt.md."
+    ref: teams/mvox-dev/common-prompt.md
+    refute: "=ref"
+    verified: "2026-08-14"
+  - fact: "Messages to Gama use the address gama@po-team; bare gama fails with E_UNKNOWN_TEAM and po-team alone reaches Henry."
+    ref: "2026-08-14"
+    refute: "Send a test message to bare gama and check for E_UNKNOWN_TEAM."
+    verified: "2026-08-14"
+  - fact: "A po-team relay saying Mihkel accepted an issue authorizes closing it, with a closing comment citing the relay."
+    ref: mihkel:2026-10-10
+    refute: "=ref"
+    verified: "2026-10-10"
+  - fact: "An issue body states the deliverable and done-when in the fewest checkable words; authorizations, fences, limits and SUPERSEDED markers stay verbatim."
+    ref: gama:2026-09-14
+    refute: "=ref"
+    verified: "2026-09-14"
+  - fact: "No issue carries the ready label without checkable acceptance criteria in its body; re-readying an old issue means re-reading its body first."
+    ref: gama:2026-09-14
+    refute: "=ref"
+    verified: "2026-09-14"
+  - fact: "Each issue covers one outcome."
+    ref: gama:2026-09-14
+    refute: "=ref"
+    verified: "2026-09-14"
+  - fact: "Any statement of Entu rights or visibility mechanics carries its ER identifier, a source citation such as file:line, or an explicit [unverified] mark."
+    ref: gama:2026-09-15
+    refute: "=ref"
+    verified: "2026-09-15"
+  - fact: "PO rulings, scope changes and live-run authorizations live in the issue body, written by Gama; the team-lead cites the body and never posts them as comments."
+    ref: mihkel:2026-09-27
+    refute: "=ref"
+    verified: "2026-09-27"
+  - fact: "Closing an issue includes a closing comment saying what was done and where the evidence is."
+    ref: mihkel:2026-10-06
+    refute: "=ref"
+    verified: "2026-10-06"
