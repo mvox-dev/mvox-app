@@ -49,10 +49,16 @@ columns, 110 once asked), otherwise it waits. `/obligations` opens it at any wid
 ## Data source
 
 - `<memory dir>/obligations.yaml`. The memory directory is, in order:
-  1. the `memoryDir` option, when set. A relative path resolves against the session's working
-     directory. For a lead session that runs outside its home (a team folder, a sibling repo).
+  1. the `memoryDir` option, when set. A relative path resolves against `<cwd>`. For a lead
+     session that runs outside its home (a team folder, a sibling repo).
   2. `<cwd>/<memory_dir>`, with `memory_dir` read from `<cwd>/memory-kit.conf`.
   3. `<cwd>/memory`.
+
+  `<cwd>` is the directory the session started in, not where it is now (since 0.2.1, kit issue
+  #3). A shell `cd` into another repo mid-session does not switch the ledger. The start directory
+  is kept in `$.state`, so a mod reload (which fires `session.start` again, with the directory
+  the session is in by then) keeps it too. Only when no start was seen does the pane fall back
+  to `$.session.cwd()`.
 
   Left empty, one install therefore serves every kit home. The value is stored in settings under
   `pluginConfigs`; set in the user's settings, it points every session at that one home. Whether
@@ -92,6 +98,14 @@ to set the footer's agent name. `/obligations` opens the pane at any width.
 
 Or for one session only: `claude --plugin-dir ./memory-kit/adapters/claude-code/obligations-pane`.
 
+Options (`userConfig`):
+
+- `agentName` is the footer name of the main agent. Left empty, the footer uses the working
+  directory's name.
+- `memoryDir` points the pane at a home's memory directory (see Data source).
+- `autoOpen` (default on) opens the pane at session start, but only where an obligations file
+  exists.
+
 ## Develop
 
 ```sh
@@ -104,6 +118,13 @@ tsc -p .                      # once Claude Code has laid .claude-plugin/types/ 
 `.claude-plugin/types/` when it loads the mod from a watched folder. Before that, type-check
 with a tsconfig kept outside the folder whose `include` names the `claude-code.d.ts` that the
 plugin-authoring skill writes, plus `hooks`, `types` and `tests`.
+
+For live testing in a session, link a working copy into the session's dev-mods folder. Claude
+Code then asks once whether to enable hot reloading for that session:
+
+```sh
+ln -s <working copy>/obligations-pane ~/.claude/dev-mods/<session-id>/obligations-pane
+```
 
 ## Capture
 
