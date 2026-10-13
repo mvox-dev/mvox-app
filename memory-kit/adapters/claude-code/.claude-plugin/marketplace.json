@@ -1,0 +1,11 @@
+{
+  "name": "memory-kit",
+  "owner": { "name": "memory-kit (mitselek)" },
+  "plugins": [
+    {
+      "name": "obligations-pane",
+      "source": "./obligations-pane",
+      "description": "Read-only side pane over the memory-kit obligations tier."
+    }
+  ]
+}

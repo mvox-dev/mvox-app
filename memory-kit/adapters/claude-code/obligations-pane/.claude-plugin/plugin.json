@@ -1,0 +1,23 @@
+{
+  "name": "obligations-pane",
+  "version": "0.1.0",
+  "description": "Side pane showing the memory-kit obligations tier (memory/obligations.yaml), soonest expiry first; read-only",
+  "author": {
+    "name": "Mihkel Putrinš"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "agentName": {
+      "type": "string",
+      "title": "Agent name",
+      "description": "The name the footer shows for this session's main agent. Empty uses the working directory's name.",
+      "default": ""
+    },
+    "autoOpen": {
+      "type": "boolean",
+      "title": "Open at session start",
+      "description": "Open the pane when a session starts in a folder that has an obligations file (it still waits for a wide enough terminal). /obligations opens it any time.",
+      "default": true
+    }
+  }
+}
