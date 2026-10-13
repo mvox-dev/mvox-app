@@ -406,18 +406,29 @@ def main(argv=None):
     ref_re = re.compile(caps["ref_grammar"]["pattern"])
     today = dt.date.today()
 
+    # The target is the home, or its memory directory directly. memory-kit.conf lives in
+    # the home; its memory_dir names the memory directory (default "memory"). An explicit
+    # memory-directory path wins over the conf.
     target = pathlib.Path(a.target).resolve()
-    mem = target if target.name == "memory" else target / "memory"
+    home = target.parent if target.name == "memory" else target
+    conf_path = home / "memory-kit.conf"
+    conf = {}
+    if conf_path.exists():
+        conf = yaml.safe_load(conf_path.read_text()) or {}
+    mem = target if target.name == "memory" else home / conf.get("memory_dir", "memory")
 
     # Mode: flag beats config; config beats the default. A home adopting an existing tree
     # starts in gauge, because a gate must pass on the tree it is introduced to.
     mode = "gate" if a.gate else "report" if a.report else None
-    conf_path = (mem.parent / "memory-kit.conf")
-    conf = {}
-    if conf_path.exists():
-        conf = yaml.safe_load(conf_path.read_text()) or {}
     if mode is None:
         mode = "report" if conf.get("mode") == "gauge" else "gate"
+
+    # A missing memory directory fails in every mode, --report included: a lint that
+    # found no tree has checked nothing, and "clean" would be a lie.
+    if not mem.is_dir():
+        print(f"memory-kit lint {caps['version']} -- {mode} -- {mem}")
+        print(f"  FAIL {mem.name}: no such memory directory")
+        return 2
 
     f = Findings()
     lint_tree(mem, caps, f, ref_re, today, shipped_rules=a.shipped_rules)

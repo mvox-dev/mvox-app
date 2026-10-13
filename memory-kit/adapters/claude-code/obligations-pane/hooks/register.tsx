@@ -54,14 +54,20 @@ const models = atom({ plugin: 'obligations-pane', key: 'models' } as const, {})
 const loads = atom({ plugin: 'obligations-pane', key: 'loads' } as const, {})
 const mainModel = atom({ plugin: 'obligations-pane', key: 'mainModel' } as const, '')
 
-/** Where the obligations live for a working directory: <cwd>/<memory_dir>/obligations.yaml. */
-async function memoryRoot($: EngineInterface, cwd: string): Promise<string> {
-  let dir = 'memory'
-  try {
-    const conf = `${cwd}/memory-kit.conf`
-    if (await $.fs.exists(conf)) dir = memoryDirOf(await $.fs.read(conf)) ?? dir
-  } catch {
-    // An unreadable conf falls back to the kit default.
+/**
+ * The memory directory: the memoryDir option when set, else <cwd>/<memory_dir> from
+ * <cwd>/memory-kit.conf, else <cwd>/memory. A relative path resolves against cwd.
+ */
+async function memoryRoot($: EngineInterface, cwd: string, memoryDir: string): Promise<string> {
+  let dir = memoryDir
+  if (dir === '') {
+    dir = 'memory'
+    try {
+      const conf = `${cwd}/memory-kit.conf`
+      if (await $.fs.exists(conf)) dir = memoryDirOf(await $.fs.read(conf)) ?? dir
+    } catch {
+      // An unreadable conf falls back to the kit default.
+    }
   }
   return dir.startsWith('/') ? dir : `${cwd}/${dir}`
 }
@@ -113,10 +119,10 @@ async function resolveUrls($: EngineInterface, root: string, items: readonly Obl
 }
 
 /** Gathers everything the pane draws and writes it to state in one go. */
-export async function refresh($: EngineInterface, agentName: string): Promise<void> {
+export async function refresh($: EngineInterface, agentName: string, memoryDir = ''): Promise<void> {
   const now = await $.clock.now()
   const cwd = await $.session.cwd()
-  const root = await memoryRoot($, cwd)
+  const root = await memoryRoot($, cwd, memoryDir)
   const path = `${root}/obligations.yaml`
   const ledger = await readObligations($, path)
   const urls = await resolveUrls($, root, ledger.items)
@@ -174,9 +180,9 @@ async function wheel($: EngineInterface, by: number): Promise<void> {
 }
 
 /** refresh, never throwing: a failure goes to the debug log and the last snapshot stays. */
-async function safeRefresh($: EngineInterface, agentName: string): Promise<void> {
+async function safeRefresh($: EngineInterface, agentName: string, memoryDir: string): Promise<void> {
   try {
-    await refresh($, agentName)
+    await refresh($, agentName, memoryDir)
   } catch (err) {
     $.ui.log(`obligations-pane: refresh failed: ${String(err)}`, { to: 'debug' })
   }
@@ -184,29 +190,30 @@ async function safeRefresh($: EngineInterface, agentName: string): Promise<void>
 
 export const register: Register = (on, options) => {
   const agentName = typeof options.agentName === 'string' ? options.agentName.trim() : ''
+  const memoryDir = typeof options.memoryDir === 'string' ? options.memoryDir.trim() : ''
   const autoOpen = options.autoOpen !== false
   let timer: { cancel: () => void } | undefined
 
   on('session.start', async ($, e, next) => {
     const started = await next(e)
     await $.command.register({ name: 'obligations', description: 'Open the obligations pane (memory/obligations.yaml)' })
-    await safeRefresh($, agentName)
+    await safeRefresh($, agentName, memoryDir)
     timer?.cancel()
-    timer = $.clock.every(REFRESH_MS, () => void safeRefresh($, agentName))
+    timer = $.clock.every(REFRESH_MS, () => void safeRefresh($, agentName, memoryDir))
     const snap = await read($, snapshot)
     if (autoOpen && snap?.source !== 'missing') void $.ui.open({ id: PANE, title: TITLE })
     return started
   })
 
   on('command.run', { command: 'obligations' }, async $ => {
-    await safeRefresh($, agentName)
+    await safeRefresh($, agentName, memoryDir)
     const opened = await $.ui.open({ id: PANE, title: TITLE })
     return { text: opened.isPlaced ? 'Obligations pane opened.' : 'Obligations pane waits for a wider terminal.' }
   })
 
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
-    await safeRefresh($, agentName)
+    await safeRefresh($, agentName, memoryDir)
     return done
   })
 
@@ -233,7 +240,7 @@ export const register: Register = (on, options) => {
     const id = result.agentId
     if (result.deny === undefined && id !== undefined) {
       await update($, models, m => ({ ...m, [id]: result.model }))
-      await safeRefresh($, agentName)
+      await safeRefresh($, agentName, memoryDir)
     }
     return result
   }).catch(($, e, next) => next(e))

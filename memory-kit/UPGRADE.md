@@ -53,6 +53,23 @@ A major means data shape changed. The kit ships `migrations/<version>/` for exac
   matter from your existing index), then `--check`, then the lint. A home that already keeps its
   own front matter: compare its keys with `LessonFrontMatter` first.
 
+- **0.1.0-alpha.2 -> 0.1.0-alpha.3:** no data step -- the pull changes nothing in a home's
+  memory; run the lint to confirm. New, optional: the Claude Code obligations pane. From the home
+  root: `claude plugin marketplace add ./memory-kit/adapters/claude-code`, then
+  `claude plugin install obligations-pane@memory-kit`. The install notes "2 userConfig options
+  not yet set": harmless, the defaults apply (agent name = the folder's name; auto-open where an
+  obligations file exists). A session whose working folder is not the home root: put a
+  `memory-kit.conf` there with an absolute `memory_dir` (po-team's setup). Superseded in
+  alpha.4: use the pane's `memoryDir` option instead.
+
+- **0.1.0-alpha.3 -> 0.1.0-alpha.4:** no data step. After the pull, run the lint once **with the
+  home as its argument** -- it now honours `memory_dir` and fails (exit 2, even under `--report`)
+  when the memory directory is missing, so a hook or script that passed a wrong path will now
+  fail where it used to pass. Fix the path, not the lint. A home that put a `memory-kit.conf`
+  outside itself to steer the pane (alpha.3's advice): delete that file and set the pane's
+  `memoryDir` option to the home's memory directory (stored in settings under
+  `pluginConfigs`), then `/reload-plugins`.
+
 ## Always
 
 - The home's config for the kit lives outside the subtree; a pull must never clobber it.
