@@ -383,6 +383,43 @@ def lint_tree(mem, caps, f, ref_re, today, *, shipped_rules=False):
         lint_facts(p, caps, f, ref_re, dormant=True)
     lint_lessons(mem, caps, f, ref_re)
     lint_urls(mem, f)
+    count_ignored(mem, f)
+
+
+def is_tier_file(rel):
+    """Whether the lint reads this file as part of a tier (path relative to the memory dir)."""
+    parts = rel.parts
+    if len(parts) == 1:
+        return rel.suffix == ".yaml"
+    top = parts[0]
+    if len(parts) == 2 and top in ("facts", "dormant"):
+        return rel.suffix == ".yaml"
+    if len(parts) == 2 and top == "lessons":
+        return rel.suffix == ".md" or rel.name == "index.yaml"
+    if len(parts) == 2 and top == "urls":
+        return True
+    return top == "secrets"
+
+
+def count_ignored(mem, f):
+    """Phase 0 on a pre-kit home used to print 'clean' because nothing had the kit's shape. Say
+    how much of the tree was read and how much was not, so silence cannot pass as health."""
+    seen, ignored = 0, []
+    for p in sorted(mem.rglob("*")):
+        if not p.is_file() or ".git" in p.parts:
+            continue
+        rel = p.relative_to(mem)
+        if p.name in ("README.md", ".gitkeep"):
+            continue
+        if is_tier_file(rel):
+            seen += 1
+        else:
+            ignored.append(str(rel))
+    f.count("files read", seen)
+    if ignored:
+        f.count("files ignored", len(ignored))
+        more = f" +{len(ignored) - 5} more" if len(ignored) > 5 else ""
+        f.note(mem, "not a kit tier, not checked: " + ", ".join(ignored[:5]) + more)
 
 
 def main(argv=None):

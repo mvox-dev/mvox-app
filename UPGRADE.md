@@ -56,9 +56,9 @@ A major means data shape changed. The kit ships `migrations/<version>/` for exac
 - **0.1.0-alpha.2 -> 0.1.0-alpha.3:** no data step -- the pull changes nothing in a home's
   memory; run the lint to confirm. New, optional: the Claude Code obligations pane. From the home
   root: `claude plugin marketplace add ./memory-kit/adapters/claude-code`, then
-  `claude plugin install obligations-pane@memory-kit`. The install notes "2 userConfig options
-  not yet set": harmless, the defaults apply (agent name = the folder's name; auto-open where an
-  obligations file exists). A session whose working folder is not the home root: put a
+  `claude plugin install obligations-pane@memory-kit`. The install notes "N userConfig options
+  not yet set" (2 at alpha.3; 3 from alpha.4, when `memoryDir` arrived): harmless, the defaults
+  apply (agent name = the folder's name; no memoryDir; auto-open where an obligations file exists). A session whose working folder is not the home root: put a
   `memory-kit.conf` there with an absolute `memory_dir` (po-team's setup). Superseded in
   alpha.4: use the pane's `memoryDir` option instead.
 
@@ -74,6 +74,14 @@ A major means data shape changed. The kit ships `migrations/<version>/` for exac
   pane 0.2.1: it now stays on the home the session started in, even after a shell `cd`. If your
   home's adoption PR was squash-merged, `git subtree pull` will refuse; see "Always" below. A home
   more than one version behind: read every step from its version on, then pull once.
+
+- **0.1.0-alpha.5 -> 0.1.0-alpha.6:** no data step. Pull, run the lint, then `/reload-plugins`.
+  Expect a new note in the lint output: "files read / files ignored", naming files in your memory
+  directory that are not a kit tier. It never fails the gate; it shows what the lint does not
+  check. New, optional: `memory-kit/tools/obligations-due.py <home>` replaces a home-written
+  deadline script. The pane (0.3.0) now makes one anonymous request to Codeberg at most every
+  6 hours to look for a newer release; set `checkUpdates` off to stop it. A Windows home: check
+  that an absolute `memoryDir` works (#8 is tested only on Linux).
 
 ## Always
 

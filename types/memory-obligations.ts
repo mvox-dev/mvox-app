@@ -4,6 +4,24 @@
 
 import type { IsoDate, Ref } from './memory-common';
 
+/**
+ * The YAML layout readers accept. The lint reads full YAML; the obligations pane reads this
+ * subset, so stay inside it:
+ *
+ * - One top-level key, `obligations:`, holding a block list, or `obligations: []` when empty.
+ *   Comments and blank lines anywhere.
+ * - List items at column 0 under the key (as `yaml.safe_dump` writes them) or indented, the
+ *   same way throughout the file. Each item is a flat map of the keys below; no other key.
+ * - Values are scalars: plain, 'single-quoted' ('' for a quote) or "double-quoted" (YAML
+ *   escapes, \x \u \U included). A value may continue on lines indented deeper than its key;
+ *   the lines fold as YAML folds them. A plain `null` or `~` is an empty value.
+ * - Not accepted: block scalars (| or >), flow collections ([a] or {a: b}) as values, anchors,
+ *   aliases, tags, and nested maps or lists.
+ * - `since` and `expires` are ISO dates (YYYY-MM-DD), quoted or not.
+ *
+ * `yaml.safe_dump(data, sort_keys=False)` output is inside the subset, with or without
+ * allow_unicode.
+ */
 export interface ObligationsFile {
   obligations: Obligation[];
 }

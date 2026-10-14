@@ -1,6 +1,6 @@
 # Facts about memory-kit itself. Ships with the kit; installed into an adopting home. Installed in every adopting home so that the home's
 # assistant knows what its own memory convention is, where it lives, and how to talk back.
-# Shape: schemas/facts.json. These are MANDATORY core: a home cannot opt out of knowing
+# Shape: types/memory-facts.ts. These are MANDATORY core: a home cannot opt out of knowing
 # where its own kit comes from.
 
 facts:

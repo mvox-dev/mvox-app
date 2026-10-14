@@ -6,10 +6,20 @@ plugin API (early access; the API moves between releases).
 
 ## What it shows
 
-- **Header** (sticky, dark on the pastel): local date and time to the minute, bold, then the
-  counts `N expired · M due ≤7d`, then the scroll position `i/n`.
+- **Header** (sticky, dark on the pastel), bold: the home's kit version, then the counts
+  `N expired · M due ≤7d`, then the scroll position `i/n`. For example
+  `memory-kit 0.1.0-alpha.5  0 expired · 1 due ≤7d  1/6` (since 0.3.0, kit #4; it showed the
+  date and time before).
+  - The version is line 1 of `<home>/memory-kit/VERSION`, the home's pinned kit, not the pane's
+    own version. The home is the folder that holds the memory directory (for a `memoryDir`
+    session that runs outside it), else `<cwd>`: the first of the two with a VERSION. Without
+    one the slot is empty: never a guess.
+  - When upstream has a newer release: `memory-kit 0.1.0-alpha.5 · alpha.6 out`. A newer
+    pre-release of the same version shows its pre-release part alone; a different
+    major, minor or patch shows the whole version, as `· 0.2.0 out` (kit #7, see Release check).
   - Expired means `expires` is before today.
-  - Due means `expires` falls between today and today + 7 days, both ends included.
+  - Due means `expires` falls between today and today + 7 days, both ends included. Today is the
+    local date, which the header no longer shows.
 - **Body**: one row per obligation, ordered by `expires` (expired first), ties by `since`,
   then file order.
   - The due date comes first, bold and black. An expired date also gets a salmon background.
@@ -38,8 +48,9 @@ plugin API (early access; the API moves between releases).
   direction of the tick. Further events are ignored for 150 ms after a step, so a trackpad or
   fast-wheel burst moves one item. The index is clamped to the list. The `k` and `j` hotkeys step one while the
   pane has the keyboard. They live on two Buttons inside a Box that is not displayed.
-- **Refresh**: every 20 s, which also moves the clock, and at the end of every turn. The mod
-  API has no file watch, so the file is re-read each time.
+- **Refresh**: every 20 s and at the end of every turn. The mod API has no file watch, so the
+  file and VERSION are re-read each time. Each refresh also runs the release check, which asks
+  the network at most once every 6 h.
 - **Empty states**: a missing file says `no obligations file here (<path>)`. An empty list says
   `no obligations`. A file the parser rejects says `obligations.yaml unreadable: line N: <why>`.
 
@@ -49,7 +60,9 @@ columns, 110 once asked), otherwise it waits. `/obligations` opens it at any wid
 ## Data source
 
 - `<memory dir>/obligations.yaml`. The memory directory is, in order:
-  1. the `memoryDir` option, when set. A relative path resolves against `<cwd>`. For a lead
+  1. the `memoryDir` option, when set. A relative path resolves against `<cwd>`. Absolute is
+     POSIX (`/...`), a drive letter (`C:\...` or `C:/...`) or UNC (`\\server\share`), since
+     0.3.0 (kit #8); the same holds for `memory_dir`. For a lead
      session that runs outside its home (a team folder, a sibling repo).
   2. `<cwd>/<memory_dir>`, with `memory_dir` read from `<cwd>/memory-kit.conf`.
   3. `<cwd>/memory`.
@@ -73,9 +86,46 @@ columns, 110 once asked), otherwise it waits. `/obligations` opens it at any wid
   environment has no bundler and no `node_modules`, so a YAML library is not an option.
   - Accepted: comments, `obligations:` or `obligations: []`, and list items of flat
     `key: value` maps with double-quoted, single-quoted or plain scalars.
+  - The items may sit at column 0 under `obligations:`, as `yaml.safe_dump` writes them, or be
+    indented (since 0.3.0, kit #5). One file uses one indent throughout.
+  - A value may continue on lines indented deeper than its key and folds as YAML folds it.
+    Single quotes double a quote (`''`). Double quotes take YAML's escapes, `\x`, `\u`, `\U`
+    and an escaped line end included. A plain `null` or `~` is empty.
+  - In short: whatever `yaml.safe_dump(data, sort_keys=False)` writes, with or without
+    `allow_unicode`, parses to what PyYAML reads back. The test fixture is that real output
+    (`tests/fixtures/make-safe-dump.py`).
   - Rejected, with the line number: anything else, such as unknown keys, duplicate keys,
-    block scalars, a non-ISO `since` or `expires`, or a missing `obligation`, `actor` or
-    `expires`.
+    block scalars, flow collections, nested maps, a non-ISO `since` or `expires`, or a missing
+    `obligation`, `actor` or `expires`.
+  - The proposed wording for the kit's `types/memory-obligations.ts` is in
+    `PROPOSED-types-doc.md`, for upstream to apply.
+
+## Release check
+
+Since 0.3.0 (kit #7), the pane notices a newer kit release by itself.
+
+- **Source**: the Forgejo tags API, anonymous, through `$.http.fetch`:
+  `https://codeberg.org/api/v1/repos/<owner>/<repo>/tags?limit=50`. That is the newest 50 tags,
+  newest first.
+- **Upstream**: `mitselek/memory-kit` unless the home's `memory-kit.conf` (the home whose
+  VERSION the header shows) has an `upstream:` key. Its value is `owner/repo` on Codeberg, e.g. `upstream: someone/memory-kit`. Any other
+  value, a full URL included, makes no request and writes one debug line.
+- **Which tags count**: release tags only, `v<major>.<minor>.<patch>` with an optional
+  `-alpha.N`, `-beta.N` or `-rc.N`. They compare by semver precedence (alpha.10 > alpha.9,
+  alpha < beta < rc < the release). Other tags are ignored.
+- **Interval**: at most one request per upstream every 6 hours. The result is cached in
+  `$.store` under `upstream` (`url -> { checkedAt, latest }`). The store is the plugin's own and
+  shared by every session, so ten open sessions make one request.
+- **No VERSION file**: no request, no comparison, no note.
+- **Never waits on the network**: no hook awaits the check; session start and turn end return
+  once the local refresh is done. `$.http.fetch` has no timeout of its own, so a request not
+  answered in 10 s (on `$.clock.after`) is a failed check.
+- **Failure is silent**: a refused request, a timeout, an error status or an answer that is not
+  a tags list keeps the last known result, or shows nothing. It writes one `debug` log line and
+  never draws an error. A failure counts as a check, so the next try comes 6 h later.
+- **Off switch**: `checkUpdates: false` makes no request at all and shows no note.
+- **Read-only**: the pane never pulls or upgrades anything. Upgrading stays `UPGRADE.md`, run by
+  the home's assistant.
 
 ## Read-only
 
@@ -105,12 +155,18 @@ Options (`userConfig`):
 - `memoryDir` points the pane at a home's memory directory (see Data source).
 - `autoOpen` (default on) opens the pane at session start, but only where an obligations file
   exists.
+- `checkUpdates` (default on) runs the release check (see Release check). Off, the pane makes
+  no network request at all.
+
+One key in the home's `memory-kit.conf` is read besides `memory_dir`: `upstream: owner/repo`
+(see Release check). The lint ignores keys it does not know.
 
 ## Develop
 
 ```sh
 claude plugin validate .
-claude plugin test .          # tests/*.test.ts
+claude plugin test .          # tests/*.test.ts; no test reaches the network
+python3 tests/fixtures/make-safe-dump.py   # regenerates the yaml.safe_dump fixture (PyYAML)
 tsc -p .                      # once Claude Code has laid .claude-plugin/types/ (gitignored)
 ```
 
@@ -129,12 +185,13 @@ ln -s <working copy>/obligations-pane ~/.claude/dev-mods/<session-id>/obligation
 ## Capture
 
 The pane over the workshop's real `memory/obligations.yaml` at 56 columns on 2026-10-14
-01:14 EEST, with one teammate running. The capture is a text approximation of the drawn tree.
-Colours are not shown: the background is pastel yellow, the header is dark, Mihkel is pink,
-the Prusa actor gets a palette colour, and the link is dark blue.
+01:14 EEST, with one teammate running; the header line is redrawn in the 0.3.0 format. The
+capture is a text approximation of the drawn tree. Colours are not shown: the background is
+pastel yellow, the header is dark, Mihkel is pink, the Prusa actor gets a palette colour, and
+the link is dark blue.
 
 ```text
- 2026-10-14 01:14  0 expired · 1 due ≤7d           1/6
+ memory-kit 0.1.0-alpha.5  0 expired · 1 due ≤7d    1/6
 
  2026-10-21 Mihkel Start print M3T06 on keldri (on the
  printer since 2026-10-13 07:28, not started).

@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+## v0.1.0-alpha.6 -- 2026-10-14 -- the pane knows its kit; docs keep their promises
+
+- **Pane 0.3.0** (built by the workshop's pane agent; 81/81 tests):
+  - reads obligations files the way `yaml.safe_dump` writes them: list items at column 0, wrapped
+    long values, YAML escapes, `null`/`~` as empty (#5). Tested against real PyYAML output.
+  - the header shows the home's kit version instead of the date and time (#4).
+  - checks upstream for a newer release at most every 6 h and says "· alpha.N out" in the header
+    (#7). Anonymous Codeberg tags API, cached across sessions in `$.store`, 10 s time limit, never
+    blocks a hook, never pulls. Off with the new `checkUpdates` option; another upstream with
+    `upstream: <owner>/<repo>` (Codeberg) in `memory-kit.conf`.
+  - Windows absolute paths (`C:\`, `C:/`, UNC) in `memoryDir` or `memory_dir` are no longer
+    joined to the working folder (#8). Unverified on real Windows: a Windows home should check it.
+- **Docs: the obligations tier is in the core docs** (#2). README D6 and the ADOPTION Phase 1 tier
+  list name it; Phase 3's genus test routes waiting-on items to `obligations.yaml`, no longer to
+  the scratchpad (which the kit's own lesson forbids), and says `expires` is when you run the
+  check, not the other party's deadline.
+- **Docs: no promises the kit does not keep** (#2). D2 names `types/` as the machine-readable
+  contract; D3 drops `sync.sh` (a home uses `git subtree pull`). The README layout lists what
+  ships; `SPEC.md`, `schemas/` and `migrations/` are marked planned. Five shipped rules cited
+  missing files (`SPEC.md`, `templates/`) and now cite the `types/` file or skeleton README that
+  states them.
+- **Lint: files read / files ignored.** The gauge counts the files it read and those it did not,
+  and names the first five ignored. A pre-kit home no longer gauges as "clean" (#2; hr2, workshop
+  and household finding 1). A note only, never a failure. Fixture: `valid/files-ignored`.
+- **Fixtures check the reason, not only the exit code** (household finding 11). Each invalid
+  fixture carries an `expect` line; `run-fixtures.sh` fails a fixture with no `expect`, with more
+  than one FAIL line, or failing for another reason. This caught
+  `invalid/lesson-hooked-without-trigger` failing twice since alpha.2 (it lacked front matter).
+- **Tool: `tools/obligations-due.py`** -- the deadline horizon (expired, next N days, later).
+  Honours `memory_dir`. Three homes had written it independently (household finding 13).
+- UPGRADE: the pane's option count is 3 from alpha.4 (#6).
+- **Types: the obligations layout readers accept** (#5), written above `ObligationsFile` in
+  `types/memory-obligations.ts`: the subset the pane reads, so a writer finds it where the shape is.
+  `yaml.safe_dump(..., sort_keys=False)` output is inside it. Text by the workshop.
+
 ## v0.1.0-alpha.5 -- 2026-10-14 -- pane stays on its home; never squash the subtree
 
 - **Pane 0.2.1: reads the home the session started in** (#3). A shell `cd` into another repo

@@ -35,26 +35,82 @@ function plainScalar(raw: string): string {
   return (hash === -1 ? raw : raw.slice(0, hash)).trim()
 }
 
-/** One scalar value: double-quoted, single-quoted, or plain. */
+const ESCAPES: Record<string, string> = {
+  '0': '\0', a: '\x07', b: '\b', t: '\t', n: '\n', v: '\v', f: '\f', r: '\r', e: '\x1b',
+  ' ': ' ', '"': '"', '/': '/', '\\': '\\', N: '\x85', _: '\xa0', L: ' ', P: ' ',
+}
+const HEX_ESCAPES: Record<string, number> = { x: 2, u: 4, U: 8 }
+
+/**
+ * Line folding inside a flow scalar: `text` holds the scalar's lines joined by '\n'. Each
+ * line is trimmed (the first only at its end, the last only at its start); one break
+ * becomes a space, each empty line between two lines a '\n'.
+ */
+function fold(lines: readonly string[]): string {
+  let out = ''
+  let empties = 0
+  lines.forEach((raw, i) => {
+    let line = i === 0 ? raw : raw.trimStart()
+    if (i < lines.length - 1) line = line.trimEnd()
+    if (i > 0 && line === '' && i < lines.length - 1) {
+      empties++
+      return
+    }
+    if (i > 0) out += empties > 0 ? '\n'.repeat(empties) : ' '
+    empties = 0
+    out += line
+  })
+  return out
+}
+
+/**
+ * One scalar value: double-quoted, single-quoted, or plain, as YAML reads it. `raw` is the
+ * value's first line and any continuation lines, joined by '\n' (yaml.safe_dump folds long
+ * values onto indented continuation lines). `null` and `~` written plain are empty.
+ */
 export function parseScalar(raw: string, line: number): string {
   const text = raw.trim()
   if (text.startsWith('"')) {
-    let out = ''
+    // The scalar's lines, escapes marked; folded once the closing quote is found.
+    const parts: string[] = []
+    let current = ''
+    let lineNo = line
     for (let i = 1; i < text.length; i++) {
-      const c = text[i]
+      const c = text[i] ?? ''
       if (c === '"') {
         const rest = text.slice(i + 1).trim()
-        if (rest !== '' && !rest.startsWith('#')) throw new ParseError(line, 'text after closing quote')
-        return out
+        if (rest !== '' && !rest.startsWith('#')) throw new ParseError(lineNo, 'text after closing quote')
+        parts.push(current)
+        return foldQuoted(parts)
       }
-      if (c === '\\') {
-        const n = text[++i]
-        const map: Record<string, string> = { '\\': '\\', '"': '"', n: '\n', t: '\t', '/': '/', '0': '\0' }
-        if (n === undefined || map[n] === undefined) throw new ParseError(line, `unsupported escape \\${n ?? ''}`)
-        out += map[n]
+      if (c === '\n') {
+        lineNo++
+        parts.push(current)
+        current = ''
         continue
       }
-      out += c
+      if (c === '\\') {
+        const n = text[++i] ?? ''
+        if (n === '\n') {
+          // Escaped break: the lines join with nothing between, the next line's indent dropped.
+          lineNo++
+          while (text[i + 1] === ' ') i++
+          continue
+        }
+        const width = HEX_ESCAPES[n]
+        if (width !== undefined) {
+          const hex = text.slice(i + 1, i + 1 + width)
+          if (!new RegExp(`^[0-9A-Fa-f]{${width}}$`).test(hex)) throw new ParseError(lineNo, `bad escape \\${n}${hex}`)
+          current += escapeMark(String.fromCodePoint(Number.parseInt(hex, 16)))
+          i += width
+          continue
+        }
+        const mapped = ESCAPES[n]
+        if (mapped === undefined) throw new ParseError(lineNo, `unsupported escape \\${n}`)
+        current += escapeMark(mapped)
+        continue
+      }
+      current += c
     }
     throw new ParseError(line, 'unterminated double-quoted string')
   }
@@ -69,17 +125,34 @@ export function parseScalar(raw: string, line: number): string {
           continue
         }
         const rest = text.slice(i + 1).trim()
-        if (rest !== '' && !rest.startsWith('#')) throw new ParseError(line, 'text after closing quote')
-        return out
+        if (rest !== '' && !rest.startsWith('#')) throw new ParseError(line + lineCount(text.slice(0, i)), 'text after closing quote')
+        return fold(out.split('\n'))
       }
       out += c
     }
     throw new ParseError(line, 'unterminated single-quoted string')
   }
-  const plain = plainScalar(text)
+  const lines = text.split('\n')
+  lines.forEach((l, i) => {
+    if (i < lines.length - 1 && plainScalar(l) !== l.trim()) throw new ParseError(line + i, 'a comment cannot continue onto the next line')
+  })
+  const plain = fold(lines.map(plainScalar))
   if (/^[|>]/.test(plain)) throw new ParseError(line, 'block scalars (| or >) are not supported')
   if (/^[[{&*!]/.test(plain)) throw new ParseError(line, `unsupported value: ${plain.slice(0, 20)}`)
+  if (plain === '~' || /^(null|Null|NULL)$/.test(plain)) return ''
   return plain
+}
+
+function lineCount(text: string): number {
+  return text.split('\n').length - 1
+}
+
+// Escaped characters are content, never trimmed or folded: each is carried as a mark with
+// no whitespace in it (U+0000, the code point in hex, ';') until folding is done.
+const escapeMark = (c: string) => `\u0000${(c.codePointAt(0) ?? 0).toString(16)};`
+
+function foldQuoted(parts: readonly string[]): string {
+  return fold(parts).replace(/\u0000([0-9a-f]+);/g, (_, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
 }
 
 /** Splits `key: value` (value may be empty). */
@@ -92,6 +165,8 @@ function keyValue(text: string, line: number): [string, string] {
 /**
  * Parses memory/obligations.yaml. Accepts: comments, blank lines, one top-level key
  * `obligations:` holding a block list of flat maps (or `[]`), scalar values quoted or plain.
+ * The list items may sit at column 0 under the key, as yaml.safe_dump writes them, or be
+ * indented; a value may continue on lines indented deeper than its key (folded as YAML does).
  * Every item records the 1-based line it starts on: file order for ties, and a stable row key.
  */
 export function parseObligations(text: string): ParseResult {
@@ -111,8 +186,23 @@ function parseOrThrow(text: string): ObligationRow[] {
   let itemIndent = -1
   let keyIndent = -1
   let current: (Partial<Record<Key, string>> & { line: number }) | undefined
+  // The key whose value is still open: continuation lines join it until the next key or item.
+  let pending: { key: string; raw: string[]; line: number; blanks: number } | undefined
+
+  const flush = () => {
+    if (!pending) return
+    const { key, raw, line } = pending
+    pending = undefined
+    if (!current) throw new ParseError(line, 'key outside a list item')
+    if (!(KEYS as readonly string[]).includes(key)) throw new ParseError(line, `unknown key "${key}"`)
+    if (current[key as Key] !== undefined) throw new ParseError(line, `duplicate key "${key}"`)
+    // A value that starts on the next line: the scalar is the continuation alone.
+    const value = raw[0]?.trim() === '' && raw.length > 1 ? raw.slice(1) : raw
+    current[key as Key] = parseScalar(value.join('\n'), line)
+  }
 
   const close = () => {
+    flush()
     if (!current) return
     for (const key of REQUIRED) {
       if (current[key] === undefined || current[key] === '') {
@@ -137,22 +227,52 @@ function parseOrThrow(text: string): ObligationRow[] {
     current = undefined
   }
 
-  const setKey = (key: string, raw: string, line: number) => {
-    if (!current) throw new ParseError(line, 'key outside a list item')
-    if (!(KEYS as readonly string[]).includes(key)) throw new ParseError(line, `unknown key "${key}"`)
-    if (current[key as Key] !== undefined) throw new ParseError(line, `duplicate key "${key}"`)
-    current[key as Key] = parseScalar(raw, line)
+  const openKey = (text: string, line: number) => {
+    flush()
+    const [key, value] = keyValue(text, line)
+    pending = { key, raw: [value], line, blanks: 0 }
+  }
+
+  /** Inside an open quoted value, every line is content, a '#' or a blank line included. */
+  const inOpenQuote = (): boolean => {
+    if (!pending) return false
+    const value = pending.raw.join('\n').trim()
+    if (value.startsWith("'")) return !/^'(?:[^']|'')*'/.test(value)
+    if (value.startsWith('"')) return !/^"(?:[^"\\]|\\[\s\S])*"/.test(value)
+    return false
   }
 
   lines.forEach((raw, i) => {
     const line = i + 1
-    if (/^\s*(#.*)?$/.test(raw)) return
-    if (raw.includes('\t')) throw new ParseError(line, 'tab in indentation')
+    const blank = /^\s*(#.*)?$/.test(raw)
+    if (raw.includes('\t') && !inOpenQuote()) throw new ParseError(line, 'tab in indentation')
     const indent = raw.length - raw.trimStart().length
-    const body = raw.trim()
 
-    if (indent === 0) {
+    // A continuation line: deeper than the open value's key, or anything inside an open quote.
+    if (pending && (inOpenQuote() || (!blank && indent > keyIndent))) {
+      if (raw.trim() === '') {
+        pending.blanks++
+        return
+      }
+      const quoted = /^\s*['"]/.test(pending.raw.join('\n'))
+      if (!quoted && /^[A-Za-z_][\w-]*:(\s|$)/.test(raw.trim())) {
+        throw new ParseError(line, 'key at inconsistent indent (nested values are not supported)')
+      }
+      for (; pending.blanks > 0; pending.blanks--) pending.raw.push('')
+      pending.raw.push(raw)
+      return
+    }
+    if (blank) {
+      if (pending && raw.trim() === '') pending.blanks++
+      return
+    }
+    if (pending) pending.blanks = 0
+    const body = raw.trim()
+    const isItem = body.startsWith('- ') || body === '-'
+
+    if (indent === 0 && !(isItem && seenTop)) {
       if (seenTop) throw new ParseError(line, `unexpected top-level line: ${body.slice(0, 40)}`)
+      if (isItem) throw new ParseError(line, 'expected "obligations:" first')
       const [key, value] = keyValue(body, line)
       if (key !== 'obligations') throw new ParseError(line, `unknown top-level key "${key}"`)
       seenTop = true
@@ -164,7 +284,7 @@ function parseOrThrow(text: string): ObligationRow[] {
     if (!seenTop) throw new ParseError(line, 'expected "obligations:" first')
     if (isEmptyList) throw new ParseError(line, 'content after "obligations: []"')
 
-    if (body.startsWith('- ') || body === '-') {
+    if (isItem) {
       if (itemIndent === -1) itemIndent = indent
       if (indent !== itemIndent) throw new ParseError(line, 'list item at inconsistent indent')
       close()
@@ -174,16 +294,17 @@ function parseOrThrow(text: string): ObligationRow[] {
       const firstKeyIndent = indent + (body.length - rest.length)
       if (keyIndent === -1) keyIndent = firstKeyIndent
       else if (firstKeyIndent !== keyIndent) throw new ParseError(line, 'key at inconsistent indent')
-      const [key, value] = keyValue(rest, line)
-      setKey(key, value, line)
+      openKey(rest, line)
       return
     }
 
     if (!current) throw new ParseError(line, 'expected a list item ("- ")')
-    if (keyIndent === -1) keyIndent = indent
+    if (keyIndent === -1) {
+      if (indent <= itemIndent) throw new ParseError(line, 'key at inconsistent indent')
+      keyIndent = indent
+    }
     if (indent !== keyIndent) throw new ParseError(line, 'key at inconsistent indent (nested values are not supported)')
-    const [key, value] = keyValue(body, line)
-    setKey(key, value, line)
+    openKey(body, line)
   })
 
   if (!seenTop) {
@@ -195,16 +316,153 @@ function parseOrThrow(text: string): ObligationRow[] {
   return items
 }
 
-/** Reads `memory_dir:` from a kit home's memory-kit.conf; undefined when absent. */
-export function memoryDirOf(conf: string): string | undefined {
+/** A top-level `key: value` of a kit home's memory-kit.conf, unquoted; undefined when absent or empty. */
+export function confValue(conf: string, key: string): string | undefined {
   for (const raw of conf.split(/\r?\n/)) {
-    const m = /^memory_dir:\s*(.*)$/.exec(raw)
-    if (m) {
-      const v = plainScalar(m[1] ?? '').replace(/^["']|["']$/g, '')
-      return v === '' ? undefined : v
-    }
+    if (!raw.startsWith(`${key}:`)) continue
+    const v = plainScalar(raw.slice(key.length + 1)).replace(/^["']|["']$/g, '')
+    return v === '' ? undefined : v
   }
   return undefined
+}
+
+/**
+ * An absolute path: POSIX (/...), drive letter (C:\ or C:/) or UNC (\\server\share). The mod
+ * has no Node, so no path.isAbsolute (kit #8).
+ */
+export function isAbsolutePath(path: string): boolean {
+  return /^(\/|[A-Za-z]:[\\/]|\\\\)/.test(path)
+}
+
+/** The directory holding `path`, POSIX or Windows separators: '/' at the root, '.' for a bare name. */
+export function parentDir(path: string): string {
+  const trimmed = path.replace(/[\\/]+$/, '')
+  const cut = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'))
+  if (cut === -1) return '.'
+  return cut === 0 ? trimmed.slice(0, 1) : trimmed.slice(0, cut)
+}
+
+/** Reads `memory_dir:` from a kit home's memory-kit.conf; undefined when absent. */
+export function memoryDirOf(conf: string): string | undefined {
+  return confValue(conf, 'memory_dir')
+}
+
+// ---------------------------------------------------------------------------------------------
+// The home's kit version (kit #4) and the upstream release check (kit #7).
+
+/** The version a home's memory-kit/VERSION names: line 1, trimmed; undefined when empty. */
+export function kitVersionOf(text: string): string | undefined {
+  const first = (text.split(/\r?\n/)[0] ?? '').trim()
+  return first === '' ? undefined : first
+}
+
+export type Release = { major: number; minor: number; patch: number; pre?: { kind: 'alpha' | 'beta' | 'rc'; n: number } }
+
+const NUM = '(0|[1-9]\\d*)'
+const RELEASE = new RegExp(`^v?${NUM}\\.${NUM}\\.${NUM}(?:-(alpha|beta|rc)\\.${NUM})?$`)
+
+/** A release tag or version: v<maj>.<min>.<patch>, optional -alpha.N, -beta.N or -rc.N; else undefined. */
+export function parseRelease(tag: string): Release | undefined {
+  const m = RELEASE.exec(tag.trim())
+  if (!m) return undefined
+  const core = { major: Number(m[1]), minor: Number(m[2]), patch: Number(m[3]) }
+  return m[4] === undefined ? core : { ...core, pre: { kind: m[4] as 'alpha' | 'beta' | 'rc', n: Number(m[5]) } }
+}
+
+const PRE_ORDER = { alpha: 0, beta: 1, rc: 2 } as const
+
+/** Semver precedence: core numbers, then a release above its pre-releases, then alpha < beta < rc, then N. */
+export function compareRelease(a: Release, b: Release): number {
+  const core = a.major - b.major || a.minor - b.minor || a.patch - b.patch
+  if (core !== 0) return core
+  if (a.pre === undefined || b.pre === undefined) return (a.pre === undefined ? 1 : 0) - (b.pre === undefined ? 1 : 0)
+  return PRE_ORDER[a.pre.kind] - PRE_ORDER[b.pre.kind] || a.pre.n - b.pre.n
+}
+
+const versionText = (r: Release) =>
+  `${r.major}.${r.minor}.${r.patch}${r.pre === undefined ? '' : `-${r.pre.kind}.${r.pre.n}`}`
+
+/** The newest release among tag names, as a version without the `v`; undefined when none is a release. */
+export function newestRelease(names: readonly string[]): string | undefined {
+  let best: Release | undefined
+  for (const name of names) {
+    const r = parseRelease(name)
+    if (r !== undefined && (best === undefined || compareRelease(r, best) > 0)) best = r
+  }
+  return best === undefined ? undefined : versionText(best)
+}
+
+/**
+ * What the header adds when upstream is ahead: the pre-release alone (`alpha.6`) when the
+ * core is the same, else the whole version. '' when not newer, or either side is not a release.
+ */
+export function updateNote(local: string, latest: string): string {
+  const mine = parseRelease(local)
+  const theirs = parseRelease(latest)
+  if (mine === undefined || theirs === undefined || compareRelease(theirs, mine) <= 0) return ''
+  const sameCore = mine.major === theirs.major && mine.minor === theirs.minor && mine.patch === theirs.patch
+  return sameCore && theirs.pre !== undefined ? `${theirs.pre.kind}.${theirs.pre.n}` : versionText(theirs)
+}
+
+/** The header's version slot: `memory-kit <version>`, ` · <note> out` when upstream is ahead; '' without a version. */
+export function kitLabel(version: string, note: string): string {
+  if (version === '') return ''
+  return note === '' ? `memory-kit ${version}` : `memory-kit ${version} · ${note} out`
+}
+
+export const DEFAULT_UPSTREAM = 'mitselek/memory-kit'
+const REPO_PART = '[A-Za-z0-9_][A-Za-z0-9_.-]*'
+const OWNER_REPO = new RegExp(`^${REPO_PART}/${REPO_PART}$`)
+
+/**
+ * The tags API URL for memory-kit.conf's `upstream:` (owner/repo on Codeberg; the kit's own
+ * repository when absent). undefined for any other value: no request is made.
+ */
+export function upstreamTagsUrl(upstream: string | undefined): string | undefined {
+  const repo = upstream ?? DEFAULT_UPSTREAM
+  if (!OWNER_REPO.test(repo) || repo.split('/').some(p => /^\.+$/.test(p))) return undefined
+  return `https://codeberg.org/api/v1/repos/${repo}/tags?limit=50`
+}
+
+/** Tag names from a tags API answer (a JSON list of `{ name }`); undefined for anything else. */
+export function tagNamesOf(text: string): string[] | undefined {
+  let data: unknown
+  try {
+    data = JSON.parse(text)
+  } catch {
+    return undefined
+  }
+  if (!Array.isArray(data)) return undefined
+  const names: string[] = []
+  for (const tag of data) {
+    const name = (tag as { name?: unknown } | null)?.name
+    if (typeof name !== 'string') return undefined
+    names.push(name)
+  }
+  return names
+}
+
+/** A tags request not answered by then counts as a failed check: $.http.fetch has no timeout of its own. */
+export const FETCH_TIMEOUT_MS = 10_000
+
+/** At most one request per upstream in this long, across every session ($.store). */
+export const UPDATE_INTERVAL_MS = 6 * 3_600_000
+
+/** One upstream's last check: when, and the newest release then known ('' for none). */
+export type UpstreamCheck = { checkedAt: number; latest: string }
+
+/** A check made within the interval. A clock that went back makes it stale. */
+export function isFresh(checkedAt: number, now: number): boolean {
+  const age = now - checkedAt
+  return age >= 0 && age < UPDATE_INTERVAL_MS
+}
+
+/** The stored check for `url` from the store's `upstream` value (url -> check); undefined when absent or malformed. */
+export function cachedCheck(stored: unknown, url: string): UpstreamCheck | undefined {
+  if (typeof stored !== 'object' || stored === null) return undefined
+  const entry = (stored as Record<string, unknown>)[url] as Partial<UpstreamCheck> | undefined
+  if (typeof entry?.checkedAt !== 'number' || typeof entry.latest !== 'string') return undefined
+  return { checkedAt: entry.checkedAt, latest: entry.latest }
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -1,4 +1,5 @@
-import type { On, RenderInput, SessionStartInput } from 'claude-code'
+import type { HttpResponse, On, RenderInput, SessionStartInput } from 'claude-code'
+import { mock } from 'claude-code/testing'
 
 export const CWD = '/home/kit'
 export const PLUGIN = 'obligations-pane'
@@ -35,11 +36,26 @@ export type World = {
   commands: string[]
   zone: string
   reads: number
+  /** Every URL the plugin fetched, in order. Tests never reach the network. */
+  requests: string[]
+  /** What $.http.fetch answers; undefined refuses (as offline), 'hang' never settles. */
+  answer: ((url: string) => HttpResponse) | 'hang' | undefined
+  /** Lines the plugin logged, as `<to>: <text>`. */
+  logs: string[]
 }
 
-const abs = (path: string) => (path.startsWith('/') ? path : `${CWD}/${path}`)
+/** A tags API answer listing these names, newest first as Forgejo lists them. */
+export const tagsAnswer = (...names: string[]): HttpResponse => ({
+  status: 200,
+  ok: true,
+  headers: { 'content-type': 'application/json' },
+  text: JSON.stringify(names.map(name => ({ name, id: 'x', commit: { sha: 'x' } }))),
+})
 
-export function worldOf(on: On, files: Readonly<Record<string, string>>): World {
+/** POSIX, drive-letter (C:\ or C:/) and UNC paths are absolute; the rest are under the cwd. */
+const abs = (path: string) => (/^(\/|[A-Za-z]:[\\/]|\\\\)/.test(path) ? path : `${CWD}/${path}`)
+
+export function worldOf(on: On, files: Readonly<Record<string, string>>, store: Readonly<Record<string, unknown>> = {}): World {
   const world: World = {
     files: new Map(Object.entries(files).map(([p, t]) => [abs(p), t])),
     cwd: CWD,
@@ -51,7 +67,11 @@ export function worldOf(on: On, files: Readonly<Record<string, string>>): World 
     commands: [],
     zone: '+0300',
     reads: 0,
+    requests: [],
+    answer: undefined,
+    logs: [],
   }
+  mock.store(on, store)
   const isDir = (path: string) => [...world.files.keys()].some(f => f.startsWith(`${path}/`))
 
   on('fs.exists', ($, e) => ({ value: world.files.has(abs(e.path)) || isDir(abs(e.path)) }))
@@ -78,7 +98,15 @@ export function worldOf(on: On, files: Readonly<Record<string, string>>): World 
     world.opened.push(e.id)
     return { value: { isPlaced: true } } as never
   })
-  on('ui.log', () => ({ value: undefined }))
+  on('ui.log', ($, e) => {
+    world.logs.push(`${e.to}: ${e.text}`)
+    return { value: undefined }
+  })
+  on('http.fetch', ($, e) => {
+    world.requests.push(e.url)
+    if (world.answer === 'hang') return new Promise<never>(() => {})
+    return world.answer === undefined ? { deny: 'offline' } : { value: world.answer(e.url) }
+  })
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('turn.complete', ($, e) => ({ text: (e as { answer?: string }).answer ?? '' }) as never)
 
