@@ -13,8 +13,11 @@ import {
   backoffMs,
   brake,
   confValue,
+  COURIER_GRACE_MS,
   decideRetire,
+  entryKey,
   expandHome,
+  fileOpArgv,
   formatEvent,
   hubItems,
   isAsideOf,
@@ -24,13 +27,18 @@ import {
   matchSegment,
   MINUTE,
   parseSource,
+  pathSegments,
   pendingEvents,
   pendingOf,
+  platformOfHome,
+  PROBE_ARGV,
   recentAsks,
   retirePrompt,
   sourcesOf,
+  STALE_LOCK_MS,
+  takes,
 } from './watch'
-import type { Item, Source } from './watch'
+import type { FileOp, Item, Platform, Source, Take } from './watch'
 
 const startCwd = atom({ plugin: 'watch', key: 'startCwd' } as const, '')
 const askedAt = atom({ plugin: 'watch', key: 'askedAt' } as const, 0)
@@ -80,7 +88,7 @@ const dirOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf('/'), pa
 /** The files a path names; `*` in a segment matches the directory's entries (never dotfiles). */
 async function expand($: EngineInterface, path: string): Promise<string[]> {
   if (!path.includes('*')) return [path]
-  const segments = path.split('/')
+  const segments = pathSegments(path)
   let bases = [segments[0] ?? '']
   for (const segment of segments.slice(1)) {
     const next: string[] = []
@@ -90,7 +98,9 @@ async function expand($: EngineInterface, path: string): Promise<string[]> {
         continue
       }
       try {
-        for (const entry of await $.fs.list(base === '' ? '/' : base)) if (matchSegment(segment, entry.name)) next.push(`${base}/${entry.name}`)
+        // '' is the POSIX root; a bare drive ('C:') is that drive's root, not its current directory.
+        const dir = base === '' ? '/' : /^[A-Za-z]:$/.test(base) ? `${base}/` : base
+        for (const entry of await $.fs.list(dir)) if (matchSegment(segment, entry.name)) next.push(`${base}/${entry.name}`)
       } catch {
         // A directory that is not there matches nothing.
       }
@@ -100,13 +110,35 @@ async function expand($: EngineInterface, path: string): Promise<string[]> {
   return bases
 }
 
-async function run($: EngineInterface, argv: string[]): Promise<boolean> {
+// The host's platform, found once per module load (kit alpha.9): a drive-letter or UNC home is
+// Windows; otherwise `uname -s` decides (it answers on Linux and macOS, not on Windows).
+let platform: Platform | undefined
+let homeHint = ''
+
+async function platformOf($: EngineInterface): Promise<Platform> {
+  if (platform !== undefined) return platform
+  let found = platformOfHome(homeHint)
+  if (found === undefined) {
+    try {
+      found = (await $.process.run([...PROBE_ARGV], { timeoutMs: 10_000 })).exitCode === 0 ? 'posix' : 'windows'
+    } catch {
+      found = 'windows'
+    }
+  }
+  platform = found
+  logOnce($, `file operations run on ${found === 'posix' ? 'POSIX mv/rm' : 'Windows PowerShell'}`)
+  return found
+}
+
+/** One rename, delete or lock operation on the host; false (one debug line per distinct failure) when it failed. */
+async function fileOp($: EngineInterface, f: FileOp): Promise<boolean> {
+  const what = 'path' in f ? `${f.op} ${f.path}` : `${f.op} ${f.from} -> ${f.to}`
   try {
-    const { exitCode, stderr } = await $.process.run(argv, { timeoutMs: 10_000 })
-    if (exitCode !== 0) logOnce($, `${argv.join(' ')} failed: ${stderr.trim()}`)
+    const { exitCode, stderr } = await $.process.run(fileOpArgv(await platformOf($), f), { timeoutMs: 30_000 })
+    if (exitCode !== 0) logOnce($, `${what} failed: ${stderr.trim()}`)
     return exitCode === 0
   } catch (err) {
-    logOnce($, `${argv.join(' ')} failed: ${String(err)}`)
+    logOnce($, `${what} failed: ${String(err)}`)
     return false
   }
 }
@@ -118,7 +150,7 @@ const itemsOf = (format: Source['format'], text: string): Item[] | undefined =>
 async function replace($: EngineInterface, path: string, text: string): Promise<boolean> {
   const tmp = `${path}.watch-tmp`
   await $.fs.write(tmp, text)
-  return run($, ['mv', '-f', '--', tmp, path])
+  return fileOp($, { op: 'move-replace', from: tmp, to: path })
 }
 
 /** Adds an aside's content to the archive. False (and the aside kept) when the archive is not usable. */
@@ -155,8 +187,13 @@ async function drainAside($: EngineInterface, source: Source, file: string, asid
   const text = await readOrEmpty($, aside)
   const items = itemsOf(source.format, text)
   if (items === undefined) {
+    if (source.take !== undefined) {
+      // A shared inbox is the harness's: nothing of ours is ever put back into it.
+      logOnce($, `${aside}: not a hub inbox; left aside`)
+      return
+    }
     // Put back only where nothing new has arrived (mv -n); otherwise it stays aside, not lost.
-    await run($, ['mv', '-n', '--', aside, file])
+    await fileOp($, { op: 'move-keep', from: aside, to: file })
     logOnce($, `${aside}: not a hub inbox; put back where ${file} was free, else left aside`)
     return
   }
@@ -165,7 +202,7 @@ async function drainAside($: EngineInterface, source: Source, file: string, asid
     const events = items.map(item => formatEvent(source.prefix, item, archivePath))
     if (!(await replace($, pendingOf(aside), `${JSON.stringify(events, null, 1)}\n`))) return
   }
-  await run($, ['rm', '-f', '--', aside])
+  await fileOp($, { op: 'remove', path: aside })
 }
 
 /** The entries of `file`'s directory that `match`, as paths, oldest first (the names carry the time). */
@@ -183,6 +220,10 @@ async function besideOf($: EngineInterface, file: string, match: (file: string, 
 /** Drains one file: asides a crash left behind first, then the file itself, renamed aside before it is read. */
 async function drainFile($: EngineInterface, source: Source, file: string, archivePath: string): Promise<void> {
   for (const aside of await besideOf($, file, isAsideOf)) await drainAside($, source, file, aside, archivePath)
+  if (source.take !== undefined) {
+    await drainShared($, source, source.take, file, archivePath)
+    return
+  }
 
   const text = await readOrEmpty($, file)
   const items = itemsOf(source.format, text)
@@ -192,7 +233,84 @@ async function drainFile($: EngineInterface, source: Source, file: string, archi
   }
   if (items.length === 0) return
   const aside = asideOf(file, await $.clock.now(), ++nonce)
-  if (!(await run($, ['mv', '--', file, aside]))) return
+  if (!(await fileOp($, { op: 'move', from: file, to: aside }))) return
+  await drainAside($, source, file, aside, archivePath)
+}
+
+/** When each takeable entry of a shared inbox was first seen, by `<file>\n<entry key>`. */
+const firstSeen = new Map<string, number>()
+
+/**
+ * Takes the harness's lock on a shared inbox (`<inbox>.lock`, a directory, as the harness itself
+ * takes it). A lock older than STALE_LOCK_MS is broken first. False: someone holds it.
+ */
+async function lock($: EngineInterface, path: string, now: number): Promise<boolean> {
+  if (await $.fs.exists(path)) {
+    let mtime = now
+    try {
+      mtime = (await $.fs.stat(path)).mtimeMs
+    } catch {
+      return false
+    }
+    if (now - mtime <= STALE_LOCK_MS) return false
+    logOnce($, `${path}: stale lock (older than ${STALE_LOCK_MS / 1000} s), broken`)
+    if (!(await fileOp($, { op: 'unlock', path }))) return false
+  }
+  return fileOp($, { op: 'lock', path })
+}
+
+/**
+ * A shared inbox (kit #12): the harness's own teammate inbox, which the courier also writes. Only
+ * the entries the source takes leave it, after COURIER_GRACE_MS (the harness delivers them itself
+ * while its team is live). Under the harness's lock: re-read, write the taken entries to an aside
+ * (temp + rename), then the rest back in place (temp + rename, as the harness writes), unlock.
+ * Everything else stays, in order and unchanged. The courier writes only into an empty inbox, and
+ * the watch writes only when it takes something, so it never meets the courier mid-write.
+ */
+async function drainShared($: EngineInterface, source: Source, take: Take, file: string, archivePath: string): Promise<void> {
+  const text = await readOrEmpty($, file)
+  if (text.trim() === '') return
+  const parse = (t: string): unknown[] | undefined => {
+    try {
+      const data: unknown = JSON.parse(t)
+      return Array.isArray(data) ? data : undefined
+    } catch {
+      return undefined
+    }
+  }
+  const seen = parse(text)
+  if (seen === undefined) {
+    logOnce($, `${file}: not a hub inbox; left in place`)
+    return
+  }
+  const now = await $.clock.now()
+  const keys = new Set(seen.filter(e => takes(take, e)).map(e => `${file}\n${entryKey(e)}`))
+  for (const k of [...firstSeen.keys()]) if (k.startsWith(`${file}\n`) && !keys.has(k)) firstSeen.delete(k)
+  for (const k of keys) if (!firstSeen.has(k)) firstSeen.set(k, now)
+  const ready = new Set([...keys].filter(k => now - (firstSeen.get(k) ?? now) >= COURIER_GRACE_MS))
+  if (ready.size === 0) return
+
+  const lockPath = `${file}.lock`
+  if (!(await lock($, lockPath, now))) return
+  let aside: string | undefined
+  try {
+    const entries = parse(await readOrEmpty($, file))
+    if (entries === undefined) return
+    const isTaken = (e: unknown) => takes(take, e) && ready.has(`${file}\n${entryKey(e)}`)
+    const taken = entries.filter(isTaken)
+    if (taken.length === 0) return
+    const candidate = asideOf(file, now, ++nonce)
+    if (!(await replace($, candidate, `${JSON.stringify(taken, null, 2)}\n`))) return
+    if (!(await replace($, file, JSON.stringify(entries.filter(e => !isTaken(e)), null, 2)))) {
+      // The inbox still holds them: drop our copy rather than deliver twice.
+      await fileOp($, { op: 'remove', path: candidate })
+      return
+    }
+    for (const e of taken) firstSeen.delete(`${file}\n${entryKey(e)}`)
+    aside = candidate
+  } finally {
+    await fileOp($, { op: 'unlock', path: lockPath })
+  }
   await drainAside($, source, file, aside, archivePath)
 }
 
@@ -237,7 +355,7 @@ async function deliverPending($: EngineInterface, files: readonly string[]): Pro
       refusalTold = false
       events = rest
       if (events.length > 0) await replace($, path, `${JSON.stringify(events, null, 1)}\n`)
-      else await run($, ['rm', '-f', '--', path])
+      else await fileOp($, { op: 'remove', path })
     }
   }
 }
@@ -245,7 +363,8 @@ async function deliverPending($: EngineInterface, files: readonly string[]): Pro
 /** Drains every source into pending files; returns them all, in source order, oldest first. */
 async function drainAll($: EngineInterface, home: string, conf: string): Promise<string[]> {
   const pending: string[] = []
-  const userHome = (await $.env.get('HOME')) ?? ''
+  // Windows has USERPROFILE, and HOME only where something set it.
+  const userHome = (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')) ?? ''
   for (const spec of sourcesOf(conf)) {
     const source = parseSource(spec)
     if (typeof source === 'string') {
@@ -331,6 +450,7 @@ async function tick($: EngineInterface, settings: Settings): Promise<void> {
   polling = true
   try {
     const home = await homeOf($, settings)
+    homeHint = home
     const conf = await readOrEmpty($, `${home}/memory-kit.conf`)
     await deliverPending($, await drainAll($, home, conf))
     if (settings.retireOnIdle) await idleCheck($, settings, conf)
