@@ -7,16 +7,28 @@ moves between releases).
 
 It has two jobs, both on one timer (`pollSeconds`, default 5):
 
-1. **Idle-safe notifications.** It drains the sources the home declares and delivers each item
-   with `$.prompt.submit`. The prompt queues until the session is idle and then starts a turn of
-   its own, marked as coming from the plugin.
+1. **Idle-safe notifications.** It drains the sources the home declares and delivers what each
+   poll found as one prompt, with `$.prompt.submit`. The prompt queues until the session is idle
+   and then starts a turn of its own, marked as coming from the plugin.
 2. **Checkpoint and retire on idle**, behind `retireOnIdle` (default off). An idle session whose
    context has grown is asked, once, to run its close routine and then the home's own retire step.
 
+**What it costs: every delivered prompt is a full turn** (kit #17). The turn carries the
+session's whole context, so on a long session one prompt costs hundreds of thousands of input
+tokens, even when it says nothing new. An item that wakes an idle session costs the same.
+
+- One poll's items go as **one** prompt (since kit alpha.14), at most 20 to a prompt; see
+  Draining. A burst of five mails is one turn, not five.
+- Still, every source is a standing bill. Declare only what the session must act on, and keep
+  chatty feeds (status pings, logs) out of `watch_sources`.
+- One drain per home: a second session in the same home, and a session started outside a home
+  that only the `home` option names, deliver nothing (see "One drain per home").
+
 ## Sources
 
-They are declared per home in `<home>/memory-kit.conf`. `<home>` is the `home` option, else the
-directory the session started in. The lint ignores keys it does not know.
+They are declared per home in `<home>/memory-kit.conf`. `<home>` is the home a `kit_home`
+pointer in the start folder's conf names (see below), else the `home` option, else the directory
+the session started in. The lint ignores keys it does not know.
 
 ```yaml
 watch_sources:
@@ -88,16 +100,29 @@ The mod reads both but changes neither.
 3. **Archive** the aside's content. Its events go into a pending file beside it
    (`.watch-pending-…`), and then the aside is removed. The archive and the pending file are
    each written through a temporary and a rename, so a crash never leaves half of either.
-4. **Deliver** the pending events, oldest first, one at a time:
-   - Each `$.prompt.submit` is awaited, and its event leaves the pending file only once the
-     submit was accepted.
+4. **Deliver** the pending events, oldest first, **as one prompt** (kit #17):
+   - A single event goes as it is. Several go one per line under a count line, each line still
+     under its own `[prefix]`:
+
+     ```text
+     [watch] 3 items, oldest first:
+     [lelle] from=pepys id=a1 subject=...
+     [hub mail] from po-team [2026-10-14T08:00:00Z]: ...
+     [lelle] from=hr2 id=c3 subject=...
+     ```
+
+   - At most 20 events go in one prompt (about 9 KB at 450 characters each). A longer burst
+     goes as several prompts, in order.
+   - Each `$.prompt.submit` is awaited, and the batch's events leave their pending files only
+     once the submit was accepted.
    - A submit resolves when its turn starts, so in a busy session the delivery pass waits for
      it. Polls are single-flight: a poll tick that finds one running does nothing, so nothing is
-     sent twice and the order holds. New mail waits in its inbox until that turn starts.
-   - A crash between an accepted submit and the rewrite can deliver that one event again, but
-     none is ever lost.
+     sent twice and the order holds. New mail waits in its inbox until that turn starts, and
+     whatever has gathered by then goes as the next prompt.
+   - A crash between an accepted submit and the rewrite can deliver that one batch again, but
+     nothing is ever lost.
 5. **On a refusal**, for example another plugin's `prompt.submit` hook dropping it:
-   - The event stays pending, and the pass stops so the order holds.
+   - The batch stays pending, whole, and the pass stops so the order holds.
    - Retries back off: 1 min, then doubling, at most 30 min.
    - The human gets one notice per streak of refusals, saying how many items wait, where, and
      why.
@@ -110,6 +135,146 @@ stays aside, never lost.
 **Long items.** No event is over 450 characters, because the harness cuts long lines. A longer
 item arrives as
 `[prefix] <head> (long: N chars, full text in <archive>): <preview>…`.
+
+## One drain per home (kit #17)
+
+Two sessions draining one home split its items between them: each item goes to whichever
+session polled first, and it is a full turn there. Two guards keep one drain per home:
+
+1. **The `home` option counts only inside that home.** The option is set at user scope, so it
+   applies to every session on the machine (FR's warning, the pepys desk). A session whose start
+   folder is not the home or below it drains nothing. It gets one notice that names a
+   `kit_home` pointer conf as the way to watch a home from another folder. A pointer, or a
+   session started in the home itself, is not affected. Paths are compared after `.` and `..`
+   are resolved, and without case for a drive-letter or UNC path. Symlinks are not followed.
+2. **One session per home: a claim in `$.store`** (`drain:<home>`), as kit-update claims a
+   release:
+   - The first session to poll a home with sources writes `{ session, cwd, at }`, reads it back
+     at once, and drains only if it is still its own. Of two sessions taking a free home at
+     once, the last writer drains.
+   - The holder refreshes the claim every poll tick, also while its delivery waits for a busy
+     turn.
+   - It lets go when its session ends (`session.end`; a `/clear` too), and the next session to
+     poll takes the home over. A claim not refreshed for 60 s (or 3 polls, if longer) is a
+     session gone, and is taken over too.
+   - Any other session drains nothing and delivers nothing from that home, including pending
+     files. It gets one notice naming the holder's start folder.
+   - Mail waits in its source meanwhile; nothing is lost.
+
+`/watch` says which session drains the home: `drained by this session`, `drained by another
+session in <folder>`, or why not here.
+
+- **Checked live** (2026-10-14, 2.1.299, three throwaway sessions on one `--plugin-dir`):
+  - The store is shared across processes: the second session saw the first one's claim at
+    once and gave its notice.
+  - New mail went to the first session only.
+  - When the first session exited, the second took the home over at its next poll, and the
+    next mail went there.
+  - A session started outside the home, with the `home` option naming it, gave the notice and
+    drained nothing.
+- **The store is per install.** A `--plugin-dir` copy and `watch@memory-kit` keep separate
+  stores, so they do not see each other's claims. Load one of them per machine.
+  (`[unverified]` whether two marketplace installs of one version share one store.)
+
+## A remote hub: a spool fed by a peek-only poller (kit #16)
+
+The watch reads local files only, and it never touches a hub. For mail on a remote hub, such as
+Lelle's stationmaster reached with `evr-mail recv`, a poller peeks at the hub and appends one line
+per new item to a local spool. The home declares that spool as a `lines` source:
+
+```yaml
+watch_sources:
+  - "lelle | lines | inbound/lelle-spool.txt"
+```
+
+Each line arrives as `[lelle] from=… id=… subject=…`. The session then collects and acks the mail
+with its own `recv`, after recording it. **Custody stays with the session**: the poller only
+looks, and the watch only delivers the line.
+
+`spool/spool-poll.py` (Python 3, stdlib only) is the poller, generic over the command. It is
+built from the fleet's `lelle-watch.py --spool` rules (pepys desk, semafor, hr2):
+
+```sh
+python3 memory-kit/adapters/claude-code/watch/spool/spool-poll.py \
+  --spool inbound/lelle-spool.txt \
+  --match '^--- \d+/\d+\s+from=(?P<from>\S+)\s+id=(?P<id>\S+)(?:\nsubject: (?P<subject>.*))?' \
+  --line 'from={from} id={id} subject={subject}' --healthy '^collected' \
+  -- python3 tools/evr-mail.py recv --peek
+```
+
+- **Peek only.** The command after `--` must only look (`recv --peek`), never collect or ack.
+  The poller cannot check that: it is the home's choice of command.
+- **Items.** Each match of `--match` in the command's output (a Python regex, multiline) is one
+  item, keyed by its named group `id`. `--line` writes the spool line from the named groups; an
+  absent group is empty. Without `--line`, the line is the match itself, on one line. A line
+  never holds a line break.
+- **Each item once.** Seen ids persist in `.<stem>-seen.json` beside the spool (the last 500,
+  `--keep`). So a peeked but uncollected item is not spooled again, across restarts too. The
+  line is written before its id is recorded: a crash between the two spools an item twice,
+  never loses one.
+- **Health.** A run fails when the command cannot start, times out (`--timeout`, 90 s), exits
+  non-zero, or prints nothing matching `--healthy`. After 3 failures in a row (`--tolerate`), the
+  spool gets one `health: <why>` line, then at most one per 30 min (`--health-every`) while the
+  failures go on, and `health: recovered` once a run succeeds. A brief flap writes nothing.
+  Each health line is a delivered item, so a full turn.
+- **Every 30 s** (`--every`). The spool is opened per write, so the watch can drain it by
+  renaming it aside, and the next write makes it again.
+- **One poller per spool.** It holds `.<stem>.lock` beside the spool and writes its pid there.
+  The lock is `flock` on POSIX, the same lock the `flock` command takes, and `msvcrt` on Windows.
+  A second poller finds the lock held, says so and exits 0. The default names (`.lelle-spool.lock`,
+  `.lelle-spool-seen.json`, `.lelle-spool.log`) are the ones the fleet's poller already uses.
+- `--once` polls once and exits, for a scheduler. Bad usage exits 2.
+- **The race it cannot close.** A line written in the instant between the watch's rename of the
+  spool and its read of the aside lands in the aside after the read, and is not delivered.
+  The write is a single call made microseconds after the open, while the watch's rename and
+  read are separate host calls milliseconds apart, so this is not expected in practice
+  (`[speculative]`). The mail is still on the hub, uncollected, for the session's next `recv`.
+
+**Keep-alive: a SessionStart hook.** `--keep-alive` makes sure one poller runs for the spool and
+returns at once. If a poller holds the lock, it exits 0. Otherwise it starts one detached, in its
+own session (`setsid`) with its output in `.<stem>.log`, and exits 0. It never blocks the session.
+The detached poller outlives the session that started it, so one poller serves every session
+of the home. Put it in the home's `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "sh \"$CLAUDE_PROJECT_DIR/tools/lelle-spool-start.sh\"" } ] }
+    ]
+  }
+}
+```
+
+The script holds the poller's command line, so the regex is quoted once, by `sh`:
+
+```sh
+#!/bin/sh
+# tools/lelle-spool-start.sh: one Lelle spool poller for this home (kit #16).
+cd "$CLAUDE_PROJECT_DIR" || exit 0
+exec python3 memory-kit/adapters/claude-code/watch/spool/spool-poll.py --keep-alive \
+  --spool inbound/lelle-spool.txt \
+  --match '^--- \d+/\d+\s+from=(?P<from>\S+)\s+id=(?P<id>\S+)(?:\nsubject: (?P<subject>.*))?' \
+  --line 'from={from} id={id} subject={subject}' --healthy '^collected' \
+  -- python3 tools/evr-mail.py recv --peek
+```
+
+- **POSIX** (Linux, macOS): this replaces the `flock -n … setsid nohup …` hook (semafor's). It
+  uses no `flock` or `setsid` commands, which macOS lacks, and it takes the same lock, so an
+  old poller still running blocks a new one.
+- **Windows** (`[unverified]`: the tests run on Linux): `--keep-alive` starts the poller with
+  `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`, and asks to break away from the hook's job
+  object, without that if the job refuses. The hook command runs under Git Bash or PowerShell
+  as the harness runs hooks there; `python` may be the name instead of `python3`. Until a desk
+  confirms that the poller outlives the session that started it, starting it by hand each
+  session (as the desk does today) is the safe course.
+- **Stopping it:** kill the pid in `.<stem>.lock`.
+- **Checked live** (2026-10-14, 2.1.299, a throwaway home with a fake `recv --peek`):
+  - The SessionStart hook fired with `CLAUDE_PROJECT_DIR` set and the home as its working
+    directory.
+  - `--keep-alive` started one detached poller. A second session's start started none.
+  - The poller outlived the session that started it.
+  - Three mails peeked in one poll arrived as one `[watch] 3 items` prompt.
 
 ## Checkpoint and retire on idle
 
@@ -142,10 +307,36 @@ The five guards (PO comment on #9, 2026-10-14). Each has its own tests:
 A notice goes through `$.ui.notify`. Where that shows no text (no channel, as in tmux, or a bare
 bell), it also goes to the transcript as a dim line.
 
+## A session outside its home: `kit_home` (kit #18)
+
+**User-scope options apply to every session on the machine.** That covers `home` set in the
+user's settings, not only the home's own sessions. On the pepys desk a user-wide `home` made
+every session on the box drain the desk's spool, and six notifications were lost. Use a pointer
+conf instead: put this in the folder the session starts in:
+
+```yaml
+kit_home: ../desk        # absolute, or relative to this conf's own folder
+```
+
+- **What counts:** the home it names. That home's `memory-kit.conf` counts (`watch_sources`, `watch_retire_step`), with paths
+  relative to that home, and so does its `memory-kit/VERSION`. Other keys left in the pointer
+  conf are ignored, and `watch_sources` left there are a visible notice.
+- **Precedence:** the start folder's pointer first. It wins over the user-scope `home` option. Then
+  the option, then the start folder itself.
+- **One hop, never chained.** If the target's own conf points on, that is refused, and so is a
+  loop. `kit_home: .` is just the home.
+- **Absolute paths:** POSIX, a drive letter (`C:\` or `C:/`) or UNC. `~` is not expanded: write
+  the path absolute or relative to the conf.
+- **Never silent:** a target with no `memory-kit.conf`, a chained pointer or a `~` path is one visible notice (notify, else a transcript line), and the watch drains nothing. It never falls back to the start folder. `/watch` names the home and the pointer.
+- The lint and the tools follow the same pointer (`lint/kit_home.py`). This plugin's copy of the
+  rules is `hooks/kit-home.ts`, identical in all three plugins; `lint/run-fixtures.sh` fails when
+  the copies differ.
+
 ## Options (`userConfig`)
 
 - `home`: the kit home whose `memory-kit.conf` declares the sources. Empty: the session's start
-  directory.
+  directory. **Set user-wide, it applies to every session on the machine**: prefer a `kit_home`
+  pointer conf (above), which also wins over this option.
 - Setting options from a shell: `claude plugin configure watch@memory-kit --values-stdin` takes
   a JSON object of **strings only**, e.g. `{"pollSeconds": "5", "retireOnIdle": "false"}`;
   bare numbers and booleans are refused (found by mvox, 2026-10-14).
@@ -275,7 +466,8 @@ aside, taking teammate messages away from the harness. A source with modifiers w
   - odd file names: pass;
   - a missing path under `Stop` fails the remove, which 0.2.2 fixes.
 - **Speed.** One call costs 200 to 280 ms warm and 0.5 to 1.5 s cold. A drain of n items makes
-  4 + n calls, so a single hub message costs about 1 to 1.5 s warm, spread over one poll.
+  5 calls (4 + one per batch of up to 20), so a single hub message costs about 1 to 1.5 s warm,
+  spread over one poll.
   - A shared inbox adds 2 calls (lock and unlock) and a temp-file rename.
   - The poll is single-flight, so a slow call delays the next poll and never overlaps it.
 - **Still unverified on Windows** (part 1, as reported to the watch):
@@ -290,7 +482,8 @@ aside, taking teammate messages away from the harness. A source with modifiers w
 ## Limits
 
 - Do not drain one file from two places. Switch off the hub-drain Monitor for an inbox before
-  declaring it here: both rename aside, and both rewrite the same archive.
+  declaring it here: both rename aside, and both rewrite the same archive. The claim (One drain
+  per home) keeps two watch sessions apart, not a Monitor or a script.
 - The kaarel spool needs `kaarel-watch.sh` to append lines to the spool file instead of typing
   into tmux. That change belongs to the household.
 

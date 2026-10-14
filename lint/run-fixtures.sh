@@ -66,9 +66,25 @@ fi
 
 # Every file read and write in the kit's Python names its encoding (kit #13): with none, Windows
 # uses the locale code page (cp1257 on Estonian Windows) and crashes on the first UTF-8 letter.
-bare=$(grep -nE "\.(read_text|write_text)\(|[^a-z_]open\(" "$KIT"/lint/*.py "$KIT"/tools/*.py | grep -v 'encoding="utf-8"' || true)
+# The watch's spool poller (kit #16) runs on the Windows desks too. Popen is not open.
+bare=$(grep -nE "\.(read_text|write_text)\(|[^A-Za-z_]open\(" "$KIT"/lint/*.py "$KIT"/tools/*.py "$KIT"/adapters/claude-code/watch/spool/*.py | grep -v 'encoding="utf-8"' || true)
 if [ -n "$bare" ]; then
   fail=$((fail+1)); echo "NO ENCODING      file I/O without encoding=\"utf-8\":"; printf '%s\n' "$bare" | sed 's/^/    /'
+else
+  pass=$((pass+1))
+fi
+
+# The three plugins each carry a copy of the kit_home rules and their test (kit #18): a plugin
+# loads only its own folder. The copies must stay identical, or the plugins disagree on the home.
+AD="$KIT/adapters/claude-code"
+drift=
+for f in hooks/kit-home.ts tests/kit-home.test.ts; do
+  for p in obligations-pane kit-update; do
+    cmp -s "$AD/watch/$f" "$AD/$p/$f" || drift="$drift $p/$f"
+  done
+done
+if [ -n "$drift" ]; then
+  fail=$((fail+1)); echo "COPIES DIFFER    kit_home copies differ from watch/:$drift"
 else
   pass=$((pass+1))
 fi

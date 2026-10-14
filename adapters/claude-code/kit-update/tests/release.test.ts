@@ -92,15 +92,44 @@ describe('data steps: auto or manual', () => {
     '',
   ].join('\n')
 
-  test('no data step on every version between: auto', () => {
-    expect(stepCheck(UPGRADE, '0.1.0-alpha.12', '0.1.0-alpha.13')).toEqual({ manual: false })
-    expect(stepCheck(UPGRADE, '0.1.0-alpha.11', '0.1.0-alpha.13')).toEqual({ manual: false })
+  const RELEASES = ['v0.1.0-alpha.11', 'verified/v0.1.0-alpha.11', 'v0.1.0-alpha.12', 'v0.1.0-alpha.13', 'v0.1.0-alpha.14', 'nightly']
+
+  test('no data step on every hop between: auto', () => {
+    expect(stepCheck(UPGRADE, '0.1.0-alpha.12', '0.1.0-alpha.13', RELEASES)).toEqual({ manual: false })
+    expect(stepCheck(UPGRADE, '0.1.0-alpha.11', '0.1.0-alpha.13', RELEASES)).toEqual({ manual: false })
   })
 
-  test('a data step anywhere between, a missing step, or a new major: manual', () => {
-    expect(stepCheck(UPGRADE, '0.1.0-alpha.12', '0.1.0-alpha.14')).toEqual({ manual: true, reason: 'a data step in 0.1.0-alpha.13 -> 0.1.0-alpha.14' })
-    expect(stepCheck(UPGRADE, '0.1.0-alpha.14', '0.1.0-alpha.15')).toEqual({ manual: true, reason: 'UPGRADE.md has no step for 0.1.0-alpha.15' })
-    expect(stepCheck(UPGRADE, '0.1.0-alpha.13', '1.0.0')).toEqual({ manual: true, reason: 'a new major version' })
+  test('a data step on any hop, or a new major: manual', () => {
+    expect(stepCheck(UPGRADE, '0.1.0-alpha.12', '0.1.0-alpha.14', RELEASES)).toEqual({ manual: true, reason: 'a data step in 0.1.0-alpha.13 -> 0.1.0-alpha.14' })
+    expect(stepCheck(UPGRADE, '0.1.0-alpha.13', '1.0.0', [...RELEASES, 'v1.0.0'])).toEqual({ manual: true, reason: 'a new major version' })
+  })
+
+  // Ultrareview alpha.13, finding 3: the plugin must refuse what tools/kit-update.py refuses.
+  test('every consecutive release needs its own entry, as the script requires', () => {
+    // An entry that spans alpha.11 -> alpha.13 does not cover the alpha.12 release in between.
+    const spanning = '- **0.1.0-alpha.11 -> 0.1.0-alpha.13:** no data step.\n'
+    expect(stepCheck(spanning, '0.1.0-alpha.11', '0.1.0-alpha.13', RELEASES)).toEqual({
+      manual: true,
+      reason: 'UPGRADE.md has no entry for 0.1.0-alpha.11 -> 0.1.0-alpha.12',
+    })
+    expect(stepCheck(UPGRADE, '0.1.0-alpha.14', '0.1.0-alpha.15', [...RELEASES, 'v0.1.0-alpha.15'])).toEqual({
+      manual: true,
+      reason: 'UPGRADE.md has no entry for 0.1.0-alpha.14 -> 0.1.0-alpha.15',
+    })
+  })
+
+  test("the hop from the home's own version is checked even when its tag is gone upstream", () => {
+    const md = '- **0.1.0-alpha.12 -> 0.1.0-alpha.14:** no data step.\n'
+    expect(stepCheck(md, '0.1.0-alpha.13', '0.1.0-alpha.14', ['v0.1.0-alpha.12', 'v0.1.0-alpha.14'])).toEqual({
+      manual: true,
+      reason: 'UPGRADE.md has no entry for 0.1.0-alpha.13 -> 0.1.0-alpha.14',
+    })
+  })
+
+  test('an entry must begin "no data step", as the script reads it', () => {
+    const md = '- **0.1.0-alpha.12 -> 0.1.0-alpha.13:** Pull, lint; no data step needed after the rename.\n'
+    expect(stepCheck(md, '0.1.0-alpha.12', '0.1.0-alpha.13', RELEASES)).toEqual({ manual: true, reason: 'a data step in 0.1.0-alpha.12 -> 0.1.0-alpha.13' })
+    expect(stepCheck('- **0.1.0-alpha.12 -> 0.1.0-alpha.13:**  No data step.\n', '0.1.0-alpha.12', '0.1.0-alpha.13', RELEASES)).toEqual({ manual: false })
   })
 })
 

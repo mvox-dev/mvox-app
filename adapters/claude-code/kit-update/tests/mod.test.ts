@@ -84,12 +84,86 @@ describe('a newer release on the home channel (kit #15)', () => {
     expect(world.submitted[0]).not.toContain('Run `python3')
   })
 
+  test('an intermediate release with no UPGRADE.md entry: "manual upgrade needed", as the script would refuse', async ($, on) => {
+    const world = homeOn(on, 'latest')
+    world.files.set(`${CWD}/memory-kit/VERSION`, '0.1.0-alpha.11\n')
+    world.tags = ['v0.1.0-alpha.13', 'v0.1.0-alpha.12', 'v0.1.0-alpha.11']
+    world.upgrade = { 'v0.1.0-alpha.13': '- **0.1.0-alpha.11 -> 0.1.0-alpha.13:** no data step.\n' }
+    const clock = mock.clock(on, { now: NOW })
+    await start($, clock)
+    expect(world.submitted).toHaveLength(1)
+    expect(world.submitted[0]).toContain('manual upgrade needed (UPGRADE.md has no entry for 0.1.0-alpha.11 -> 0.1.0-alpha.12)')
+  })
+
   test('a home already on the newest release: nothing', async ($, on) => {
     const world = homeOn(on, 'latest')
     world.files.set(`${CWD}/memory-kit/VERSION`, '0.1.0-alpha.13\n')
     const clock = mock.clock(on, { now: NOW })
     await start($, clock)
     expect(world.submitted).toEqual([])
+  })
+})
+
+describe('kit_home: the start folder points at the home (kit #18)', () => {
+  const DESK = '/home/u/desk'
+  /** Upstream as homeOn has it, the start folder a pointer, the desk the home. */
+  const pointed = (on: Parameters<typeof worldOf>[0], deskFiles: Record<string, string>, startConf = 'kit_home: ../desk\n') => {
+    const world = worldOf(on, { 'memory-kit.conf': startConf, ...Object.fromEntries(Object.entries(deskFiles).map(([k, v]) => [`${DESK}/${k}`, v])) })
+    world.tags = ['v0.1.0-alpha.13', 'verified/v0.1.0-alpha.13', 'v0.1.0-alpha.12', 'verified/v0.1.0-alpha.12']
+    world.upgrade = { 'v0.1.0-alpha.13': UPGRADE }
+    return world
+  }
+  const DESK_HOME = { 'memory-kit/VERSION': '0.1.0-alpha.12\n', 'memory-kit.conf': 'update: verified\n' }
+
+  test("the channel and the version come from the home it names; the prompt names that home", async ($, on) => {
+    const world = pointed(on, DESK_HOME)
+    const clock = mock.clock(on, { now: NOW })
+    await start($, clock)
+    expect(world.submitted).toHaveLength(1)
+    expect(world.submitted[0]).toContain(`kit-update.py '${DESK}'`)
+  })
+
+  test('the pointer wins over a user-scope home option', { options: { home: '/home/u/elsewhere' } }, async ($, on) => {
+    const world = pointed(on, DESK_HOME)
+    world.files.set('/home/u/elsewhere/memory-kit.conf', 'update: pinned\n')
+    world.files.set('/home/u/elsewhere/memory-kit/VERSION', '0.1.0-alpha.12\n')
+    const clock = mock.clock(on, { now: NOW })
+    await start($, clock)
+    expect(world.submitted).toHaveLength(1)
+  })
+
+  test('a broken pointer: one visible notice, no request', async ($, on) => {
+    const world = pointed(on, {}, 'kit_home: ../nowhere\n')
+    const clock = mock.clock(on, { now: NOW })
+    await start($, clock)
+    await clock.advance(2 * HOUR)
+    expect(world.requests).toEqual([])
+    expect(world.notified).toEqual([expect.stringContaining('no memory-kit.conf there')])
+  })
+
+  test('a pointed home without memory-kit/VERSION: one visible notice, no request', async ($, on) => {
+    const world = pointed(on, { 'memory-kit.conf': 'update: verified\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await start($, clock)
+    await clock.advance(2 * HOUR)
+    expect(world.requests).toEqual([])
+    expect(world.notified).toEqual([expect.stringContaining(`${DESK} has no memory-kit/VERSION`)])
+  })
+
+  test('update: left in a pointer conf is ignored, and said so', async ($, on) => {
+    const world = pointed(on, { ...DESK_HOME, 'memory-kit.conf': 'update: pinned\n' }, 'kit_home: ../desk\nupdate: latest\n')
+    const clock = mock.clock(on, { now: NOW })
+    await start($, clock)
+    expect(world.requests).toEqual([])
+    expect(world.notified).toEqual([expect.stringMatching(/update .*ignored.*desk\/memory-kit\.conf/)])
+  })
+
+  test('/kit-update names the home and the pointer', async ($, on) => {
+    pointed(on, DESK_HOME)
+    const clock = mock.clock(on, { now: NOW })
+    await start($, clock)
+    const { text } = await $.command.run({ command: 'kit-update', args: '', origin: { kind: 'composer' } } as never)
+    expect(text).toContain(`this home: 0.1.0-alpha.12 (${DESK}, by kit_home in ${CWD}/memory-kit.conf)`)
   })
 })
 

@@ -1,6 +1,98 @@
 # Changelog
 
-## Unreleased
+## v0.1.0-alpha.14 -- 2026-10-14 -- the pointer home, one drain per home, ultrareview fixes
+
+Plugin versions this release: watch 0.3.0, obligations-pane 0.4.0, kit-update 0.2.0.
+The kit_home pointer was checked live before release: a pointer-only start folder, the watch
+draining through it in under 5 s, the pane showing the pointed home's VERSION and rows, and a
+bad source format or obligations key reported in-session, never swallowed.
+
+Known trap, found in that live test: **two enabled plugins with the same name (e.g. a released
+and a branch copy from differently named marketplaces) collide silently** -- only the user-scope
+copy's mods run. Disable one copy before testing the other.
+
+- **`kit_home:` in memory-kit.conf names the kit home** (#18, from the pepys desk).
+  - A folder that is not the home holds a pointer conf, `kit_home: ../desk` (absolute, or relative
+    to that conf's folder), instead of setting a plugin's `home`/`memoryDir` for every session on
+    the machine.
+  - The pointer is followed one hop, never chained; a loop is refused, and `kit_home: .` is just
+    the home. A target with no `memory-kit.conf`, or a `~` path, is a problem said plainly, never
+    a silent fall back.
+  - The home's own conf counts: `memory_dir` (relative to the home), `update:`, `upstream:`,
+    `watch_sources`, mode. The pointer conf's other keys are ignored and reported.
+  - The lint, `tools/kit-update.py` and `tools/obligations-due.py` follow it (`lint/kit_home.py`).
+    A pointer-only conf passes the lint when its home does. Fixtures `valid/kit-home-pointer`,
+    `invalid/kit-home-chained`, `invalid/kit-home-no-conf`. `lesson-index.py` takes a memory
+    directory, not a home, so it has nothing to follow.
+  - All three plugins follow it the same way (`hooks/kit-home.ts`, one identical copy each; the
+    fixture run fails when the copies differ). The start folder's pointer wins over the user-scope
+    `home` (watch, kit-update) and `memoryDir` (pane), which the READMEs now say apply to every
+    session on the machine. A broken pointer is visible in each: a notice (watch, kit-update),
+    the pane's body (pane). A pointed home without VERSION shows `memory-kit ?` (pane), or is a
+    notice (kit-update). Keys left in a pointer conf that a plugin reads are reported as ignored.
+- **The watch delivers one prompt per poll** (#17, context load). Every delivered prompt is a
+  turn carrying the session's whole context, so a burst of N items used to cost N full turns.
+  What one poll drained now goes as one prompt: a single item as before, several one per line
+  under `[watch] N items, oldest first:`, at most 20 to a prompt. Custody is unchanged: the batch
+  leaves its pending files only once the submit was accepted; a refusal keeps it whole; a crash
+  can repeat one batch, never lose one. The README now states the cost of every delivered
+  prompt plainly.
+- **One drain per home** (#17, FR's warning). Two guards:
+  - The `home` option counts only for a session started inside that home. It applies to every
+    session on the machine, so it no longer makes them all drain one home's sources. A session
+    outside the home gets one notice naming the `kit_home` pointer. Behaviour change: a home
+    watched from another folder through the option alone now needs the pointer.
+  - One session per home through a `$.store` claim (`drain:<home>`), as kit-update claims a
+    release. The claim is read back at once (the last writer wins), refreshed every poll tick
+    (also while a delivery waits for a busy turn), let go at `session.end`, and taken over when
+    60 s stale. Other sessions in the home deliver nothing from it and get one notice naming the
+    holder. `/watch` says who drains.
+  - Checked live: the store is shared across processes, and the takeover works when the holder
+    exits.
+- **A remote hub feeds the watch through a peek-only spool poller** (#16, the fleet's Lelle
+  pattern). New `adapters/claude-code/watch/spool/spool-poll.py` (stdlib only), generic over the
+  command:
+  - It runs a peek-only command every 30 s and appends one line per new item to a spool, which
+    the home declares as a `lines` source. The command is e.g. `evr-mail recv --peek`; items are
+    matched by a regex with a named `id` group, and the line is written from a template.
+  - It keeps a seen-id set (the last 500), and writes one `health:` line after 3 failures in a row,
+    then at most one per 30 min, then `health: recovered`.
+  - One poller per spool, through a lock beside it (the `flock` lock).
+  - `--keep-alive` is for a SessionStart hook: it starts one detached poller unless one runs, and
+    returns at once. It needs no `flock`/`setsid` commands; the Windows path is untested.
+  - The README documents the pattern, the hook, and that custody stays with the session's own
+    `recv`.
+  - Tests: `spool-poll-test.py` (unittest, no network; it starts a real detached poller with a
+    fake peek and stops it again). Checked live: the SessionStart hook fired, one poller ran for
+    two sessions and outlived the first, and three mails arrived as one prompt.
+
+Fixes from the ultrareview of main at v0.1.0-alpha.13 (to ship in alpha.14):
+
+- **Lesson summary cut by ` #`** (finding 2). `link-a-ticket-with-a-url-file.md`'s unquoted
+  summary held ` #123)`, which YAML reads as a comment, so the index carried "Make a ticket key
+  (Jira VEO-214, issue". The summary is quoted and the index regenerated. New lint check: a lesson
+  summary whose plain value holds ` #` fails, read from the raw front matter (the parsed value has
+  already lost it). Fixture `invalid/lesson-unquoted-hash`. Only `summary`: the short fields may
+  carry a deliberate trailing comment, which raw text cannot tell from a cut value.
+- **kit-update.py checks the hop from the home's own version** (finding 1). The step path was
+  built from upstream tags alone, so a home whose own tag is gone upstream skipped the check of
+  its first hop, and with one release left, every check. The path now always starts at the
+  home's current version; a missing UPGRADE.md entry for any hop refuses. New:
+  `tools/kit-update-test.py` (stdlib unittest, a fake `subprocess.run`, no network, no git).
+- **kit-update.py says when its undo fails** (finding 4). After a failed pull or lint gate, the
+  `git reset --hard` back to the start was not checked, and the tool always said "undone". Now
+  a failed reset says the tree may be partly pulled and how to recover (a stale `index.lock`,
+  then `git reset --hard <start>`), and exits **3**, a code of its own.
+- **kit-update.py bounds its network calls** (finding 5). `git fetch` and `git subtree pull` had
+  no timeout and could hang on a stalled remote. Both now stop at 300 s (`NETWORK_TIMEOUT`): a
+  timeout is a failure; a timed-out pull goes through the undo, and a timed-out fetch changes
+  nothing. git never waits on a credential prompt (`GIT_TERMINAL_PROMPT=0`).
+- **The kit-update plugin decides as the script does** (finding 3). Its auto/manual check
+  required only an UPGRADE.md entry ending at the target, so it could promise a run the script
+  then refused. It now walks the script's path (the home's version, always, then every release
+  tag up to the target) and needs an entry beginning "no data step" for each hop; otherwise
+  "manual upgrade needed (UPGRADE.md has no entry for A -> B)". The plugin's version is unchanged
+  (0.1.0); the household versions it with the release.
 
 ## v0.1.0-alpha.13 -- 2026-10-14 -- kit updates: channels, the tool, the plugin
 

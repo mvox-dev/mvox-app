@@ -5,7 +5,12 @@ import {
   asideOf,
   base64Utf16le,
   backoffMs,
+  BATCH_MAX,
+  batchPrompt,
   brake,
+  CLAIM_STALE_MS,
+  claimDecision,
+  claimKey,
   confValue,
   COURIER_GRACE_MS,
   decideRetire,
@@ -18,9 +23,11 @@ import {
   hubItems,
   isAsideOf,
   isHuman,
+  isInside,
   isPendingOf,
   lineItems,
   matchSegment,
+  normalPath,
   pathSegments,
   parseSource,
   pendingEvents,
@@ -446,5 +453,57 @@ describe('a shared inbox: take only courier mail, unread (kit #12)', () => {
     expect(decode(fileOpArgv('windows', { op: 'unlock', path: lock }))).toBe(
       `$ErrorActionPreference = 'Stop'; if (Test-Path -LiteralPath ${psQuote(lock)}) { Remove-Item -LiteralPath ${psQuote(lock)} -Force }`,
     )
+  })
+})
+
+describe('one prompt per poll (kit #17)', () => {
+  test('a single item goes as it is; several go as one prompt, one per line, under a count', () => {
+    expect(batchPrompt(['[lelle] from=a id=1 subject=x'])).toBe('[lelle] from=a id=1 subject=x')
+    expect(batchPrompt(['[lelle] one', '[hub mail] from po [t]: two', '[lelle] three'])).toBe(
+      '[watch] 3 items, oldest first:\n[lelle] one\n[hub mail] from po [t]: two\n[lelle] three',
+    )
+  })
+
+  test('a batch is bounded: each line under the event limit, at most BATCH_MAX lines', () => {
+    expect(BATCH_MAX).toBe(20)
+    expect(EVENT_LIMIT * BATCH_MAX).toBeLessThanOrEqual(10_000)
+  })
+})
+
+describe('one drain per home (kit #17)', () => {
+  test('paths compare with either separator, . and .. resolved, no trailing slash', () => {
+    expect(normalPath('/home/u/kit/../desk/')).toBe('/home/u/desk')
+    expect(normalPath('/home/u/./desk')).toBe('/home/u/desk')
+    expect(normalPath('C:\\Users\\m\\desk\\')).toBe('C:/Users/m/desk')
+    expect(normalPath('/')).toBe('/')
+  })
+
+  test('inside the home: the home itself or below it; a sibling with the same prefix is not', () => {
+    expect(isInside('/home/u/desk', '/home/u/desk')).toBe(true)
+    expect(isInside('/home/u/desk/sub', '/home/u/desk/')).toBe(true)
+    expect(isInside('/home/u/desk-two', '/home/u/desk')).toBe(false)
+    expect(isInside('/home/u', '/home/u/desk')).toBe(false)
+    expect(isInside('/home/u/kit', '/home/u/kit/../desk')).toBe(false)
+    expect(isInside('/home/u/desk/x', '/')).toBe(true)
+    // A drive-letter path is Windows: no case.
+    expect(isInside('c:\\users\\M\\Desk\\x', 'C:/Users/m/desk')).toBe(true)
+  })
+
+  const NOW = 1_000_000_000
+  test('one store key per home, the path normalised', () => {
+    expect(claimKey('/home/u/kit/')).toBe('drain:/home/u/kit')
+    expect(claimKey('/home/u/x/../kit')).toBe('drain:/home/u/kit')
+  })
+
+  test('no claim, a stale claim, or our own: this session drains', () => {
+    expect(claimDecision(undefined, 'me', NOW, CLAIM_STALE_MS)).toEqual({ drain: true })
+    expect(claimDecision('junk', 'me', NOW, CLAIM_STALE_MS)).toEqual({ drain: true })
+    expect(claimDecision({ session: 'other', cwd: '/o', at: NOW - CLAIM_STALE_MS - 1 }, 'me', NOW, CLAIM_STALE_MS)).toEqual({ drain: true })
+    expect(claimDecision({ session: 'me', cwd: '/h', at: NOW - 5 }, 'me', NOW, CLAIM_STALE_MS)).toEqual({ drain: true })
+  })
+
+  test("another session's fresh claim: this one does not drain, and is told who does", () => {
+    const holder = { session: 'other', cwd: '/h/sub', at: NOW - 10_000 }
+    expect(claimDecision(holder, 'me', NOW, CLAIM_STALE_MS)).toEqual({ drain: false, holder })
   })
 })

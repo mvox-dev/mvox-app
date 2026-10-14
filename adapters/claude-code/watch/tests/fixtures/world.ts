@@ -40,6 +40,12 @@ export type World = {
   clixml: boolean
   /** A lock the plugin takes is gone again at once: the harness broke it as stale. */
   lockVanishes: boolean
+  /** The plugin's $.store, as the engine keeps it: one JSON value per key, shared by every session. */
+  store: Map<string, unknown>
+  /** What $.session.id() answers. */
+  sessionId: string
+  /** Runs after each store write: another session writing just after the plugin. */
+  afterStoreSet: ((key: string) => void) | undefined
 }
 
 const abs = (path: string) => (path.startsWith('/') ? path : `${CWD}/${path}`)
@@ -82,8 +88,23 @@ export function worldOf(
     locks: new Map(),
     clixml: false,
     lockVanishes: false,
+    store: new Map(Object.entries(store)),
+    sessionId: 'sess-1',
+    afterStoreSet: undefined,
   }
-  mock.store(on, store)
+  // The store in memory, readable and writable by the test (another session's writes).
+  const copy = (v: unknown) => (v === undefined ? undefined : (JSON.parse(JSON.stringify(v)) as unknown))
+  on('store.get', ($, e) => ({ value: copy(world.store.get(e.key)) }))
+  on('store.set', ($, e) => {
+    world.store.set(e.key, copy(e.value))
+    world.afterStoreSet?.(e.key)
+    return { value: undefined }
+  })
+  on('store.delete', ($, e) => {
+    world.store.delete(e.key)
+    return { value: undefined }
+  })
+  on('store.keys', () => ({ value: [...world.store.keys()] }))
   mock.env(on, env)
   const isDir = (path: string) => world.locks.has(path) || [...world.files.keys(), ...world.locks.keys()].some(f => f.startsWith(`${path}/`))
 
@@ -194,6 +215,8 @@ export function worldOf(
   })
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('session.cwd', () => ({ value: CWD }))
+  on('session.id', () => ({ value: world.sessionId }))
+  on('session.end', ($, e) => ({ sessionId: e.sessionId }))
   on('session.usage', () => ({
     value: {
       startedAt: 0,
