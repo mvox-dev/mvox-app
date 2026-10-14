@@ -1,9 +1,9 @@
 {
   "name": "watch",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "memory-kit watch: delivers a home's declared inboxes into the session as prompts (idle-safe), and optionally asks an idle, grown session to checkpoint and retire",
   "author": {
-    "name": "Mihkel Putrinš"
+    "name": "Mihkel Putrin\u0161"
   },
   "types": "./types/index.d.ts",
   "userConfig": {

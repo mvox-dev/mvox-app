@@ -110,6 +110,17 @@ A major means data shape changed. The kit ships `migrations/<version>/` for exac
   a channel in `memory-kit.conf` (`update: pinned|verified|latest`; pinned is the default), and
   `claude plugin install kit-update@memory-kit` to be prompted when a release on it appears.
 
+- **0.1.0-alpha.13 -> 0.1.0-alpha.14:** no data step. Pull, lint, `/reload-plugins`, then `/watch` once:
+  it now names which session drains each home (one drain per home). Behaviour changes to know:
+  the watch delivers one prompt per poll (a burst arrives as one `[watch] N items` prompt), and
+  the user-scope `home` option no longer makes a session outside that home drain it -- a start
+  folder that is not the home needs a one-line pointer conf instead (`kit_home: <path>`, see the
+  skeleton conf). A home that kept `watch_sources`/`memory_dir` in a start folder's conf as a
+  workaround: once `kit_home` is added there, those keys are ignored with a notice -- move them
+  into the home's own conf. Plugin versions moved (watch 0.3.0, obligations-pane 0.4.0,
+  kit-update 0.2.0): `claude plugin marketplace update memory-kit`, then update each plugin or
+  reinstall, then `/reload-plugins`.
+
 ## Always
 
 - The home's config for the kit lives outside the subtree; a pull must never clobber it.

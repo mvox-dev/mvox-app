@@ -1,0 +1,76 @@
+// kit_home: a memory-kit.conf key naming the kit home (kit #18). Pure: the caller hands in how
+// to read a file.
+//
+// IDENTICAL in adapters/claude-code/{obligations-pane,watch,kit-update}/hooks/kit-home.ts: a
+// plugin loads only its own folder, so each carries a copy; lint/run-fixtures.sh fails when the
+// copies differ. The same rules for Python are lint/kit_home.py, with the same messages.
+//
+// If the start folder's memory-kit.conf says `kit_home: <path>` (absolute, or relative to that
+// conf's folder), the home is the folder it names: that home's conf, memory-kit/VERSION, memory
+// directory, update:/upstream: and watch_sources count, and the pointer conf's other keys are
+// ignored (reported in `ignored`). One hop, never chained: the target's conf may not point on (a
+// loop is a chain too). `kit_home: .` is just the home. A target with no memory-kit.conf, and a
+// `~` path (not expanded), are problems said plainly, never a silent fall back.
+
+export const KIT_HOME_KEY = 'kit_home'
+
+export type KitHome = { home: string; pointer?: string; ignored: string[] } | { problem: string; pointer: string }
+
+/** POSIX (/...), a drive letter (C:\ or C:/) or UNC (\\server\share). */
+export function isAbsolute(path: string): boolean {
+  return /^(\/|[A-Za-z]:[\\/]|\\\\)/.test(path)
+}
+
+/** `.` and `..` resolved, `/` as the separator, no trailing slash; a root (/, C:/, //server/share) kept. */
+export function normalizePath(path: string): string {
+  const unc = /^\\\\|^\/\//.test(path)
+  const drive = /^[A-Za-z]:[\\/]/.exec(path)?.[0].slice(0, 2)
+  const root = unc ? '//' : drive !== undefined ? `${drive}/` : path.startsWith('/') ? '/' : ''
+  const parts: string[] = []
+  for (const part of path.slice(unc ? 2 : drive !== undefined ? 3 : root.length).split(/[\\/]+/)) {
+    if (part === '' || part === '.') continue
+    if (part === '..' && parts.length > 0 && parts[parts.length - 1] !== '..') parts.pop()
+    else if (part !== '..' || root === '') parts.push(part)
+  }
+  return `${root}${parts.join('/')}` || '.'
+}
+
+const sameAs = (a: string, b: string) => {
+  const [x, y] = [normalizePath(a), normalizePath(b)]
+  return /^[A-Za-z]:\//.test(x) || x.startsWith('//') ? x.toLowerCase() === y.toLowerCase() : x === y
+}
+
+/** A top-level `key: value` of memory-kit.conf, a trailing comment and quotes stripped; '' when absent. */
+export function confValueOf(conf: string, key: string): string {
+  for (const line of conf.split(/\r?\n/)) {
+    if (!line.startsWith(`${key}:`)) continue
+    const raw = line.slice(key.length + 1)
+    const hash = raw.search(/\s#/)
+    return (hash === -1 ? raw : raw.slice(0, hash)).trim().replace(/^["']|["']$/g, '')
+  }
+  return ''
+}
+
+const topKeys = (conf: string) => conf.split(/\r?\n/).flatMap(line => /^([A-Za-z_][\w-]*):/.exec(line)?.[1] ?? [])
+
+/** The home for a start folder, by its memory-kit.conf's kit_home (see the head of this file). */
+export async function resolveKitHome(start: string, read: (path: string) => Promise<string | undefined>): Promise<KitHome> {
+  const from = normalizePath(start)
+  const pointer = `${from}/memory-kit.conf`
+  const conf = await read(pointer)
+  const raw = conf === undefined ? '' : confValueOf(conf, KIT_HOME_KEY)
+  if (raw === '') return { home: from, ignored: [] }
+  if (raw.startsWith('~'))
+    return { pointer, problem: `${pointer}: kit_home: ${raw} -- write it absolute or relative to this conf's folder (~ is not expanded)` }
+  const target = normalizePath(isAbsolute(raw) ? raw : `${from}/${raw}`)
+  if (sameAs(target, from)) return { home: from, ignored: [] }
+  const targetConf = await read(`${target}/memory-kit.conf`)
+  if (targetConf === undefined) return { pointer, problem: `${pointer}: kit_home: ${raw} -> ${target}: no memory-kit.conf there, so it is not a kit home` }
+  const onward = confValueOf(targetConf, KIT_HOME_KEY)
+  if (onward !== '' && !sameAs(isAbsolute(onward) ? onward : `${target}/${onward}`, target))
+    return {
+      pointer,
+      problem: `${pointer}: kit_home: ${raw} -> ${target}, whose own conf points on (kit_home: ${onward}); a pointer is followed one hop, never chained`,
+    }
+  return { home: target, pointer, ignored: topKeys(conf ?? '').filter(k => k !== KIT_HOME_KEY) }
+}

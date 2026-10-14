@@ -28,7 +28,8 @@ export type AgentLoad = { tokens: number; model: string }
 export type PaneSnapshot = {
   /** Absolute path of the obligations file this snapshot read (or looked for). */
   path: string
-  source: 'ok' | 'missing' | 'error'
+  /** 'pointer': the start folder's kit_home pointer is broken (kit #18); `error` says why, `path` is that conf. */
+  source: 'ok' | 'missing' | 'error' | 'pointer'
   /** For source 'error': what went wrong, with the line when known. */
   error: string
   items: ObligationRow[]

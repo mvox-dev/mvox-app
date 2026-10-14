@@ -135,23 +135,39 @@ export function upgradeUrl(upstream: string | undefined, version: string): strin
 // Auto or manual: UPGRADE.md's per-version steps, `- **A -> B:** ...`.
 
 /**
- * Whether going from `current` to `target` can run tools/kit-update.py: every per-version step
- * between them says "no data step", the target has a step, and the major is the same. Otherwise a
- * manual upgrade, with the reason. The script makes the same refusal; this only words the prompt.
+ * Whether going from `current` to `target` can run tools/kit-update.py, decided as the script
+ * decides it (its step_path and data_steps_ok), so the prompt never promises what the script
+ * refuses (ultrareview alpha.13, finding 3). The path is the home's current version, always (even
+ * when its tag is gone upstream), then every release tag in `releases` after it up to the target.
+ * Every hop A -> B needs its own UPGRADE.md entry `**A -> B:**` whose text begins "no data step";
+ * a missing entry, a data step, or a new major is a manual upgrade, with the reason. The script
+ * makes the same refusal; this only words the prompt.
  */
-export function stepCheck(upgradeMd: string, current: string, target: string): { manual: false } | { manual: true; reason: string } {
+export function stepCheck(
+  upgradeMd: string,
+  current: string,
+  target: string,
+  releases: readonly string[],
+): { manual: false } | { manual: true; reason: string } {
   const from = parseRelease(current)
   const to = parseRelease(target)
   if (from === undefined || to === undefined) return { manual: true, reason: 'a version that is not a release' }
   if (to.major !== from.major) return { manual: true, reason: 'a new major version' }
-  let reachesTarget = false
-  for (const m of upgradeMd.matchAll(/^- \*\*(\S+) -> (\S+):\*\*(.*)$/gm)) {
-    const step = parseRelease(m[2] ?? '')
-    if (step === undefined || compareRelease(step, from) <= 0 || compareRelease(step, to) > 0) continue
-    if (compareRelease(step, to) === 0) reachesTarget = true
-    if (!/no data step/i.test(m[3] ?? '')) return { manual: true, reason: `a data step in ${m[1]} -> ${m[2]}` }
+  const between = releases
+    .filter(name => name.startsWith('v'))
+    .map(name => parseRelease(name))
+    .filter((r): r is Release => r !== undefined && compareRelease(r, from) > 0 && compareRelease(r, to) < 0)
+    .sort(compareRelease)
+    .map(versionText)
+  const path = [current, ...new Set(between), target]
+  for (let i = 0; i + 1 < path.length; i++) {
+    const [a = '', b = ''] = [path[i], path[i + 1]]
+    const entry = upgradeMd.indexOf(`**${a} -> ${b}:**`)
+    if (entry === -1) return { manual: true, reason: `UPGRADE.md has no entry for ${a} -> ${b}` }
+    const text = upgradeMd.slice(entry + `**${a} -> ${b}:**`.length).split('\n')[0] ?? ''
+    if (!text.trimStart().toLowerCase().startsWith('no data step')) return { manual: true, reason: `a data step in ${a} -> ${b}` }
   }
-  return reachesTarget ? { manual: false } : { manual: true, reason: `UPGRADE.md has no step for ${target}` }
+  return { manual: false }
 }
 
 // ---------------------------------------------------------------------------------------------

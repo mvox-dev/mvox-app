@@ -322,6 +322,19 @@ export function formatEvent(prefix: string, item: Item, archive: string, limit =
   return `${head}${chars.slice(0, room).join('')}…`
 }
 
+/** Most items one prompt carries (kit #17): a burst of more goes as several prompts, in order. */
+export const BATCH_MAX = 20
+
+/**
+ * One prompt for what one poll delivers (kit #17): every delivered prompt is a turn carrying the
+ * session's whole context, so a burst of N items is one turn, not N. A single event goes as it
+ * is; several go one per line under a count, each line still `[prefix] ...`.
+ */
+export function batchPrompt(events: readonly string[]): string {
+  if (events.length === 1) return events[0] ?? ''
+  return [`[watch] ${events.length} items, oldest first:`, ...events].join('\n')
+}
+
 /** A prompt the human gave: typed, through Remote Control, or a Slack ping. */
 export function isHuman(origin: PromptOrigin): boolean {
   return origin.kind === 'composer' || origin.kind === 'bridge' || origin.kind === 'slack-ping'
@@ -478,4 +491,45 @@ function powershell(command: string): string[] {
 /** A path's segments for glob expansion, on either separator; a leading '' is the POSIX root. */
 export function pathSegments(path: string): string[] {
   return path.split(/[\\/]/)
+}
+
+// ---------------------------------------------------------------------------------------------
+// One drain per home (kit #17). Two sessions draining one home split its items between them,
+// and a user-scope `home` option made every session on the box drain one home's sources.
+
+/** A path with `\\` as `/`, `.` and `..` resolved, no trailing slash: for comparing, never for opening. */
+export function normalPath(path: string): string {
+  const out: string[] = []
+  const parts = path.replaceAll('\\', '/').split('/')
+  for (const [i, part] of parts.entries()) {
+    if (part === '.' || (part === '' && i > 0)) continue
+    if (part === '..' && out.length > 1) out.pop()
+    else if (part !== '..') out.push(part)
+  }
+  return out.length === 1 && out[0] === '' ? '/' : out.join('/')
+}
+
+/** Whether `dir` is `home` or lies inside it. A drive-letter or UNC path is Windows: no case. Symlinks are not followed. */
+export function isInside(dir: string, home: string): boolean {
+  const fold = (p: string) => (platformOfHome(p) === 'windows' ? p.toLowerCase() : p)
+  const d = fold(normalPath(dir))
+  const h = fold(normalPath(home))
+  return d === h || d.startsWith(h.endsWith('/') ? h : `${h}/`)
+}
+
+/** Who drains a home: the session holding its claim in $.store, refreshed every poll. */
+export type Claim = { session: string; cwd: string; at: number }
+
+/** A claim not refreshed for this long is a session gone: another may take the home over. */
+export const CLAIM_STALE_MS = 60_000
+
+/** The $.store key of a home's claim: one key per home, so a write for one never touches another. */
+export const claimKey = (home: string) => `drain:${normalPath(home)}`
+
+/** Whether this session drains the home now, given the home's claim record: yes unless another session holds it fresh. */
+export function claimDecision(record: unknown, me: string, now: number, staleMs: number): { drain: true } | { drain: false; holder: Claim } {
+  if (typeof record !== 'object' || record === null) return { drain: true }
+  const c = record as Partial<Claim>
+  if (typeof c.session !== 'string' || typeof c.at !== 'number' || c.session === me || now - c.at > staleMs) return { drain: true }
+  return { drain: false, holder: { session: c.session, cwd: typeof c.cwd === 'string' ? c.cwd : '?', at: c.at } }
 }

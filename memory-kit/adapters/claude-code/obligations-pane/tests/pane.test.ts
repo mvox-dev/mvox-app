@@ -128,6 +128,60 @@ describe('empty states', () => {
   })
 })
 
+describe('kit_home: the start folder points at the home (kit #18)', () => {
+  const DESK = '/home/desk'
+  const dates = async (ui: Parameters<typeof textOf>[0]) => (await textOf(ui)).filter(t => /^\d{4}-\d{2}-\d{2}$/.test(t))
+  const header = async (ui: Parameters<typeof textOf>[0]) => (await textOf(ui)).find(t => t.includes('expired'))
+  const desk = {
+    'memory-kit.conf': 'kit_home: ../desk\n',
+    [`${DESK}/memory-kit.conf`]: 'memory_dir: notes\n',
+    [`${DESK}/notes/obligations.yaml`]: WORKSHOP_YAML,
+    [`${DESK}/memory-kit/VERSION`]: '0.1.0-alpha.14\n',
+  }
+
+  test("the ledger and the version come from the home it names, with that home's memory_dir", async ($, on) => {
+    worldOf(on, desk)
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    expect(await dates(ui)).toHaveLength(6)
+    expect(await header(ui)).toBe('memory-kit 0.1.0-alpha.14  0 expired · 1 due ≤7d')
+    await ui.unmount()
+  })
+
+  test('the pointer wins over a user-scope memoryDir', { options: { memoryDir: '/srv/other/memory' } }, async ($, on) => {
+    worldOf(on, { ...desk, '/srv/other/memory/obligations.yaml': 'obligations: []\n' })
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    expect(await dates(ui)).toHaveLength(6)
+    await ui.unmount()
+  })
+
+  test('a broken pointer is shown in the pane, never the start folder instead', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': 'kit_home: ../nowhere\n', 'memory/obligations.yaml': WORKSHOP_YAML })
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    expect(world.opened).toEqual(['obligations'])
+    const ui = await mountPane($)
+    expect(await dates(ui)).toHaveLength(0)
+    expect((await textOf(ui)).some(t => t.startsWith('kit_home pointer broken: ') && t.includes('no memory-kit.conf there'))).toBe(true)
+    await ui.unmount()
+  })
+
+  test('a pointed home without memory-kit/VERSION shows "memory-kit ?" and asks upstream nothing', async ($, on) => {
+    const { [`${DESK}/memory-kit/VERSION`]: _, ...noVersion } = desk
+    const world = worldOf(on, noVersion)
+    world.answer = () => tagsAnswer('v0.1.0-alpha.15')
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    expect(await header(ui)).toBe('memory-kit ?  0 expired · 1 due ≤7d')
+    expect(world.requests).toEqual([])
+    await ui.unmount()
+  })
+})
+
 describe('the memoryDir option', () => {
   const dates = async (ui: Parameters<typeof textOf>[0]) =>
     (await textOf(ui)).filter(t => /^\d{4}-\d{2}-\d{2}$/.test(t))
