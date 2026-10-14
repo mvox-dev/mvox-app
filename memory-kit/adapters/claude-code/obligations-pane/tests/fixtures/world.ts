@@ -25,6 +25,8 @@ export type Agent = { id: string; name?: string; description: string; type: stri
 /** The world beneath the plugin, in memory: files, the session's figures, the agents. */
 export type World = {
   files: Map<string, string>
+  /** What $.session.cwd() answers now: a shell cd mid-session moves it. */
+  cwd: string
   model: string
   tokens: number | undefined
   window: number
@@ -40,6 +42,7 @@ const abs = (path: string) => (path.startsWith('/') ? path : `${CWD}/${path}`)
 export function worldOf(on: On, files: Readonly<Record<string, string>>): World {
   const world: World = {
     files: new Map(Object.entries(files).map(([p, t]) => [abs(p), t])),
+    cwd: CWD,
     model: 'claude-opus-5-5',
     tokens: 127_400,
     window: 1_000_000,
@@ -57,7 +60,7 @@ export function worldOf(on: On, files: Readonly<Record<string, string>>): World 
     const text = world.files.get(abs(e.path))
     return text === undefined ? { deny: `ENOENT: ${e.path}` } : { value: text }
   })
-  on('session.cwd', () => ({ value: CWD }))
+  on('session.cwd', () => ({ value: world.cwd }))
   on('session.model', () => ({ value: world.model }))
   on('session.usage', () => ({
     value: {

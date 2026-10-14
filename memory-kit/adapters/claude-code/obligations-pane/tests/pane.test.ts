@@ -422,3 +422,35 @@ describe('mouse wheel', () => {
     await ui.unmount()
   })
 })
+
+describe('the pane follows the home the session started in (kit issue #3)', () => {
+  const OTHER = '/home/other-repo'
+  const OTHER_YAML = 'obligations:\n  - obligation: "the other repo\'s own obligation"\n    actor: "Kit"\n    expires: 2026-01-01\n'
+  const dates = async (ui: Parameters<typeof textOf>[0]) => (await textOf(ui)).filter(t => /^\d{4}-\d{2}-\d{2}$/.test(t))
+
+  test('a cd mid-session does not switch the ledger (timer and turn end)', async ($, on) => {
+    const world = worldOf(on, { ...KIT, [`${OTHER}/memory/obligations.yaml`]: OTHER_YAML })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    expect(await dates(ui)).toHaveLength(6)
+
+    world.cwd = OTHER
+    await clock.advance(20_000)
+    await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
+    expect(await dates(ui)).toHaveLength(6)
+    expect(await dates(ui)).not.toContain('2026-01-01')
+    await ui.unmount()
+  })
+
+  test('a reload after the cd (session.start again, new cwd) keeps the first home', async ($, on) => {
+    const world = worldOf(on, { ...KIT, [`${OTHER}/memory/obligations.yaml`]: OTHER_YAML })
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    world.cwd = OTHER
+    await $.session.start({ ...SESSION, cwd: OTHER })
+    const ui = await mountPane($)
+    expect(await dates(ui)).toHaveLength(6)
+    await ui.unmount()
+  })
+})
