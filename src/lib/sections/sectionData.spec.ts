@@ -406,5 +406,25 @@ describe('groupBySection — pure: members grouped by sectionIds, display_order 
 	});
 });
 
+describe('listSections — each section carries its own rights (#914)', () => {
+	it('requests _owner,_editor,_expander and maps them off .reference', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [
+					{
+						...rawSection('sec-a', 'Alto', 1),
+						_owner: [{ reference: 'p-own' }],
+						_editor: [{ reference: 'p-ed' }],
+						_expander: [{ reference: 'p-ex' }]
+					}
+				]
+			})
+		);
+		const [node] = await listSections(cfg, fetchImpl);
+		expect(String(fetchImpl.mock.calls[0][0])).toMatch(/props=[^&]*_owner,_editor,_expander/);
+		expect([node.ownerIds, node.editorIds, node.expanderIds]).toEqual([['p-own'], ['p-ed'], ['p-ex']]);
+	});
+});
+
 // (*MVOX:Tallis*)
 // (*MVOX:Palestrina*)

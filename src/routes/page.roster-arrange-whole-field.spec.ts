@@ -47,9 +47,9 @@ import { q } from '$lib/testing/pages/dom';
 
 function fixtureTree(): SectionNode[] {
 	return [
-		{ id: 'sec-sop', name: 'Soprano', displayOrder: 1, parentId: null, depth: 0, children: [] },
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, depth: 0, children: [] },
-		{ id: 'sec-bass', name: 'Bass', displayOrder: 3, parentId: null, depth: 0, children: [] }
+		{ id: 'sec-sop', name: 'Soprano', displayOrder: 1, parentId: null, depth: 0, ownerIds: ['person-p'], children: [] },
+		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, depth: 0, ownerIds: ['person-p'], children: [] },
+		{ id: 'sec-bass', name: 'Bass', displayOrder: 3, parentId: null, depth: 0, ownerIds: ['person-p'], children: [] }
 	];
 }
 

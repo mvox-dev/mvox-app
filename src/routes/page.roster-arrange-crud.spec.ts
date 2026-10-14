@@ -53,13 +53,14 @@ function fixtureTree(): SectionNode[] {
 			displayOrder: 1,
 			parentId: null,
 			depth: 0,
+			ownerIds: ['person-p'],
 			children: [
-				{ id: 'sec-sop1', name: 'Soprano 1', displayOrder: 1, parentId: 'sec-sop', depth: 1, children: [] },
-				{ id: 'sec-sop2', name: 'Soprano 2', displayOrder: 2, parentId: 'sec-sop', depth: 1, children: [] }
+				{ id: 'sec-sop1', name: 'Soprano 1', displayOrder: 1, parentId: 'sec-sop', depth: 1, ownerIds: ['person-p'], children: [] },
+				{ id: 'sec-sop2', name: 'Soprano 2', displayOrder: 2, parentId: 'sec-sop', depth: 1, ownerIds: ['person-p'], children: [] }
 			]
 		},
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, depth: 0, children: [] },
-		{ id: 'sec-bass', name: 'Bass', displayOrder: 3, parentId: null, depth: 0, children: [] }
+		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, depth: 0, ownerIds: ['person-p'], children: [] },
+		{ id: 'sec-bass', name: 'Bass', displayOrder: 3, parentId: null, depth: 0, ownerIds: ['person-p'], children: [] }
 	];
 }
 
@@ -407,7 +408,7 @@ describe('/roster — arrange-mode structural writes are SINGLE-FLIGHT (#155/S4 
 
 		listSectionsMock.mockResolvedValue([
 			...fixtureTree(),
-			{ id: 'sec-ten', name: 'Tenor', displayOrder: 4, parentId: null, depth: 0, children: [] }
+			{ id: 'sec-ten', name: 'Tenor', displayOrder: 4, parentId: null, depth: 0, ownerIds: ['person-p'], children: [] }
 		] satisfies SectionNode[]);
 
 		await fireEvent.click(q(container, 'arrange-rename-sec-alto') as HTMLElement);
@@ -433,7 +434,7 @@ describe('/roster — arrange-mode structural writes are SINGLE-FLIGHT (#155/S4 
 
 		listSectionsMock.mockResolvedValue([
 			...fixtureTree(),
-			{ id: 'sec-ten', name: 'Tenor', displayOrder: 4, parentId: null, depth: 0, children: [] }
+			{ id: 'sec-ten', name: 'Tenor', displayOrder: 4, parentId: null, depth: 0, ownerIds: ['person-p'], children: [] }
 		] satisfies SectionNode[]);
 
 		await fireEvent.click(q(container, 'section-remove-sec-bass') as HTMLElement);
@@ -584,16 +585,17 @@ describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 rev
 		const container = await renderArrangeReady();
 
 		listSectionsMock.mockResolvedValue([
-			{ id: 'sec-sop', name: 'Soprano', displayOrder: 1, parentId: null, depth: 0, children: [] },
-			{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, depth: 0, children: [] },
+			{ id: 'sec-sop', name: 'Soprano', displayOrder: 1, parentId: null, depth: 0, ownerIds: ['person-p'], children: [] },
+			{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, depth: 0, ownerIds: ['person-p'], children: [] },
 			{
 				id: 'sec-bass',
 				name: 'Bass',
 				displayOrder: 3,
 				parentId: null,
 				depth: 0,
+				ownerIds: ['person-p'],
 				children: [
-					{ id: 'sec-bass1', name: 'Bass 1', displayOrder: 1, parentId: 'sec-bass', depth: 1, children: [] }
+					{ id: 'sec-bass1', name: 'Bass 1', displayOrder: 1, parentId: 'sec-bass', depth: 1, ownerIds: ['person-p'], children: [] }
 				]
 			}
 		] satisfies SectionNode[]);

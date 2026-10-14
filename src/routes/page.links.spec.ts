@@ -35,7 +35,7 @@ import {
 	reorderLinksMock,
 	updateLinkMock
 } from '$lib/testing/mocks/links';
-import { cleanupClearAdmin, rowEls, rowNames, rows, setAuthed } from '$lib/testing/pages/links';
+import { cleanupClearAdmin, memberRows, rowEls, rowNames, rows, setAuthed } from '$lib/testing/pages/links';
 import { q, qa } from '$lib/testing/pages/dom';
 import { CFG } from '$lib/testing/pages/roster';
 
@@ -51,6 +51,7 @@ beforeEach(() => {
 afterEach(cleanupClearAdmin);
 
 async function renderReady(tier: 'editor' | 'not-editor') {
+	if (tier === 'not-editor') listLinksMock.mockResolvedValue(memberRows());
 	dbEditRight.set(tier);
 	const utils = render(Page);
 	await waitFor(() => {
@@ -136,6 +137,7 @@ describe('#256 — members cannot mutate: admin controls ABSENT from the DOM, no
 	});
 
 	it("dbEditRight 'loading' fails CLOSED — no admin control renders before the tier is known", async () => {
+		listLinksMock.mockResolvedValue(memberRows());
 		dbEditRight.set('loading');
 		const { container } = render(Page);
 		await waitFor(() => {
@@ -321,7 +323,9 @@ describe('#374/#375 — edit: whole-field, prefilled, url normalised at payload-
 				name: 'Salvestused',
 				url: '/salvestused?x=1#y',
 				description: null,
-				displayOrder: 1
+				displayOrder: 1,
+				ownerIds: ['person-p'],
+				editorIds: []
 			}
 		]);
 		const { container } = await renderReady('editor');

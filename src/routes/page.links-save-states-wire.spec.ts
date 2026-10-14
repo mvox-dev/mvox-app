@@ -49,7 +49,9 @@ function serveList() {
 			_id: l._id,
 			name: [{ string: l.name }],
 			url: [{ string: `https://example.test/${l._id}` }],
-			display_order: [{ number: l.order }]
+			display_order: [{ number: l.order }],
+			_owner: [{ reference: 'person-p', inherited: true }],
+			_editor: [{ reference: 'person-p', inherited: true }]
 		}))
 	});
 }

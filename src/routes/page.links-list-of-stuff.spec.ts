@@ -28,12 +28,12 @@ vi.mock('$app/state', () => ({ page: pageStub }));
 import Page from './links/+page.svelte';
 import { dbEditRight } from '$lib/nav/dbRights';
 import { listLinksMock } from '$lib/testing/mocks/links';
-import { cleanupClearAdmin, rowEls, rows, setAuthed } from '$lib/testing/pages/links';
+import { cleanupClearAdmin, memberRows, rowEls, setAuthed } from '$lib/testing/pages/links';
 import { q } from '$lib/testing/pages/dom';
 
 beforeEach(() => {
 	setAuthed();
-	listLinksMock.mockResolvedValue(rows());
+	listLinksMock.mockResolvedValue(memberRows());
 });
 
 afterEach(cleanupClearAdmin);

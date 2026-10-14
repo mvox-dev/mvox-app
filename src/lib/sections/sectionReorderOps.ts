@@ -12,11 +12,13 @@ import {
 import { createRestoreSections } from '$lib/sections/sectionArrangeRestore';
 import { isStructuralWritePending } from '$lib/sections/sectionArrangeState';
 import type { ArrangeOpsDeps } from '$lib/sections/sectionArrangeOps';
+import { createArrangeRights } from '$lib/sections/sectionRights';
 
 export function createReorderOps(deps: ArrangeOpsDeps) {
 	const { roster, arrange: a, actions, generation, isOffline } = deps;
 	const structuralWritePending = () => isStructuralWritePending(a);
 	const restoreSections = createRestoreSections(deps);
+	const rights = createArrangeRights(deps);
 
 	function visibleSiblingsOf(id: string): SectionNode[] | null {
 		const siblings = siblingsOf(roster.sections, id);
@@ -31,6 +33,7 @@ export function createReorderOps(deps: ArrangeOpsDeps) {
 	): Promise<boolean> {
 		if (structuralWritePending()) return false;
 		if (isOffline()) return false;
+		if (!rights.mayReorder(movedId)) return false;
 		const cfg = deps.cfg();
 		if (!cfg) {
 			console.error('roster: section reorder with no cfg', afterIds);
@@ -135,6 +138,7 @@ export function createReorderOps(deps: ArrangeOpsDeps) {
 	}
 
 	async function handleIndent(node: SectionNode): Promise<void> {
+		if (!rights.mayIndent(node.id)) return;
 		const prevId = prevSiblingId(node.id);
 		if (prevId === null) return;
 		const parentName = findSectionNode(roster.sections, prevId)?.name ?? '';
@@ -144,7 +148,7 @@ export function createReorderOps(deps: ArrangeOpsDeps) {
 	}
 
 	async function handleUnindent(node: SectionNode): Promise<void> {
-		if (node.parentId === null) return;
+		if (node.parentId === null || !rights.mayUnindent(node.id)) return;
 		const parent = findSectionNode(roster.sections, node.parentId);
 		if (!parent) return;
 		if (parent.parentId === null) {

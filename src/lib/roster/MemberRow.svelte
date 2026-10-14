@@ -16,6 +16,7 @@
 	} from '$lib/roster/joinStateView';
 	import MemberRecordEditor from '$lib/roster/MemberRecordEditor.svelte';
 	import { sectionNamesFor } from '$lib/sections/sectionTree';
+	import { sectionAccess } from '$lib/sections/sectionRights';
 	import MemberInvite from '$lib/roster/MemberInvite.svelte';
 	import MemberDeactivate from '$lib/roster/MemberDeactivate.svelte';
 
@@ -51,6 +52,7 @@
 			: memberSectionIds.filter((id) => id === groupSectionId)
 	);
 	const line = $derived(joinStateLine(row, roster.joinStateDetails));
+	const expandableIds = $derived(sectionAccess(roster.sections, selected?.personId ?? null).expandable);
 </script>
 
 <li
@@ -102,6 +104,7 @@
 				sections={roster.sections}
 				selectedIds={memberSectionIds}
 				renderIds={pickerRenderIds}
+				{expandableIds}
 				busy={memberOps.sectionBusyIds.has(row.memberId) || isOffline}
 				onassign={(sectionId) => ops.handleAssign(row.memberId, sectionId)}
 				onunassign={(sectionId) => ops.handleUnassign(row.memberId, sectionId)}

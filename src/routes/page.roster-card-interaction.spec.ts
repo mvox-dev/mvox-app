@@ -78,7 +78,7 @@ function rows(): RosterRow[] {
 
 function tree(): SectionNode[] {
 	return [
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 1, parentId: null, dbEntityId: 'org-a', depth: 0, children: [] }
+		{ id: 'sec-alto', name: 'Alto', displayOrder: 1, parentId: null, dbEntityId: 'org-a', depth: 0, ownerIds: ['person-p'], children: [] }
 	];
 }
 

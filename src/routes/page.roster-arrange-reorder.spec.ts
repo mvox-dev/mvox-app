@@ -61,13 +61,14 @@ function fixtureTree(): SectionNode[] {
 			displayOrder: 1,
 			parentId: null,
 			depth: 0,
+			ownerIds: ['person-p'],
 			children: [
-				{ id: 'sec-sop1', name: 'Soprano 1', displayOrder: 1, parentId: 'sec-sop', depth: 1, children: [] },
-				{ id: 'sec-sop2', name: 'Soprano 2', displayOrder: 2, parentId: 'sec-sop', depth: 1, children: [] }
+				{ id: 'sec-sop1', name: 'Soprano 1', displayOrder: 1, parentId: 'sec-sop', depth: 1, ownerIds: ['person-p'], children: [] },
+				{ id: 'sec-sop2', name: 'Soprano 2', displayOrder: 2, parentId: 'sec-sop', depth: 1, ownerIds: ['person-p'], children: [] }
 			]
 		},
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, depth: 0, children: [] },
-		{ id: 'sec-tenor', name: 'Tenor', displayOrder: 3, parentId: null, depth: 0, children: [] }
+		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, depth: 0, ownerIds: ['person-p'], children: [] },
+		{ id: 'sec-tenor', name: 'Tenor', displayOrder: 3, parentId: null, depth: 0, ownerIds: ['person-p'], children: [] }
 	];
 }
 
@@ -294,19 +295,20 @@ function listSlots(container: HTMLElement): string[] {
 
 function fixtureTreeAltFirst(): SectionNode[] {
 	return [
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 1, parentId: null, depth: 0, children: [] },
+		{ id: 'sec-alto', name: 'Alto', displayOrder: 1, parentId: null, depth: 0, ownerIds: ['person-p'], children: [] },
 		{
 			id: 'sec-sop',
 			name: 'Soprano',
 			displayOrder: 2,
 			parentId: null,
 			depth: 0,
+			ownerIds: ['person-p'],
 			children: [
-				{ id: 'sec-sop1', name: 'Soprano 1', displayOrder: 1, parentId: 'sec-sop', depth: 1, children: [] },
-				{ id: 'sec-sop2', name: 'Soprano 2', displayOrder: 2, parentId: 'sec-sop', depth: 1, children: [] }
+				{ id: 'sec-sop1', name: 'Soprano 1', displayOrder: 1, parentId: 'sec-sop', depth: 1, ownerIds: ['person-p'], children: [] },
+				{ id: 'sec-sop2', name: 'Soprano 2', displayOrder: 2, parentId: 'sec-sop', depth: 1, ownerIds: ['person-p'], children: [] }
 			]
 		},
-		{ id: 'sec-tenor', name: 'Tenor', displayOrder: 3, parentId: null, depth: 0, children: [] }
+		{ id: 'sec-tenor', name: 'Tenor', displayOrder: 3, parentId: null, depth: 0, ownerIds: ['person-p'], children: [] }
 	];
 }
 

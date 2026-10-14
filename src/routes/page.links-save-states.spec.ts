@@ -204,20 +204,24 @@ describe('#323 — FAILED: truthful alert, retry available, screen restored to t
 		expect(rowNames(container)).toEqual(['Salvestused', 'Scores', 'Website']);
 
 		const serverAfterFailure: LinkRow[] = [
-			{ id: 'l-scores', name: 'Scores', url: 'example.com/x', description: null, displayOrder: 1 },
+			{ id: 'l-scores', name: 'Scores', url: 'example.com/x', description: null, displayOrder: 1, ownerIds: ['person-p'], editorIds: [] },
 			{
 				id: 'l-site',
 				name: 'Website',
 				url: 'https://crede.ee',
 				description: 'Choir website',
-				displayOrder: 2
+				displayOrder: 2,
+				ownerIds: ['person-p'],
+				editorIds: []
 			},
 			{
 				id: 'l-rec',
 				name: 'Salvestused',
 				url: 'https://f.io/GCkGMr5J',
 				description: 'Crede recordings',
-				displayOrder: 3
+				displayOrder: 3,
+				ownerIds: ['person-p'],
+				editorIds: []
 			}
 		];
 		reorderLinksMock.mockRejectedValue(new Error('renumber failed mid-loop'));
@@ -394,7 +398,7 @@ describe('#323 adjacent — deleteLink failure surfaces as role="alert", the row
 describe('#323 — a collective switch resets failure/saved residue (routeLoad reset is the guard idiom)', () => {
 	function rowsB(): LinkRow[] {
 		return [
-			{ id: 'lb-1', name: 'B-Website', url: 'https://b.example', description: null, displayOrder: 1 }
+			{ id: 'lb-1', name: 'B-Website', url: 'https://b.example', description: null, displayOrder: 1, ownerIds: ['person-q'], editorIds: [] }
 		];
 	}
 
@@ -455,9 +459,11 @@ describe('#323 review F1 — a write started in A settles silently once the user
 				name: 'B-Website',
 				url: 'https://b.example',
 				description: null,
-				displayOrder: 1
+				displayOrder: 1,
+				ownerIds: ['person-q'],
+				editorIds: []
 			},
-			{ id: 'lb-2', name: 'B-Scores', url: 'https://b.example/s', description: null, displayOrder: 2 }
+			{ id: 'lb-2', name: 'B-Scores', url: 'https://b.example/s', description: null, displayOrder: 2, ownerIds: ['person-q'], editorIds: [] }
 		];
 	}
 

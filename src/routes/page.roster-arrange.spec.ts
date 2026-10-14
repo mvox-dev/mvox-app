@@ -51,14 +51,15 @@ function fixtureTree(): SectionNode[] {
 			displayOrder: 1,
 			parentId: null,
 			depth: 0,
+			ownerIds: ['person-p'],
 			children: [
-				{ id: 'sec-sop1', name: 'Soprano 1', displayOrder: 1, parentId: 'sec-sop', depth: 1, children: [] },
-				{ id: 'sec-sop2', name: 'Soprano 2', displayOrder: 2, parentId: 'sec-sop', depth: 1, children: [] }
+				{ id: 'sec-sop1', name: 'Soprano 1', displayOrder: 1, parentId: 'sec-sop', depth: 1, ownerIds: ['person-p'], children: [] },
+				{ id: 'sec-sop2', name: 'Soprano 2', displayOrder: 2, parentId: 'sec-sop', depth: 1, ownerIds: ['person-p'], children: [] }
 			]
 		},
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, depth: 0, children: [] },
-		{ id: 'sec-tenor', name: 'Tenor', displayOrder: 3, parentId: null, depth: 0, children: [] },
-		{ id: 'sec-bass', name: 'Bass', displayOrder: 4, parentId: null, depth: 0, children: [] }
+		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, depth: 0, ownerIds: ['person-p'], children: [] },
+		{ id: 'sec-tenor', name: 'Tenor', displayOrder: 3, parentId: null, depth: 0, ownerIds: ['person-p'], children: [] },
+		{ id: 'sec-bass', name: 'Bass', displayOrder: 4, parentId: null, depth: 0, ownerIds: ['person-p'], children: [] }
 	];
 }
 
@@ -374,8 +375,9 @@ describe('/roster — the view modes are a rendering switch over the one existin
 				displayOrder: 1,
 				parentId: null,
 				depth: 0,
+				ownerIds: ['person-p'],
 				children: [
-					{ id: 'sec-men1', name: 'Men 1', displayOrder: 1, parentId: 'sec-men', depth: 1, children: [] }
+					{ id: 'sec-men1', name: 'Men 1', displayOrder: 1, parentId: 'sec-men', depth: 1, ownerIds: ['person-p'], children: [] }
 				]
 			}
 		] satisfies SectionNode[]);

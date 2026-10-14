@@ -59,7 +59,7 @@ const EFK_TENOR = '69c7f8758489bfcb0e81b113';
 const TAM_BASS = '69c7f88a8489bfcb0e81b5bc';
 
 function node(id: string, name: string, displayOrder: number, dbEntityId: string): SectionNode {
-	return { id, name, displayOrder, parentId: null, dbEntityId, depth: 0, children: [] };
+	return { id, name, displayOrder, parentId: null, dbEntityId, depth: 0, ownerIds: ['person-p'], children: [] };
 }
 
 function gateWalkTree(): SectionNode[] {

@@ -126,8 +126,8 @@ const ROWS = [
 
 function fixtureTree(): SectionNode[] {
 	return [
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 1, parentId: null, dbEntityId: 'db-1', depth: 0, children: [] },
-		{ id: 'sec-bass', name: 'Bass', displayOrder: 2, parentId: null, dbEntityId: 'db-1', depth: 0, children: [] }
+		{ id: 'sec-alto', name: 'Alto', displayOrder: 1, parentId: null, dbEntityId: 'db-1', depth: 0, ownerIds: ['person-p'], children: [] },
+		{ id: 'sec-bass', name: 'Bass', displayOrder: 2, parentId: null, dbEntityId: 'db-1', depth: 0, ownerIds: ['person-p'], children: [] }
 	];
 }
 

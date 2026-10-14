@@ -1,4 +1,4 @@
-<!-- /links: the collective's link list; admins add, edit, reorder and remove links. -->
+<!-- /links: the collective's link list; each write control shows only where Entu allows it. -->
 <script lang="ts">
 	import ListOfStuff from '$lib/components/ListOfStuff.svelte';
 	import { reportProblem } from '$lib/problems/reportProblem';
@@ -7,6 +7,7 @@
 	import { selectedCollectiveIdentityStore } from '$lib/collectives/store';
 	import { dbEditRight } from '$lib/nav/dbRights';
 	import { listLinks, type LinkRow } from '$lib/links/linkData';
+	import { linkControls, type LinkControls } from '$lib/links/linkRights';
 	import { createLink, updateLink, reorderLinks, deleteLink } from '$lib/links/linkActions';
 	import { normalizeUrl } from '$lib/links/normalizeUrl';
 	import { cfgFor } from '$lib/entu/cfg';
@@ -23,6 +24,8 @@
 
 	let status = $state<RouteLoadStatus>('loading');
 	let rows = $state<LinkRow[]>([]);
+	const controls = $derived(linkControls(rows, selected?.personId ?? null));
+	const NO_CONTROLS: LinkControls = { edit: false, remove: false, move: false };
 
 	// Plain, not $state: writes read it at tap time and it never drives a render.
 	let currentCfg: { db: string; token: string } | null = null;
@@ -276,7 +279,7 @@
 				</p>
 			{/if}
 
-			<!-- One reason for every disabled write control; admin-gated, as only admins see them. -->
+			<!-- One reason for every disabled write control, beside the add form it shares a gate with. -->
 			{#if editRight === 'editor' && isOffline}
 				<p data-testid="links-write-unavailable" class="text-sm text-ink-2">
 					{m.write_unavailable_no_signal()}
@@ -320,7 +323,7 @@
 							{row}
 							index={i}
 							rowCount={rows.length}
-							canEditDb={editRight === 'editor'}
+							controls={controls.get(row.id) ?? NO_CONTROLS}
 							{isOffline}
 							{reorderPending}
 							editing={editingId === row.id}

@@ -257,8 +257,8 @@ export const WRITE_PAGES: Record<string, WritePage> = {
 			url.includes('_type.string=link')
 				? {
 						entities: [
-							{ _id: 'link-1', name: [{ string: 'Scores' }], url: [{ string: 'https://a.test' }], display_order: [{ number: 1 }] },
-							{ _id: 'link-2', name: [{ string: 'Rota' }], url: [{ string: 'https://b.test' }], display_order: [{ number: 2 }] }
+							{ _id: 'link-1', name: [{ string: 'Scores' }], url: [{ string: 'https://a.test' }], display_order: [{ number: 1 }], _owner: [{ reference: 'person-p', inherited: true }] },
+							{ _id: 'link-2', name: [{ string: 'Rota' }], url: [{ string: 'https://b.test' }], display_order: [{ number: 2 }], _owner: [{ reference: 'person-p', inherited: true }] }
 						]
 					}
 				: undefined,
@@ -292,6 +292,7 @@ export const WRITE_PAGES: Record<string, WritePage> = {
 				parentId: null,
 				dbEntityId: 'org-1',
 				depth: 0,
+				ownerIds: ['person-p'],
 				children: []
 			});
 			listSectionsMock.mockResolvedValue([root('sec-s', 'Soprano', 1), root('sec-a', 'Alto', 2)]);

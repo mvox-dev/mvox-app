@@ -219,7 +219,7 @@ export function createArrangeDrag(deps: ArrangeDragDeps) {
 		if (a.grabbedSectionId !== null && a.grabbedSectionId !== node.id) return;
 
 		if (a.grabbedSectionId === null) {
-			if (structuralWritePending()) return;
+			if (structuralWritePending() || !ops.mayReorder(node.id)) return;
 			a.grabbedSectionId = node.id;
 			grabSiblingIds = ops.visibleSiblingsOf(node.id)?.map((n) => n.id) ?? [node.id];
 			a.rovingHandleId = node.id;

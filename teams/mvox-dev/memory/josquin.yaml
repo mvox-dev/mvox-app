@@ -1,4 +1,20 @@
 # Josquin scratchpad. Converted by memkit 2026-10-14. (*MVOX:memkit*)
 # Only Josquin writes here. History lives in git; this keeps what the next issue needs.
-current: []
-staging: []
+current:
+  - label: WIP
+    record: "#914 pushed on refactor/914-rights-names; awaiting Bentham review"
+    ref: "#914"
+staging:
+  - label: GOTCHA
+    record: "comment-rules.spec checks every touched file: a 1-word rename drags legacy comments into scope"
+    ref: "src/lib/testing/commentRules.ts"
+  - label: GOTCHA
+    record: "Full vitest run is ~11 min, over the 600s tool cap: run src/routes and the rest as two splits"
+    ref: "#914"
+  - label: PATTERN
+    record: "Optional rights fields set only when the wire has them keep toEqual shape specs passing"
+    ref: "src/lib/sections/sectionData.ts"
+  - label: GOTCHA
+    record: "Fixtures for a rights gate: give admin shape as a builder; member shape stays rightless"
+    ref: "src/lib/testing/pages/links.ts"
+# (*MVOX:Josquin*)

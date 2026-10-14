@@ -2,6 +2,7 @@
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { byDisplayOrder } from '$lib/collections/displayOrder';
+import { referenceIds } from '$lib/entu/references';
 
 export interface LinkRow {
 	id: string;
@@ -9,6 +10,9 @@ export interface LinkRow {
 	url: string;
 	description: string | null;
 	displayOrder: number | null;
+	// Present only when the read returned them; absent means not loaded, and no control shows.
+	ownerIds?: string[];
+	editorIds?: string[];
 }
 
 interface RawLink {
@@ -17,6 +21,8 @@ interface RawLink {
 	url?: Array<{ string?: string }>;
 	description?: Array<{ string?: string }>;
 	display_order?: Array<{ number?: number }>;
+	_owner?: Array<{ reference?: string }>;
+	_editor?: Array<{ reference?: string }>;
 }
 
 export async function listLinks(
@@ -30,7 +36,7 @@ export async function listLinks(
 	// A hand-curated menu never nears 200, so the cap is a guard, not a silent prefix.
 	const res = await entuFetch(
 		cfg.db,
-		`entity?_type.string=link&_parent.reference=${encodeURIComponent(dbEntityId)}&props=name,url,description,display_order&limit=200`,
+		`entity?_type.string=link&_parent.reference=${encodeURIComponent(dbEntityId)}&props=name,url,description,display_order,_owner,_editor&limit=200`,
 		cfg.token,
 		{},
 		fetchImpl
@@ -44,7 +50,9 @@ export async function listLinks(
 			name: raw.name?.[0]?.string ?? '',
 			url: raw.url?.[0]?.string ?? '',
 			description: raw.description?.[0]?.string || null,
-			displayOrder: raw.display_order?.[0]?.number ?? null
+			displayOrder: raw.display_order?.[0]?.number ?? null,
+			...(raw._owner ? { ownerIds: referenceIds(raw._owner) } : {}),
+			...(raw._editor ? { editorIds: referenceIds(raw._editor) } : {})
 		})
 	);
 

@@ -65,6 +65,8 @@ export function createPageCreateOps(deps: ArrangeOpsDeps) {
 		if (g !== generation()) return;
 
 		const depth = parentId ? (findSectionNode(roster.sections, parentId)?.depth ?? 0) + 1 : 0;
+		const personId = deps.personId();
+		// Entu makes the creating caller the new section's `_owner` (ER-5).
 		const newNode: SectionNode = {
 			id: newId,
 			name,
@@ -72,7 +74,8 @@ export function createPageCreateOps(deps: ArrangeOpsDeps) {
 			parentId,
 			dbEntityId: parentId ? null : (deps.currentDbEntityId() ?? null),
 			depth,
-			children: []
+			children: [],
+			ownerIds: personId === null ? [] : [personId]
 		};
 		roster.sections = insertSectionNode(roster.sections, newNode, parentId);
 		roster.expandedIds = new Set(roster.expandedIds).add(newId);

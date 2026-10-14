@@ -8,7 +8,7 @@ import { ORG_A } from './rosterFixtures';
 
 export function treeA(): SectionNode[] {
 	return [
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 1, parentId: null, dbEntityId: ORG_A, depth: 0, children: [] }
+		{ id: 'sec-alto', name: 'Alto', displayOrder: 1, parentId: null, dbEntityId: ORG_A, depth: 0, ownerIds: ['person-p'], children: [] }
 	];
 }
 

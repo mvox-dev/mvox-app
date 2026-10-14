@@ -207,9 +207,7 @@
 	const groupById = $derived(groupsBySectionId(groups));
 	const unassignedGroup = $derived(groups.find((g) => g.sectionId === null) ?? null);
 
-	const sectionNameById = $derived(
-		new Map(flattenSections(roster.sections).map((n) => [n.id, n.name]))
-	);
+	const sectionNameById = $derived(new Map(flattenSections(roster.sections).map((n) => [n.id, n.name])));
 
 	const flatRows = $derived([...roster.rows].sort((a, b) => a.name.localeCompare(b.name)));
 
@@ -272,7 +270,9 @@
 		generation: () => routeLoad.generation,
 		isOffline: () => isOffline,
 		visibleSections: () => visibleSections,
-		currentDbEntityId: () => currentDbEntityId
+		currentDbEntityId: () => currentDbEntityId,
+		personId: () => selected?.personId ?? null,
+		canEditDb: () => editRight === 'editor'
 	});
 
 	const drag = createArrangeDrag({

@@ -52,18 +52,21 @@ function sectionWireEntities(damagedParents: Array<{ reference: string; entity_t
 			_id: 'sec-sop',
 			name: [{ string: 'Soprano' }],
 			display_order: [{ number: 1 }],
+			_owner: [{ reference: 'person-p', inherited: true }], _editor: [{ reference: 'person-p', inherited: true }], _expander: [{ reference: 'person-p', inherited: true }],
 			_parent: [{ reference: DB_ENTITY, entity_type: 'database' }]
 		},
 		{
 			_id: 'sec-tenor',
 			name: [{ string: 'Tenor' }],
 			display_order: [{ number: 2 }],
+			_owner: [{ reference: 'person-p', inherited: true }], _editor: [{ reference: 'person-p', inherited: true }], _expander: [{ reference: 'person-p', inherited: true }],
 			_parent: [{ reference: DB_ENTITY, entity_type: 'database' }]
 		},
 		{
 			_id: 'sec-alto',
 			name: [{ string: 'Alto' }],
 			display_order: [{ number: 3 }],
+			_owner: [{ reference: 'person-p', inherited: true }], _editor: [{ reference: 'person-p', inherited: true }], _expander: [{ reference: 'person-p', inherited: true }],
 			_parent: damagedParents
 		}
 	];

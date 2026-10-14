@@ -53,9 +53,11 @@ function rowsFixture(): LinkRow[] {
 			name: 'Salvestused',
 			url: 'https://f.io/GCkGMr5J',
 			description: 'Crede recordings',
-			displayOrder: 1
+			displayOrder: 1,
+			ownerIds: ['person-p'],
+			editorIds: []
 		},
-		{ id: 'l-scores', name: 'Scores', url: 'example.com/x', description: null, displayOrder: 2 }
+		{ id: 'l-scores', name: 'Scores', url: 'example.com/x', description: null, displayOrder: 2, ownerIds: ['person-p'], editorIds: [] }
 	];
 }
 

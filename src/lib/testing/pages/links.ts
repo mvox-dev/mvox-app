@@ -37,7 +37,8 @@ export function setAuthedWithTwoCollectives(): void {
 	});
 }
 
-export function rows(): LinkRow[] {
+// A member's view: no rights on any link.
+export function memberRows(): LinkRow[] {
 	return [
 		{
 			id: 'l-rec',
@@ -55,6 +56,11 @@ export function rows(): LinkRow[] {
 			displayOrder: 3
 		}
 	];
+}
+
+// A db admin's view: the grant inherited from the database entity, owner folded into editor.
+export function rows(): LinkRow[] {
+	return memberRows().map((r) => ({ ...r, ownerIds: ['person-p'], editorIds: ['person-p'] }));
 }
 
 export function rowEls(container: HTMLElement): HTMLElement[] {
