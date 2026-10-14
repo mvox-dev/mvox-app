@@ -93,6 +93,13 @@ A major means data shape changed. The kit ships `migrations/<version>/` for exac
   that installed the watch at alpha.7 and set no `pollSeconds` now polls every 5 s; one that set
   15 should set 5 (`claude plugin configure watch@memory-kit --values-stdin`).
 
+- **0.1.0-alpha.8 -> 0.1.0-alpha.9:** no data step. Pull, lint, `/reload-plugins`. POSIX homes see
+  no change in behaviour. A Windows home can now use the watch; check the README's Platforms list.
+
+- **0.1.0-alpha.9 -> 0.1.0-alpha.10:** no data step. Pull, lint, `/reload-plugins`. A team home whose
+  watch source is `~/.claude/teams/session-*/inboxes/...`: change its format to `hub unread courier`
+  (see the watch README) so teammate messages stay with the harness.
+
 ## Always
 
 - The home's config for the kit lives outside the subtree; a pull must never clobber it.

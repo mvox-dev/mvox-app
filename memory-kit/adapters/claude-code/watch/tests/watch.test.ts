@@ -3,12 +3,16 @@ import { describe, expect, test } from 'claude-code/testing'
 import {
   archiveFor,
   asideOf,
+  base64Utf16le,
   backoffMs,
   brake,
   confValue,
+  COURIER_GRACE_MS,
   decideRetire,
+  entryKey,
   EVENT_LIMIT,
   expandHome,
+  fileOpArgv,
   formatEvent,
   HOUR,
   hubItems,
@@ -17,12 +21,18 @@ import {
   isPendingOf,
   lineItems,
   matchSegment,
+  pathSegments,
   parseSource,
   pendingEvents,
   pendingOf,
+  platformOfHome,
+  PROBE_ARGV,
+  psQuote,
   retirePrompt,
   sourcesOf,
+  STALE_LOCK_MS,
   SURVIVE_MS,
+  takes,
 } from '../hooks/watch'
 import type { RetireInput } from '../hooks/watch'
 
@@ -257,5 +267,132 @@ describe('retire decision (the five guards)', () => {
     expect(text).toContain('touch .fresh-next, then exit')
     expect(text).toMatch(/exact wording/)
     expect(text.length).toBeLessThanOrEqual(EVENT_LIMIT * 2)
+  })
+})
+
+describe('platform: the four file operations (kit alpha.9)', () => {
+  const decode = (b64: string) => {
+    const bin = atob(b64)
+    let out = ''
+    for (let i = 0; i + 1 < bin.length; i += 2) out += String.fromCharCode(bin.charCodeAt(i) | (bin.charCodeAt(i + 1) << 8))
+    return out
+  }
+  const script = (argv: string[]) => {
+    expect(argv.slice(0, 4)).toEqual(['powershell.exe', '-NoProfile', '-NonInteractive', '-EncodedCommand'])
+    expect(argv).toHaveLength(5)
+    return decode(argv[4] ?? '')
+  }
+  const from = '/c/My Inbox [team]/.watch-drain-team-lead.json-1-2'
+  const to = "/c/My Inbox [team]/O'Brien's lead.json"
+
+  test('POSIX: mv, mv -n, mv -f, rm -f, each with -- before the paths', () => {
+    expect(fileOpArgv('posix', { op: 'move', from, to })).toEqual(['mv', '--', from, to])
+    expect(fileOpArgv('posix', { op: 'move-keep', from, to })).toEqual(['mv', '-n', '--', from, to])
+    expect(fileOpArgv('posix', { op: 'move-replace', from, to })).toEqual(['mv', '-f', '--', from, to])
+    expect(fileOpArgv('posix', { op: 'remove', path: from })).toEqual(['rm', '-f', '--', from])
+  })
+
+  test('Windows: Move-Item (fails on an existing target), -Force to replace, Remove-Item quietly; -LiteralPath', () => {
+    const q = (p: string) => psQuote(p)
+    expect(script(fileOpArgv('windows', { op: 'move', from, to }))).toBe(
+      `$ErrorActionPreference = 'Stop'; Move-Item -LiteralPath ${q(from)} -Destination ${q(to)}`,
+    )
+    // No-clobber put-back: plain Move-Item refuses an existing target, which is the point.
+    expect(script(fileOpArgv('windows', { op: 'move-keep', from, to }))).toBe(
+      `$ErrorActionPreference = 'Stop'; Move-Item -LiteralPath ${q(from)} -Destination ${q(to)}`,
+    )
+    expect(script(fileOpArgv('windows', { op: 'move-replace', from, to }))).toBe(
+      `$ErrorActionPreference = 'Stop'; Move-Item -LiteralPath ${q(from)} -Destination ${q(to)} -Force`,
+    )
+    expect(script(fileOpArgv('windows', { op: 'remove', path: from }))).toBe(
+      `$ErrorActionPreference = 'Stop'; Remove-Item -LiteralPath ${q(from)} -Force -ErrorAction SilentlyContinue`,
+    )
+  })
+
+  test("PowerShell quoting: single quotes, every quote PowerShell reads as one doubled; [ ] and $ stay literal", () => {
+    expect(psQuote("C:\\Users\\m\\My Inbox [team]\\a$b.json")).toBe("'C:\\Users\\m\\My Inbox [team]\\a$b.json'")
+    expect(psQuote("O'Brien")).toBe("'O''Brien'")
+    expect(psQuote('it\u2019s \u2018x\u2019 \u201a \u201b')).toBe("'it\u2019\u2019s \u2018\u2018x\u2019\u2019 \u201a\u201a \u201b\u201b'")
+  })
+
+  test('the script travels as UTF-16LE base64 (-EncodedCommand): no command-line quoting at all', () => {
+    expect(base64Utf16le('a')).toBe('YQA=')
+    expect(base64Utf16le('Wõ€')).toBe(btoa('W\0\xf5\0\xac\x20'))
+    expect(decode(base64Utf16le("Move-Item 'ä [x]'"))).toBe("Move-Item 'ä [x]'")
+  })
+
+  test('detection: a drive-letter or UNC home is Windows; otherwise the probe decides', () => {
+    expect(platformOfHome('C:\\Users\\m\\kit')).toBe('windows')
+    expect(platformOfHome('d:/kit')).toBe('windows')
+    expect(platformOfHome('\\\\server\\share\\kit')).toBe('windows')
+    expect(platformOfHome('/home/m/kit')).toBeUndefined()
+    expect(PROBE_ARGV).toEqual(['uname', '-s'])
+  })
+
+  test('glob segments split on either separator, a drive kept whole', () => {
+    expect(pathSegments('/home/u/.claude/teams/session-*/inboxes/a.json')).toEqual(['', 'home', 'u', '.claude', 'teams', 'session-*', 'inboxes', 'a.json'])
+    expect(pathSegments('C:\\Users\\m\\.claude\\teams\\session-*\\inboxes\\a.json')).toEqual(['C:', 'Users', 'm', '.claude', 'teams', 'session-*', 'inboxes', 'a.json'])
+  })
+})
+
+describe('a shared inbox: take only courier mail, unread (kit #12)', () => {
+  test('modifiers after the hub format: unread, courier, both', () => {
+    expect(parseSource('hub mail | hub unread courier | ~/.claude/teams/session-*/inboxes/team-lead.json')).toEqual({
+      prefix: 'hub mail',
+      format: 'hub',
+      path: '~/.claude/teams/session-*/inboxes/team-lead.json',
+      take: { unread: true, courier: true },
+    })
+    expect(parseSource('h | hub courier | a.json')).toEqual({ prefix: 'h', format: 'hub', path: 'a.json', take: { unread: false, courier: true } })
+    expect(parseSource('h | hub  unread | a.json')).toEqual({ prefix: 'h', format: 'hub', path: 'a.json', take: { unread: true, courier: false } })
+    // A plain hub source drains the whole file, as before.
+    expect(parseSource('h | hub | a.json')).toEqual({ prefix: 'h', format: 'hub', path: 'a.json' })
+    expect(parseSource('h | hub unread unread | a.json')).toMatch(/twice/)
+    expect(parseSource('h | hub everything | a.json')).toMatch(/unknown/)
+    expect(parseSource('h | lines courier | a.txt')).toMatch(/only to a hub/)
+  })
+
+  test('which entries a source takes', () => {
+    const entries = [
+      { from: 'mate', text: 'teammate, delivered', read: true },
+      { from: 'mate', text: 'teammate, not yet delivered', read: false },
+      { from: 'hub-courier', text: 'hub mail', read: false },
+      { from: 'company-courier', text: 'hub mail, no read field' },
+      { from: 'hub-courier', text: 'hub mail the harness delivered', read: true },
+      { from: 'courier', text: 'not a -courier suffix' },
+      'not an object',
+    ]
+    expect(entries.map(e => takes({ unread: true, courier: true }, e))).toEqual([false, false, true, true, false, false, false])
+    expect(entries.map(e => takes({ unread: false, courier: true }, e))).toEqual([false, false, true, true, true, false, false])
+    expect(entries.map(e => takes({ unread: true, courier: false }, e))).toEqual([false, true, true, true, false, true, false])
+  })
+
+  test('an entry is known by its msg_id, else by its content', () => {
+    expect(entryKey({ msg_id: 'm1', text: 'a' })).toBe('id:m1')
+    expect(entryKey({ from: 'hub-courier', text: 'a', timestamp: 't' })).toBe(entryKey({ from: 'hub-courier', text: 'a', timestamp: 't' }))
+    expect(entryKey({ from: 'hub-courier', text: 'a', timestamp: 't' })).not.toBe(entryKey({ from: 'hub-courier', text: 'b', timestamp: 't' }))
+  })
+
+  test('the harness gets 30 s to take courier mail itself; a lock older than 60 s is stale', () => {
+    expect(COURIER_GRACE_MS).toBe(30_000)
+    expect(STALE_LOCK_MS).toBe(60_000)
+  })
+
+  test("the harness's lock: mkdir / rmdir; on Windows New-Item / Remove-Item", () => {
+    const lock = '/c/My Inbox [x]/team-lead.json.lock'
+    expect(fileOpArgv('posix', { op: 'lock', path: lock })).toEqual(['mkdir', '--', lock])
+    expect(fileOpArgv('posix', { op: 'unlock', path: lock })).toEqual(['rmdir', '--', lock])
+    const decode = (argv: string[]) => {
+      const bin = atob(argv[argv.length - 1] ?? '')
+      let out = ''
+      for (let i = 0; i + 1 < bin.length; i += 2) out += String.fromCharCode(bin.charCodeAt(i) | (bin.charCodeAt(i + 1) << 8))
+      return out
+    }
+    expect(decode(fileOpArgv('windows', { op: 'lock', path: lock }))).toBe(
+      `$ErrorActionPreference = 'Stop'; New-Item -ItemType Directory -Path ${psQuote(lock)} | Out-Null`,
+    )
+    expect(decode(fileOpArgv('windows', { op: 'unlock', path: lock }))).toBe(
+      `$ErrorActionPreference = 'Stop'; Remove-Item -LiteralPath ${psQuote(lock)} -Force`,
+    )
   })
 })
