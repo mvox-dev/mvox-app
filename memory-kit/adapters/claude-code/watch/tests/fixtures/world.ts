@@ -36,9 +36,16 @@ export type World = {
   platform: 'posix' | 'windows'
   /** Lock directories (`<inbox>.lock`, the harness's), with their mtime. */
   locks: Map<string, number>
+  /** Windows: every powershell.exe call also writes CLIXML progress records to stderr. */
+  clixml: boolean
+  /** A lock the plugin takes is gone again at once: the harness broke it as stale. */
+  lockVanishes: boolean
 }
 
 const abs = (path: string) => (path.startsWith('/') ? path : `${CWD}/${path}`)
+
+/** What Windows PowerShell writes to stderr on a call that succeeded (kit #11, Pepys's desk). */
+export const CLIXML = '#< CLIXML\r\n<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV></PR></MS></Obj></Objs>\r\n'
 
 /** Text of a powershell.exe -EncodedCommand argument (base64 of UTF-16LE). */
 export function decodeUtf16le(b64: string): string {
@@ -73,6 +80,8 @@ export function worldOf(
     commands: [],
     platform,
     locks: new Map(),
+    clixml: false,
+    lockVanishes: false,
   }
   mock.store(on, store)
   mock.env(on, env)
@@ -126,27 +135,39 @@ export function worldOf(
     }
     const mkdir = (path: string) => {
       if (world.locks.has(abs(path)) || world.files.has(abs(path))) return fail(`'${path}' exists`)
-      world.locks.set(abs(path), 0)
+      if (!world.lockVanishes) world.locks.set(abs(path), 0)
       return { value: ok }
     }
     const rmdir = (path: string) => (world.locks.delete(abs(path)) ? { value: ok } : fail(`no directory '${path}'`))
     if (world.platform === 'windows') {
       if (argv[0] !== 'powershell.exe') return { deny: `ENOENT: ${argv[0]}` }
-      const script = decodeUtf16le(argv[argv.length - 1] ?? '')
+      // As Windows PowerShell 5.1 does it (Pepys's desk, kit #11): under
+      // $ErrorActionPreference = 'Stop' any error ends the script with exit 1, even with
+      // -ErrorAction SilentlyContinue on the command; stderr may carry CLIXML progress records
+      // on a call that succeeded.
+      const script = decodeUtf16le(argv[argv.length - 1] ?? '').replace(/^\$ErrorActionPreference = 'Stop'; /, '')
       const lit = "'((?:[^']|'')*)'"
       const un = (q: string | undefined) => (q ?? '').replaceAll("''", "'")
-      const mv = new RegExp(`Move-Item -LiteralPath ${lit} -Destination ${lit}( -Force)?$`).exec(script)
-      if (mv) return move(un(mv[1]), un(mv[2]), mv[3] === undefined ? 'no' : 'yes')
-      const md = new RegExp(`New-Item -ItemType Directory -Path ${lit} \\| Out-Null$`).exec(script)
-      if (md) return mkdir(un(md[1]))
-      const rd = new RegExp(`Remove-Item -LiteralPath ${lit} -Force$`).exec(script)
-      if (rd) return rmdir(un(rd[1]))
-      const rm = new RegExp(`Remove-Item -LiteralPath ${lit} -Force -ErrorAction SilentlyContinue$`).exec(script)
-      if (rm) {
-        world.files.delete(abs(un(rm[1])))
-        return { value: ok }
+      const exists = (path: string) => world.files.has(abs(path)) || world.locks.has(abs(path))
+      const run1 = (stmt: string): ReturnType<typeof fail> | { value: typeof ok } => {
+        const guarded = new RegExp(`^if \\(Test-Path -LiteralPath ${lit}\\) \\{ (.*) \\}$`).exec(stmt)
+        if (guarded) return exists(un(guarded[1])) ? run1(guarded[2] ?? '') : { value: ok }
+        const mv = new RegExp(`^Move-Item -LiteralPath ${lit} -Destination ${lit}( -Force)?$`).exec(stmt)
+        if (mv) return move(un(mv[1]), un(mv[2]), mv[3] === undefined ? 'no' : 'yes')
+        const md = new RegExp(`^New-Item -ItemType Directory -Path ${lit} \\| Out-Null$`).exec(stmt)
+        if (md) return mkdir(un(md[1]))
+        const rm = new RegExp(`^Remove-Item -LiteralPath ${lit} -Force( -ErrorAction SilentlyContinue)?$`).exec(stmt)
+        if (rm) {
+          const path = un(rm[1])
+          if (!exists(path)) return fail(`Remove-Item : Cannot find path '${path}' because it does not exist.`)
+          world.files.delete(abs(path))
+          world.locks.delete(abs(path))
+          return { value: ok }
+        }
+        return fail(`not mocked: ${stmt}`)
       }
-      return fail(`not mocked: ${script}`)
+      const result = run1(script)
+      return world.clixml ? { value: { ...result.value, stderr: `${CLIXML}${result.value.stderr}` } } : result
     }
     const paths = argv.filter(a => !a.startsWith('-'))
     if (argv[0] === 'mkdir') return mkdir(paths[1] ?? '')
@@ -157,12 +178,21 @@ export function worldOf(
       if (from === undefined || to === undefined) return fail('usage')
       return move(from, to, argv.includes('-n') ? 'skip' : 'yes')
     }
+    if (argv[0] === 'rm' && argv.includes('-d')) {
+      // rm -d -f: a file or an empty directory; -f: quiet when it is already gone.
+      for (const p of paths.slice(1)) {
+        world.files.delete(abs(p))
+        world.locks.delete(abs(p))
+      }
+      return { value: ok }
+    }
     if (argv[0] === 'rm') {
       for (const p of paths.slice(1)) world.files.delete(abs(p))
       return { value: ok }
     }
     return fail(`not mocked: ${argv.join(' ')}`)
   })
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('session.cwd', () => ({ value: CWD }))
   on('session.usage', () => ({
     value: {

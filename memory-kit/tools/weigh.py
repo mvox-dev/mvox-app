@@ -29,7 +29,7 @@ def chars(patterns):
     for pat in patterns:
         for p in sorted(ROOT.glob(pat)):
             if p.is_file() and p.name != "README.md" or pat.endswith("README.md"):
-                total += len(p.read_text())
+                total += len(p.read_text(encoding="utf-8"))
                 n += 1
     return total, n
 

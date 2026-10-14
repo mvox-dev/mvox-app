@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+## v0.1.0-alpha.12 -- 2026-10-14 -- the watch never idles silently
+
+- **Watch 0.2.3** (#14, found at mvox; built by the workshop's agent, 90/90 tests).
+  - `watch_sources` may be a block list or a one-line (or multi-line) flow list; quoting and
+    trailing commas work. At mvox the flow form had been ignored silently, so the watch idled.
+  - Never silent: a declared list it cannot read, and every skipped item, raises one visible
+    notice naming the conf. `watch_sources: []` stays quiet on purpose.
+  - New `/watch` command: the active sources (format, modifiers, path), the skipped ones with
+    reasons, the poll interval and the retire switch.
+  - README: `plugin configure --values-stdin` takes strings only.
+
+## v0.1.0-alpha.11 -- 2026-10-14 -- Windows fixes: UTF-8 everywhere, quiet removes
+
+- **Watch 0.2.2: a remove or unlock of a path already gone no longer fails** (#11, found by
+  Pepys's desk on Windows 11; built by the workshop's agent, 77/77 tests). Under
+  `$ErrorActionPreference='Stop'`, `Remove-Item -ErrorAction SilentlyContinue` exits 1 for a
+  missing file; it is now guarded by `Test-Path`. The unlock had the same trap on POSIX
+  (`rmdir` -> `rm -d -f`). A call is judged by exit code alone, even with CLIXML on stderr.
+- **Fix: the kit's Python names UTF-8 on every read and write** (#13, reported by Pepys's desk
+  and framework-research). With no `encoding=`, Windows used the locale code page (cp1257 on
+  Estonian Windows) and crashed on the first `õ`. 22 call sites in `lint/` and `tools/`; writes
+  also pin `newline="\n"`. `run-fixtures.sh` now fails any file I/O without `encoding="utf-8"`,
+  and `valid/non-ascii` keeps a UTF-8 tree in the fixtures. The `-X utf8` / `PYTHONUTF8=1`
+  workarounds are no longer needed.
+
 ## v0.1.0-alpha.10 -- 2026-10-14 -- the watch shares a team inbox with the harness
 
 - **Watch 0.2.1: shared hub inboxes** (#12, reported by mvox; built by the workshop's agent,

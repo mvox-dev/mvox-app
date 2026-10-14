@@ -53,7 +53,7 @@ def load(path, f):
     """Parse a YAML file. A parse error is always a failure: an unreadable tier is not a
     tier, and treating it as empty would hide everything in it."""
     try:
-        data = yaml.safe_load(path.read_text())
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as e:
         f.fail(path, f"unparseable YAML: {str(e).splitlines()[0]}")
         return None
@@ -272,7 +272,7 @@ LESSON_FRONT_KEYS = ("summary", "learned", "ref", "enforcement", "trigger")
 
 def lesson_front_matter(path):
     """The index fields a lesson carries in its YAML front matter, or None if it has none."""
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     if not text.startswith("---\n"):
         return None
     head, sep, _ = text[4:].partition("\n---\n")
@@ -353,7 +353,7 @@ def lint_urls(mem, f):
             continue
         if not re.match(r"^[a-z0-9-]+$", p.name):
             f.fail(p, "url short-name must be [a-z0-9-]+, cited as urls/<name>")
-        lines = [l for l in p.read_text().splitlines() if l.strip()]
+        lines = [l for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
         if len(lines) != 1:
             f.fail(p, f"{len(lines)} non-empty lines; a url file holds exactly one URL")
         elif not re.match(r"^\S+://\S+$", lines[0].strip()):
@@ -439,7 +439,7 @@ def main(argv=None):
     if not caps_path.exists():
         sys.stderr.write("memory-kit: caps.yaml missing; run tools/extract-caps.py\n")
         return 2
-    caps = yaml.safe_load(caps_path.read_text())
+    caps = yaml.safe_load(caps_path.read_text(encoding="utf-8"))
     ref_re = re.compile(caps["ref_grammar"]["pattern"])
     today = dt.date.today()
 
@@ -451,7 +451,7 @@ def main(argv=None):
     conf_path = home / "memory-kit.conf"
     conf = {}
     if conf_path.exists():
-        conf = yaml.safe_load(conf_path.read_text()) or {}
+        conf = yaml.safe_load(conf_path.read_text(encoding="utf-8")) or {}
     mem = target if target.name == "memory" else home / conf.get("memory_dir", "memory")
 
     # Mode: flag beats config; config beats the default. A home adopting an existing tree

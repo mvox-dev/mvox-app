@@ -27,19 +27,19 @@ export type Source = { prefix: string; format: Format; path: string; archive?: s
 /** Parses `prefix | format [modifiers] | path [| archive]`; a string says what is wrong. */
 export function parseSource(spec: string): Source | string {
   const parts = spec.split('|').map(p => p.trim())
-  if (parts.length < 3 || parts.length > 4) return `expected "prefix | format | path [| archive]": ${spec}`
+  if (parts.length < 3 || parts.length > 4) return `expected "prefix | format | path [| archive]"`
   const [prefix = '', formatField = '', path = '', archive] = parts
   const [format = '', ...modifiers] = formatField.split(/\s+/)
-  if (prefix === '') return `empty prefix: ${spec}`
-  if (format !== 'hub' && format !== 'lines') return `unknown format "${format}" (hub or lines): ${spec}`
-  if (path === '') return `empty path: ${spec}`
+  if (prefix === '') return `empty prefix`
+  if (format !== 'hub' && format !== 'lines') return `unknown format "${format}" (hub or lines)`
+  if (path === '') return `empty path`
   const source: Source = archive === undefined || archive === '' ? { prefix, format, path } : { prefix, format, path, archive }
   if (modifiers.length === 0) return source
-  if (format !== 'hub') return `modifiers apply only to a hub format: ${spec}`
+  if (format !== 'hub') return `modifiers apply only to a hub format`
   const take: Take = { unread: false, courier: false }
   for (const m of modifiers) {
-    if (m !== 'unread' && m !== 'courier') return `unknown modifier "${m}" (unread or courier): ${spec}`
-    if (take[m]) return `modifier "${m}" given twice: ${spec}`
+    if (m !== 'unread' && m !== 'courier') return `unknown modifier "${m}" (unread or courier)`
+    if (take[m]) return `modifier "${m}" given twice`
     take[m] = true
   }
   return { ...source, take }
@@ -89,25 +89,112 @@ export function confValue(conf: string, key: string): string | undefined {
   return undefined
 }
 
-/** The `watch_sources:` block list of memory-kit.conf, each item unquoted. */
-export function sourcesOf(conf: string): string[] {
-  const out: string[] = []
-  let inList = false
-  for (const raw of conf.split(/\r?\n/)) {
-    if (/^watch_sources:/.test(raw)) {
-      inList = true
-      continue
-    }
-    if (!inList || /^\s*(#.*)?$/.test(raw)) continue
-    const item = /^\s*-\s+(.*)$/.exec(raw)
-    if (!item) {
-      if (!/^\s/.test(raw)) inList = false
-      continue
-    }
+/**
+ * What `watch_sources:` in memory-kit.conf declares (kit #14): a block list (`- "item"` lines) or
+ * a flow list (`["a", 'b', c]`, on one line or several). `declared` is whether the key is there;
+ * `problem` says why a declared list could not be read, so it is never silently empty. An
+ * explicit `[]` is a home watching nothing on purpose: no problem.
+ */
+export type SourceList = { declared: boolean; items: string[]; problem?: string }
+
+export function readSources(conf: string): SourceList {
+  const lines = conf.split(/\r?\n/)
+  const at = lines.findIndex(l => /^watch_sources:/.test(l))
+  if (at === -1) return { declared: false, items: [] }
+  const rest = (lines[at] ?? '').slice('watch_sources:'.length).trim()
+  if (rest.startsWith('[')) return flowList([rest, ...lines.slice(at + 1)].join('\n'))
+  if (rest !== '' && !rest.startsWith('#')) return { declared: true, items: [], problem: 'expected a list (block "- item" lines, or [ ... ])' }
+  const items: string[] = []
+  for (const raw of lines.slice(at + 1)) {
+    if (/^\s*(#.*)?$/.test(raw)) continue
+    // Items may sit at column 0 under the key, as yaml.safe_dump writes them; any other
+    // column-0 line is the next key.
+    if (!/^\s/.test(raw) && !/^-(\s|$)/.test(raw)) break
+    const item = /^\s*-(?:\s+(.*))?$/.exec(raw)
+    if (!item) return { declared: true, items, problem: `not a list item: ${raw.trim()}` }
     const v = unquote(item[1] ?? '')
-    if (v !== '') out.push(v)
+    if (v !== '') items.push(v)
   }
-  return out
+  return items.length === 0 ? { declared: true, items, problem: 'no items under it' } : { declared: true, items }
+}
+
+/** A YAML flow list of scalars, from its `[` to its `]` (which may be lines later). */
+function flowList(text: string): SourceList {
+  const items: string[] = []
+  const fail = (problem: string): SourceList => ({ declared: true, items: [], problem })
+  let i = 1
+  let expectItem = true
+  const skipBlank = () => {
+    for (;;) {
+      while (i < text.length && /\s/.test(text[i] ?? '')) i++
+      if (text[i] !== '#' || !/\s/.test(text[i - 1] ?? ' ')) return
+      while (i < text.length && text[i] !== '\n') i++
+    }
+  }
+  for (;;) {
+    skipBlank()
+    const c = text[i]
+    if (c === undefined) return fail('unterminated [ ... ]: no closing ]')
+    if (c === ']') {
+      const after = text.slice(i + 1).split('\n')[0]?.trim() ?? ''
+      if (after !== '' && !after.startsWith('#')) return fail(`text after the closing ]: ${after}`)
+      return { declared: true, items }
+    }
+    if (c === ',') {
+      if (expectItem) return fail('an empty item (two commas)')
+      expectItem = true
+      i++
+      continue
+    }
+    if (!expectItem) return fail('items must be separated by a comma')
+    if (c === '[' || c === '{') return fail('nested lists or maps are not source items')
+    let value = ''
+    if (c === '"') {
+      i++
+      for (;;) {
+        const d = text[i]
+        if (d === undefined || d === '\n') return fail('unterminated "..." item')
+        if (d === '"') break
+        if (d === '\\') {
+          const n = text[i + 1] ?? ''
+          value += n === 'n' ? '\n' : n === 't' ? '\t' : n
+          i += 2
+          continue
+        }
+        value += d
+        i++
+      }
+      i++
+    } else if (c === "'") {
+      i++
+      for (;;) {
+        const d = text[i]
+        if (d === undefined || d === '\n') return fail("unterminated '...' item")
+        if (d === "'") {
+          if (text[i + 1] === "'") {
+            value += "'"
+            i += 2
+            continue
+          }
+          break
+        }
+        value += d
+        i++
+      }
+      i++
+    } else {
+      // A plain item ends at a comma, the closing ] or a line end.
+      while (i < text.length && !/[,\]\n]/.test(text[i] ?? '')) value += text[i++]
+      value = value.trim()
+    }
+    if (value !== '') items.push(value)
+    expectItem = false
+  }
+}
+
+/** The `watch_sources:` items of memory-kit.conf, either list form. */
+export function sourcesOf(conf: string): string[] {
+  return readSources(conf).items
 }
 
 const ABSOLUTE = /^(\/|[A-Za-z]:[\\/]|\\\\)/
@@ -363,15 +450,17 @@ export function base64Utf16le(text: string): string {
  */
 export function fileOpArgv(platform: Platform, f: FileOp): string[] {
   if ('path' in f) {
-    if (platform === 'posix') return f.op === 'remove' ? ['rm', '-f', '--', f.path] : [f.op === 'lock' ? 'mkdir' : 'rmdir', '--', f.path]
+    // remove and unlock are quiet when the target is already gone (another session, or the
+    // harness breaking a stale lock), and still fail on a real failure. rmdir is not quiet, so
+    // the unlock is rm -d -f; on Windows, under Stop, even -ErrorAction SilentlyContinue fails
+    // on a missing path (kit #11), so the removal is guarded by Test-Path.
+    if (platform === 'posix') return f.op === 'remove' ? ['rm', '-f', '--', f.path] : f.op === 'lock' ? ['mkdir', '--', f.path] : ['rm', '-d', '-f', '--', f.path]
     const path = psQuote(f.path)
     return powershell(
-      f.op === 'remove'
-        ? `Remove-Item -LiteralPath ${path} -Force -ErrorAction SilentlyContinue`
-        : f.op === 'lock'
-          ? // New-Item has no -LiteralPath; it fails when the directory exists, which the lock needs.
-            `New-Item -ItemType Directory -Path ${path} | Out-Null`
-          : `Remove-Item -LiteralPath ${path} -Force`,
+      f.op === 'lock'
+        ? // New-Item has no -LiteralPath; it fails when the directory exists, which the lock needs.
+          `New-Item -ItemType Directory -Path ${path} | Out-Null`
+        : `if (Test-Path -LiteralPath ${path}) { Remove-Item -LiteralPath ${path} -Force }`,
     )
   }
   if (platform === 'posix') {
