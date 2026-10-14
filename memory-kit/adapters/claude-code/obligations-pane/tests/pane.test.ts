@@ -3,16 +3,16 @@ import type { Engine } from 'claude-code/testing'
 
 import { LINK_FG, MODEL_COLORS, PANE_BG } from '../hooks/obligations'
 import { PRUSA_URL_FILE, WORKSHOP_YAML } from './fixtures/data'
-import { PANE, PLUGIN, SESSION, worldOf } from './fixtures/world'
+import { PANE, PLUGIN, SESSION, tagsAnswer, worldOf } from './fixtures/world'
 
 const NOW = Date.parse('2026-10-14T12:00:00Z')
-const KIT = { 'memory/obligations.yaml': WORKSHOP_YAML, 'memory/urls/prusa-start-ooze-issue': PRUSA_URL_FILE }
-
-/** The header clock as the mod computes it: the environment's own zone, else the host's +0300. */
-const expectedClock = () => {
-  const own = -new Date(NOW).getTimezoneOffset()
-  return new Date(NOW + (own !== 0 ? own : 180) * 60_000).toISOString().slice(0, 16).replace('T', ' ')
+const KIT = {
+  'memory/obligations.yaml': WORKSHOP_YAML,
+  'memory/urls/prusa-start-ooze-issue': PRUSA_URL_FILE,
+  'memory-kit/VERSION': '0.1.0-alpha.5\n',
 }
+const TAGS_URL = 'https://codeberg.org/api/v1/repos/mitselek/memory-kit/tags?limit=50'
+const HOUR = 3_600_000
 
 const mountPane = ($: Engine, surface: 'terminal' | 'desktop' = 'terminal') =>
   $.ui.mount({ ...PANE, surface, plugin: PLUGIN } as never)
@@ -32,8 +32,8 @@ describe('the pane over the workshop ledger', () => {
       expect((root as { props?: { backgroundColor?: string } }).props?.backgroundColor).toBe(PANE_BG)
 
       const texts = await textOf(ui)
-      const header = texts.find(t => t.startsWith('2026-'))
-      expect(header).toBe(`${expectedClock()}  0 expired · 1 due ≤7d`)
+      const header = texts.find(t => t.includes('expired'))
+      expect(header).toBe('memory-kit 0.1.0-alpha.5  0 expired · 1 due ≤7d')
 
       // Rows: soonest expiry first; the Prusa row (2026-12-31) last.
       const dates = texts.filter(t => /^\d{4}-\d{2}-\d{2}$/.test(t))
@@ -104,7 +104,8 @@ describe('empty states', () => {
     const ui = await mountPane($)
     const texts = await textOf(ui)
     expect(texts).toContain('no obligations')
-    expect(texts.find(t => t.startsWith('2026-'))).toBe(`${expectedClock()}  0 expired · 0 due ≤7d`)
+    // No memory-kit/VERSION here: nothing in the version slot, never a guess.
+    expect(texts.find(t => t.includes('expired'))).toBe('0 expired · 0 due ≤7d')
     await ui.unmount()
   })
 
@@ -163,6 +164,40 @@ describe('the memoryDir option', () => {
     await ui.unmount()
   })
 
+  // On this POSIX host the engine's $.fs resolves a C:\ path against the process cwd before
+  // any hook sees it, so a test cannot serve the file there. It checks where the pane looked:
+  // the path in "no obligations file here (...)" is the one memoryRoot built (kit #8).
+  const lookedAt = async (ui: Parameters<typeof textOf>[0]) =>
+    (await textOf(ui)).find(t => t.startsWith('no obligations file here'))
+  for (const dir of ['C:\\Users\\m\\pepys\\memory', 'C:/Users/m/pepys/memory', '\\\\server\\share\\memory']) {
+    test(`a Windows absolute memoryDir is not joined to cwd (kit #8): ${dir}`, { options: { memoryDir: dir } }, async ($, on) => {
+      worldOf(on, { 'memory/obligations.yaml': WORKSHOP_YAML })
+      mock.clock(on, { now: NOW })
+      await $.session.start(SESSION)
+      const ui = await mountPane($)
+      expect(await lookedAt(ui)).toBe(`no obligations file here (${dir}/obligations.yaml)`)
+      await ui.unmount()
+    })
+  }
+
+  test('a Windows absolute memory_dir in memory-kit.conf is not joined to cwd (kit #8)', async ($, on) => {
+    worldOf(on, { 'memory-kit.conf': 'memory_dir: D:\\homes\\kit\\memory\n', 'memory/obligations.yaml': WORKSHOP_YAML })
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    expect(await lookedAt(ui)).toBe('no obligations file here (D:\\homes\\kit\\memory/obligations.yaml)')
+    await ui.unmount()
+  })
+
+  test('a relative memoryDir still resolves against the working directory (kit #8)', { options: { memoryDir: 'elsewhere/memory' } }, async ($, on) => {
+    worldOf(on, {})
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    expect(await lookedAt(ui)).toBe('no obligations file here (/home/kit/elsewhere/memory/obligations.yaml)')
+    await ui.unmount()
+  })
+
   test('a memoryDir pointing nowhere says where it looked', { options: { memoryDir: '/nowhere/memory' } }, async ($, on) => {
     worldOf(on, { 'memory/obligations.yaml': WORKSHOP_YAML })
     mock.clock(on, { now: NOW })
@@ -194,8 +229,9 @@ describe('refresh', () => {
     mock.clock(on, { now: NOW + 8 * 86_400_000 })
     await $.session.start(SESSION)
     const ui = await mountPane($)
-    const header = (await textOf(ui)).find(t => t.startsWith('2026-'))
-    expect(header).toMatch(/^2026-10-22 .* 1 expired · 4 due ≤7d$/)
+    // The header no longer shows the date; the counts still run on today's.
+    const header = (await textOf(ui)).find(t => t.includes('expired'))
+    expect(header).toBe('memory-kit 0.1.0-alpha.5  1 expired · 4 due ≤7d')
     const expired = await ui.find({ type: 'Text', text: /^2026-10-21$/ })
     expect(expired?.props.backgroundColor).toBeDefined()
     const later = await ui.find({ type: 'Text', text: /^2026-10-28$/ })
@@ -407,7 +443,7 @@ describe('mouse wheel', () => {
     mock.clock(on, { now: NOW })
     await $.session.start(SESSION)
     const ui = await mountPane($)
-    const header = async () => (await textOf(ui)).find(t => t.startsWith('2026-') && t.includes('expired'))
+    const header = async () => (await textOf(ui)).find(t => t.includes('expired'))
     const footer = async () => (await textOf(ui)).find(t => t.startsWith('kit '))
     const before = { header: await header(), footer: await footer() }
 
@@ -452,5 +488,204 @@ describe('the pane follows the home the session started in (kit issue #3)', () =
     const ui = await mountPane($)
     expect(await dates(ui)).toHaveLength(6)
     await ui.unmount()
+  })
+})
+
+describe('upstream release check (kit #7)', () => {
+  const header = async (ui: Parameters<typeof textOf>[0]) => (await textOf(ui)).find(t => t.includes('expired'))
+
+  test('a newer tag upstream: the header says so', async ($, on) => {
+    const world = worldOf(on, KIT)
+    world.answer = () => tagsAnswer('v0.1.0-alpha.6', 'v0.1.0-alpha.5', 'not-a-release')
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    expect(await header(ui)).toBe('memory-kit 0.1.0-alpha.5 · alpha.6 out  0 expired · 1 due ≤7d')
+    expect(world.requests).toEqual([TAGS_URL])
+    await ui.unmount()
+  })
+
+  test('alpha.10 is newer than alpha.9', async ($, on) => {
+    const world = worldOf(on, { ...KIT, 'memory-kit/VERSION': '0.1.0-alpha.9\n' })
+    world.answer = () => tagsAnswer('v0.1.0-alpha.9', 'v0.1.0-alpha.10')
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    expect(await header(ui)).toBe('memory-kit 0.1.0-alpha.9 · alpha.10 out  0 expired · 1 due ≤7d')
+    await ui.unmount()
+  })
+
+  test('another major, minor or patch: the whole version', async ($, on) => {
+    const world = worldOf(on, KIT)
+    world.answer = () => tagsAnswer('v0.2.0', 'v0.1.0-alpha.10')
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    expect(await header(ui)).toBe('memory-kit 0.1.0-alpha.5 · 0.2.0 out  0 expired · 1 due ≤7d')
+    await ui.unmount()
+  })
+
+  for (const tags of [['v0.1.0-alpha.5'], ['v0.1.0-alpha.4', 'v0.1.0-alpha.3']]) {
+    test(`the same or an older tag (${tags.join(', ')}): nothing extra`, async ($, on) => {
+      const world = worldOf(on, KIT)
+      world.answer = () => tagsAnswer(...tags)
+      mock.clock(on, { now: NOW })
+      await $.session.start(SESSION)
+      const ui = await mountPane($)
+      expect(world.requests).toEqual([TAGS_URL])
+      expect(await header(ui)).toBe('memory-kit 0.1.0-alpha.5  0 expired · 1 due ≤7d')
+      await ui.unmount()
+    })
+  }
+
+  const failures: [string, ((url: string) => ReturnType<typeof tagsAnswer>) | undefined][] = [
+    ['refused (offline)', undefined],
+    ['an error status', () => ({ status: 429, ok: false, headers: {}, text: '{"message":"rate limited"}' })],
+    ['junk', () => ({ status: 200, ok: true, headers: {}, text: '<html>captive portal</html>' })],
+  ]
+  for (const [what, answer] of failures) {
+    test(`${what}: nothing extra, no error drawn, one debug line, no retry within 6 h`, async ($, on) => {
+      const world = worldOf(on, KIT)
+      world.answer = answer
+      const clock = mock.clock(on, { now: NOW })
+      await $.session.start(SESSION)
+      const ui = await mountPane($)
+      await clock.advance(20_000)
+      const texts = await textOf(ui)
+      expect(await header(ui)).toBe('memory-kit 0.1.0-alpha.5  0 expired · 1 due ≤7d')
+      expect(texts.some(t => /unreadable|error|fail|upstream/i.test(t))).toBe(false)
+      expect(world.requests).toHaveLength(1)
+      const lines = world.logs.filter(l => l.includes('upstream'))
+      expect(lines).toHaveLength(1)
+      expect(lines[0]).toMatch(/^debug: /)
+      await ui.unmount()
+    })
+  }
+
+  test('a failure keeps the last known result', async ($, on) => {
+    const world = worldOf(on, KIT, { upstream: { [TAGS_URL]: { checkedAt: NOW - 7 * HOUR, latest: '0.1.0-alpha.6' } } })
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    expect(world.requests).toEqual([TAGS_URL])
+    expect(await header(ui)).toBe('memory-kit 0.1.0-alpha.5 · alpha.6 out  0 expired · 1 due ≤7d')
+    await ui.unmount()
+  })
+
+  test('within 6 h no request (cache hit); after 6 h, one', async ($, on) => {
+    const world = worldOf(on, KIT)
+    world.answer = () => tagsAnswer('v0.1.0-alpha.5')
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    // The release check runs unawaited after session start; a zero advance lets it settle.
+    await clock.advance(0)
+    expect(world.requests).toHaveLength(1)
+    for (let i = 0; i < 5; i++) await clock.advance(HOUR)
+    await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
+    await clock.advance(HOUR - 20_000)
+    expect(world.requests).toHaveLength(1)
+    await clock.advance(20_000)
+    expect(world.requests).toHaveLength(2)
+    await clock.advance(20_000)
+    expect(world.requests).toHaveLength(2)
+  })
+
+  test('the cache is shared: a check another session made is used, not repeated', async ($, on) => {
+    const world = worldOf(on, KIT, { upstream: { [TAGS_URL]: { checkedAt: NOW - HOUR, latest: '0.1.0-alpha.6' } } })
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    expect(world.requests).toEqual([])
+    expect(await header(ui)).toBe('memory-kit 0.1.0-alpha.5 · alpha.6 out  0 expired · 1 due ≤7d')
+    await ui.unmount()
+  })
+
+  test('checkUpdates: false makes no request at all', { options: { checkUpdates: false } }, async ($, on) => {
+    // A stale cache that names a newer release: a check would be due, and the note would show.
+    const world = worldOf(on, KIT, { upstream: { [TAGS_URL]: { checkedAt: NOW - 7 * HOUR, latest: '0.1.0-alpha.6' } } })
+    world.answer = () => tagsAnswer('v0.1.0-alpha.6')
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    await clock.advance(20_000)
+    await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
+    await clock.advance(0)
+    expect(world.requests).toEqual([])
+    expect(await header(ui)).toBe('memory-kit 0.1.0-alpha.5  0 expired · 1 due ≤7d')
+    await ui.unmount()
+  })
+
+  test('no memory-kit/VERSION: no request, no comparison, no note', async ($, on) => {
+    const { 'memory-kit/VERSION': _, ...noVersion } = KIT
+    const world = worldOf(on, noVersion)
+    world.answer = () => tagsAnswer('v0.1.0-alpha.6')
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    expect(world.requests).toEqual([])
+    expect(await header(ui)).toBe('0 expired · 1 due ≤7d')
+    await ui.unmount()
+  })
+
+  test('a fetch that never settles: session start and turn end still return; timed out at 10 s, next try after 6 h', { timeoutMs: 20_000 }, async ($, on) => {
+    // 20 s of test time: six mocked hours of 20 s refreshes take a few real seconds.
+    const world = worldOf(on, KIT)
+    world.answer = 'hang'
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
+    await clock.advance(10_000)
+    expect(world.requests).toHaveLength(1)
+    expect(world.logs.filter(l => l.includes('upstream'))).toEqual([expect.stringMatching(/^debug: .*timed out/)])
+    // The timeout counted as a check: nothing more until 6 h after it.
+    await clock.advance(6 * HOUR - 10_000 - 20_000)
+    await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't2', reason: 'answer' })
+    expect(world.requests).toHaveLength(1)
+    world.answer = () => tagsAnswer('v0.1.0-alpha.6')
+    await clock.advance(20_000)
+    expect(world.requests).toHaveLength(2)
+    const ui = await mountPane($)
+    expect(await header(ui)).toBe('memory-kit 0.1.0-alpha.5 · alpha.6 out  0 expired · 1 due ≤7d')
+    await ui.unmount()
+  })
+
+  test('a memoryDir home outside the cwd: VERSION and upstream come from the home that holds the memory dir', { options: { memoryDir: '/srv/home/memory' } }, async ($, on) => {
+    const world = worldOf(on, {
+      '/srv/home/memory/obligations.yaml': WORKSHOP_YAML,
+      '/srv/home/memory-kit/VERSION': '0.1.0-alpha.4\n',
+      '/srv/home/memory-kit.conf': 'memory_dir: memory\nupstream: someone/kit-fork\n',
+    })
+    world.answer = () => tagsAnswer('v0.1.0-alpha.5')
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    expect(await header(ui)).toBe('memory-kit 0.1.0-alpha.4 · alpha.5 out  0 expired · 1 due ≤7d')
+    expect(world.requests).toEqual(['https://codeberg.org/api/v1/repos/someone/kit-fork/tags?limit=50'])
+    await ui.unmount()
+  })
+
+  test('a memoryDir home without VERSION falls back to the cwd home', { options: { memoryDir: '/srv/home/memory' } }, async ($, on) => {
+    worldOf(on, { '/srv/home/memory/obligations.yaml': WORKSHOP_YAML, 'memory-kit/VERSION': '0.1.0-alpha.5\n' })
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    expect(await header(ui)).toBe('memory-kit 0.1.0-alpha.5  0 expired · 1 due ≤7d')
+    await ui.unmount()
+  })
+
+  test('upstream: owner/repo in memory-kit.conf picks the repository; a bad value makes no request', async ($, on) => {
+    const world = worldOf(on, { ...KIT, 'memory-kit.conf': 'memory_dir: memory\nupstream: someone/kit-fork\n' })
+    world.answer = () => tagsAnswer('v0.1.0-rc.1')
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    expect(world.requests).toEqual(['https://codeberg.org/api/v1/repos/someone/kit-fork/tags?limit=50'])
+    expect(await header(ui)).toBe('memory-kit 0.1.0-alpha.5 · rc.1 out  0 expired · 1 due ≤7d')
+    await ui.unmount()
+
+    world.files.set('/home/kit/memory-kit.conf', 'upstream: https://evil.example/tags\n')
+    world.requests.length = 0
+    await $.session.start(SESSION)
+    expect(world.requests).toEqual([])
   })
 })

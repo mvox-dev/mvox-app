@@ -4,7 +4,10 @@ import {
   ACTOR_PALETTE,
   actorColor,
   addDays,
+  cachedCheck,
   clampIndex,
+  compareRelease,
+  confValue,
   contextLoad,
   contextWeight,
   countsLabel,
@@ -12,27 +15,39 @@ import {
   fitActor,
   fitName,
   fitWeight,
+  isAbsolutePath,
   isoDate,
+  isFresh,
   isoMinute,
+  kitLabel,
+  kitVersionOf,
   LINK_FG,
   memoryDirOf,
+  parentDir,
   MIHKEL_COLOR,
   modelLetter,
+  newestRelease,
   offsetFromZ,
   parseObligations,
+  parseRelease,
   recordStep,
   segmentsOf,
   sortByExpires,
   statusOf,
   step,
   subagentWeight,
+  tagNamesOf,
   trailingLinksOf,
+  UPDATE_INTERVAL_MS,
+  updateNote,
+  upstreamTagsUrl,
   urlNamesOf,
   urlOfFile,
   wheelStep,
 } from '../hooks/obligations'
 import type { ObligationRow } from '../types'
 import { WORKSHOP_YAML } from './fixtures/data'
+import { SAFE_DUMP_ASCII, SAFE_DUMP_ITEMS, SAFE_DUMP_UNICODE } from './fixtures/safe-dump'
 
 const row = (expires: string, extra: Partial<ObligationRow> = {}): ObligationRow => ({
   obligation: `due ${expires}`,
@@ -109,10 +124,162 @@ describe('parsing', () => {
     }
   })
 
+  test('yaml.safe_dump output: items at column 0, folded lines, escapes (kit #5)', () => {
+    for (const text of [SAFE_DUMP_ASCII, SAFE_DUMP_UNICODE]) {
+      const parsed = parseObligations(text)
+      expect(parsed.kind).toBe('ok')
+      if (parsed.kind !== 'ok') return
+      expect(parsed.items.map(({ line, ...rest }) => rest)).toEqual(SAFE_DUMP_ITEMS)
+      expect(parsed.items.map(i => i.line)).toEqual([2, 9, 15, 23])
+    }
+  })
+
+  test('the indented layout still parses, and the two layouts agree', () => {
+    const indented = SAFE_DUMP_UNICODE.split('\n')
+      .map(l => (l === '' || l === 'obligations:' ? l : `  ${l}`))
+      .join('\n')
+    const parsed = parseObligations(indented)
+    expect(parsed.kind).toBe('ok')
+    if (parsed.kind === 'ok') expect(parsed.items.map(({ line, ...rest }) => rest)).toEqual(SAFE_DUMP_ITEMS)
+    expect(parseObligations(WORKSHOP_YAML).kind).toBe('ok')
+  })
+
+  test('multi-line scalars fold as YAML does', () => {
+    const one = (value: string) => {
+      const parsed = parseObligations(`obligations:\n- obligation: ${value}\n  actor: a\n  expires: 2026-10-20\n`)
+      return parsed.kind === 'ok' ? parsed.items[0]?.obligation : parsed
+    }
+    // A blank line inside a scalar is a line break; single breaks are spaces.
+    expect(one('x\n    more text\n\n    after blank')).toBe('x more text\nafter blank')
+    expect(one("'a\n\n    b  \n     c'")).toBe('a\nb c')
+    // Double-quoted: a backslash ends the line without a space; "\ " is a space.
+    expect(one('"a\\\n    \\ b"')).toBe('a b')
+    expect(one('"caf\\xE9 \\u2014 \\U0001F600"')).toBe('café — 😀')
+    // The value may start on the next line.
+    expect(one('\n    on the next line')).toBe('on the next line')
+    // Plain null and ~ are empty; quoted, they are text.
+    const nulls = parseObligations("obligations:\n- obligation: x\n  actor: a\n  expires: 2026-10-20\n  ref: null\n  check: ~\n  since: ''\n")
+    expect(nulls.kind === 'ok' && [nulls.items[0]?.ref, nulls.items[0]?.check]).toEqual(['', ''])
+  })
+
+  test('column-0 and multi-line errors', () => {
+    const cases: [string, number, RegExp][] = [
+      ['- obligation: x', 1, /expected "obligations:" first/],
+      ['obligations: []\n- obligation: x', 2, /content after/],
+      ['obligations:\n- obligation: x\n  - obligation: y', 3, /inconsistent indent/],
+      ['obligations:\n- obligation: x\n    actor: y', 3, /inconsistent indent/],
+      ['obligations:\n- obligation: x # note\n    more', 2, /comment/],
+      ['obligations:\n- obligation: "x\n  actor: y', 2, /unterminated/],
+      ['obligations:\n- obligation: x\nfacts:', 3, /unexpected top-level line/],
+    ]
+    for (const [text, line, message] of cases) {
+      const parsed = parseObligations(text)
+      expect(parsed.kind, text).toBe('error')
+      if (parsed.kind === 'error') {
+        expect(parsed.line, text).toBe(line)
+        expect(parsed.message, text).toMatch(message)
+      }
+    }
+  })
+
+  test('absolute paths: POSIX, drive letter, UNC (kit #8)', () => {
+    for (const p of ['/srv/home/memory', 'C:\\Users\\m\\memory', 'C:/Users/m/memory', 'd:\\x', '\\\\server\\share\\memory'])
+      expect(isAbsolutePath(p), p).toBe(true)
+    for (const p of ['memory', 'kit-home/memory', './memory', '..\\memory', 'C:memory', 'CC:\\x', ''])
+      expect(isAbsolutePath(p), p).toBe(false)
+  })
+
+  test('parent directory, POSIX and Windows separators', () => {
+    expect(parentDir('/srv/home/memory')).toBe('/srv/home')
+    expect(parentDir('/srv/home/memory/')).toBe('/srv/home')
+    expect(parentDir('C:\\Users\\m\\memory')).toBe('C:\\Users\\m')
+    expect(parentDir('/home/kit/C:/x/memory')).toBe('/home/kit/C:/x')
+    expect(parentDir('/memory')).toBe('/')
+    expect(parentDir('memory')).toBe('.')
+  })
+
   test('memory_dir from memory-kit.conf', () => {
     expect(memoryDirOf('# c\nmemory_dir: memory\nmode: gate\n')).toBe('memory')
     expect(memoryDirOf('memory_dir: "notes" # here\n')).toBe('notes')
     expect(memoryDirOf('mode: gate\n')).toBeUndefined()
+  })
+})
+
+describe('kit version and upstream releases (kit #4, #7)', () => {
+  test('conf values, VERSION text', () => {
+    const conf = '# c\nmemory_dir: memory\nupstream: "someone/memory-kit" # fork\nmode: gate\n'
+    expect(confValue(conf, 'upstream')).toBe('someone/memory-kit')
+    expect(confValue(conf, 'mode')).toBe('gate')
+    expect(confValue(conf, 'absent')).toBeUndefined()
+    expect(confValue('  upstream: nested\n', 'upstream')).toBeUndefined()
+    expect(kitVersionOf('0.1.0-alpha.5\n')).toBe('0.1.0-alpha.5')
+    expect(kitVersionOf('  \n')).toBeUndefined()
+    expect(kitVersionOf('')).toBeUndefined()
+  })
+
+  test('release tags: v<maj>.<min>.<patch>, optional -alpha.N, -beta.N, -rc.N', () => {
+    expect(parseRelease('v0.1.0-alpha.5')).toEqual({ major: 0, minor: 1, patch: 0, pre: { kind: 'alpha', n: 5 } })
+    expect(parseRelease('0.1.0-alpha.5')).toEqual({ major: 0, minor: 1, patch: 0, pre: { kind: 'alpha', n: 5 } })
+    expect(parseRelease('v1.2.3')).toEqual({ major: 1, minor: 2, patch: 3 })
+    for (const junk of ['v1.2', 'v1.2.3-dev', 'v1.2.3-alpha', 'v1.2.3-rc.1.1', 'release-1', 'v01.2.3', 'v1.2.3+build', ''])
+      expect(parseRelease(junk), junk).toBeUndefined()
+  })
+
+  test('semver precedence', () => {
+    const order = ['0.1.0-alpha.2', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-beta.1', '0.1.0-rc.1', '0.1.0', '0.1.1', '0.2.0-alpha.1', '1.0.0']
+    for (let i = 0; i + 1 < order.length; i++) {
+      const a = parseRelease(order[i] ?? '')
+      const b = parseRelease(order[i + 1] ?? '')
+      if (a === undefined || b === undefined) throw new Error(`unparsed ${order[i]}`)
+      expect(compareRelease(a, b), `${order[i]} < ${order[i + 1]}`).toBeLessThan(0)
+      expect(compareRelease(b, a)).toBeGreaterThan(0)
+      expect(compareRelease(a, a)).toBe(0)
+    }
+    expect(newestRelease(['v0.1.0-alpha.9', 'nightly', 'v0.1.0-alpha.10', 'v9.9.9-dev'])).toBe('0.1.0-alpha.10')
+    expect(newestRelease(['junk'])).toBeUndefined()
+  })
+
+  test('the note: newer only; the pre-release alone on the same core, else the whole version', () => {
+    expect(updateNote('0.1.0-alpha.5', '0.1.0-alpha.6')).toBe('alpha.6')
+    expect(updateNote('0.1.0-alpha.5', '0.1.0-rc.1')).toBe('rc.1')
+    expect(updateNote('0.1.0-alpha.5', '0.1.0')).toBe('0.1.0')
+    expect(updateNote('0.1.0-alpha.5', '0.2.0-alpha.1')).toBe('0.2.0-alpha.1')
+    expect(updateNote('0.1.0-alpha.5', '0.1.0-alpha.5')).toBe('')
+    expect(updateNote('0.1.0-alpha.5', '0.1.0-alpha.4')).toBe('')
+    expect(updateNote('0.1.0-alpha.5', '')).toBe('')
+    expect(updateNote('', '0.1.0-alpha.6')).toBe('')
+    expect(updateNote('my-fork', '0.1.0-alpha.6')).toBe('')
+    expect(kitLabel('0.1.0-alpha.5', 'alpha.6')).toBe('memory-kit 0.1.0-alpha.5 · alpha.6 out')
+    expect(kitLabel('0.1.0-alpha.5', '')).toBe('memory-kit 0.1.0-alpha.5')
+    expect(kitLabel('', 'alpha.6')).toBe('')
+  })
+
+  test('upstream: owner/repo on Codeberg, the kit repo by default', () => {
+    expect(upstreamTagsUrl(undefined)).toBe('https://codeberg.org/api/v1/repos/mitselek/memory-kit/tags?limit=50')
+    expect(upstreamTagsUrl('someone/memory-kit.fork')).toBe('https://codeberg.org/api/v1/repos/someone/memory-kit.fork/tags?limit=50')
+    for (const bad of ['https://example.com/tags', 'a/b/c', '../x', 'a', 'a/..', ''])
+      expect(upstreamTagsUrl(bad), bad).toBeUndefined()
+  })
+
+  test('tags answer: names of a JSON list, else junk', () => {
+    expect(tagNamesOf('[{"name":"v0.1.0-alpha.5","id":"x"},{"name":"v0.1.0-alpha.4"}]')).toEqual(['v0.1.0-alpha.5', 'v0.1.0-alpha.4'])
+    expect(tagNamesOf('[]')).toEqual([])
+    for (const junk of ['<html>', '{"message":"rate"}', '[{"nom":"x"}]', '[1]', ''])
+      expect(tagNamesOf(junk), junk).toBeUndefined()
+  })
+
+  test('cache: fresh for 6 h; a clock that went back is stale', () => {
+    expect(UPDATE_INTERVAL_MS).toBe(6 * 3_600_000)
+    expect(isFresh(1_000, 1_000)).toBe(true)
+    expect(isFresh(1_000, 1_000 + UPDATE_INTERVAL_MS - 1)).toBe(true)
+    expect(isFresh(1_000, 1_000 + UPDATE_INTERVAL_MS)).toBe(false)
+    expect(isFresh(1_000, 999)).toBe(false)
+    const url = 'https://u'
+    expect(cachedCheck({ [url]: { checkedAt: 5, latest: '0.1.0' } }, url)).toEqual({ checkedAt: 5, latest: '0.1.0' })
+    expect(cachedCheck({ [url]: { checkedAt: '5', latest: '0.1.0' } }, url)).toBeUndefined()
+    expect(cachedCheck({ other: { checkedAt: 5, latest: '' } }, url)).toBeUndefined()
+    expect(cachedCheck(undefined, url)).toBeUndefined()
+    expect(cachedCheck('junk', url)).toBeUndefined()
   })
 })
 

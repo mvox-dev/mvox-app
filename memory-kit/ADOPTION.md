@@ -36,9 +36,9 @@ For each existing file, name which tier its content is already doing. Expect one
 doing several jobs at once; that is the normal finding.
 
 Tiers: `facts` (claims about the present with an address that could prove them wrong),
-`scratchpad` (what to act on next), `rules` (standing norms, read every session),
-`lessons` (situational knowledge with a why), `dormant` (parked facts), `urls`, `secrets`,
-`keys`.
+`scratchpad` (what to act on next), `obligations` (what someone owes, with who, since when,
+how to check, and when to check), `rules` (standing norms, read every session), `lessons`
+(situational knowledge with a why), `dormant` (parked facts), `urls`, `secrets`, `keys`.
 
 Write `adoption/01-map.md`: a table of source file -> tier(s) -> count, plus a list of
 anything that fits no tier, quoted, with your best guess at what it is.
@@ -67,8 +67,12 @@ Useful genus test, when a claim resists placement:
 - goes inapplicable rather than false -> **lesson**
 - rots only when re-decided -> a **ruling**; keep it, and when it is reversed keep one dated
   line naming what replaced it
-- names someone you are waiting on -> not a fact. It needs an owner and an expiry; put it in
-  the scratchpad with a command that re-checks it
+- names someone you are waiting on, or something someone owes -> an **obligation**, not a
+  fact and not a scratchpad row. Give it an `actor`, a `since`, a `check` (how to see whether
+  it is done) and an `expires`. `expires` is the date you run the check, not the other party's
+  deadline: on that date you check, then re-state, resolve or hand it to the human. (A
+  scratchpad row would vanish at the next regeneration or squat a row for weeks; see the
+  kit lesson `memory-kit/memory/lessons/obligations-are-not-facts.md`.)
 
 Items the human rules dead go to `adoption/03-ruled-dead.md` -- still not deleted.
 
