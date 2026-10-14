@@ -1,11 +1,19 @@
 {
   "name": "memory-kit",
-  "owner": { "name": "memory-kit (mitselek)" },
+  "owner": {
+    "name": "memory-kit (mitselek)"
+  },
+  "description": "Claude Code tools that travel with memory-kit: the read-only obligations pane and the watch.",
   "plugins": [
     {
       "name": "obligations-pane",
       "source": "./obligations-pane",
       "description": "Read-only side pane over the memory-kit obligations tier."
+    },
+    {
+      "name": "watch",
+      "source": "./watch",
+      "description": "Delivers a home's declared inboxes into the session (idle-safe); optional checkpoint-and-retire on idle."
     }
   ]
 }

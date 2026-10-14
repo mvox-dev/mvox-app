@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+## v0.1.0-alpha.8 -- 2026-10-14 -- the watch polls every 5 s
+
+- **Watch 0.1.1: `pollSeconds` defaults to 5** (#10). The household's flood test (15 hub
+  messages from three teams in about a minute) delivered all 15 exactly once, but at 15 s
+  every second message first bounced: the hub courier waits only about 10 s for an occupied
+  inbox. The hub kept and redelivered them, late and out of order. 5 s (the minimum) matches
+  the old hub-drain Monitors. The README says why to keep it there for a `hub` source.
+- Known limit: the watch drains with POSIX `mv`/`rm`, so it does not run on Windows yet
+  (planned for the next release).
+
+## v0.1.0-alpha.7 -- 2026-10-14 -- the watch
+
+- **New adapter: `adapters/claude-code/watch/`, watch 0.1.0** (#9; built by the workshop's agent,
+  48/48 tests). A second plugin in the `memory-kit` marketplace, beside the read-only pane:
+  `claude plugin install watch@memory-kit`.
+  - **Idle-safe notifications.** Drains the inboxes a home declares in `memory-kit.conf`
+    (`watch_sources: "prefix | hub|lines | path [| archive]"`) and delivers each item as a prompt
+    once the session is idle, prefixed with its source. A hub-mail Monitor is no longer needed, nor
+    is typing into tmux. An item leaves its pending file only once its delivery is accepted: a
+    refusal keeps it, backs off (1 to 30 min) and tells the human once; a crash may deliver an item
+    twice, never zero times.
+  - **Checkpoint and retire on idle**, off by default (`retireOnIdle`). After `idleMinutes` (50)
+    idle, with context grown by `growthPercent` (50) since the session began, it asks the session
+    to run its close routine and the home's `watch_retire_step`. Five guards against a restart
+    loop: human input first, growth not size, one ask per session, a shared brake (2 h apart, 4 a
+    day), and the off switch. Each guard's removal fails its own tests.
+  - POSIX only for now (draining uses `mv`/`rm`); Windows is not supported yet.
+- The marketplace gains a description.
+
+- README: a **Roadmap** section -- the gates for 0.1.0, what 0.2 and 0.3 settle, and draft 1.0
+  criteria (PO, 2026-10-14).
+- UPGRADE: the pane's option count is 4 from alpha.6 (`checkUpdates`).
+
 ## v0.1.0-alpha.6 -- 2026-10-14 -- the pane knows its kit; docs keep their promises
 
 - **Pane 0.3.0** (built by the workshop's pane agent; 81/81 tests):

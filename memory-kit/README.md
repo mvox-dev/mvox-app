@@ -30,6 +30,25 @@ The world still files natural language under "prose" and code under "engineering
 | D6 | Core tiers only in v0.x: scratchpad, obligations, facts, dormant, rules, lessons, urls, secrets, keys. Refute-by-genus ships as guidance. Team-only artefacts stay with their team until a second consumer wants them. |
 | D7 | One lint, two modes: `--gate` (fail-closed) and `--report` (exit 0). One principle: **a gate must pass on the tree it is introduced to.** A fresh home gates everything from day one; an existing home gates what already passes and gauges the rest. |
 
+## Roadmap
+
+Where the kit is, and what each step waits for. Dates are targets; gates are not negotiable.
+
+- **0.1.0-alpha.N (now).** Five homes run the kit; upgrades need no data step since alpha.2.
+- **0.1.0** -- drops "alpha" when:
+  - at least one home has passed ADOPTION GATE 3 (deletions) on the kit (household: 17.10), and
+  - the adopting homes have filed their experience reports (household due 27.10).
+- **0.2** -- settles the questions that can change data shape:
+  - a tier for rulings (asked by three homes);
+  - refs with more than one source;
+  - a gauge mode for homes not yet on the kit;
+  - `SPEC.md` and JSON Schemas beside `types/`.
+- **0.3** -- revisits team-only artefacts (D6) and long-term knowledge (the 2026-09-23 ruling).
+- **1.0** -- the contract stops moving. Draft criteria, to be ruled:
+  - no tier shape change for two consecutive minor releases;
+  - at least 80% of adopting homes on the current release;
+  - the fixtures cover every lint check, each with its expected reason.
+
 Resolved questions:
 
 - No date field on records. A date is provenance and lives in `ref`: `<person>:<date>`, or a bare
