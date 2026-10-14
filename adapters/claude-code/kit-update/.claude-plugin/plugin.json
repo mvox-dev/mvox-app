@@ -1,0 +1,28 @@
+{
+  "name": "kit-update",
+  "version": "0.1.0",
+  "description": "memory-kit kit-update: checks upstream for a newer release on the home's channel (memory-kit.conf update: pinned|verified|latest) and prompts the session, once per release, to run tools/kit-update.py. Never runs git, never changes files.",
+  "author": {
+    "name": "Mihkel Putrinš"
+  },
+  "userConfig": {
+    "home": {
+      "type": "string",
+      "title": "Kit home",
+      "description": "The kit home whose memory-kit.conf names the channel (update:) and whose memory-kit/VERSION is current. Empty: the directory the session started in.",
+      "default": ""
+    },
+    "checkMinutes": {
+      "type": "number",
+      "title": "Check interval (minutes)",
+      "description": "How often upstream's tags are asked, shared by every session through the plugin's store. At least 5.",
+      "default": 60
+    },
+    "checkUpdates": {
+      "type": "boolean",
+      "title": "Check for kit releases",
+      "description": "Off: no request at all, whatever the channel.",
+      "default": true
+    }
+  }
+}

@@ -106,6 +106,10 @@ A major means data shape changed. The kit ships `migrations/<version>/` for exac
 - **0.1.0-alpha.11 -> 0.1.0-alpha.12:** no data step. Pull, lint, `/reload-plugins`, then run `/watch`
   once to see that your sources are active.
 
+- **0.1.0-alpha.12 -> 0.1.0-alpha.13:** no data step. Pull, lint, `/reload-plugins`. New, optional: choose
+  a channel in `memory-kit.conf` (`update: pinned|verified|latest`; pinned is the default), and
+  `claude plugin install kit-update@memory-kit` to be prompted when a release on it appears.
+
 ## Always
 
 - The home's config for the kit lives outside the subtree; a pull must never clobber it.
