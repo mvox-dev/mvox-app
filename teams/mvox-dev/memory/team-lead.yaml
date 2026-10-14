@@ -28,6 +28,15 @@ current:
   - label: DECISION
     record: "About page (urls/mvox-about) is the public baseline for publishers; it names no partner or dispute"
     ref: "2026-06-14"
+  - label: DECISION
+    record: "Kit on alpha.14, channel verified; kit-update plugin prompts, run kit-update.py on a worktree"
+    ref: memory-kit.conf
+  - label: DECISION
+    record: "Hub mail comes via the watch plugin; never drain team-lead.json by hand"
+    ref: memory-kit.conf
+  - label: WIP
+    record: "06-report.md: fix the squash section, fill proving; file by 2026-10-28"
+    ref: teams/mvox-dev/memory-adoption/06-report.md
   - label: DEFERRED
     record: "Untested: agenda view toggle with no chips."
     ref: src/lib/agenda/AgendaListArea.svelte
