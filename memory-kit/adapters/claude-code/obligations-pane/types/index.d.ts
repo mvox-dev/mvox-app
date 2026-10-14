@@ -36,8 +36,14 @@ export type PaneSnapshot = {
   urls: Record<string, string>
   /** Milliseconds since the epoch when the snapshot was taken. */
   now: number
-  /** Local UTC offset in minutes east, for the header clock and "today". */
+  /** Local UTC offset in minutes east, for "today". */
   offsetMinutes: number
+  /** The home's memory-kit/VERSION, line 1; '' when there is none (kit #4). */
+  kitVersion: string
+  /** The tags URL the release check asks; '' when none is made: checkUpdates off, no VERSION, or an unusable upstream (kit #7). */
+  upstreamUrl: string
+  /** The newest upstream release known for upstreamUrl, without the `v`; '' when none. */
+  latest: string
   self: { name: string; model: string; tokens: number | null; window: number | null }
   agents: PaneAgent[]
 }

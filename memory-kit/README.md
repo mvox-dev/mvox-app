@@ -23,11 +23,11 @@ The world still files natural language under "prose" and code under "engineering
 | # | Ruling |
 |---|--------|
 | D1 | Strict YAML for every structured tier (scratchpad, facts, dormant, rules, lessons index, keys). Markdown only for prose bodies. `urls/` stay one-line files; secrets stay `.age`. |
-| D2 | **Fixtures are the contract.** Every implementation passes the same `fixtures/{valid,invalid}/`. JSON Schema is the machine-readable statement; `SPEC.md` the readable one. A schema can be reinterpreted; a fixture cannot. |
-| D3 | Distributed by `git subtree` into `memory-kit/` in each consumer, with `VERSION` and `sync.sh`. Never a submodule. |
+| D2 | **Fixtures are the contract.** Every implementation passes the same `fixtures/{valid,invalid}/`. The TypeScript interfaces in `types/` are the machine-readable statement; this README, `ADOPTION.md` and `UPGRADE.md` the readable one. (A separate `SPEC.md` and JSON Schemas were planned and are deferred to v0.2.) A schema can be reinterpreted; a fixture cannot. |
+| D3 | Distributed by `git subtree` into `memory-kit/` in each consumer, with `VERSION`; a home updates with a plain `git subtree pull` (see `UPGRADE.md`). Never a submodule. |
 | D4 | Codeberg is primary; GitHub carries a mirror. |
 | D5 | Proven-first: nothing enters the kit unproven in at least one consumer. Semver; a migration script per major. See `GOVERNANCE.md`. |
-| D6 | Core tiers only in v0.x: scratchpad, facts, dormant, rules, lessons, urls, secrets, keys. Refute-by-genus ships as guidance. Team-only artefacts stay with their team until a second consumer wants them. |
+| D6 | Core tiers only in v0.x: scratchpad, obligations, facts, dormant, rules, lessons, urls, secrets, keys. Refute-by-genus ships as guidance. Team-only artefacts stay with their team until a second consumer wants them. |
 | D7 | One lint, two modes: `--gate` (fail-closed) and `--report` (exit 0). One principle: **a gate must pass on the tree it is introduced to.** A fresh home gates everything from day one; an existing home gates what already passes and gauges the rest. |
 
 Resolved questions:
@@ -218,27 +218,26 @@ lesson, and what it displaces if core is full.
 own config; the lint reports the divergence, never forbids it. The kit does not legislate
 homes it has not seen.
 
-## Layout (target for v0.1)
+## Layout (as shipped)
 
 ```
 ADOPTION.md        prompt: bring an existing home onto the kit, once
 UPGRADE.md         prompt: after every pull
-SPEC.md            the convention, readable
 types/             TypeScript interfaces -- the canon: shape, constants and rationale
 caps.yaml          GENERATED from types/caps.ts; the flat extract the lint reads
-tools/             extract-caps.py (--check fails when caps.yaml is stale)
-core/              content that ships WITH the kit: kit facts, 8 rules, lessons, urls
-schemas/           one JSON Schema per tier
-caps.yaml          every numeric cap, in one place
+tools/             extract-caps.py, lesson-index.py, obligations-due.py, weigh.py
+memory/            the kit's own memory, shipped with it: kit facts, the 8 core rules, lessons, urls
 fixtures/          valid/ and invalid/ samples per tier -- the contract
-lint/              reference lint: POSIX sh + awk + yq, --gate | --report
-migrations/        one directory per breaking version
-skeleton/          the empty home a fresh consumer starts from
-lessons/           convention-level lessons that travel with the kit
-templates/         secrets README, keys file
+lint/              reference lint (python3 + PyYAML), --gate | --report; run-fixtures.sh
+skeleton/          the empty home a fresh consumer starts from (secrets README included)
+adapters/          harness-bound tools, e.g. adapters/claude-code/obligations-pane/
+GOVERNANCE.md
 VERSION            pinned by consumers
 CHANGELOG.md
 ```
+
+Planned, not shipped yet: `SPEC.md` (a readable spec beside `types/`), `schemas/` (JSON Schema per
+tier), `migrations/` (one directory per breaking version; none has been needed yet).
 
 ## Status
 
