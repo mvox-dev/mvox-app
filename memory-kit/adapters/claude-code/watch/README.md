@@ -48,7 +48,33 @@ Each item is `prefix | format [modifiers] | path [| archive]`:
   is `archive/` beside the file: `<stem>-archive.json` for hub, the same file name for lines. Both
   defaults match the household's `comms/inboxes/archive/team-lead-archive.json`.
 
-A bad line is skipped with one debug line; the rest still run.
+**Either YAML list form** (since 0.2.3, kit #14):
+
+- the block form above, with items indented or at column 0;
+- the flow form, on one line or several:
+  `watch_sources: ["hub mail | hub unread courier | ~/.claude/teams/session-*/inboxes/team-lead.json"]`.
+
+In the flow form, items may be `"double"` quoted (with `\"` and `\\`), `'single'` quoted (with
+`''`) or plain. A comma or bracket inside a quoted item is part of it. A plain item ends at a
+comma.
+
+**Never silently idle.** Each case below is one visible notice per session (notify, else a
+transcript line), never a debug line alone:
+
+- `watch_sources:` is there but cannot be read: no items under it, a value that is not a list,
+  an unterminated `[ ...`, nested lists or maps, or items without commas between them.
+- One item does not parse, or names `~` with no HOME. That item is skipped, and the rest still
+  run.
+
+`watch_sources: []` is a home watching nothing on purpose, so it gets no notice.
+
+**`/watch`** shows what is active now:
+
+- each source with its format and expanded path;
+- what was skipped, and why;
+- the retire switch and the poll interval.
+
+It re-reads `memory-kit.conf` every time, so it is the check to run after a reload.
 
 ## Draining
 
@@ -120,6 +146,9 @@ bell), it also goes to the transcript as a dim line.
 
 - `home`: the kit home whose `memory-kit.conf` declares the sources. Empty: the session's start
   directory.
+- Setting options from a shell: `claude plugin configure watch@memory-kit --values-stdin` takes
+  a JSON object of **strings only**, e.g. `{"pollSeconds": "5", "retireOnIdle": "false"}`;
+  bare numbers and booleans are refused (found by mvox, 2026-10-14).
 - `pollSeconds` (5, at least 5): the drain and idle-check interval. It reads local files only.
   For a `hub` source keep it at 5: the hub courier waits only about 10 s for an occupied inbox
   (50 rounds of 0.2 s), so a slower poll makes a burst bounce and arrive late and out of order
@@ -212,9 +241,9 @@ aside, taking teammate messages away from the harness. A source with modifiers w
 | move | the inbox, renamed aside | `mv -- a b` | `Move-Item -LiteralPath 'a' -Destination 'b'` |
 | move, never over a file | an unreadable aside put back | `mv -n -- a b` | `Move-Item` as above: it fails when the target exists |
 | move over | archive and pending file, through a temporary | `mv -f -- a b` | `Move-Item ... -Force` |
-| remove | the aside, an emptied pending file | `rm -f -- a` | `Remove-Item -LiteralPath 'a' -Force -ErrorAction SilentlyContinue` |
+| remove | the aside, an emptied pending file | `rm -f -- a` | `if (Test-Path -LiteralPath 'a') { Remove-Item -LiteralPath 'a' -Force }` |
 | lock | a shared inbox's `<inbox>.lock` | `mkdir -- a` | `New-Item -ItemType Directory -Path 'a'`: it fails when the lock exists. New-Item has no `-LiteralPath`, so `[ ]` in the path is unverified |
-| unlock | the same | `rmdir -- a` | `Remove-Item -LiteralPath 'a' -Force` |
+| unlock | the same | `rm -d -f -- a` | `if (Test-Path -LiteralPath 'a') { Remove-Item -LiteralPath 'a' -Force }` |
 
 - **Detection:** the platform is found once per module load and cached. A drive-letter or UNC
   home is Windows. Otherwise `uname -s` decides: an answer means POSIX, no answer means Windows.
@@ -228,17 +257,35 @@ aside, taking teammate messages away from the harness. A source with modifiers w
     literal.
   - `-LiteralPath` keeps `[ ]` from being read as wildcards.
   - `$ErrorActionPreference = 'Stop'` makes a failed move exit non-zero.
-- **Unverified on Windows:** this has not run on a Windows host yet. Pepys's desk (Windows 11)
-  will check it live. The tests run on Linux, against a fake host that decodes the script and
-  acts on in-memory files. Open points:
-  - whether `Move-Item -Destination` takes `[ ]` literally on PowerShell 5.1. Only
-    `-LiteralPath` is documented as literal; a home path with brackets is the case to try;
-  - whether a failed `Move-Item` under `Stop` exits 1 from `-EncodedCommand`;
-  - whether `$.fs` on Windows reads and lists `C:\...` paths and the `.watch-*` dotfiles as it
-    does on Linux;
-  - whether `$.process.run` finds `powershell.exe` on PATH;
-  - the cost: each call starts a PowerShell process, and draining a file of n items makes 4 + n
-    calls. How long that takes on Pepys's desk is not measured.
+  - **Already gone counts as removed** (since 0.2.2, kit #11). Under `Stop`, `Remove-Item` on a
+    missing path exits 1 even with `-ErrorAction SilentlyContinue` (Pepys's desk). So remove and
+    unlock are guarded by `Test-Path`: exit 0 when the path is gone, exit 1 on a real failure.
+    The same trap was on POSIX for the unlock: `rmdir` fails on a missing directory, so it is now
+    `rm -d -f`.
+    - A file can already be gone because another session finished the same pending file.
+    - A lock can already be gone because the harness broke it as stale.
+    - The lock itself stays a plain `New-Item` / `mkdir`: failing when the lock exists is its
+      job.
+  - **Success is the exit code alone.** stderr goes only into the debug line of a failed call.
+    Windows PowerShell writes CLIXML progress records (`#< CLIXML …`) to stderr even on a call
+    that succeeded (Pepys's desk), and a test holds that.
+- **Checked on Windows 11** (Pepys's desk, part 1 of the check, kit #11):
+  - brackets in paths: pass;
+  - a failed move exits 1: pass;
+  - odd file names: pass;
+  - a missing path under `Stop` fails the remove, which 0.2.2 fixes.
+- **Speed.** One call costs 200 to 280 ms warm and 0.5 to 1.5 s cold. A drain of n items makes
+  4 + n calls, so a single hub message costs about 1 to 1.5 s warm, spread over one poll.
+  - A shared inbox adds 2 calls (lock and unlock) and a temp-file rename.
+  - The poll is single-flight, so a slow call delays the next poll and never overlaps it.
+- **Still unverified on Windows** (part 1, as reported to the watch):
+  - whether `New-Item -ItemType Directory -Path` takes `[ ]` literally for the lock;
+  - whether `$.fs` reads and lists `C:\...` paths and the `.watch-*` files there as it does on
+    Linux;
+  - a whole drain through the mod in a live session.
+
+  The tests run on Linux, against a fake host that decodes the script and models PowerShell's
+  `Stop` behaviour (a missing path fails, stderr may carry CLIXML).
 
 ## Limits
 

@@ -34,11 +34,11 @@ import {
   PROBE_ARGV,
   recentAsks,
   retirePrompt,
-  sourcesOf,
+  readSources,
   STALE_LOCK_MS,
   takes,
 } from './watch'
-import type { FileOp, Item, Platform, Source, Take } from './watch'
+import type { FileOp, Item, Platform, Source, SourceList, Take } from './watch'
 
 const startCwd = atom({ plugin: 'watch', key: 'startCwd' } as const, '')
 const askedAt = atom({ plugin: 'watch', key: 'askedAt' } as const, 0)
@@ -360,23 +360,50 @@ async function deliverPending($: EngineInterface, files: readonly string[]): Pro
   }
 }
 
-/** Drains every source into pending files; returns them all, in source order, oldest first. */
-async function drainAll($: EngineInterface, home: string, conf: string): Promise<string[]> {
-  const pending: string[] = []
+/** A source ready to drain: its spec, its parsed form, its path and archive template expanded. */
+type Active = { spec: string; source: Source; path: string; template: string | undefined }
+
+/** What a home's memory-kit.conf declares, read and checked (kit #14). */
+type Declared = { confPath: string; list: SourceList; active: Active[]; skipped: { spec: string; why: string }[] }
+
+async function declaredIn($: EngineInterface, home: string, conf: string): Promise<Declared> {
+  const confPath = `${home}/memory-kit.conf`
+  const list = readSources(conf)
   // Windows has USERPROFILE, and HOME only where something set it.
   const userHome = (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')) ?? ''
-  for (const spec of sourcesOf(conf)) {
+  const active: Active[] = []
+  const skipped: Declared['skipped'] = []
+  for (const spec of list.items) {
     const source = parseSource(spec)
     if (typeof source === 'string') {
-      logOnce($, `watch_sources: ${source}`)
+      skipped.push({ spec, why: source })
       continue
     }
     const path = expandHome(source.path, home, userHome)
     const template = source.archive === undefined ? undefined : expandHome(source.archive, home, userHome)
     if (path === undefined || (source.archive !== undefined && template === undefined)) {
-      logOnce($, `watch_sources: no HOME for ~ in: ${spec}`)
+      skipped.push({ spec, why: 'no HOME or USERPROFILE for ~' })
       continue
     }
+    active.push({ spec, source, path, template })
+  }
+  return { confPath, list, active, skipped }
+}
+
+/**
+ * Never idle silently (kit #14): a declared list the watch cannot read, or an item it skips, is
+ * one visible notice (notify, else the transcript), once per module load and message.
+ */
+async function noticeDeclared($: EngineInterface, d: Declared): Promise<void> {
+  if (d.list.problem !== undefined)
+    await tellOnce($, `watch_sources in ${d.confPath}: ${d.list.problem}. The watch delivers nothing from it until it is fixed.`)
+  for (const { spec, why } of d.skipped) await tellOnce($, `watch_sources in ${d.confPath}: skipped "${spec}": ${why}.`)
+}
+
+/** Drains every active source into pending files; returns them all, in source order, oldest first. */
+async function drainAll($: EngineInterface, active: readonly Active[]): Promise<string[]> {
+  const pending: string[] = []
+  for (const { source, path, template } of active) {
     for (const file of await expand($, path)) {
       await drainFile($, source, file, archiveFor(template, file, source.format))
       pending.push(...(await besideOf($, file, isPendingOf)))
@@ -442,7 +469,37 @@ async function tell($: EngineInterface, text: string): Promise<void> {
   } catch {
     // Refused: the transcript line below carries it.
   }
-  if (!shown) $.ui.log(`watch: ${text}`)
+  // The engine already heads a plugin's transcript line with its name (seen live).
+  if (!shown) $.ui.log(text)
+}
+
+const told = new Set<string>()
+
+/** tell, once per distinct text for the module's life. */
+async function tellOnce($: EngineInterface, text: string): Promise<void> {
+  if (told.has(text)) return
+  told.add(text)
+  await tell($, text)
+}
+
+/** What /watch answers: the sources active now, what was skipped and why, the retire switch. */
+async function status($: EngineInterface, settings: Settings): Promise<string> {
+  const home = await homeOf($, settings)
+  const d = await declaredIn($, home, await readOrEmpty($, `${home}/memory-kit.conf`))
+  const lines: string[] = []
+  if (!d.list.declared) lines.push(`no watch_sources in ${d.confPath}; nothing to watch.`)
+  else {
+    const n = d.active.length
+    lines.push(`${n} source${n === 1 ? '' : 's'} active, from ${d.confPath}`)
+    for (const a of d.active) {
+      const take = a.source.take === undefined ? '' : `${a.source.take.unread ? ' unread' : ''}${a.source.take.courier ? ' courier' : ''}`
+      lines.push(`  [${a.source.prefix}] ${a.source.format}${take}  ${a.path}`)
+    }
+    if (d.list.problem !== undefined) lines.push(`  watch_sources unreadable: ${d.list.problem}`)
+    for (const { spec, why } of d.skipped) lines.push(`  skipped "${spec}": ${why}`)
+  }
+  lines.push(`retire on idle: ${settings.retireOnIdle ? 'on' : 'off'}; poll every ${settings.pollMs / 1000} s`)
+  return lines.join('\n')
 }
 
 async function tick($: EngineInterface, settings: Settings): Promise<void> {
@@ -452,7 +509,9 @@ async function tick($: EngineInterface, settings: Settings): Promise<void> {
     const home = await homeOf($, settings)
     homeHint = home
     const conf = await readOrEmpty($, `${home}/memory-kit.conf`)
-    await deliverPending($, await drainAll($, home, conf))
+    const declared = await declaredIn($, home, conf)
+    await noticeDeclared($, declared)
+    await deliverPending($, await drainAll($, declared.active))
     if (settings.retireOnIdle) await idleCheck($, settings, conf)
   } catch (err) {
     logOnce($, `poll failed: ${String(err)}`)
@@ -479,12 +538,15 @@ export const register: Register = (on, options) => {
     const started = await next(e)
     if ((await read($, startCwd)) === '') await $.state.set({ plugin: 'watch', key: 'startCwd' }, e.cwd)
     await markActivity($)
+    await $.command.register({ name: 'watch', description: 'Show the watch sources active in this home, and what was skipped' })
     timer?.cancel()
     timer = $.clock.every(settings.pollMs, () => void tick($, settings))
     // Not awaited: a delivery waits for its turn to start, which a start hook must not hold up.
     void tick($, settings)
     return started
   })
+
+  on('command.run', { command: 'watch' }, async $ => ({ text: await status($, settings) }))
 
   // Activity, for the idle clock. Observers: a failure here never touches the prompt or the call.
   on('prompt.submit', async ($, e, next) => {

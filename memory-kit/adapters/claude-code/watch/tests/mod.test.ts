@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
-import { CWD, decodeUtf16le, HOME, SESSION, typed, worldOf } from './fixtures/world'
+import { CLIXML, CWD, decodeUtf16le, HOME, SESSION, typed, worldOf } from './fixtures/world'
 import type { World } from './fixtures/world'
 
 const NOW = Date.parse('2026-10-14T12:00:00Z')
@@ -208,14 +208,82 @@ describe('notifications: drain and deliver', () => {
     expect(world.commands).toEqual([])
   })
 
-  test('a bad source line is skipped with one debug line; the good ones still run', async ($, on) => {
+  test('a bad source line is skipped with one visible notice; the good ones still run', async ($, on) => {
     const conf = 'watch_sources:\n  - "broken | json | x"\n  - "kaarel | lines | ~/spool/kaarel.txt"\n'
     const world = worldOf(on, { 'memory-kit.conf': conf, [SPOOL]: 'hi\n' })
     const clock = mock.clock(on, { now: NOW })
     await $.session.start(SESSION)
     await clock.advance(30_000)
     expect(world.submitted).toEqual(['[kaarel] hi'])
-    expect(world.logs.filter(l => l.includes('broken'))).toHaveLength(1)
+    expect(world.notified).toEqual([expect.stringMatching(/broken \| json \| x.*unknown format/)])
+  })
+})
+
+describe('never idle silently (kit #14)', () => {
+  test("mvox's one-line flow list is read, and its mail delivered", async ($, on) => {
+    const conf = 'watch_sources: ["hub mail | hub | comms/inboxes/team-lead.json", \'kaarel | lines | ~/spool/kaarel.txt\']\n'
+    const world = worldOf(on, { 'memory-kit.conf': conf, [HUB]: hub({ from: 'po', text: 'Ping' }), [SPOOL]: 'hi\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    expect(world.submitted).toEqual(['[hub mail] from po [2026-10-14T08:00:00Z]: Ping', '[kaarel] hi'])
+    expect(world.notified).toEqual([])
+  })
+
+  for (const [what, conf] of [
+    ['declared with no items', 'watch_sources:\nmode: gate\n'],
+    ['a form the watch cannot read', 'watch_sources: "hub mail | hub | x.json"\n'],
+    ['only items that do not parse', 'watch_sources:\n  - "hub mail | json | x.json"\n'],
+  ] as const) {
+    test(`watch_sources ${what}: one visible notice, not one per poll`, async ($, on) => {
+      const world = worldOf(on, { 'memory-kit.conf': conf })
+      const clock = mock.clock(on, { now: NOW })
+      await $.session.start(SESSION)
+      await clock.advance(60_000)
+      expect(world.notified.filter(n => n.includes('watch_sources'))).toHaveLength(1)
+      expect(world.notified.some(n => n.includes(`${CWD}/memory-kit.conf`))).toBe(true)
+    })
+  }
+
+  test('where no channel shows the notice, it goes to the transcript', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': 'watch_sources:\nmode: gate\n' })
+    world.notifyResult = { isSent: false, reason: 'no-channel' }
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    expect(world.logs.filter(l => l.startsWith('transcript: ') && l.includes('watch_sources'))).toHaveLength(1)
+  })
+
+  test('watch_sources: [] is a home that watches nothing on purpose: no notice', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': 'watch_sources: []\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(30_000)
+    expect(world.notified).toEqual([])
+  })
+
+  test('/watch says what is active, after a reload as any time', async ($, on) => {
+    const conf = 'watch_sources: ["hub mail | hub | comms/inboxes/team-lead.json", "broken | json | x", \'kaarel | lines | ~/spool/kaarel.txt\']\n'
+    worldOf(on, { 'memory-kit.conf': conf })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    const { text } = await $.command.run({ command: 'watch', args: '', origin: { kind: 'composer' } } as never)
+    expect(text).toContain('2 sources active')
+    expect(text).toContain(`${CWD}/memory-kit.conf`)
+    expect(text).toContain('[hub mail] hub')
+    expect(text).toContain('[kaarel] lines')
+    expect(text).toMatch(/broken \| json \| x.*unknown format/)
+    expect(text).toMatch(/retire on idle: off/)
+  })
+
+  test('/watch with nothing declared says so', async ($, on) => {
+    worldOf(on, { 'memory-kit.conf': 'memory_dir: memory\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    const { text } = await $.command.run({ command: 'watch', args: '', origin: { kind: 'composer' } } as never)
+    expect(text).toMatch(/no watch_sources/)
   })
 })
 
@@ -352,7 +420,8 @@ describe('Windows (kit alpha.9)', () => {
     expect(asides(world)).toEqual([])
     expect(world.commands[0]).toEqual(['uname', '-s'])
     expect(world.commands.slice(1).every(c => c[0] === 'powershell.exe')).toBe(true)
-    expect(scripts(world).map(s => s.split(' -')[0])).toEqual(['Move-Item', 'Move-Item', 'Move-Item', 'Remove-Item', 'Move-Item', 'Remove-Item'])
+    const cmdlet = (s: string) => (s.startsWith('if (Test-Path ') ? 'guarded Remove-Item' : s.split(' -')[0])
+    expect(scripts(world).map(cmdlet)).toEqual(['Move-Item', 'Move-Item', 'Move-Item', 'guarded Remove-Item', 'Move-Item', 'guarded Remove-Item'])
   })
 
   test('the put-back never replaces a newer inbox (Move-Item without -Force)', async ($, on) => {
@@ -384,6 +453,51 @@ describe('Windows (kit alpha.9)', () => {
     await $.session.start(SESSION)
     await clock.advance(0)
     expect(world.submitted).toEqual(['[kaarel] hi'])
+  })
+})
+
+describe('a file already gone counts as removed (kit #11)', () => {
+  const failures = (world: World) => world.logs.filter(l => / failed: /.test(l))
+
+  for (const platform of ['posix', 'windows'] as const) {
+    test(`${platform}: a pending file another session already finished is removed quietly`, async ($, on) => {
+      const world = worldOf(on, { 'memory-kit.conf': CONF, [HUB]: hub({ from: 'po', text: 'only' }) }, {}, { HOME }, platform)
+      world.hold = true
+      const clock = mock.clock(on, { now: NOW })
+      await $.session.start(SESSION)
+      await clock.advance(5_000)
+      // While our submit waits for its turn, another session delivers the same pending file and removes it.
+      for (const f of asides(world)) world.files.delete(f)
+      world.release()
+      await clock.advance(5_000)
+      expect(world.submitted).toEqual(['[hub mail] from po [2026-10-14T08:00:00Z]: only'])
+      expect(failures(world)).toEqual([])
+    })
+
+    test(`${platform}: a lock the harness already broke is released quietly`, async ($, on) => {
+      const team = `${HOME}/.claude/teams/session-ab12/inboxes/team-lead.json`
+      const conf = `watch_sources:\n  - "hub mail | hub unread courier | ${team}"\n`
+      const world = worldOf(on, { 'memory-kit.conf': conf, [team]: JSON.stringify([{ from: 'hub-courier', text: 'x', timestamp: 't' }]) }, {}, { HOME }, platform)
+      world.lockVanishes = true
+      const clock = mock.clock(on, { now: NOW })
+      await $.session.start(SESSION)
+      await clock.advance(35_000)
+      expect(world.submitted).toHaveLength(1)
+      expect(failures(world)).toEqual([])
+    })
+  }
+
+  test('windows: CLIXML progress records on stderr with exit 0 are a success', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [HUB]: hub({ from: 'po', text: 'first' }, { from: 'po', text: 'second' }) }, {}, { HOME }, 'windows')
+    world.clixml = true
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    expect(world.submitted).toHaveLength(2)
+    expect(world.files.has(HUB)).toBe(false)
+    expect(asides(world)).toEqual([])
+    expect(failures(world)).toEqual([])
+    expect(CLIXML.startsWith('#< CLIXML')).toBe(true)
   })
 })
 

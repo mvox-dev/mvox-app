@@ -100,6 +100,12 @@ A major means data shape changed. The kit ships `migrations/<version>/` for exac
   watch source is `~/.claude/teams/session-*/inboxes/...`: change its format to `hub unread courier`
   (see the watch README) so teammate messages stay with the harness.
 
+- **0.1.0-alpha.10 -> 0.1.0-alpha.11:** no data step. Pull, lint, `/reload-plugins`. A Windows home can
+  drop the `-X utf8` / `PYTHONUTF8=1` workaround for the lint and tools.
+
+- **0.1.0-alpha.11 -> 0.1.0-alpha.12:** no data step. Pull, lint, `/reload-plugins`, then run `/watch`
+  once to see that your sources are active.
+
 ## Always
 
 - The home's config for the kit lives outside the subtree; a pull must never clobber it.
