@@ -22,11 +22,11 @@ directory the session started in. The lint ignores keys it does not know.
 watch_sources:
   - "hub mail | hub | ~/passepartout/comms/inboxes/team-lead.json"
   - "kaarel | lines | ~/passepartout/comms/spool/kaarel.txt"
-  - "hub mail | hub | ~/.claude/teams/session-*/inboxes/team-lead.json | ~/comms/archive/{name}-archive.json"
+  - "hub mail | hub unread courier | ~/.claude/teams/session-*/inboxes/team-lead.json | ~/comms/archive/{name}-archive.json"
 watch_retire_step: "touch .fresh-next, then exit"
 ```
 
-Each item is `prefix | format | path [| archive]`:
+Each item is `prefix | format [modifiers] | path [| archive]`:
 
 - **prefix**: what every item from the source arrives under, as `[prefix]`. Peer content stays
   information and is never taken for the human's words.
@@ -35,9 +35,15 @@ Each item is `prefix | format | path [| archive]`:
     An item reads `[hub mail] from <from> [<timestamp>]: <text>`.
   - `lines` is one item per non-blank line, e.g. a spool a watcher script appends to. An item
     reads `[kaarel] <line>`.
-- **path**: absolute, `~/` for the user's home, or relative to the kit home. A `*` in a segment
+- **modifiers**, for `hub` only (since 0.2.1, kit #12): `unread` skips entries marked
+  `read: true`, and `courier` takes only entries whose `from` ends in `-courier`. A source with
+  either is a shared inbox (see below). For the harness's teammate inbox, use both:
+  `hub unread courier`.
+- **path**: absolute (POSIX, `C:\`, `C:/` or UNC), `~/` for the user's home (`HOME`, else
+  `USERPROFILE` on Windows), or relative to the kit home. A `*` in a segment
   matches entries of that directory (never a dotfile). This covers a team inbox under the
-  rotating `~/.claude/teams/session-<id>/`.
+  rotating `~/.claude/teams/session-<id>/`. Check that the glob matches only the inbox you mean.
+  `session-*` matches every team on the box, the dead ones included.
 - **archive**: where drained content is kept. `{name}` is the drained file's stem. The default
   is `archive/` beside the file: `<stem>-archive.json` for hub, the same file name for lines. Both
   defaults match the household's `comms/inboxes/archive/team-lead-archive.json`.
@@ -51,8 +57,8 @@ The mod reads both but changes neither.
 
 1. **Read first.** An empty file, or `[]`, is left alone. A file that is not a hub list is left
    in place with one debug line.
-2. **Rename aside** (`mv` to `.watch-drain-<file>-<time>-<n>` beside it), so a writer racing
-   the drain never loses an item.
+2. **Rename aside** to `.watch-drain-<file>-<time>-<n>` beside it, so a writer racing the
+   drain never loses an item. Renames and deletes run on the host (see Platforms).
 3. **Archive** the aside's content. Its events go into a pending file beside it
    (`.watch-pending-…`), and then the aside is removed. The archive and the pending file are
    each written through a temporary and a rename, so a crash never leaves half of either.
@@ -72,7 +78,7 @@ The mod reads both but changes neither.
    - Draining into pending files goes on meanwhile, so the inbox never blocks a writer.
 
 Asides a crash left behind are picked up first at the next poll. An aside that turns out
-unreadable goes back to the file's name only if nothing new is there (`mv -n`); otherwise it
+unreadable goes back to the file's name only if nothing new is there (no-clobber); otherwise it
 stays aside, never lost.
 
 **Long items.** No event is over 450 characters, because the harness cuts long lines. A longer
@@ -139,10 +145,103 @@ bell), it also goes to the transcript as a dim line.
   `--plugin-dir` load). `watch@memory-kit` has its own, so the live checks left one `retires`
   entry in the inline store only.
 
+## A shared inbox: the harness's teammate inbox (since 0.2.1, kit #12)
+
+In a team session the courier writes hub mail into `~/.claude/teams/session-<id>/inboxes/team-lead.json`,
+which is also the harness's own teammate inbox. A plain `hub` source would rename the whole file
+aside, taking teammate messages away from the harness. A source with modifiers works differently:
+
+- **Only its own entries leave.** The watch takes the entries the source takes (e.g. unread
+  courier mail). Everything else stays in place, unchanged and in order: read entries, and
+  teammate messages read or not. A file holding nothing to take is not touched at all.
+- **The harness goes first.** A takeable entry must sit in the file for 30 s before the watch
+  takes it. While the harness's team is live, the harness delivers inbox entries itself and
+  removes them within about a second, so the watch never sees them twice. The watch takes only
+  what the harness is not picking up.
+  The cost: while a courier entry waits out its 30 s, the inbox is not empty, so the courier
+  holds any further hub mail (it writes only into an empty inbox) and redelivers it later. A
+  burst into a team inbox therefore arrives about one message per 30-40 s, in custody and in
+  full, but slowly. A household-style inbox that only the courier writes needs no modifiers and
+  has no such delay.
+- **Under the harness's own lock.** The harness serialises its inbox with a `<inbox>.lock`
+  directory, made with mkdir (seen live, below). The watch takes the same lock with `mkdir`, or
+  `New-Item -ItemType Directory` on Windows; both fail when the lock exists. If the lock is
+  held, the watch tries again at the next poll. A lock older than 60 s is taken as stale and
+  broken, with one debug line. Under the lock the watch:
+  1. re-reads the file;
+  2. writes the taken entries to an aside (temp file + rename);
+  3. writes the rest back in place (temp file + rename, as the harness itself writes);
+  4. unlocks.
+
+  The aside then goes through the usual archive, pending and delivery steps. If writing the
+  rest back fails, the aside is removed and the inbox still holds everything.
+- **The courier.** `stationmaster-courier.py` writes only into an absent or empty inbox (empty,
+  rename-aside, then exclusive-create). The watch writes only when it takes something, so the file
+  is not empty when the watch acts, and the courier is then waiting.
+- **Never put back.** An unreadable aside of a shared source stays aside, with one debug line. It
+  is never moved into the harness's inbox.
+- **What can still go twice:** a crash after the aside is written but before the rest is written
+  back. The taken entries then sit in both, and arrive twice. None is lost.
+
+**Live check** (2026-10-14, Claude Code 2.1.299, throwaway team sessions, haiku, plan mode):
+
+- **No teammate.** The harness did not read its inbox at all, idle or at a turn's end. A courier
+  entry written there sat untouched: the esl "8 h unread" case. With the watch on
+  `hub unread courier`:
+  - the courier entry was delivered 35 s later as `[hub mail]`;
+  - a `read: true` teammate entry stayed in place, byte for byte;
+  - the watch took and released `team-lead.json.lock`.
+- **A live teammate.** The harness polled about once a second. It took its lock (a directory,
+  `team-lead.json.lock`), delivered the entry as "Message from @hub-courier" and replaced the
+  file with `[]` (temp file + rename: new inode). It removed every entry, `read: true` ones
+  included. The watch saw the entry for a second and did not deliver it.
+- **Unverified:**
+  - mvox's report that its harness marks entries `read: true` and leaves them. The harness here
+    removed them. Either way the watch leaves read entries alone.
+  - Whether every harness version takes the lock.
+  - Whether teammates' own writes into the inbox take it. A teammate's write here showed up as a
+    temp-file rename.
+
+## Platforms (since 0.2.0, kit alpha.9)
+
+`$.fs` has no rename or delete, so the drain runs its file operations on the host through
+`$.process.run`:
+
+| operation | used for | POSIX | Windows (PowerShell) |
+|---|---|---|---|
+| move | the inbox, renamed aside | `mv -- a b` | `Move-Item -LiteralPath 'a' -Destination 'b'` |
+| move, never over a file | an unreadable aside put back | `mv -n -- a b` | `Move-Item` as above: it fails when the target exists |
+| move over | archive and pending file, through a temporary | `mv -f -- a b` | `Move-Item ... -Force` |
+| remove | the aside, an emptied pending file | `rm -f -- a` | `Remove-Item -LiteralPath 'a' -Force -ErrorAction SilentlyContinue` |
+| lock | a shared inbox's `<inbox>.lock` | `mkdir -- a` | `New-Item -ItemType Directory -Path 'a'`: it fails when the lock exists. New-Item has no `-LiteralPath`, so `[ ]` in the path is unverified |
+| unlock | the same | `rmdir -- a` | `Remove-Item -LiteralPath 'a' -Force` |
+
+- **Detection:** the platform is found once per module load and cached. A drive-letter or UNC
+  home is Windows. Otherwise `uname -s` decides: an answer means POSIX, no answer means Windows.
+  The probe is `uname` rather than `mv --version` because macOS's BSD `mv` has no `--version`.
+- **Windows calls:**
+  - The tool is `powershell.exe -NoProfile -NonInteractive -EncodedCommand <base64 of UTF-16LE>`.
+    That is Windows PowerShell 5.1, which every Windows 10 and 11 has.
+  - The encoded script never meets command-line quoting, so spaces and quotes in paths are safe.
+  - Inside the script each path is a single-quoted literal. Every character PowerShell reads as a
+    single quote (`'` and the typographic `‘ ’ ‚ ‛`) is doubled, so `$` and backticks stay
+    literal.
+  - `-LiteralPath` keeps `[ ]` from being read as wildcards.
+  - `$ErrorActionPreference = 'Stop'` makes a failed move exit non-zero.
+- **Unverified on Windows:** this has not run on a Windows host yet. Pepys's desk (Windows 11)
+  will check it live. The tests run on Linux, against a fake host that decodes the script and
+  acts on in-memory files. Open points:
+  - whether `Move-Item -Destination` takes `[ ]` literally on PowerShell 5.1. Only
+    `-LiteralPath` is documented as literal; a home path with brackets is the case to try;
+  - whether a failed `Move-Item` under `Stop` exits 1 from `-EncodedCommand`;
+  - whether `$.fs` on Windows reads and lists `C:\...` paths and the `.watch-*` dotfiles as it
+    does on Linux;
+  - whether `$.process.run` finds `powershell.exe` on PATH;
+  - the cost: each call starts a PowerShell process, and draining a file of n items makes 4 + n
+    calls. How long that takes on Pepys's desk is not measured.
+
 ## Limits
 
-- Draining runs `mv` and `rm` through `$.process.run`, because `$.fs` has no rename or delete.
-  So it is POSIX hosts only, and not Windows yet.
 - Do not drain one file from two places. Switch off the hub-drain Monitor for an inbox before
   declaring it here: both rename aside, and both rewrite the same archive.
 - The kaarel spool needs `kaarel-watch.sh` to append lines to the spool file instead of typing
@@ -172,6 +271,6 @@ For one session only: `claude --plugin-dir ./memory-kit/adapters/claude-code/wat
 
 ```sh
 claude plugin validate .
-claude plugin test .          # tests/*.test.ts; files, mv/rm, clock and store are mocked
+claude plugin test .          # tests/*.test.ts; files, the host (POSIX or Windows), clock and store are mocked
 tsc -p .                      # once Claude Code has laid .claude-plugin/types/ (gitignored)
 ```

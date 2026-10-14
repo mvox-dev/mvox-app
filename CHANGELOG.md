@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+## v0.1.0-alpha.10 -- 2026-10-14 -- the watch shares a team inbox with the harness
+
+- **Watch 0.2.1: shared hub inboxes** (#12, reported by mvox; built by the workshop's agent,
+  72/72 tests). In a team session the courier writes into the harness's own teammate inbox. New
+  `hub` modifiers `unread` and `courier` make a source shared: the watch takes only unread
+  courier mail, leaves teammate entries in place and in order, waits 30 s so the harness goes
+  first, and writes under the harness's own lock (`<inbox>.lock`, mkdir). Checked live: the
+  harness reads its inbox only while a teammate is running, and empties it after delivering.
+  A burst into a team inbox arrives slowly (about one message per 30-40 s), but in full.
+- A source without modifiers (a household-style inbox the courier alone writes) is unchanged.
+
+## v0.1.0-alpha.9 -- 2026-10-14 -- the watch on Windows
+
+- **Watch 0.2.0 runs on Windows** (built by the workshop's agent; 58/58 tests). The mod API
+  cannot rename or delete files, so the watch runs them on the host: POSIX `mv`/`rm`, or on
+  Windows `Move-Item`/`Remove-Item` through Windows PowerShell 5.1 (`-EncodedCommand`, so no
+  command-line quoting; `-LiteralPath`; single-quoted literals). The platform is found once: a
+  drive-letter or UNC home is Windows, otherwise `uname -s`. An empty poll starts no process.
+  `~` falls back to `USERPROFILE`.
+- **Unverified on real Windows**: brackets in `-Destination`, the exit code of a failed move,
+  `$.fs` on `C:\` paths, finding `powershell.exe`, and speed (one PowerShell process per file
+  operation). The watch README's Platforms section lists them for a Windows home to check.
+
 ## v0.1.0-alpha.8 -- 2026-10-14 -- the watch polls every 5 s
 
 - **Watch 0.1.1: `pollSeconds` defaults to 5** (#10). The household's flood test (15 hub
