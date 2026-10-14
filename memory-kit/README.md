@@ -244,12 +244,12 @@ ADOPTION.md        prompt: bring an existing home onto the kit, once
 UPGRADE.md         prompt: after every pull
 types/             TypeScript interfaces -- the canon: shape, constants and rationale
 caps.yaml          GENERATED from types/caps.ts; the flat extract the lint reads
-tools/             extract-caps.py, lesson-index.py, obligations-due.py, kit-update.py, weigh.py
+tools/             extract-caps.py, lesson-index.py, obligations-due.py, kit-update.py (+ kit-update-test.py), weigh.py
 memory/            the kit's own memory, shipped with it: kit facts, the 8 core rules, lessons, urls
 fixtures/          valid/ and invalid/ samples per tier -- the contract
 lint/              reference lint (python3 + PyYAML), --gate | --report; run-fixtures.sh
 skeleton/          the empty home a fresh consumer starts from (secrets README included)
-adapters/          harness-bound tools, e.g. adapters/claude-code/obligations-pane/
+adapters/          harness-bound tools: adapters/claude-code/ obligations-pane, watch (+ spool/spool-poll.py), kit-update
 GOVERNANCE.md
 VERSION            pinned by consumers
 CHANGELOG.md

@@ -26,10 +26,13 @@ const hub = (...messages: { from: string; text: string; timestamp?: string }[]) 
 // Deliveries are queued unawaited ($.prompt.submit resolves only when its turn starts), so a
 // test lets them settle with a zero clock advance before it looks.
 
+/** The items delivered, batch by batch (kit #17): a batch's count line dropped, one item per line. */
+const items = (prompts: readonly string[]) => prompts.flatMap(t => t.split('\n').filter(l => !/^\[watch\] \d+ items, oldest first:$/.test(l)))
+
 const asides = (world: World) => [...world.files.keys()].filter(f => /\.watch-(drain|pending)-/.test(f))
 
 describe('notifications: drain and deliver', () => {
-  test('a hub inbox: each message prefixed, in order; archived; the inbox gone, no aside left', async ($, on) => {
+  test('a hub inbox: each message prefixed, in order, in one prompt; archived; the inbox gone, no aside left', async ($, on) => {
     const world = worldOf(on, {
       'memory-kit.conf': CONF,
       [HUB]: hub({ from: 'po-team', text: 'Ping from Henry.' }, { from: 'esl', text: 'Second.' }),
@@ -39,17 +42,16 @@ describe('notifications: drain and deliver', () => {
     await $.session.start(SESSION)
     await clock.advance(0)
     expect(world.submitted).toEqual([
-      '[hub mail] from po-team [2026-10-14T08:00:00Z]: Ping from Henry.',
-      '[hub mail] from esl [2026-10-14T08:00:00Z]: Second.',
+      '[watch] 2 items, oldest first:\n[hub mail] from po-team [2026-10-14T08:00:00Z]: Ping from Henry.\n[hub mail] from esl [2026-10-14T08:00:00Z]: Second.',
     ])
     expect(world.files.has(HUB)).toBe(false)
     expect(JSON.parse(world.files.get(HUB_ARCHIVE) ?? '').map((m: { from: string }) => m.from)).toEqual(['old', 'po-team', 'esl'])
     expect(asides(world)).toEqual([])
     // The inbox is renamed aside before it is read (race-safe against a writer); the archive and
-    // the pending events are written through a temporary and a rename; the aside is removed; each
-    // accepted event then leaves the pending file (rewritten, then removed when empty).
+    // the pending events are written through a temporary and a rename; the aside is removed; the
+    // accepted batch then leaves the pending file (removed, as it is empty).
     // The first file operation probes the host once (uname answers: POSIX).
-    expect(world.commands.map(c => c.slice(0, 2).join(' '))).toEqual(['uname -s', 'mv --', 'mv -f', 'mv -f', 'rm -f', 'mv -f', 'rm -f'])
+    expect(world.commands.map(c => c.slice(0, 2).join(' '))).toEqual(['uname -s', 'mv --', 'mv -f', 'mv -f', 'rm -f', 'rm -f'])
     expect([...world.files.keys()].some(f => f.endsWith('.watch-tmp'))).toBe(false)
   })
 
@@ -61,12 +63,12 @@ describe('notifications: drain and deliver', () => {
     expect(world.submitted).toEqual([])
     world.files.set(SPOOL, '[kaarel-chat 10:01] tere\n[kaarel-session 10:02] kaarel LOGGED IN\n')
     await clock.advance(15_000)
-    expect(world.submitted).toEqual(['[kaarel] [kaarel-chat 10:01] tere', '[kaarel] [kaarel-session 10:02] kaarel LOGGED IN'])
+    expect(items(world.submitted)).toEqual(['[kaarel] [kaarel-chat 10:01] tere', '[kaarel] [kaarel-session 10:02] kaarel LOGGED IN'])
     expect(world.files.get(`${HOME}/spool/archive/kaarel.txt`)).toBe('[kaarel-chat 10:01] tere\n[kaarel-session 10:02] kaarel LOGGED IN\n')
     expect(world.files.has(SPOOL)).toBe(false)
     // Nothing new: nothing delivered twice.
     await clock.advance(30_000)
-    expect(world.submitted).toHaveLength(2)
+    expect(world.submitted).toHaveLength(1)
   })
 
   test('a long item: a preview and the archive path, under 450 chars', async ($, on) => {
@@ -136,7 +138,9 @@ describe('notifications: drain and deliver', () => {
     await clock.advance(20 * MIN)
     expect(world.notified).toEqual([expect.stringMatching(/2 items waiting in .*comms\/inboxes.*held by a guard plugin/)])
     expect(world.attempts.length).toBeLessThanOrEqual(6)
-    expect(world.attempts.every(t => t.endsWith(': first'))).toBe(true)
+    // The same batch each time, whole: nothing went ahead of the refused item.
+    expect(new Set(world.attempts).size).toBe(1)
+    expect(items(world.attempts.slice(0, 1)).map(t => t.split(': ')[1])).toEqual(['first', 'second'])
   })
 
   test('when the refusal lifts, the next try delivers each item once, in order', async ($, on) => {
@@ -150,7 +154,7 @@ describe('notifications: drain and deliver', () => {
     await clock.advance(5 * MIN)
     world.refuse = undefined
     await clock.advance(30 * MIN)
-    expect(world.submitted).toEqual([
+    expect(items(world.submitted)).toEqual([
       '[hub mail] from po [2026-10-14T08:00:00Z]: first',
       '[hub mail] from po [2026-10-14T08:00:00Z]: second',
     ])
@@ -158,7 +162,7 @@ describe('notifications: drain and deliver', () => {
     // Mail that arrived meanwhile follows, after the older items.
     world.files.set(HUB, hub({ from: 'po', text: 'third' }))
     await clock.advance(HOUR)
-    expect(world.submitted.map(t => t.split(': ')[1])).toEqual(['first', 'second', 'third'])
+    expect(items(world.submitted).map(t => t.split(': ')[1])).toEqual(['first', 'second', 'third'])
   })
 
   test('a submit still pending at the next poll is not delivered twice, and the order holds', async ($, on) => {
@@ -178,8 +182,8 @@ describe('notifications: drain and deliver', () => {
       world.release()
       await clock.advance(15_000)
     }
-    expect(world.attempts.map(t => t.split(': ')[1])).toEqual(['first', 'second', 'third'])
-    expect(world.submitted.map(t => t.split(': ')[1])).toEqual(['first', 'second', 'third'])
+    expect(items(world.attempts).map(t => t.split(': ')[1])).toEqual(['first', 'second', 'third'])
+    expect(items(world.submitted).map(t => t.split(': ')[1])).toEqual(['first', 'second', 'third'])
     expect(asides(world)).toEqual([])
   })
 
@@ -219,6 +223,68 @@ describe('notifications: drain and deliver', () => {
   })
 })
 
+describe('kit_home: the start folder points at the home (kit #18)', () => {
+  const DESK = '/home/u/desk'
+  const DESK_CONF = 'watch_sources:\n  - "doorbell | lines | spool.txt"\n'
+
+  test('a pointer conf: sources come from the home it names, paths relative to that home', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': 'kit_home: ../desk\n', [`${DESK}/memory-kit.conf`]: DESK_CONF, [`${DESK}/spool.txt`]: 'ring\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    expect(world.submitted).toEqual(['[doorbell] ring'])
+    expect(world.files.has(`${DESK}/archive/spool.txt`)).toBe(true)
+  })
+
+  test('the pointer wins over a user-scope home option', { options: { home: '/home/u/elsewhere' } }, async ($, on) => {
+    const world = worldOf(on, {
+      'memory-kit.conf': 'kit_home: ../desk\n',
+      [`${DESK}/memory-kit.conf`]: DESK_CONF,
+      [`${DESK}/spool.txt`]: 'ring\n',
+      '/home/u/elsewhere/memory-kit.conf': 'watch_sources:\n  - "other | lines | spool.txt"\n',
+      '/home/u/elsewhere/spool.txt': 'not for this session\n',
+    })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    expect(world.submitted).toEqual(['[doorbell] ring'])
+    expect(world.files.get('/home/u/elsewhere/spool.txt')).toBe('not for this session\n')
+  })
+
+  test('a broken pointer: one visible notice, nothing drained, the start folder not used instead', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': 'kit_home: ../nowhere\nwatch_sources:\n  - "local | lines | spool.txt"\n', 'spool.txt': 'x\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(30_000)
+    expect(world.notified).toEqual([expect.stringContaining('no memory-kit.conf there')])
+    expect(world.submitted).toEqual([])
+    expect(world.files.get(`${CWD}/spool.txt`)).toBe('x\n')
+  })
+
+  test('watch_sources left in a pointer conf are ignored, and said so', async ($, on) => {
+    const world = worldOf(on, {
+      'memory-kit.conf': 'kit_home: ../desk\nwatch_sources:\n  - "local | lines | spool.txt"\n',
+      [`${DESK}/memory-kit.conf`]: 'watch_sources: []\n',
+      'spool.txt': 'x\n',
+    })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(10_000)
+    expect(world.submitted).toEqual([])
+    expect(world.notified).toEqual([expect.stringMatching(/watch_sources .*ignored.*desk\/memory-kit\.conf/)])
+  })
+
+  test('/watch names the home and the pointer', async ($, on) => {
+    worldOf(on, { 'memory-kit.conf': 'kit_home: ../desk\n', [`${DESK}/memory-kit.conf`]: DESK_CONF })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    const { text } = await $.command.run({ command: 'watch', args: '', origin: { kind: 'composer' } } as never)
+    expect(text).toContain(`home: ${DESK} (kit_home in ${CWD}/memory-kit.conf)`)
+    expect(text).toContain('1 source active')
+  })
+})
+
 describe('never idle silently (kit #14)', () => {
   test("mvox's one-line flow list is read, and its mail delivered", async ($, on) => {
     const conf = 'watch_sources: ["hub mail | hub | comms/inboxes/team-lead.json", \'kaarel | lines | ~/spool/kaarel.txt\']\n'
@@ -226,7 +292,7 @@ describe('never idle silently (kit #14)', () => {
     const clock = mock.clock(on, { now: NOW })
     await $.session.start(SESSION)
     await clock.advance(0)
-    expect(world.submitted).toEqual(['[hub mail] from po [2026-10-14T08:00:00Z]: Ping', '[kaarel] hi'])
+    expect(items(world.submitted)).toEqual(['[hub mail] from po [2026-10-14T08:00:00Z]: Ping', '[kaarel] hi'])
     expect(world.notified).toEqual([])
   })
 
@@ -411,7 +477,7 @@ describe('Windows (kit alpha.9)', () => {
     const clock = mock.clock(on, { now: NOW })
     await $.session.start(SESSION)
     await clock.advance(0)
-    expect(world.submitted).toEqual([
+    expect(items(world.submitted)).toEqual([
       '[hub mail] from po [2026-10-14T08:00:00Z]: first',
       '[hub mail] from po [2026-10-14T08:00:00Z]: second',
     ])
@@ -421,7 +487,7 @@ describe('Windows (kit alpha.9)', () => {
     expect(world.commands[0]).toEqual(['uname', '-s'])
     expect(world.commands.slice(1).every(c => c[0] === 'powershell.exe')).toBe(true)
     const cmdlet = (s: string) => (s.startsWith('if (Test-Path ') ? 'guarded Remove-Item' : s.split(' -')[0])
-    expect(scripts(world).map(cmdlet)).toEqual(['Move-Item', 'Move-Item', 'Move-Item', 'guarded Remove-Item', 'Move-Item', 'guarded Remove-Item'])
+    expect(scripts(world).map(cmdlet)).toEqual(['Move-Item', 'Move-Item', 'Move-Item', 'guarded Remove-Item', 'guarded Remove-Item'])
   })
 
   test('the put-back never replaces a newer inbox (Move-Item without -Force)', async ($, on) => {
@@ -493,7 +559,8 @@ describe('a file already gone counts as removed (kit #11)', () => {
     const clock = mock.clock(on, { now: NOW })
     await $.session.start(SESSION)
     await clock.advance(0)
-    expect(world.submitted).toHaveLength(2)
+    expect(world.submitted).toHaveLength(1)
+    expect(items(world.submitted)).toHaveLength(2)
     expect(world.files.has(HUB)).toBe(false)
     expect(asides(world)).toEqual([])
     expect(failures(world)).toEqual([])
@@ -655,5 +722,186 @@ describe('checkpoint and retire on idle', () => {
     await humanSession($, world, 50_000, 700_000)
     await clock.advance(2 * HOUR)
     expect(asks(world)).toEqual([])
+  })
+})
+
+describe('one prompt per poll (kit #17)', () => {
+  test('a burst from two sources in one poll is one prompt, oldest first', async ($, on) => {
+    const world = worldOf(on, {
+      'memory-kit.conf': CONF,
+      [HUB]: hub({ from: 'po', text: 'one' }, { from: 'esl', text: 'two' }),
+      [SPOOL]: 'three\n',
+    })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    expect(world.submitted).toEqual([
+      '[watch] 3 items, oldest first:\n[hub mail] from po [2026-10-14T08:00:00Z]: one\n[hub mail] from esl [2026-10-14T08:00:00Z]: two\n[kaarel] three',
+    ])
+    expect(asides(world)).toEqual([])
+  })
+
+  test('more than 20 items: prompts of at most 20, in order, each item once', async ($, on) => {
+    const lines = Array.from({ length: 45 }, (_, i) => `line ${i + 1}`)
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [SPOOL]: `${lines.join('\n')}\n` })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(30_000)
+    expect(world.submitted.map(t => items([t]).length)).toEqual([20, 20, 5])
+    expect(world.submitted[0]?.startsWith('[watch] 20 items, oldest first:\n')).toBe(true)
+    expect(items(world.submitted)).toEqual(lines.map(l => `[kaarel] ${l}`))
+    expect(asides(world)).toEqual([])
+  })
+
+  test('items that arrive while a prompt waits for its turn go together as the next prompt', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [SPOOL]: 'a\n' })
+    world.hold = true
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(5_000)
+    world.files.set(SPOOL, 'b\nc\n')
+    await clock.advance(20_000)
+    world.release()
+    await clock.advance(5_000)
+    world.release()
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual(['[kaarel] a', '[watch] 2 items, oldest first:\n[kaarel] b\n[kaarel] c'])
+  })
+
+  test('a refused batch stays whole on disk; a crash-free retry delivers it once', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [SPOOL]: 'x\ny\n' })
+    world.refuse = 'held'
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    const waiting = asides(world)
+    expect(waiting).toHaveLength(1)
+    expect(JSON.parse(world.files.get(waiting[0] ?? '') ?? '')).toEqual(['[kaarel] x', '[kaarel] y'])
+    world.refuse = undefined
+    await clock.advance(5 * MIN)
+    expect(world.submitted).toEqual(['[watch] 2 items, oldest first:\n[kaarel] x\n[kaarel] y'])
+    expect(asides(world)).toEqual([])
+  })
+})
+
+describe('one drain per home (kit #17)', () => {
+  const DESK = '/home/u/desk'
+  const DESK_CONF = 'watch_sources:\n  - "doorbell | lines | spool.txt"\n'
+  const KEY = `drain:${CWD}`
+  const claim = (world: World) => world.store.get(KEY) as { session: string; cwd: string; at: number } | undefined
+
+  test('the home option, a session started outside that home: nothing drained, one notice pointing at kit_home', { options: { home: DESK } }, async ($, on) => {
+    const world = worldOf(on, { [`${DESK}/memory-kit.conf`]: DESK_CONF, [`${DESK}/spool.txt`]: 'ring\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(60_000)
+    expect(world.submitted).toEqual([])
+    expect(world.files.get(`${DESK}/spool.txt`)).toBe('ring\n')
+    expect(world.notified).toEqual([expect.stringMatching(new RegExp(`started in ${CWD}, outside .*${DESK}.*kit_home: ${DESK}`))])
+    expect([...world.store.keys()].filter(k => k.startsWith('drain:'))).toEqual([])
+  })
+
+  test('the home option, a session started inside that home: drained as before', { options: { home: DESK } }, async ($, on) => {
+    const world = worldOf(on, { [`${DESK}/memory-kit.conf`]: DESK_CONF, [`${DESK}/spool.txt`]: 'ring\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start({ ...SESSION, cwd: `${DESK}/notes` })
+    await clock.advance(0)
+    expect(world.submitted).toEqual(['[doorbell] ring'])
+    expect(world.notified).toEqual([])
+  })
+
+  test('this session claims the home and keeps the claim fresh, also while a prompt waits for its turn', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [SPOOL]: 'a\n' })
+    world.hold = true
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(5 * MIN)
+    expect(world.attempts).toHaveLength(1)
+    const held = claim(world)
+    expect(held?.session).toBe('sess-1')
+    expect(held?.cwd).toBe(CWD)
+    expect(NOW + 5 * MIN - (held?.at ?? 0)).toBeLessThanOrEqual(5_000)
+  })
+
+  test("another session's fresh claim: nothing drained or delivered here, one notice naming it", async ($, on) => {
+    const pendingFile = `${CWD}/comms/inboxes/.watch-pending-team-lead.json-1-2`
+    const world = worldOf(
+      on,
+      { 'memory-kit.conf': CONF, [SPOOL]: 'a\n', [pendingFile]: '["[hub mail] theirs"]\n' },
+      { [KEY]: { session: 'other', cwd: `${CWD}/sub`, at: NOW } },
+    )
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    // The other session goes on refreshing its claim.
+    for (let i = 0; i < 6; i++) {
+      world.store.set(KEY, { session: 'other', cwd: `${CWD}/sub`, at: NOW + i * 10_000 })
+      await clock.advance(10_000)
+    }
+    expect(world.attempts).toEqual([])
+    expect(world.files.get(SPOOL)).toBe('a\n')
+    expect(world.files.get(pendingFile)).toBe('["[hub mail] theirs"]\n')
+    expect(world.notified).toEqual([expect.stringMatching(new RegExp(`another session, started in ${CWD}/sub, drains the sources of ${CWD}`))])
+  })
+
+  test('a claim left stale (its session gone) is taken over: the leftovers and the new mail are delivered here', async ($, on) => {
+    const pendingFile = `${CWD}/comms/inboxes/.watch-pending-team-lead.json-1-2`
+    const world = worldOf(
+      on,
+      { 'memory-kit.conf': CONF, [SPOOL]: 'a\n', [pendingFile]: '["[hub mail] left over"]\n' },
+      { [KEY]: { session: 'other', cwd: `${CWD}/sub`, at: NOW } },
+    )
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(30_000)
+    expect(world.attempts).toEqual([])
+    await clock.advance(60_000)
+    expect(items(world.submitted)).toEqual(['[hub mail] left over', '[kaarel] a'])
+    expect(claim(world)?.session).toBe('sess-1')
+  })
+
+  test('two sessions taking a free home at once: the last writer drains, the other stands back', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [SPOOL]: 'a\n' })
+    // Another session writes its claim just after ours, before ours is read back.
+    world.afterStoreSet = key => {
+      if (key !== KEY) return
+      world.store.set(KEY, { session: 'other', cwd: CWD, at: NOW })
+      world.afterStoreSet = undefined
+    }
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(10_000)
+    expect(world.attempts).toEqual([])
+    expect(world.files.get(SPOOL)).toBe('a\n')
+  })
+
+  test('a session ending lets go of its claim', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [SPOOL]: 'a\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    expect(claim(world)?.session).toBe('sess-1')
+    await $.session.end({ reason: 'prompt_input_exit', sessionId: 'sess-1', resume: { id: 'sess-1' } })
+    expect(claim(world)).toBeUndefined()
+  })
+
+  test('a home with no sources claims nothing', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': 'watch_sources: []\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(10_000)
+    expect([...world.store.keys()]).toEqual([])
+  })
+
+  test('/watch says which session drains the home', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF }, { [KEY]: { session: 'other', cwd: `${CWD}/sub`, at: NOW } })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    const { text } = await $.command.run({ command: 'watch', args: '', origin: { kind: 'composer' } } as never)
+    expect(text).toMatch(new RegExp(`drained by another session in ${CWD}/sub`))
+    world.store.delete(KEY)
+    await clock.advance(5_000)
+    const again = await $.command.run({ command: 'watch', args: '', origin: { kind: 'composer' } } as never)
+    expect(again.text).toContain('drained by this session')
   })
 })

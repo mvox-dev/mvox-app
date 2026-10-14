@@ -1,5 +1,5 @@
 ---
-summary: Make a ticket key (Jira VEO-214, issue #123) a clickable, checkable ref by giving it its own urls/ file.
+summary: 'Make a ticket key (Jira VEO-214, issue #123) a clickable, checkable ref by giving it its own urls/ file.'
 learned: '2026-10-14'
 ref: '#6'
 enforcement: recognition

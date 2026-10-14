@@ -54,15 +54,22 @@ Only release-shaped tags count, compared by semver precedence (alpha.10 > alpha.
 ## Auto or manual
 
 Before prompting, the plugin reads `UPGRADE.md` at the release tag
-(`/raw/UPGRADE.md?ref=v<version>`). It checks every per-version step
-(`- **A -> B:** ...`) between the home's version and the target.
+(`/raw/UPGRADE.md?ref=v<version>`). It decides the way `tools/kit-update.py` does, so a prompt
+never promises a run the script then refuses (since the ultrareview of alpha.13):
 
-- **Auto:** each step says "no data step", the target has a step, and the major is the same.
-  The prompt says to run `python3 memory-kit/tools/kit-update.py <home>`, the home path
-  quoted as one shell word.
-- **Manual:** otherwise. The prompt says "manual upgrade needed (<reason>)" and points at
-  `UPGRADE.md`, not the script. The script refuses such a release anyway; this only words the
-  prompt.
+- **The path** is the home's current version, then every release tag upstream after it, up to
+  the target. The current version is always first, even when its own tag is gone upstream. The
+  release list is the tags the check already has.
+- **Each hop** `A -> B` along it needs its own entry `**A -> B:**` whose text begins "no data
+  step". An entry that spans two hops does not cover the release between them.
+
+The outcome:
+
+- **Auto:** every hop has such an entry and the major is the same. The prompt says to run
+  `python3 memory-kit/tools/kit-update.py <home>`, the home path quoted as one shell word.
+- **Manual:** otherwise: a missing entry ("UPGRADE.md has no entry for A -> B"), a data step, or
+  a new major. The prompt says "manual upgrade needed (<reason>)" and points at `UPGRADE.md`,
+  not the script. The script refuses such a release anyway; this only words the prompt.
 
 If UPGRADE.md cannot be fetched, nothing is prompted yet. It is tried again one interval later.
 
@@ -101,10 +108,37 @@ So: the first session to check after the release appears gets the prompt.
 A crash between an accepted submit and the `delivered` write can prompt that release twice. It
 cannot lose it.
 
+## A session outside its home: `kit_home` (kit #18)
+
+**User-scope options apply to every session on the machine.** That covers `home` set in the
+user's settings, not only the home's own sessions. On the pepys desk a user-wide `home` made
+every session on the box drain the desk's spool, and six notifications were lost. Use a pointer
+conf instead: put this in the folder the session starts in:
+
+```yaml
+kit_home: ../desk        # absolute, or relative to this conf's own folder
+```
+
+- **What counts:** the home it names. That home's `memory-kit.conf` counts (`update:`, `upstream:`), with paths
+  relative to that home, and so does its `memory-kit/VERSION`. Other keys left in the pointer
+  conf are ignored, and `update:` or `upstream:` left there are a visible notice.
+- **Precedence:** the start folder's pointer first. It wins over the user-scope `home` option. Then
+  the option, then the start folder itself.
+- **One hop, never chained.** If the target's own conf points on, that is refused, and so is a
+  loop. `kit_home: .` is just the home.
+- **Absolute paths:** POSIX, a drive letter (`C:\` or `C:/`) or UNC. `~` is not expanded: write
+  the path absolute or relative to the conf.
+- **Never silent:** a broken pointer, or a pointed home without `memory-kit/VERSION`, is one visible notice (notify, else a transcript line), and nothing is checked. `/kit-update` names the home and the pointer.
+- The lint and the tools follow the same pointer (`lint/kit_home.py`). This plugin's copy of the
+  rules is `hooks/kit-home.ts`, identical in all three plugins; `lint/run-fixtures.sh` fails when
+  the copies differ.
+
 ## Options (`userConfig`)
 
 - `home`: the kit home, whose `memory-kit.conf` and `memory-kit/VERSION` count. Empty: the
-  session's start directory. Use it for a session that runs outside its home.
+  session's start directory. **Set user-wide, it applies to every session on the machine**, so
+  the prompt could land in any of them: prefer a `kit_home` pointer conf (above), which also
+  wins over this option.
 - `checkMinutes` (60, at least 5): how often upstream is asked, across all sessions.
 - `checkUpdates` (on): off makes no request at all.
 

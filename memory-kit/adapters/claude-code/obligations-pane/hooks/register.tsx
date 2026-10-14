@@ -5,6 +5,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { ObligationRow, PaneAgent, PaneSnapshot } from '../types'
+import { resolveKitHome } from './kit-home'
 import {
   actorColor,
   basename,
@@ -147,10 +148,14 @@ let badUpstreamLogged = false
  * The home is the one that holds the memory directory (a memoryDir session runs outside it),
  * else the cwd: the first with a memory-kit/VERSION. Its memory-kit.conf names `upstream:`.
  */
-async function kitOf($: EngineInterface, cwd: string, root: string, checkUpdates: boolean) {
+async function kitOf($: EngineInterface, cwd: string, root: string, checkUpdates: boolean, pointed?: string) {
   let home = ''
   let kitVersion = ''
-  for (const candidate of [...new Set([parentDir(root), cwd])]) {
+  // A pointed home (kit_home) is the only candidate; without its VERSION the slot says "?" (the
+  // pointer promised a kit home) and nothing is asked upstream.
+  if (pointed !== undefined && kitVersionOf(await readOrEmpty($, `${pointed}/memory-kit/VERSION`)) === undefined)
+    return { kitVersion: '?', upstreamUrl: '', latest: '' }
+  for (const candidate of pointed !== undefined ? [pointed] : [...new Set([parentDir(root), cwd])]) {
     kitVersion = kitVersionOf(await readOrEmpty($, `${candidate}/memory-kit/VERSION`)) ?? ''
     if (kitVersion !== '') {
       home = candidate
@@ -181,10 +186,16 @@ export async function refresh($: EngineInterface, settings: Settings): Promise<v
   // The home is where the session started (kit issue #3): a shell cd into another repo
   // mid-session must not switch the ledger. $.session.cwd() only when no start was seen.
   const cwd = (await read($, startCwd)) || (await $.session.cwd())
-  const conf = await readOrEmpty($, `${cwd}/memory-kit.conf`)
-  const root = memoryRoot(cwd, conf, memoryDir)
-  const path = `${root}/obligations.yaml`
-  const ledger = await readObligations($, path)
+  // kit #18: the start folder's memory-kit.conf may point at the home (kit_home:, one hop). The
+  // pointer wins over the user-scope memoryDir option, which applies to every session.
+  const found = await resolveKitHome(cwd, async p => ((await $.fs.exists(p)) ? $.fs.read(p) : undefined))
+  const pointed = !('problem' in found) && found.pointer !== undefined ? found.home : undefined
+  const home = pointed ?? cwd
+  const conf = await readOrEmpty($, `${home}/memory-kit.conf`)
+  const root = memoryRoot(home, conf, pointed !== undefined ? '' : memoryDir)
+  const path = 'problem' in found ? found.pointer : `${root}/obligations.yaml`
+  const ledger: Pick<PaneSnapshot, 'source' | 'error' | 'items'> =
+    'problem' in found ? { source: 'pointer', error: found.problem, items: [] } : await readObligations($, path)
   const urls = await resolveUrls($, root, ledger.items)
 
   let tokens: number | null = null
@@ -219,7 +230,7 @@ export async function refresh($: EngineInterface, settings: Settings): Promise<v
     path,
     ...ledger,
     urls,
-    ...(await kitOf($, cwd, root, checkUpdates)),
+    ...('problem' in found ? { kitVersion: '', upstreamUrl: '', latest: '' } : await kitOf($, cwd, root, checkUpdates, pointed)),
     now,
     offsetMinutes: await offsetOf($, now),
     self: { name: agentName || basename(cwd), model, tokens, window },
@@ -461,6 +472,8 @@ export const register: Register = (on, options) => {
     const body =
       snap.source === 'missing' ? (
         <Text color={DATE_FG}>no obligations file here ({snap.path})</Text>
+      ) : snap.source === 'pointer' ? (
+        <Text color="#9e0000">kit_home pointer broken: {snap.error}</Text>
       ) : snap.source === 'error' ? (
         <Text color="#9e0000">obligations.yaml unreadable: {snap.error}</Text>
       ) : items.length === 0 ? (

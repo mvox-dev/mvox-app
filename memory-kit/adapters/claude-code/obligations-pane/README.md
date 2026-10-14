@@ -63,6 +63,8 @@ columns, 110 once asked), otherwise it waits. `/obligations` opens it at any wid
 ## Data source
 
 - `<memory dir>/obligations.yaml`. The memory directory is, in order:
+  0. a `kit_home` pointer in `<cwd>/memory-kit.conf`: `<home>/<memory_dir>` of the home it names
+     (since kit #18; see "A session outside its home"). It wins over the option.
   1. the `memoryDir` option, when set. A relative path resolves against `<cwd>`. Absolute is
      POSIX (`/...`), a drive letter (`C:\...` or `C:/...`) or UNC (`\\server\share`), since
      0.3.0 (kit #8); the same holds for `memory_dir`. For a lead
@@ -77,10 +79,10 @@ columns, 110 once asked), otherwise it waits. `/obligations` opens it at any wid
   to `$.session.cwd()`.
 
   Left empty, one install therefore serves every kit home. The value is stored in settings under
-  `pluginConfigs`; set in the user's settings, it points every session at that one home. Whether
-  a project's own settings can carry it for that project alone is untested (alpha.4) -- check
-  before relying on it. Do not add a second `memory-kit.conf` outside the home to steer the
-  pane: that file says "this folder is a home", and the lint will believe it.
+  `pluginConfigs`; **set in the user's settings, it points every session on the machine at that
+  one home.** For a session that starts outside its home, use a `kit_home` pointer conf in its
+  start folder instead (kit #18): the lint and the tools follow it too, so it no longer makes
+  that folder look like a home.
 - Shape: `memory-kit/types/memory-obligations.ts`, a list of
   `{obligation, actor, since, check, expires, ref}`.
 - Links: `memory/urls/<name>` holds one URL on line 1 (`memory-kit/types/memory-urls.ts`). The
@@ -130,6 +132,31 @@ Since 0.3.0 (kit #7), the pane notices a newer kit release by itself.
 - **Read-only**: the pane never pulls or upgrades anything. Upgrading stays `UPGRADE.md`, run by
   the home's assistant.
 
+## A session outside its home: `kit_home` (kit #18)
+
+**User-scope options apply to every session on the machine.** That covers `memoryDir` set in the
+user's settings, not only the home's own sessions. On the pepys desk a user-wide `home` made
+every session on the box drain the desk's spool, and six notifications were lost. Use a pointer
+conf instead: put this in the folder the session starts in:
+
+```yaml
+kit_home: ../desk        # absolute, or relative to this conf's own folder
+```
+
+- **What counts:** the home it names. That home's `memory-kit.conf` counts (`memory_dir`, `upstream:`), with paths
+  relative to that home, and so does its `memory-kit/VERSION`. Other keys left in the pointer
+  conf are ignored.
+- **Precedence:** the start folder's pointer first. It wins over the user-scope `memoryDir` option. Then
+  the option, then the start folder itself.
+- **One hop, never chained.** If the target's own conf points on, that is refused, and so is a
+  loop. `kit_home: .` is just the home.
+- **Absolute paths:** POSIX, a drive letter (`C:\` or `C:/`) or UNC. `~` is not expanded: write
+  the path absolute or relative to the conf.
+- **Never silent:** a broken pointer fills the pane with "kit_home pointer broken: <why>", and the pane opens itself to show it, never the start folder's ledger instead. A pointed home without `memory-kit/VERSION` shows `memory-kit ?` in the header and asks upstream nothing.
+- The lint and the tools follow the same pointer (`lint/kit_home.py`). This plugin's copy of the
+  rules is `hooks/kit-home.ts`, identical in all three plugins; `lint/run-fixtures.sh` fails when
+  the copies differ.
+
 ## Read-only
 
 The pane never writes: not obligations, not `urls/`. Mihkel ruled on 2026-10-14 that it stays
@@ -155,7 +182,9 @@ Options (`userConfig`):
 
 - `agentName` is the footer name of the main agent. Left empty, the footer uses the working
   directory's name.
-- `memoryDir` points the pane at a home's memory directory (see Data source).
+- `memoryDir` points the pane at a home's memory directory (see Data source). **Set user-wide, it
+  applies to every session on the machine**: prefer a `kit_home` pointer conf, which also wins
+  over this option.
 - `autoOpen` (default on) opens the pane at session start, but only where an obligations file
   exists.
 - `checkUpdates` (default on) runs the release check (see Release check). Off, the pane makes

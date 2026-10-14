@@ -3,8 +3,9 @@
 
     python3 memory-kit/tools/obligations-due.py [home] [days]
 
-    home   the home (the folder holding memory-kit.conf), or its memory directory.
-           Default: the current directory.
+    home   the home (the folder holding memory-kit.conf), or its memory directory, or a folder
+           whose memory-kit.conf points at the home (kit_home:, kit #18). Default: the current
+           directory.
     days   the window after today. Default: 7.
 
 Prints the expired rows first (check them, then re-state, resolve or hand them to the human --
@@ -24,10 +25,22 @@ except ImportError:
     sys.exit(2)
 
 
+# Importing kit_home must leave no lint/__pycache__ in a home's vendored kit: an untracked file
+# there is a dirty tree, which kit-update.py refuses.
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "lint"))
+import kit_home  # noqa: E402
+
+
 def memory_dir(target):
     target = pathlib.Path(target).resolve()
     if target.name == "memory":
         return target
+    found = kit_home.resolve(target)
+    if found.problem:
+        sys.stderr.write(f"memory-kit: {found.problem}\n")
+        sys.exit(2)
+    target = found.home
     conf = target / "memory-kit.conf"
     name = "memory"
     if conf.exists():
