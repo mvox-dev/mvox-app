@@ -288,7 +288,7 @@ Labels: `DECISION`, `LEARNED`, `WARNING`, `WIP`, `DEFERRED`, `PATTERN`, `GOTCHA`
 - **Settled architecture** — `teams/mvox-dev/docs/architecture-decisions.md` (format: decision, rationale, date). Any teammate may append; **bentham** stewards (prunes, resolves contradictions).
 - **i18n naming and translation choices** — `teams/mvox-dev/docs/i18n-conventions.md`. **comenius** stewards, all read.
 
-Lint before committing memory: `sh memory-kit/lint/memory-lint.sh teams/mvox-dev/memory --gate` (needs python3 + PyYAML).
+Lint before committing memory: `sh memory-kit/lint/memory-lint.sh . --gate` (needs python3 + PyYAML).
 
 ### Startup Read List
 
@@ -342,7 +342,7 @@ When you receive a shutdown request:
 The team lead shuts down LAST. Execute in this order:
 
 1. **Regenerate `memory/team-lead.yaml` `current`** — at most 15 rows: state of play, expected first action, open items (every active task — startup restores the task list from these rows), decisions awaiting PO, loose ends, with concrete pointers in `ref`. Rewrite it whole; do not append. Fresh findings go to `staging` or get promoted (rulings to `memory/facts/rulings-<area>.yaml`, know-how to `memory/lessons/` + index regenerated).
-2. **Lint** — `sh memory-kit/lint/memory-lint.sh teams/mvox-dev/memory --gate`.
+2. **Lint** — `sh memory-kit/lint/memory-lint.sh . --gate`.
 3. **Send shutdown requests** — to all agents. Wait for each `teammate_terminated`.
 4. **Persist inboxes** — copy pruned inboxes from runtime to repo:
    ```bash

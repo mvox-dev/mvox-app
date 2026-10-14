@@ -31,6 +31,9 @@ plugin API (early access; the API moves between releases).
   - Every `urls/<name>` in the text becomes a dark-blue underlined link (OSC 8 in the
     terminal; Ghostty clicks it). Links cited only in `check` or `ref` trail the text.
   - A `urls/<name>` with no file, or with an unusable one, is drawn struck through and grey.
+  - Tickets (a Jira key, an issue number) link the same way: give the ticket its own URL file,
+    e.g. `memory/urls/veo-214`, and cite `urls/veo-214`. The pane recognises no ticket patterns
+    on purpose; see the kit lesson `link-a-ticket-with-a-url-file` (#6).
   - `check` and `since` are not shown, to keep rows light.
 - **Footer** (sticky, under one `─` rule across the pane, no frame): one line for the session's main agent: the name in 10 columns (longer
   names get 9 chars + `…`), a colour-coded model letter, and the context weight such as

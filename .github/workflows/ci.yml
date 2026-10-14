@@ -62,7 +62,7 @@ jobs:
       - name: Memory lint
         run: |
           python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --user --break-system-packages pyyaml
-          sh memory-kit/lint/memory-lint.sh teams/mvox-dev/memory --gate
+          sh memory-kit/lint/memory-lint.sh . --gate
 
       - name: Setup pnpm
         if: steps.scope.outputs.notes_only != 'true'

@@ -1,6 +1,7 @@
 # memory
 
-This home's memory. Shape: `memory-kit/types/*.ts`. Lint: `memory-kit/lint/memory-lint.sh`.
+This home's memory. Shape: `memory-kit/types/*.ts`. Lint, from the repo root: `sh memory-kit/lint/memory-lint.sh . --gate`.
+The home is the repo root; its config is `memory-kit.conf` there (`memory_dir` points here).
 
 The kit owns `memory-kit/`; this directory is yours. They never interleave, so a kit upgrade
 never touches anything here.

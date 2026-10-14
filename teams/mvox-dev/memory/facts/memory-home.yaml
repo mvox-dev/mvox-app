@@ -2,12 +2,12 @@
 # memory-kit adoption. (*MVOX:memkit*)
 
 facts:
-  - fact: "Team memory is teams/mvox-dev/memory/, in memory-kit shape; the kit is vendored at memory-kit/ (git subtree) pinned to v0.1.0-alpha.12."
+  - fact: "Team memory is teams/mvox-dev/memory/, in memory-kit shape; the kit is vendored at memory-kit/ (git subtree) pinned to v0.1.0-alpha.13."
     ref: memory-kit/VERSION
     refute: "cat memory-kit/VERSION"
     verified: "2026-10-14"
-  - fact: "The kit's config for this home is teams/mvox-dev/memory-kit.conf, outside the subtree; mode is gate."
-    ref: teams/mvox-dev/memory-kit.conf
+  - fact: "The kit's home is the repo root; its config is memory-kit.conf there, outside the subtree, with memory_dir teams/mvox-dev/memory, mode gate, update verified."
+    ref: memory-kit.conf
     refute: "=ref"
     verified: "2026-10-14"
   - fact: "CI runs the memory lint with --gate on every run, notes-only PRs included."
