@@ -30,14 +30,14 @@ def _read_version():
     own output while preparing the first tag. VERSION wins because D3 makes it the
     contract: a consumer reads VERSION to know what it runs.
     """
-    v = (pathlib.Path(__file__).resolve().parent.parent / "VERSION").read_text().strip()
+    v = (pathlib.Path(__file__).resolve().parent.parent / "VERSION").read_text(encoding="utf-8").strip()
     if not v:
         sys.exit("memory-kit: VERSION is empty")
     return v
 
 
 def extract():
-    text = SRC.read_text()
+    text = SRC.read_text(encoding="utf-8")
     nums = {m.group(1): int(m.group(2)) for m in NUM.finditer(text)}
     strs = {m.group(1): m.group(2) for m in STR.finditer(text)}
     missing = [k for k in (
@@ -96,12 +96,12 @@ def extract():
 def main():
     text = extract()
     if "--check" in sys.argv:
-        if not OUT.exists() or OUT.read_text() != text:
+        if not OUT.exists() or OUT.read_text(encoding="utf-8") != text:
             print("caps.yaml is stale -- run tools/extract-caps.py")
             return 1
         print("caps.yaml current")
         return 0
-    OUT.write_text(text)
+    OUT.write_text(text, encoding="utf-8", newline="\n")
     print(f"wrote {OUT.name} from {SRC.name}")
     return 0
 

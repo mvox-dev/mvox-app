@@ -31,7 +31,7 @@ def memory_dir(target):
     conf = target / "memory-kit.conf"
     name = "memory"
     if conf.exists():
-        name = (yaml.safe_load(conf.read_text()) or {}).get("memory_dir", "memory")
+        name = (yaml.safe_load(conf.read_text(encoding="utf-8")) or {}).get("memory_dir", "memory")
     return target / name
 
 
@@ -47,7 +47,7 @@ def main(argv):
         print(f"no obligations file ({path})")
         return 0
     try:
-        rows = (yaml.safe_load(path.read_text()) or {}).get("obligations") or []
+        rows = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("obligations") or []
     except yaml.YAMLError as e:
         sys.stderr.write(f"memory-kit: {path}: unparseable YAML: {str(e).splitlines()[0]}\n")
         return 2

@@ -28,7 +28,7 @@ FIELDS = ("summary", "learned", "ref", "enforcement", "trigger")
 
 
 def front_matter(path):
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     if not text.startswith("---\n"):
         sys.exit(f"{path}: no front matter")
     head, sep, _ = text[4:].partition("\n---\n")
@@ -60,15 +60,15 @@ def generate(lessons_dir):
 
 
 def from_index(lessons_dir, index):
-    rows = (yaml.safe_load(index.read_text()) or {}).get("lessons") or []
+    rows = (yaml.safe_load(index.read_text(encoding="utf-8")) or {}).get("lessons") or []
     done = 0
     for r in rows:
         p = lessons_dir / f"{r['slug']}.md"
-        if not p.exists() or p.read_text().startswith("---\n"):
+        if not p.exists() or p.read_text(encoding="utf-8").startswith("---\n"):
             continue
         meta = {k: r[k] for k in FIELDS if r.get(k) not in (None, "")}
         head = yaml.safe_dump(meta, allow_unicode=True, sort_keys=False, width=200)
-        p.write_text("---\n" + head + "---\n" + p.read_text())
+        p.write_text("---\n" + head + "---\n" + p.read_text(encoding="utf-8"), encoding="utf-8", newline="\n")
         done += 1
     print(f"{index}: front matter written into {done} lesson(s)")
 
@@ -84,12 +84,12 @@ def main(argv):
         return 0
     want = generate(lessons)
     if "--check" in argv:
-        have = (yaml.safe_load(index.read_text()) or {}).get("lessons") if index.exists() else None
+        have = (yaml.safe_load(index.read_text(encoding="utf-8")) or {}).get("lessons") if index.exists() else None
         if have != yaml.safe_load(want)["lessons"]:
             print(f"{index}: stale -- run memory-kit/tools/lesson-index.py")
             return 1
         return 0
-    index.write_text(want)
+    index.write_text(want, encoding="utf-8", newline="\n")
     print(f"{index}: {want.count('- slug:')} lessons")
     return 0
 

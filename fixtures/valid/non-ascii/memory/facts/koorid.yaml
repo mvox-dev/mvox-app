@@ -1,0 +1,5 @@
+facts:
+- fact: "Põhjala kammerkoor sings Tormis; the kit reads this file as UTF-8 on every platform."
+  ref: ""
+  refute: ""
+  verified: "2026-10-14"
