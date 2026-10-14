@@ -27,7 +27,7 @@ vi.mock('$app/navigation', async () =>
 
 import Page from './roster/+page.svelte';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
@@ -77,7 +77,7 @@ const openSoprano = (container: HTMLElement) =>
 
 async function renderView(view: 'groups' | 'arrange'): Promise<HTMLElement> {
 	setAuthedWithTwoCollectives();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(q(container, 'section-toggle-sec-sop')).not.toBeNull();

@@ -18,13 +18,13 @@ vi.mock('$lib/invite/inviteData', async (importOriginal) =>
 vi.mock('$lib/profile/linkedIdentities', async (importOriginal) =>
 	(await import('$lib/testing/mocks/admin')).joinStateDetailsModule(importOriginal)
 );
-vi.mock('$lib/nav/adminStore', async (importOriginal) =>
-	(await import('$lib/testing/mocks/admin')).ownerTierOverRealModule(importOriginal)
+vi.mock('$lib/nav/dbRights', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).dbRightOverRealModule(importOriginal)
 );
 vi.mock('$lib/roster/memberRecord', async (importOriginal) =>
 	(await import('$lib/testing/mocks/roster')).memberRecordModule(importOriginal)
 );
-vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+vi.mock('$lib/library/libraryRights', async (importOriginal) =>
 	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
 );
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
@@ -43,7 +43,7 @@ vi.mock('$app/navigation', async () =>
 import Page from './roster/+page.svelte';
 import type { RosterRow } from '$lib/roster/rosterData';
 import type { SectionNode } from '$lib/sections/sectionData';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import {
@@ -51,7 +51,7 @@ import {
 	listJoinStateDetailsMock,
 	listJoinStatesMock,
 	mintSelfLinkInviteMock,
-	resolveOwnerTierMock,
+	resolveDbRightMock,
 	withdrawInviteMock
 } from '$lib/testing/mocks/admin';
 import {
@@ -109,7 +109,7 @@ beforeEach(() => {
 			Object.fromEntries(personIds.map((id) => [id, JOIN_DATE[id] ?? { state: 'absent' }]))
 		)
 	);
-	resolveOwnerTierMock.mockResolvedValue('owner');
+	resolveDbRightMock.mockResolvedValue('owner');
 	mintSelfLinkInviteMock.mockResolvedValue({ inviteToken: 'tok-fresh-1' });
 	withdrawInviteMock.mockResolvedValue(undefined);
 	deactivateMemberMock.mockResolvedValue(undefined);
@@ -129,13 +129,13 @@ function rowLi(container: HTMLElement, memberId: string): HTMLElement {
 }
 
 async function renderRosterAs(
-	admin: 'admin' | 'not-admin',
+	admin: 'editor' | 'not-editor',
 	tier: 'owner' | 'editor' = 'owner'
 ) {
-	resolveOwnerTierMock.mockResolvedValue(tier);
+	resolveDbRightMock.mockResolvedValue(tier);
 	const utils = render(Page);
 	setAuthed();
-	adminStore.set(admin);
+	dbEditRight.set(admin);
 	await waitFor(() => expect(q(utils.container, 'section-toggle-unassigned')).not.toBeNull());
 	await fireEvent.click(q(utils.container, 'section-toggle-unassigned')!);
 	await waitFor(() => expect(q(utils.container, 'roster-row-m2')).not.toBeNull());
@@ -160,12 +160,12 @@ const DEACTIVATE_CONTROL_SELECTOR =
 
 describe('(1) the collapsed card is the activator — pencil gone, real button, content-derived name', () => {
 	it('the pencil is GONE: no roster-row-record-edit-* element renders anywhere', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		expect(container.querySelector('[data-testid^="roster-row-record-edit-"]')).toBeNull();
 	});
 
 	it("the collapsed card is a REAL <button type=button> — native Enter/Space and tab order, never a div-onclick", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		const card = q(container, 'roster-row-card-m2');
 		expect(card).not.toBeNull();
 		expect(card!.tagName).toBe('BUTTON');
@@ -173,7 +173,7 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 	});
 
 	it("accessible name per #262, scaled to the whole card: the action label AND that member's name are element CONTENT — no templated aria-label", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		const card = q(container, 'roster-row-card-m2')!;
 		expect(card.textContent).toContain('[roster_record_edit_label]');
 		expect(card.textContent).toContain('Berta Bass');
@@ -181,7 +181,7 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 	});
 
 	it('the collapsed activator nests NO interactive element (WCAG 4.1.2 — the SectionPicker and all controls sit outside it)', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		const card = q(container, 'roster-row-card-m2')!;
 		expect(
 			card.querySelector('button, input, select, textarea, a[href], [tabindex]')
@@ -189,7 +189,7 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 	});
 
 	it('layout guard (happy-dom cannot measure stacking or focus ring): the activator overlays the whole card', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		const li = rowLi(container, 'm2');
 		const card = q(container, 'roster-row-card-m2')!;
 		expect(li.className.split(/\s+/)).toContain('relative');
@@ -204,7 +204,7 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 	});
 
 	it('layout guard (happy-dom cannot measure stacking): the SectionPicker on a collapsed row sits above the overlay', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		const li = rowLi(container, 'm2');
 		const card = q(container, 'roster-row-card-m2')!;
 		const trigger = li.querySelector('[data-testid^="section-picker-"]') as HTMLElement | null;
@@ -220,7 +220,7 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 	});
 
 	it('layout guard (happy-dom cannot measure stacking): an armed deactivate pair on a collapsed row sits above the overlay', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm2');
 		await fireEvent.click(q(container, 'member-deactivate-m2')!);
 		await waitFor(() => expect(q(container, 'member-deactivate-confirm-m2')).not.toBeNull());
@@ -240,7 +240,7 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 	});
 
 	it("activating the card opens THAT member's record editor in place", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm2');
 		const li = rowLi(container, 'm2');
 		expect(li.querySelector('[data-testid="roster-record-name"]')).not.toBeNull();
@@ -250,7 +250,7 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 	});
 
 	it('an OPEN card is a form, not a button: the activator is replaced, and no editor field sits inside an interactive parent', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm2');
 		expect(q(container, 'roster-row-card-m2')).toBeNull();
 		for (const testid of [
@@ -272,7 +272,7 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 	});
 
 	it("the admin's OWN card opens — the record editor keeps its no-self-row-exclusion contract (deactivate-guard copy-paste trap)", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm1');
 		expect(
 			rowLi(container, 'm1').querySelector('[data-testid="roster-record-name"]')
@@ -280,14 +280,14 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 	});
 
 	it('a non-admin gets NO card activator anywhere — absent, not disabled', async () => {
-		const { container } = await renderRosterAs('not-admin');
+		const { container } = await renderRosterAs('not-editor');
 		expect(container.querySelector('[data-testid^="roster-row-card-"]')).toBeNull();
 	});
 });
 
 describe('(2) dated status lines — #467: joined RENDERS, every state keeps its own dated line, directly under name+email', () => {
 	it('a JOINED member now shows a dated line (m1, m2) — silence is gone', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
 		expect(q(container, 'roster-row-join-state-m1')).not.toBeNull();
 		expect(q(container, 'roster-row-join-state-m1')!.getAttribute('data-join-state')).toBe('joined');
@@ -296,14 +296,14 @@ describe('(2) dated status lines — #467: joined RENDERS, every state keeps its
 	});
 
 	it('not-invited and invited-awaiting each keep a DISTINCT dated line — collapsing them would erase what #294/#467 distinguish', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
 		expect(q(container, 'roster-row-join-state-m3')!.getAttribute('data-join-state')).toBe('invited');
 		expect(q(container, 'roster-row-join-state-m4')!.getAttribute('data-join-state')).toBe('absent');
 	});
 
 	it('the line renders directly under name+email: after the email, BEFORE the section name', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await fireEvent.click(q(container, 'roster-sort-toggle')!);
 		await waitFor(() => expect(q(container, 'roster-flat-list')).not.toBeNull());
 		await waitFor(() => expect(q(container, 'roster-row-join-state-m5')).not.toBeNull());
@@ -324,7 +324,7 @@ describe('(2) dated status lines — #467: joined RENDERS, every state keeps its
 	});
 
 	it('an EDITOR-admin still sees the SAME dated lines — the read is the gate (#454, Mihkel 2026-09-22), not the role', async () => {
-		const { container } = await renderRosterAs('admin', 'editor');
+		const { container } = await renderRosterAs('editor', 'editor');
 		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
 		expect(q(container, 'roster-row-join-state-m3')!.getAttribute('data-join-state')).toBe('invited');
 		expect(q(container, 'roster-row-join-state-m4')!.getAttribute('data-join-state')).toBe('absent');
@@ -334,14 +334,14 @@ describe('(2) dated status lines — #467: joined RENDERS, every state keeps its
 
 describe('(3) relocation — invite controls and the deactivate pair live inside the opened editor only', () => {
 	it('the REST state: a collapsed row carries NO invite control and NO deactivate control, on any row', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
 		expect(container.querySelectorAll(INVITE_CONTROL_SELECTOR)).toHaveLength(0);
 		expect(container.querySelectorAll(DEACTIVATE_CONTROL_SELECTOR)).toHaveLength(0);
 	});
 
 	it("opening a never-invited member's card (owner-admin): kutsu renders INSIDE that row, and only kutsu — state routing unchanged", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm4');
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		expect(rowLi(container, 'm4').contains(q(container, 'roster-member-invite-m4'))).toBe(true);
@@ -350,7 +350,7 @@ describe('(3) relocation — invite controls and the deactivate pair live inside
 	});
 
 	it("opening an invited member's card: saada uuesti + tühista kutse inside the row, kutsu unreachable", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm3');
 		await waitFor(() => expect(q(container, 'roster-member-reinvite-m3')).not.toBeNull());
 		expect(rowLi(container, 'm3').contains(q(container, 'roster-member-reinvite-m3'))).toBe(true);
@@ -359,7 +359,7 @@ describe('(3) relocation — invite controls and the deactivate pair live inside
 	});
 
 	it("opening a joined member's card: NO invite controls, and the deactivate trigger renders inside the row", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm2');
 		await waitFor(() => expect(q(container, 'member-deactivate-m2')).not.toBeNull());
 		expect(rowLi(container, 'm2').contains(q(container, 'member-deactivate-m2'))).toBe(true);
@@ -367,7 +367,7 @@ describe('(3) relocation — invite controls and the deactivate pair live inside
 	});
 
 	it("SELF-ROW ASYMMETRY: the admin's OWN card opens, but no deactivate control renders in it — the two guards do not merge", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm1');
 		expect(
 			rowLi(container, 'm1').querySelector('[data-testid="roster-record-name"]')
@@ -377,13 +377,13 @@ describe('(3) relocation — invite controls and the deactivate pair live inside
 	});
 
 	it('an EDITOR-admin opening a card gets NO invite controls inside it — owner gating unchanged by the move', async () => {
-		const { container } = await renderRosterAs('admin', 'editor');
+		const { container } = await renderRosterAs('editor', 'editor');
 		await openCard(container, 'm4');
 		expect(container.querySelectorAll(INVITE_CONTROL_SELECTOR)).toHaveLength(0);
 	});
 
 	it('the owner note stays PAGE-LEVEL: rendered once for an editor-admin, outside every row, editor open or not', async () => {
-		const { container } = await renderRosterAs('admin', 'editor');
+		const { container } = await renderRosterAs('editor', 'editor');
 		await waitFor(() => expect(q(container, 'roster-invite-owner-note')).not.toBeNull());
 		const notes = container.querySelectorAll('[data-testid="roster-invite-owner-note"]');
 		expect(notes).toHaveLength(1);
@@ -393,7 +393,7 @@ describe('(3) relocation — invite controls and the deactivate pair live inside
 	});
 
 	it('INTEGRATION: kutsu clicked inside the opened editor still drives the untouched handler — mintSelfLinkInvite for THAT person, never createInvite', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm4');
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);

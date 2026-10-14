@@ -12,7 +12,7 @@ vi.mock('$lib/roster/rosterData', async () =>
 vi.mock('$lib/roster/memberLifecycle', async () =>
 	(await import('$lib/testing/mocks/roster')).memberLifecycleModule({ archived: true })
 );
-vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+vi.mock('$lib/library/libraryRights', async (importOriginal) =>
 	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
 );
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
@@ -27,7 +27,7 @@ vi.mock('$lib/roster/memberRecord', async (importOriginal) =>
 
 import Page from './roster/+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
@@ -48,7 +48,7 @@ useRosterDeactivatePage();
 describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () => {
 	it('a rejected RIGHTS READ surfaces a role=alert on that row (not just a console line)', async () => {
 		listDeactivateBlockersMock.mockRejectedValue(new Error('rights read failed'));
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
@@ -80,7 +80,7 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 
 	it('a rejected STATUS WRITE surfaces the same alert, and the roster is NOT refetched as if it worked', async () => {
 		deactivateMemberMock.mockRejectedValue(new Error('403'));
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		const rosterLoadsBefore = loadRosterMock.mock.calls.length;
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
@@ -103,7 +103,7 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 
 	it('cancel-then-rearm after a failure: cancel disarms AND clears the alert; a fresh arm starts with no stale alert', async () => {
 		deactivateMemberMock.mockRejectedValue(new Error('403'));
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
@@ -144,7 +144,7 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 		reinstateMemberMock.mockRejectedValue(new Error('403'));
 		const { container } = render(Page);
 		setAuthedWithOneCollective();
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="roster-inactive-toggle"]')).not.toBeNull()
 		);
@@ -212,7 +212,7 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 	async function renderTwoCollectiveRoster() {
 		const utils = render(Page);
 		setAuthedWithTwoCollectives();
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		await waitFor(() =>
 			expect(utils.container.querySelector('[data-testid="roster-inactive-toggle"]')).not.toBeNull()
 		);
@@ -310,7 +310,7 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 		loadInactiveRosterMock.mockResolvedValue(toListRead([goneGirl]));
 		const { container } = render(Page);
 		setAuthedWithOneCollective();
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="roster-inactive-toggle"]')).not.toBeNull()
 		);

@@ -22,7 +22,7 @@
 
 {#if roster.joinStates[row.personId] !== undefined}
 	{@const state = roster.joinStates[row.personId]}
-	{#if roster.ownerTier === 'owner'}
+	{#if roster.dbRight === 'owner'}
 		<div class="flex flex-wrap items-center gap-2">
 			{#if state === 'absent'}
 				<button

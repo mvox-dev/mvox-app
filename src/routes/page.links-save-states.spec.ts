@@ -31,7 +31,7 @@ vi.mock('$app/state', async () =>
 
 import Page from './links/+page.svelte';
 import type { LinkRow } from '$lib/links/linkData';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { dbEditRight, resetDbEditRight } from '$lib/nav/dbRights';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
 import {
@@ -67,7 +67,7 @@ afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 });
 
 async function flush(): Promise<void> {
@@ -88,7 +88,7 @@ function statusText(container: HTMLElement): string {
 }
 
 async function renderReadyAdmin() {
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	const utils = render(Page);
 	await waitFor(() => {
 		expect(rowEls(utils.container).length).toBe(3);
@@ -404,7 +404,7 @@ describe('#323 — a collective switch resets failure/saved residue (routeLoad r
 			Promise.resolve(cfg.db === 'sampledb' ? rows() : rowsB())
 		);
 		reorderLinksMock.mockRejectedValue(new Error('boom'));
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		const { container } = render(Page);
 		await waitFor(() => {
 			expect(rowNames(container)).toEqual(['Salvestused', 'Scores', 'Website']);
@@ -428,7 +428,7 @@ describe('#323 — a collective switch resets failure/saved residue (routeLoad r
 		listLinksMock.mockImplementation((cfg: { db: string }) =>
 			Promise.resolve(cfg.db === 'sampledb' ? rows() : rowsB())
 		);
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		const { container } = render(Page);
 		await waitFor(() => {
 			expect(rowNames(container)).toEqual(['Salvestused', 'Scores', 'Website']);
@@ -468,7 +468,7 @@ describe('#323 review F1 — a write started in A settles silently once the user
 		);
 		const held = deferred();
 		reorderLinksMock.mockReturnValue(held.promise);
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		const utils = render(Page);
 		await waitFor(() => {
 			expect(rowNames(utils.container)).toEqual(['Salvestused', 'Scores', 'Website']);
@@ -533,7 +533,7 @@ describe('#323 review F1 — a write started in A settles silently once the user
 		);
 		const held = deferred<string>();
 		createLinkMock.mockReturnValue(held.promise);
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		const { container } = render(Page);
 		await waitFor(() => {
 			expect(rowNames(container)).toEqual(['Salvestused', 'Scores', 'Website']);
@@ -566,7 +566,7 @@ describe('#323 review F1 — a write started in A settles silently once the user
 		);
 		const held = deferred<string>();
 		createLinkMock.mockReturnValue(held.promise);
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		const { container } = render(Page);
 		await waitFor(() => {
 			expect(rowNames(container)).toEqual(['Salvestused', 'Scores', 'Website']);

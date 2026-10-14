@@ -104,7 +104,7 @@ function memberRowCount(container: HTMLElement): number {
 
 describe('/roster — the 3-chip view-mode selector replaces the collapse/expand toggle (#155/S1)', () => {
 	it('admin: roster-view-modes renders in the view slot ABOVE the groups with Collapsed, Expanded and Arrange chips in that document order, each with an accessible name', async () => {
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 
 		const selector = q(container, 'roster-view-modes');
 		expect(selector).not.toBeNull();
@@ -137,12 +137,12 @@ describe('/roster — the 3-chip view-mode selector replaces the collapse/expand
 	});
 
 	it('the old sections-toggle-all control is GONE — the chips replace it, they do not sit beside it', async () => {
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 		expect(q(container, 'sections-toggle-all')).toBeNull();
 	});
 
 	it('default selection is Collapsed: aria-pressed="true" on the Collapsed chip ONLY, and no member row is on screen', async () => {
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 
 		expect(pressedStates(container)).toEqual({
 			collapsed: 'true',
@@ -153,7 +153,7 @@ describe('/roster — the 3-chip view-mode selector replaces the collapse/expand
 	});
 
 	it('clicking Expanded switches the mode radio-style — Expanded becomes the ONE active chip and every section\'s members (sub-sections included) appear', async () => {
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 
 		await selectMode(container, 'expanded');
 
@@ -170,7 +170,7 @@ describe('/roster — the 3-chip view-mode selector replaces the collapse/expand
 	});
 
 	it('clicking Collapsed after Expanded returns to the collapsed display — one active chip, member rows gone', async () => {
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 		await selectMode(container, 'expanded');
 		await waitFor(() => {
 			expect(memberRowCount(container)).toBeGreaterThan(0);
@@ -188,7 +188,7 @@ describe('/roster — the 3-chip view-mode selector replaces the collapse/expand
 		});
 	});
 
-	it.each(['not-admin', 'loading', 'error'] as const)(
+	it.each(['not-editor', 'loading', 'error'] as const)(
 		'%s: the Arrange chip does NOT render — non-editors get exactly the two display chips (fail closed on unresolved/errored rights)',
 		async (state) => {
 			const container = await renderReady(state);
@@ -205,7 +205,7 @@ describe('/roster — the 3-chip view-mode selector replaces the collapse/expand
 
 describe('/roster — the Arrange chip renders the compact arrange-mode shell (#155/S1)', () => {
 	it('activating Arrange makes it the one active chip and swaps roster-groups out for roster-arrange-list', async () => {
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 		expect(q(container, 'roster-arrange-list')).toBeNull();
 
 		await selectMode(container, 'arrange');
@@ -222,7 +222,7 @@ describe('/roster — the Arrange chip renders the compact arrange-mode shell (#
 	});
 
 	it('the list holds ONE row per section — every nesting level — in tree pre-order, each row carrying data-depth for its nesting level', async () => {
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 		await selectMode(container, 'arrange');
 		await waitFor(() => {
 			expect(q(container, 'roster-arrange-list')).not.toBeNull();
@@ -245,7 +245,7 @@ describe('/roster — the Arrange chip renders the compact arrange-mode shell (#
 	});
 
 	it('each row shows the section NAME and its RECURSIVE member count — the same roll-up the grouped headers show (Soprano 3, its subs 1 each, Bass 0)', async () => {
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 		await selectMode(container, 'arrange');
 		await waitFor(() => {
 			expect(q(container, 'roster-arrange-list')).not.toBeNull();
@@ -270,7 +270,7 @@ describe('/roster — the Arrange chip renders the compact arrange-mode shell (#
 	});
 
 	it('nesting is VISIBLE, not just declared: a depth-1 row renders with indentation a depth-0 row does not have (class/style must differ by depth)', async () => {
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 		await selectMode(container, 'arrange');
 		await waitFor(() => {
 			expect(q(container, 'roster-arrange-list')).not.toBeNull();
@@ -283,7 +283,7 @@ describe('/roster — the Arrange chip renders the compact arrange-mode shell (#
 	});
 
 	it('COMPACT means compact: no member rows render anywhere while arrange mode is active', async () => {
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 		await selectMode(container, 'arrange');
 		await waitFor(() => {
 			expect(q(container, 'roster-arrange-list')).not.toBeNull();
@@ -293,7 +293,7 @@ describe('/roster — the Arrange chip renders the compact arrange-mode shell (#
 	});
 
 	it('NO drag-handle/expand-toggle/picker/new-section controls in the S1 shell — S2/S4 add reorder and CRUD respectively (#155/S4: section-remove-/arrange-rename-* are now expected INSIDE the arrange list, tested in page.roster-arrange-crud.spec.ts)', async () => {
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 		await selectMode(container, 'arrange');
 		await waitFor(() => {
 			expect(q(container, 'roster-arrange-list')).not.toBeNull();
@@ -310,7 +310,7 @@ describe('/roster — the Arrange chip renders the compact arrange-mode shell (#
 	});
 
 	it('switching BACK to Collapsed resumes normal rendering: arrange list gone, roster-groups back, sections collapsed', async () => {
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 		await selectMode(container, 'arrange');
 		await waitFor(() => {
 			expect(q(container, 'roster-arrange-list')).not.toBeNull();
@@ -327,7 +327,7 @@ describe('/roster — the Arrange chip renders the compact arrange-mode shell (#
 	});
 
 	it('switching from Arrange to Expanded resumes the member-bearing rendering path too', async () => {
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 		await selectMode(container, 'arrange');
 		await waitFor(() => {
 			expect(q(container, 'roster-arrange-list')).not.toBeNull();
@@ -345,7 +345,7 @@ describe('/roster — the Arrange chip renders the compact arrange-mode shell (#
 
 describe('/roster — the view modes are a rendering switch over the one existing load (#155/S1)', () => {
 	it('cycling Collapsed → Arrange → Expanded → Collapsed refetches NOTHING: loadRoster and listSections each ran exactly once, at page load', async () => {
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 		expect(loadRosterMock).toHaveBeenCalledTimes(1);
 		expect(listSectionsMock).toHaveBeenCalledTimes(1);
 
@@ -382,7 +382,7 @@ describe('/roster — the view modes are a rendering switch over the one existin
 		loadRosterMock.mockResolvedValue(toListRead([
 			{ memberId: 'm-tara', personId: 'p-tara', name: 'Tara Oja', email: 'tara@x.com', sectionIds: ['sec-men1'] }
 		] satisfies RosterRow[]));
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 
 		await selectMode(container, 'arrange');
 		await waitFor(() => {
@@ -405,7 +405,7 @@ describe('/roster — the view modes are a rendering switch over the one existin
 
 describe('/roster — the view mode is a choice on this device only (#809)', () => {
 	it('offline the view mode still changes: it saves nothing', async () => {
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 		await goOffline();
 		try {
 			await selectMode(container, 'expanded');
@@ -415,7 +415,7 @@ describe('/roster — the view mode is a choice on this device only (#809)', () 
 	});
 
 	it('tapping the chosen mode keeps it: a mode is never cleared', async () => {
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 		await selectMode(container, 'expanded');
 		await fireEvent.click(chip(container, 'expanded')!);
 		expect(pressedStates(container)).toEqual({ collapsed: 'false', expanded: 'true', arrange: 'false' });

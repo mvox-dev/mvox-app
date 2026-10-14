@@ -34,11 +34,11 @@ const h = vi.hoisted(() => {
 vi.mock('$lib/admin/roleManagement', async () =>
 	(await import('$lib/testing/mocks/admin')).roleManagementModule()
 );
-vi.mock('$lib/nav/adminStore', async () =>
-	(await import('$lib/testing/mocks/admin')).adminStoreModule()
+vi.mock('$lib/nav/dbRights', async () =>
+	(await import('$lib/testing/mocks/admin')).dbRightsModule()
 );
-vi.mock('$lib/library/librarianStore', async () =>
-	(await import('$lib/testing/mocks/admin')).librarianStoreModule()
+vi.mock('$lib/library/libraryRights', async () =>
+	(await import('$lib/testing/mocks/admin')).libraryRightsModule()
 );
 vi.mock('$lib/collective/databaseEntity', async () =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule()
@@ -79,11 +79,11 @@ import {
 	createInviteMock,
 	listAdminsMock,
 	listLibrariansMock,
-	resolveAdminMock,
+	resolveDbEditRightMock,
 	resolveCollectiveNameMarkerMock,
 	resolveInviteParentMock,
-	resolveLibrarianMock,
-	resolveOwnerTierMock,
+	resolveLibraryEditRightMock,
+	resolveDbRightMock,
 	resolveParentMock,
 	updateCollectiveNameMock
 } from '$lib/testing/mocks/admin';
@@ -101,10 +101,10 @@ const JOIN_STATES = {
 } as const;
 
 function loadOk() {
-	resolveAdminMock.mockResolvedValue('admin');
-	resolveOwnerTierMock.mockResolvedValue('owner');
+	resolveDbEditRightMock.mockResolvedValue('editor');
+	resolveDbRightMock.mockResolvedValue('owner');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
-	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 	listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
 	listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
 	loadRosterMock.mockResolvedValue(toListRead(ROSTER));
@@ -157,10 +157,10 @@ beforeEach(() => {
 	resolveDatabaseEntityIdMock.mockReset();
 	listAdminsMock.mockReset();
 	listLibrariansMock.mockReset();
-	resolveAdminMock.mockReset();
+	resolveDbEditRightMock.mockReset();
 	resolveCollectiveNameMarkerMock.mockReset();
-	resolveLibrarianMock.mockReset();
-	resolveOwnerTierMock.mockReset();
+	resolveLibraryEditRightMock.mockReset();
+	resolveDbRightMock.mockReset();
 	updateCollectiveNameMock.mockReset();
 	createInviteMock.mockReset();
 	resolveInviteParentMock.mockReset();
@@ -206,8 +206,8 @@ describe('#301 /admin invite — the person select (owner, uninvited persons pre
 		expect(jsCfg).toMatchObject({ db: 'sampledb', token: 'jwt-admin' });
 		expect([...jsIds].sort()).toEqual(['p-anna', 'p-bela', 'p-cilla', 'p-dora']);
 
-		expect(resolveOwnerTierMock).toHaveBeenCalled();
-		const tierCall = resolveOwnerTierMock.mock.calls[0];
+		expect(resolveDbRightMock).toHaveBeenCalled();
+		const tierCall = resolveDbRightMock.mock.calls[0];
 		expect(tierCall[0]).toMatchObject({ db: 'sampledb', token: 'jwt-admin' });
 		expect(tierCall[1]).toBe('admin-p');
 		expect(tierCall[3]).toBe('org-1');
@@ -318,7 +318,7 @@ describe('#301 /admin invite — when the select is not rendered', () => {
 	it('non-owner admin (editor tier) → no select, the existing owner-rights explanation, and the blank invite still works unchanged', async () => {
 		selectSampledb();
 		loadOk();
-		resolveOwnerTierMock.mockResolvedValue('editor');
+		resolveDbRightMock.mockResolvedValue('editor');
 		createInviteMock.mockResolvedValue({
 			personId: 'p-new',
 			memberId: 'm-new',
@@ -346,10 +346,10 @@ describe('#301 /admin invite — when the select is not rendered', () => {
 	it("owner tier 'error' → no select (an affordance is never rendered off an unresolved rights answer)", async () => {
 		selectSampledb();
 		loadOk();
-		resolveOwnerTierMock.mockResolvedValue('error');
+		resolveDbRightMock.mockResolvedValue('error');
 		const { section } = await renderInviteReady();
 		await waitFor(() => {
-			expect(resolveOwnerTierMock).toHaveBeenCalled();
+			expect(resolveDbRightMock).toHaveBeenCalled();
 		});
 		expect(q(section, 'invite-person-select')).toBeNull();
 		expect(section.querySelector('select')).toBeNull();
@@ -467,7 +467,7 @@ describe('/admin invite — a failed read is reported (#756)', () => {
 	it('a failed owner-tier read is reported', async () => {
 		const consoleSpy = await spyAndLoad();
 		const boom = new Error('tier read failed');
-		resolveOwnerTierMock.mockRejectedValue(boom);
+		resolveDbRightMock.mockRejectedValue(boom);
 		await renderInviteReady();
 		await waitFor(() =>
 			expect(consoleSpy).toHaveBeenCalledWith('admin/invite: reading the owner tier failed', boom)
@@ -596,13 +596,13 @@ describe('#301 /admin invite — the uninvited-list read is owner-gated', () => 
 	it('an editor-tier admin triggers NO listJoinStates fan-out, and still gets the owner-rights explanation', async () => {
 		selectSampledb();
 		loadOk();
-		resolveOwnerTierMock.mockResolvedValue('editor');
+		resolveDbRightMock.mockResolvedValue('editor');
 		const { section } = await renderInviteReady();
 
 		await waitFor(() => {
 			expect(q(section, 'invite-owner-note')).not.toBeNull();
 		});
-		expect(resolveOwnerTierMock).toHaveBeenCalled();
+		expect(resolveDbRightMock).toHaveBeenCalled();
 		expect(h.listJoinStatesMock).not.toHaveBeenCalled();
 		expect(q(section, 'invite-person-list-error')).toBeNull();
 		expect(q(section, 'invite-person-select')).toBeNull();

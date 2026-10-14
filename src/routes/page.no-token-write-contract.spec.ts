@@ -67,11 +67,11 @@ vi.mock('$lib/profile/linkedIdentities', async (importOriginal) => ({
 vi.mock('$lib/library/libraryData', async () =>
 	(await import('$lib/testing/mocks/library')).libraryReadsModule()
 );
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule()
 );
-vi.mock('$lib/nav/adminStore', async (importOriginal) =>
-	(await import('$lib/testing/mocks/admin')).adminStoreOverRealModule(importOriginal)
+vi.mock('$lib/nav/dbRights', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).dbRightsOverRealModule(importOriginal)
 );
 vi.mock('$lib/admin/roleManagement', async (importOriginal) =>
 	(await import('$lib/testing/mocks/admin')).roleManagementOverRealModule(importOriginal)
@@ -91,7 +91,7 @@ vi.mock('$lib/invite/inviteData', async (importOriginal) => {
 });
 
 import { clearAll } from '$lib/auth/storage';
-import { resetAdmin } from '$lib/nav/adminStore';
+import { resetDbEditRight } from '$lib/nav/dbRights';
 import { install401Recovery } from '$lib/auth/install-401-recovery';
 import { setAuthExpiredHandler } from '$lib/entu/request';
 import { resetGate } from '$lib/profile/completionGate';
@@ -246,7 +246,7 @@ afterEach(() => {
 	for (const handle of WRITE_PAGE_HANDLES) handle.mockReset();
 	resetAppState();
 	resetGate();
-	resetAdmin();
+	resetDbEditRight();
 	history.replaceState({}, '', '/');
 });
 

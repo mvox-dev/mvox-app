@@ -9,9 +9,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const h = vi.hoisted(() => ({
-	resolveAdmin: vi.fn(),
-	resolveOwnerTier: vi.fn(),
-	resolveLibrarian: vi.fn(),
+	resolveDbEditRight: vi.fn(),
+	resolveDbRight: vi.fn(),
+	resolveLibraryEditRight: vi.fn(),
 	loadRoster: vi.fn(),
 	listAdmins: vi.fn(),
 	listLibrarians: vi.fn(),
@@ -31,11 +31,11 @@ vi.mock('$lib/admin/roleManagement', () => ({
 	addLibrarian: vi.fn(),
 	removeLibrarian: vi.fn()
 }));
-vi.mock('$lib/nav/adminStore', () => ({
-	resolveAdmin: h.resolveAdmin,
-	resolveOwnerTier: h.resolveOwnerTier
+vi.mock('$lib/nav/dbRights', () => ({
+	resolveDbEditRight: h.resolveDbEditRight,
+	resolveDbRight: h.resolveDbRight
 }));
-vi.mock('$lib/library/librarianStore', () => ({ resolveLibrarian: h.resolveLibrarian }));
+vi.mock('$lib/library/libraryRights', () => ({ resolveLibraryEditRight: h.resolveLibraryEditRight }));
 vi.mock('$lib/profile/linkedIdentities', () => ({ listJoinStates: h.listJoinStates }));
 vi.mock('$lib/collective/databaseEntity', async () =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule()
@@ -81,9 +81,9 @@ function setCollective(name: string) {
 
 function loadOk() {
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
-	h.resolveAdmin.mockResolvedValue('admin');
-	h.resolveOwnerTier.mockResolvedValue('error');
-	h.resolveLibrarian.mockResolvedValue({ state: 'librarian', libraryId: null });
+	h.resolveDbEditRight.mockResolvedValue('editor');
+	h.resolveDbRight.mockResolvedValue('error');
+	h.resolveLibraryEditRight.mockResolvedValue({ state: 'editor', libraryId: null });
 	h.loadRoster.mockResolvedValue(toListRead([]));
 	listSectionsMock.mockResolvedValue([]);
 	h.listAdmins.mockResolvedValue({ persons: [], canManage: false });
@@ -132,8 +132,8 @@ describe('/admin — a collective switch during the gate', () => {
 			.mockImplementationOnce(() => new Promise((res) => (releaseFirst = res)))
 			.mockResolvedValueOnce('org-2');
 		let releaseAdmin!: (state: string) => void;
-		h.resolveAdmin.mockImplementation((_c, _p, _f, id) =>
-			id === 'org-2' ? new Promise((res) => (releaseAdmin = res)) : Promise.resolve('admin')
+		h.resolveDbEditRight.mockImplementation((_c, _p, _f, id) =>
+			id === 'org-2' ? new Promise((res) => (releaseAdmin = res)) : Promise.resolve('editor')
 		);
 		selectSampledb();
 		collectiveState.set({
@@ -148,15 +148,15 @@ describe('/admin — a collective switch during the gate', () => {
 		await tick();
 
 		selectedCollectiveDbStore.set('bravura');
-		await vi.waitFor(() => expect(h.resolveAdmin).toHaveBeenCalledTimes(1));
+		await vi.waitFor(() => expect(h.resolveDbEditRight).toHaveBeenCalledTimes(1));
 		releaseFirst('org-1');
 		await tick();
-		releaseAdmin('admin');
+		releaseAdmin('editor');
 
 		await waitFor(() => {
 			expect(q(container, 'admin-roles-admins')).not.toBeNull();
 		});
-		expect(h.resolveLibrarian.mock.calls.map((call) => call[3])).toEqual(['org-2']);
+		expect(h.resolveLibraryEditRight.mock.calls.map((call) => call[3])).toEqual(['org-2']);
 		expect(h.listAdmins.mock.calls.map((call) => call[1])).toEqual(['org-2']);
 	});
 });
@@ -174,7 +174,7 @@ describe('/admin — a collective rename', () => {
 		await tick();
 
 		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledTimes(1);
-		expect(h.resolveAdmin).toHaveBeenCalledTimes(1);
+		expect(h.resolveDbEditRight).toHaveBeenCalledTimes(1);
 		expect(h.loadRoster).toHaveBeenCalledTimes(1);
 		expect(q(container, 'admin-roles-admins')).not.toBeNull();
 	});

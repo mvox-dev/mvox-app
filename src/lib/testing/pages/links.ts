@@ -2,7 +2,7 @@
 import { cleanup } from '@testing-library/svelte';
 import { vi } from 'vitest';
 import type { LinkRow } from '$lib/links/linkData';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { dbEditRight, resetDbEditRight } from '$lib/nav/dbRights';
 import { resetAppState } from '$lib/testing/appReset';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
 import { resetOnLine } from '$lib/testing/networkSignal';
@@ -16,7 +16,7 @@ export function cleanupClearAdmin(): void {
 	cleanup();
 	vi.clearAllMocks();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 }
 
 export function setAuthed(): void {
@@ -25,7 +25,7 @@ export function setAuthed(): void {
 
 export function setAuthedAdmin(): void {
 	signIn();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 }
 
 export function setAuthedWithTwoCollectives(): void {
@@ -89,7 +89,7 @@ export function cleanupClearResetAdminOnLine(): void {
 	cleanup();
 	vi.clearAllMocks();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 	resetOnLine();
 }
 

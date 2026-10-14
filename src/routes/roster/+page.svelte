@@ -7,10 +7,10 @@
 	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
 	import type { ListRead } from '$lib/entu/listRead';
 	import { listJoinStateDetails } from '$lib/profile/linkedIdentities';
-	import { resolveOwnerTier } from '$lib/nav/adminStore';
+	import { resolveDbRight } from '$lib/nav/dbRights';
 	import { loadActiveAndArchivedRosters } from '$lib/roster/memberLifecycle';
 	import { listSections, groupBySection } from '$lib/sections/sectionData';
-	import { adminStore } from '$lib/nav/adminStore';
+	import { dbEditRight } from '$lib/nav/dbRights';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import { cfgFor } from '$lib/entu/cfg';
@@ -55,7 +55,7 @@
 	import { toggled } from '$lib/collections/immutable';
 
 	const selected = $derived($selectedCollectiveStore);
-	const admin = $derived($adminStore);
+	const editRight = $derived($dbEditRight);
 	const isOffline = $derived(!$writesAvailable);
 
 	let status = $state<RouteLoadStatus>('loading');
@@ -95,10 +95,10 @@
 		},
 		async load({ cfg, selected, isCurrent }) {
 			currentCfg = cfg;
-			const [rowResult, sectionResult, ownerTierResult] = await Promise.allSettled([
+			const [rowResult, sectionResult, dbRightResult] = await Promise.allSettled([
 				readRosterHalves(cfg),
 				listSections(cfg),
-				resolveOwnerTier(cfg, selected.personId)
+				resolveDbRight(cfg, selected.personId)
 			]);
 			if (!isCurrent()) return;
 
@@ -113,7 +113,7 @@
 			}
 			applyRosterHalves(rowResult.value);
 
-			roster.ownerTier = ownerTierResult.status === 'fulfilled' ? ownerTierResult.value : 'error';
+			roster.dbRight = dbRightResult.status === 'fulfilled' ? dbRightResult.value : 'error';
 
 			try {
 				const details = await listJoinStateDetails(cfg, roster.rows.map((r) => r.personId));
@@ -236,7 +236,7 @@
 		else if (mode === 'expanded') roster.expandedIds = new Set(allSectionIdsList);
 	}
 
-	const modeOptions = $derived(viewModeOptions(admin === 'admin'));
+	const modeOptions = $derived(viewModeOptions(editRight === 'editor'));
 
 	const arrangeRows = $derived(
 		listArrangeRows(visibleSections, (id) => groupById.get(id)?.memberCount ?? 0)
@@ -279,7 +279,7 @@
 		roster,
 		arrange,
 		ops: arrangeOps,
-		isAdmin: () => admin === 'admin',
+		canEditDb: () => editRight === 'editor',
 		visibleSections: () => visibleSections,
 		arrangeRows: () => arrangeRows
 	});
@@ -301,11 +301,11 @@
 	<div class="mx-auto flex w-full max-w-md flex-col gap-4">
 		<ListOfStuff
 			title={m.roster_title()}
-			filter={admin === 'admin' && status === 'ready' ? inactiveFilter : undefined}
+			filter={editRight === 'editor' && status === 'ready' ? inactiveFilter : undefined}
 			view={listShown && !roster.sectionsError ? viewControls : undefined}
 		>
 			<div class="flex flex-col gap-4">
-				{#if admin === 'admin' && isOffline}
+				{#if editRight === 'editor' && isOffline}
 					<p data-testid="roster-write-unavailable" class="text-sm text-ink-2">
 						{m.write_unavailable_no_signal()}
 					</p>
@@ -313,7 +313,7 @@
 				{#if rosterPartial}
 					<PartialNotice testid="roster-partial-notice" text={m.roster_partial_notice()} class="text-sm" />
 				{/if}
-				<RosterStatusRegions {arrange} {memberOps} {admin} />
+				<RosterStatusRegions {arrange} {memberOps} {editRight} />
 				{#if status === 'no-collective'}
 					<p data-testid="roster-no-collective" class="text-sm">{m.roster_no_collective()}</p>
 				{:else if status === 'loading'}
@@ -336,15 +336,15 @@
 					<div data-testid="roster-empty" class="flex min-h-[30vh] items-center justify-center">
 						<p class="font-display text-xl text-ink-2">{m.roster_empty()}</p>
 					</div>
-					{#if admin === 'admin' && status === 'ready'}
+					{#if editRight === 'editor' && status === 'ready'}
 						<InactiveList {roster} {memberOps} {ops} {isOffline} {sectionNameById} />
 					{/if}
 				{:else}
-					<RosterNotices {roster} {arrange} {admin} />
+					<RosterNotices {roster} {arrange} {editRight} />
 					<div class="flex flex-col">
 						<RosterListHeader />
 						{#if roster.view === 'grouped' && !roster.sectionsError}
-							{#if roster.viewMode === 'arrange' && admin === 'admin'}
+							{#if roster.viewMode === 'arrange' && editRight === 'editor'}
 								<SectionArrange
 									{roster}
 									{arrange}
@@ -352,7 +352,7 @@
 									{drag}
 									{arrangeRows}
 									{visibleSections}
-									{admin}
+									{editRight}
 									{isOffline}
 									{isOwnDbEntitySection}
 								/>
@@ -362,7 +362,7 @@
 									{groupById}
 									{unassignedGroup}
 									onToggleSection={toggleSection}
-									{admin}
+									{editRight}
 									{selected}
 									{isOffline}
 									{roster}
@@ -378,7 +378,7 @@
 										{row}
 										showSection={true}
 										groupSectionId={null}
-										{admin}
+										{editRight}
 										{selected}
 										{isOffline}
 										{roster}
@@ -389,7 +389,7 @@
 								{/each}
 							</ul>
 						{/if}
-						{#if admin === 'admin' && status === 'ready'}
+						{#if editRight === 'editor' && status === 'ready'}
 							<InactiveList {roster} {memberOps} {ops} {isOffline} {sectionNameById} />
 						{/if}
 					</div>

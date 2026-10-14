@@ -6,11 +6,11 @@ import type { RouteLoadStatus } from '$lib/loading/routeLoad';
 import {
 	loadLibraryEditions,
 	loadLibraryCopies,
-	loadLibrarianState,
+	loadLibraryEditRight,
 	loadLibrarianPickers,
 	loadLibrarianMemberNames
 } from '$lib/library/libraryPageData';
-import { librarianStore, resetLibrarian } from '$lib/library/librarianStore';
+import { libraryEditRight, resetLibraryEditRight } from '$lib/library/libraryRights';
 import { without } from '$lib/collections/immutable';
 import type { LibraryState, NodeStatus } from '$lib/library/libraryState';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
@@ -125,11 +125,11 @@ export function createLibrarianLoad(lib: LibraryState) {
 	function select(current: { db: string; personId: string } | null): void {
 		if (!current) {
 			++librarianGen;
-			resetLibrarian();
+			resetLibraryEditRight();
 			resetLibrarianPickerPartial();
 			return;
 		}
-		resetLibrarian();
+		resetLibraryEditRight();
 		resetLibrarianPickerPartial();
 		loadLibrarian(current);
 	}
@@ -144,9 +144,9 @@ export function createLibrarianLoad(lib: LibraryState) {
 		const g = ++librarianGen;
 		const token = getToken();
 		const cfg = { db: current.db, token: token ?? '' };
-		loadLibrarianState(cfg, current.personId).then(async (result) => {
+		loadLibraryEditRight(cfg, current.personId).then(async (result) => {
 			if (g !== librarianGen) return;
-			if (result.state === 'librarian') {
+			if (result.state === 'editor') {
 				try {
 					const {
 						editions: editionsRead,
@@ -171,12 +171,12 @@ export function createLibrarianLoad(lib: LibraryState) {
 				} catch (e) {
 					if (g !== librarianGen) return;
 					reportProblem({ area: 'library', action: 'loading the checkout data', error: e });
-					librarianStore.set('error');
+					libraryEditRight.set('error');
 					return;
 				}
 			}
 			if (g !== librarianGen) return;
-			librarianStore.set(result.state);
+			libraryEditRight.set(result.state);
 		});
 	}
 

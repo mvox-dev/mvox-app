@@ -10,8 +10,8 @@ vi.mock('$lib/invite/inviteData', async () => {
 	const admin = await import('$lib/testing/mocks/admin');
 	return { ...admin.inviteDataModule({ errors: true }), mintSelfLinkInvite: admin.mintSelfLinkInviteMock };
 });
-vi.mock('$lib/nav/adminStore', async (importOriginal) =>
-	(await import('$lib/testing/mocks/admin')).ownerTierOverRealModule(importOriginal)
+vi.mock('$lib/nav/dbRights', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).dbRightOverRealModule(importOriginal)
 );
 vi.mock('$lib/profile/linkedIdentities', async (importOriginal) =>
 	(await import('$lib/testing/mocks/admin')).joinStateDetailsModule(importOriginal)
@@ -34,7 +34,7 @@ import {
 	listJoinStatesMock,
 	mintSelfLinkInviteMock,
 	resolveInviteParentMock,
-	resolveOwnerTierMock,
+	resolveDbRightMock,
 	resolveParentMock
 } from '$lib/testing/mocks/admin';
 import { authExpiredError, resetInviteMocks, selectSampledb } from '$lib/testing/pages/admin';
@@ -42,7 +42,7 @@ import { cleanupReset } from '$lib/testing/pages/dom';
 
 beforeEach(() => {
 	resetInviteMocks();
-	for (const mock of [resolveOwnerTierMock, listJoinStatesMock, mintSelfLinkInviteMock]) {
+	for (const mock of [resolveDbRightMock, listJoinStatesMock, mintSelfLinkInviteMock]) {
 		mock.mockReset();
 	}
 });
@@ -76,7 +76,7 @@ describe('/admin/invite — session expired (#107 review F2)', () => {
 	});
 
 	it('an auth-expired person-targeted MINT shows the session-expired notice — not the person error', async () => {
-		resolveOwnerTierMock.mockResolvedValue('owner');
+		resolveDbRightMock.mockResolvedValue('owner');
 		listJoinStatesMock.mockResolvedValue({ 'p-cilla': 'absent' });
 		mintSelfLinkInviteMock.mockRejectedValue(authExpiredError());
 		selectSampledb();

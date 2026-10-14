@@ -31,7 +31,7 @@ vi.mock('$lib/roster/rosterData', async () =>
 	(await import('$lib/testing/mocks/roster')).activeMembersModule()
 );
 
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule({ libraryId: false })
 );
 
@@ -55,12 +55,12 @@ import {
 	resolveCopyNamesMock
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
-import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
 import { LIBRARY_SURFACES } from '$lib/testing/pages/library';
 
 function setAuthedWithOneCollective() {
 	signIn();
-	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+	resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 	findMyMemberIdMock.mockResolvedValue(null);
 	listAllEditionsMock.mockResolvedValue(toListRead([]));
 	listAllCopiesMock.mockResolvedValue(toListRead([]));
@@ -69,7 +69,7 @@ function setAuthedWithOneCollective() {
 
 function setAuthedLibrarian() {
 	setAuthedWithOneCollective();
-	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 }
 
 afterEach(() => {
@@ -79,7 +79,7 @@ afterEach(() => {
 	listCopiesMock.mockReset();
 	listLendingsMock.mockReset();
 	resolveBorrowerNamesMock.mockReset();
-	resolveLibrarianMock.mockReset();
+	resolveLibraryEditRightMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listAllEditionsMock.mockReset();
 	listAllCopiesMock.mockReset();
@@ -168,7 +168,7 @@ describe('#75 — a11y: error states use role="alert"', () => {
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		setAuthedWithOneCollective();
-		resolveLibrarianMock.mockResolvedValue({ state: 'error', libraryId: null });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'error', libraryId: null });
 
 		const { container } = render(Page);
 

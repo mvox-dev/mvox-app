@@ -1,6 +1,6 @@
-// resolveAdmin skips the database lookup when given its id.
+// resolveDbEditRight skips the database lookup when given its id.
 import { describe, it, expect, vi } from 'vitest';
-import { resolveAdmin as resolveAdminActual, type AdminState } from './adminStore';
+import { resolveDbEditRight as resolveAdminActual, type EditRightState } from './dbRights';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
 
@@ -9,8 +9,8 @@ type ResolveAdminPreResolved = (
 	personId: string,
 	fetchImpl?: typeof fetch,
 	dbEntityId?: string
-) => Promise<AdminState>;
-const resolveAdmin = resolveAdminActual as ResolveAdminPreResolved;
+) => Promise<EditRightState>;
+const resolveDbEditRight = resolveAdminActual as ResolveAdminPreResolved;
 
 const cfg = testCfg('sampledb', 'test-token');
 const personId = 'person-123';
@@ -32,13 +32,13 @@ function calledUrls(fetchImpl: typeof fetch): string[] {
 	);
 }
 
-describe('resolveAdmin with a pre-resolved dbEntityId (#173)', () => {
+describe('resolveDbEditRight with a pre-resolved dbEntityId (#173)', () => {
 	it('skips the database-entity lookup — NO _type.string=database query on the wire', async () => {
 		const fetchImpl = mockFetch({ _owner: [{ reference: personId }] });
 
-		const state = await resolveAdmin(cfg, personId, fetchImpl, DB_ENTITY);
+		const state = await resolveDbEditRight(cfg, personId, fetchImpl, DB_ENTITY);
 
-		expect(state).toBe('admin');
+		expect(state).toBe('editor');
 		const urls = calledUrls(fetchImpl);
 		expect(urls.filter((u) => u.includes('_type.string=database'))).toEqual([]);
 	});
@@ -46,9 +46,9 @@ describe('resolveAdmin with a pre-resolved dbEntityId (#173)', () => {
 	it('reads rights off the PROVIDED id in a single round-trip', async () => {
 		const fetchImpl = mockFetch({ _editor: [{ reference: personId }] });
 
-		const state = await resolveAdmin(cfg, personId, fetchImpl, DB_ENTITY);
+		const state = await resolveDbEditRight(cfg, personId, fetchImpl, DB_ENTITY);
 
-		expect(state).toBe('admin');
+		expect(state).toBe('editor');
 		const urls = calledUrls(fetchImpl);
 		expect(urls).toHaveLength(1);
 		expect(urls[0]).toContain(`/entity/${DB_ENTITY}`);
@@ -58,9 +58,9 @@ describe('resolveAdmin with a pre-resolved dbEntityId (#173)', () => {
 	it('still answers not-admin from the provided id when the person is in neither list', async () => {
 		const fetchImpl = mockFetch({ _owner: [{ reference: 'someone-else' }] });
 
-		const state = await resolveAdmin(cfg, personId, fetchImpl, DB_ENTITY);
+		const state = await resolveDbEditRight(cfg, personId, fetchImpl, DB_ENTITY);
 
-		expect(state).toBe('not-admin');
+		expect(state).toBe('not-editor');
 		expect(calledUrls(fetchImpl)).toHaveLength(1);
 	});
 });

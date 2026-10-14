@@ -22,7 +22,7 @@ import {
 	resolveBorrowerNamesMock,
 	resolveCopyChainsMock,
 	resolveCopyNamesMock,
-	resolveLibrarianMock,
+	resolveLibraryEditRightMock,
 	resolveMyLibraryIdMock,
 	returnLendingMock
 } from '$lib/testing/mocks/library';
@@ -42,7 +42,7 @@ export function resetCopyListMocks(): void {
 	listLendingsMock.mockReset();
 	resolveBorrowerNamesMock.mockReset();
 	resolveCopyNamesMock.mockReset();
-	resolveLibrarianMock.mockReset();
+	resolveLibraryEditRightMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listAllEditionsMock.mockReset();
 	listAllCopiesMock.mockReset();
@@ -63,7 +63,7 @@ export function resetRepertoireBadgeMocks(): void {
 	listLendingsMock.mockReset();
 	resolveBorrowerNamesMock.mockReset();
 	resolveCopyNamesMock.mockReset();
-	resolveLibrarianMock.mockReset();
+	resolveLibraryEditRightMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listActiveMembersMock.mockReset();
 	listSeasonsMock.mockReset();
@@ -88,10 +88,10 @@ export interface ReaderOpts {
 // One collective, empty reads. Each option is a seed some specs add; none is on by default.
 export function signInLibraryReader(opts: ReaderOpts = {}): void {
 	signIn();
-	resolveLibrarianMock.mockResolvedValue(
+	resolveLibraryEditRightMock.mockResolvedValue(
 		opts.librarian
-			? { state: 'librarian', libraryId: 'lib-1' }
-			: { state: 'not-librarian', libraryId: null }
+			? { state: 'editor', libraryId: 'lib-1' }
+			: { state: 'not-editor', libraryId: null }
 	);
 	if (opts.myLibraryId) resolveMyLibraryIdMock.mockResolvedValue(opts.myLibraryId);
 	findMyMemberIdMock.mockResolvedValue(null);
@@ -107,7 +107,7 @@ export function signInLibraryReader(opts: ReaderOpts = {}): void {
 }
 
 export function mockLibrarian(): void {
-	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 }
 
 export { DB_A, DB_B, truncated } from './agenda';
@@ -202,8 +202,8 @@ export function seedTwoLibraries(): void {
 	listActiveMembersMock.mockImplementation((cfg: { db: string }) =>
 		Promise.resolve(toListRead(membersFor(cfg.db)))
 	);
-	resolveLibrarianMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve({ state: 'librarian', libraryId: cfg.db === DB_A ? 'lib-a' : 'lib-b' })
+	resolveLibraryEditRightMock.mockImplementation((cfg: { db: string }) =>
+		Promise.resolve({ state: 'editor', libraryId: cfg.db === DB_A ? 'lib-a' : 'lib-b' })
 	);
 	resolveMyLibraryIdMock.mockImplementation((cfg: { db: string }) =>
 		Promise.resolve(cfg.db === DB_A ? 'lib-a' : 'lib-b')

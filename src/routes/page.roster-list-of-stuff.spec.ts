@@ -11,7 +11,7 @@ vi.mock('$lib/roster/memberLifecycle', async () =>
 vi.mock('$lib/invite/inviteData', async (importOriginal) =>
 	(await import('$lib/testing/mocks/admin')).inviteWritesModule(importOriginal, { withdraw: false })
 );
-vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+vi.mock('$lib/library/libraryRights', async (importOriginal) =>
 	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
 );
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
@@ -25,7 +25,7 @@ vi.mock('$lib/roster/memberRecord', async (importOriginal) =>
 );
 
 import Page from './roster/+page.svelte';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadInactiveRosterMock, loadRosterMock } from '$lib/testing/mocks/roster';
@@ -46,12 +46,12 @@ const gone = {
 	dbEntityId: 'db-1'
 };
 
-async function renderAs(admin: 'admin' | 'not-admin'): Promise<HTMLElement> {
+async function renderAs(admin: 'editor' | 'not-editor'): Promise<HTMLElement> {
 	listSectionsMock.mockResolvedValue([altoSection]);
 	loadInactiveRosterMock.mockResolvedValue(toListRead([gone]));
 	const { container } = render(Page);
 	setAuthedWithOneCollective();
-	adminStore.set(admin);
+	dbEditRight.set(admin);
 	await waitFor(() => expect(q(container, 'roster-sort-toggle')).not.toBeNull());
 	return container;
 }
@@ -68,7 +68,7 @@ function follows(a: Node, b: Node): boolean {
 
 describe('/roster — members list on list-of-stuff (#861)', () => {
 	it('admin, grouped: show-inactive sits in the filter slot; sort toggle and view modes in the view slot', async () => {
-		const container = await renderAs('admin');
+		const container = await renderAs('editor');
 		await waitFor(() => expect(q(container, 'roster-inactive-toggle')).not.toBeNull());
 		expect(inside(container, 'list-of-stuff-filter', 'roster-inactive-toggle')).toBe(true);
 		expect(inside(container, 'list-of-stuff-view', 'roster-sort-toggle')).toBe(true);
@@ -77,7 +77,7 @@ describe('/roster — members list on list-of-stuff (#861)', () => {
 
 	it('admin, offline: filter, title line, then the offline notice in the list body (#869)', async () => {
 		await goOffline();
-		const container = await renderAs('admin');
+		const container = await renderAs('editor');
 		await waitFor(() => expect(q(container, 'roster-inactive-toggle')).not.toBeNull());
 		const notice = q(container, 'roster-write-unavailable')!;
 		const toggle = q(container, 'roster-inactive-toggle')!;
@@ -88,7 +88,7 @@ describe('/roster — members list on list-of-stuff (#861)', () => {
 	});
 
 	it('admin, A–Z: the sort toggle stays in the view slot and the view modes are gone', async () => {
-		const container = await renderAs('admin');
+		const container = await renderAs('editor');
 		await fireEvent.click(q(container, 'roster-sort-toggle')!);
 		await waitFor(() => expect(q(container, 'roster-flat-list')).not.toBeNull());
 		expect(inside(container, 'list-of-stuff-view', 'roster-sort-toggle')).toBe(true);
@@ -96,13 +96,13 @@ describe('/roster — members list on list-of-stuff (#861)', () => {
 	});
 
 	it('non-admin: no filter slot and no show-inactive toggle', async () => {
-		const container = await renderAs('not-admin');
+		const container = await renderAs('not-editor');
 		expect(q(container, 'list-of-stuff-filter')).toBeNull();
 		expect(q(container, 'roster-inactive-toggle')).toBeNull();
 	});
 
 	it('admin opens inactive: the inactive list sits in the list body, after the active rows', async () => {
-		const container = await renderAs('admin');
+		const container = await renderAs('editor');
 		await waitFor(() => expect(q(container, 'roster-inactive-toggle')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-inactive-toggle')!);
 		const list = await waitFor(() => {
@@ -120,7 +120,7 @@ describe('/roster — members list on list-of-stuff (#861)', () => {
 		loadInactiveRosterMock.mockResolvedValue(toListRead([gone]));
 		const { container } = render(Page);
 		setAuthedWithOneCollective();
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		await waitFor(() => expect(q(container, 'roster-empty')).not.toBeNull());
 		await waitFor(() => expect(q(container, 'roster-inactive-toggle')).not.toBeNull());
 		expect(inside(container, 'list-of-stuff-filter', 'roster-inactive-toggle')).toBe(true);
@@ -133,7 +133,7 @@ describe('/roster — members list on list-of-stuff (#861)', () => {
 		listSectionsMock.mockRejectedValue(new Error('sections boom'));
 		const { container } = render(Page);
 		setAuthedWithOneCollective();
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		await waitFor(() => expect(q(container, 'roster-inactive-toggle')).not.toBeNull());
 		expect(q(container, 'list-of-stuff-view')).toBeNull();
 		expect(q(container, 'roster-sort-toggle')).toBeNull();

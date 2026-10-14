@@ -1,10 +1,10 @@
-// resolveMyLibraryId and resolveLibrarian skip the database lookup when given its id.
+// resolveMyLibraryId and resolveLibraryEditRight skip the database lookup when given its id.
 import { describe, it, expect, vi } from 'vitest';
 import {
 	resolveMyLibraryId as resolveMyLibraryIdActual,
-	resolveLibrarian as resolveLibrarianActual,
-	type LibrarianResult
-} from './librarianStore';
+	resolveLibraryEditRight as resolveLibrarianActual,
+	type LibraryEditRightResult
+} from './libraryRights';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
 
@@ -18,9 +18,9 @@ type ResolveLibrarianPreResolved = (
 	personId: string,
 	fetchImpl?: typeof fetch,
 	dbEntityId?: string
-) => Promise<LibrarianResult>;
+) => Promise<LibraryEditRightResult>;
 const resolveMyLibraryId = resolveMyLibraryIdActual as ResolveMyLibraryIdPreResolved;
-const resolveLibrarian = resolveLibrarianActual as ResolveLibrarianPreResolved;
+const resolveLibraryEditRight = resolveLibrarianActual as ResolveLibrarianPreResolved;
 
 const cfg = testCfg('sampledb', 'test-token');
 const personId = 'person-123';
@@ -71,16 +71,16 @@ describe('resolveMyLibraryId with a pre-resolved dbEntityId (#173)', () => {
 	});
 });
 
-describe('resolveLibrarian with a pre-resolved dbEntityId (#173)', () => {
+describe('resolveLibraryEditRight with a pre-resolved dbEntityId (#173)', () => {
 	it('resolves librarian state without any _type.string=database query', async () => {
 		const fetchImpl = mockFetch({
 			libraryHit: true,
 			libraryRights: { _id: LIBRARY_ID, _editor: [{ reference: personId }] }
 		});
 
-		const result = await resolveLibrarian(cfg, personId, fetchImpl, DB_ENTITY);
+		const result = await resolveLibraryEditRight(cfg, personId, fetchImpl, DB_ENTITY);
 
-		expect(result).toEqual({ state: 'librarian', libraryId: LIBRARY_ID });
+		expect(result).toEqual({ state: 'editor', libraryId: LIBRARY_ID });
 		const urls = calledUrls(fetchImpl);
 		expect(urls.filter((u) => u.includes('_type.string=database'))).toEqual([]);
 		expect(urls).toHaveLength(2);
@@ -89,9 +89,9 @@ describe('resolveLibrarian with a pre-resolved dbEntityId (#173)', () => {
 	it('answers the factual not-librarian (no library under the provided id) in ONE round-trip', async () => {
 		const fetchImpl = mockFetch({ libraryHit: false });
 
-		const result = await resolveLibrarian(cfg, personId, fetchImpl, DB_ENTITY);
+		const result = await resolveLibraryEditRight(cfg, personId, fetchImpl, DB_ENTITY);
 
-		expect(result).toEqual({ state: 'not-librarian', libraryId: null });
+		expect(result).toEqual({ state: 'not-editor', libraryId: null });
 		expect(calledUrls(fetchImpl)).toHaveLength(1);
 	});
 });

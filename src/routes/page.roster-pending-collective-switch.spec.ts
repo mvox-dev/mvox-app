@@ -23,7 +23,7 @@ vi.mock('$lib/roster/memberLifecycle', async () =>
 vi.mock('$lib/invite/inviteData', async (importOriginal) =>
 	(await import('$lib/testing/mocks/admin')).inviteWritesModule(importOriginal, { withdraw: false })
 );
-vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+vi.mock('$lib/library/libraryRights', async (importOriginal) =>
 	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
 );
 vi.mock('$lib/collectives/discover', async () =>
@@ -39,7 +39,7 @@ vi.mock('$lib/roster/memberRecord', async (importOriginal) =>
 	(await import('$lib/testing/mocks/roster')).memberRecordModule(importOriginal)
 );
 
-import { resolveMyLibraryId } from '$lib/library/librarianStore';
+import { resolveMyLibraryId } from '$lib/library/libraryRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import {

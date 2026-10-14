@@ -7,7 +7,7 @@
 		row: LinkRow;
 		index: number;
 		rowCount: number;
-		isAdmin: boolean;
+		canEditDb: boolean;
 		isOffline: boolean;
 		reorderPending: boolean;
 		editing: boolean;
@@ -26,7 +26,7 @@
 		row,
 		index,
 		rowCount,
-		isAdmin,
+		canEditDb,
 		isOffline,
 		reorderPending,
 		editing,
@@ -104,7 +104,7 @@
 				{row.description}
 			</p>
 		{/if}
-		{#if isAdmin}
+		{#if canEditDb}
 			<div class="flex gap-2">
 				<button
 					type="button"

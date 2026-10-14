@@ -27,7 +27,7 @@ vi.mock('$app/navigation', async () =>
 
 import Page from './roster/+page.svelte';
 import type { MemberRecordLookup } from '$lib/roster/memberRecord';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import {
@@ -120,7 +120,7 @@ async function startSaveInAThenSwitch(container: HTMLElement) {
 describe('/roster — a record save in flight does not lock the next collective (#819)', () => {
 	it('B record editor is enabled and B save goes through while A save is in flight', async () => {
 		setAuthedWithTwoCollectives();
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		const { container } = render(Page);
 		const heldA = await startSaveInAThenSwitch(container);
 		await expandGroup(container, 'unassigned', 'roster-row-m-bob');
@@ -147,7 +147,7 @@ describe('/roster — a record save in flight does not lock the next collective 
 
 	it('A first save settling late leaves the second save of the same member locked', async () => {
 		setAuthedWithTwoCollectives();
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		const { container } = render(Page);
 		const first = await startSaveInAThenSwitch(container);
 		await switchTo(container, 'sampledb', 'section-toggle-sec-sop');

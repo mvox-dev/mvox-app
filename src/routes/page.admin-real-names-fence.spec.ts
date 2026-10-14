@@ -22,10 +22,10 @@ vi.mock('$lib/admin/roleManagement', async (importOriginal) => ({
 	addLibrarian: vi.fn(),
 	removeLibrarian: vi.fn()
 }));
-vi.mock('$lib/nav/adminStore', async (importOriginal) =>
-	(await import('$lib/testing/mocks/admin')).adminStoreOverRealModule(importOriginal)
+vi.mock('$lib/nav/dbRights', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).dbRightsOverRealModule(importOriginal)
 );
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule({ libraryId: false })
 );
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
@@ -62,18 +62,18 @@ import { expectNameMarkedOnce, expectWholeTextMarkedOnce } from '$lib/testing/na
 import { resetAppState } from '$lib/testing/appReset';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import {
-	resolveAdminMock,
+	resolveDbEditRightMock,
 	resolveCollectiveNameMarkerMock,
-	resolveLibrarianMock,
-	resolveOwnerTierMock,
+	resolveLibraryEditRightMock,
+	resolveDbRightMock,
 	updateCollectiveNameMock
 } from '$lib/testing/mocks/admin';
 import { selectSampledb } from '$lib/testing/pages/admin';
 
 beforeEach(() => {
-	resolveAdminMock.mockResolvedValue('admin');
-	resolveOwnerTierMock.mockResolvedValue('owner');
-	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+	resolveDbEditRightMock.mockResolvedValue('editor');
+	resolveDbRightMock.mockResolvedValue('owner');
+	resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 	h.listAdminsMock.mockResolvedValue({ persons: [], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
 	listSectionsMock.mockResolvedValue([]);
@@ -232,7 +232,7 @@ describe('#361 — admin roles lists: member names are marked', () => {
 	});
 
 	it('Librarians list: the name span is marked once, and the Remove button text sits whole in one marker', async () => {
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		h.listLibrariansMock.mockResolvedValue({
 			persons: [{ id: 'p-lena', name: LIB_NAME, role: 'editor', valueIds: ['v-l'] }],
 			canManage: true

@@ -65,7 +65,7 @@ vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 vi.mock('$lib/library/libraryData', async () =>
 	(await import('$lib/testing/mocks/library')).libraryReadsModule()
 );
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule({ libraryId: false })
 );
 vi.mock('$lib/seasons/seasonManage', async (importOriginal) => ({
@@ -86,7 +86,7 @@ import EventPage from './event/[id]/+page.svelte';
 import LibraryPage from './library/+page.svelte';
 import RosterPage from './roster/+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { dbEditRight, resetDbEditRight } from '$lib/nav/dbRights';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { deferred } from '$lib/testing/entuFetchKit';
@@ -130,7 +130,7 @@ import {
 	resolveBorrowerNamesMock,
 	resolveCopyChainsMock,
 	resolveCopyNamesMock,
-	resolveLibrarianMock
+	resolveLibraryEditRightMock
 } from '$lib/testing/mocks/library';
 
 type Row = {
@@ -285,7 +285,7 @@ const ROWS: Record<string, Row> = {
 		read: listActiveMembersMock,
 		items: [{ memberId: 'member-1', personId: 'p-ada', sectionIds: [] }],
 		arrange: () => {
-			resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+			resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 			const edition = { id: 'edition-1', name: 'Original', publisher: 'B', workId: 'work-1' };
 			listEditionsMock.mockResolvedValue(complete([edition]));
 			listAllEditionsMock.mockResolvedValue(complete([edition]));
@@ -350,7 +350,7 @@ function arrangeComplete() {
 		'fetch',
 		vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify(eventWire(String(input)))))
 	);
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	completionGateStore.set('complete');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	listSectionsMock.mockResolvedValue([]);
@@ -364,7 +364,7 @@ function arrangeComplete() {
 	listAllRsvpsForEventMock.mockResolvedValue([]);
 	loadRosterMock.mockResolvedValue(complete([MEMBER]));
 	listActiveMembersMock.mockResolvedValue(complete([]));
-	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+	resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 	listWorksMock.mockResolvedValue(complete(ROWS['/library works'].items));
 	for (const read of [listLendingsMock, listEditionsMock, listCopiesMock, listAllEditionsMock, listAllCopiesMock]) {
 		read.mockResolvedValue(complete([]));
@@ -406,7 +406,7 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 	vi.clearAllMocks();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 	resetGate();
 	history.replaceState({}, '', '/');
 });

@@ -26,7 +26,7 @@ vi.mock('$lib/roster/rosterData', async () =>
 	(await import('$lib/testing/mocks/roster')).activeMembersModule()
 );
 
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule()
 );
 
@@ -73,7 +73,7 @@ import {
 	resolveBorrowerNamesMock,
 	resolveCopyChainsMock,
 	resolveCopyNamesMock,
-	resolveLibrarianMock,
+	resolveLibraryEditRightMock,
 	resolveMyLibraryIdMock,
 	returnLendingMock
 } from '$lib/testing/mocks/library';
@@ -90,7 +90,7 @@ afterEach(() => {
 	resolveBorrowerNamesMock.mockReset();
 	resolveCopyNamesMock.mockReset();
 	resolveCopyChainsMock.mockReset();
-	resolveLibrarianMock.mockReset();
+	resolveLibraryEditRightMock.mockReset();
 	resolveMyLibraryIdMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listAllEditionsMock.mockReset();
@@ -130,7 +130,7 @@ function mockLibrarianTree() {
 		])
 	);
 	signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 	listAllEditionsMock.mockResolvedValue(
 		toListRead([{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter', workId: 'work-1' }])
 	);

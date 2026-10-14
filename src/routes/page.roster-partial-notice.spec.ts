@@ -22,7 +22,7 @@ vi.mock('$lib/roster/memberLifecycle', () => ({
 	listInactiveMembers: listInactiveMembersMock,
 	listDeactivateBlockers: vi.fn().mockResolvedValue([])
 }));
-vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+vi.mock('$lib/library/libraryRights', async (importOriginal) =>
 	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
 );
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
@@ -39,7 +39,7 @@ vi.mock('$app/navigation', async () =>
 );
 
 import Page from './roster/+page.svelte';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
@@ -92,7 +92,7 @@ afterEach(cleanupClearResetAdmin);
 async function renderReady() {
 	const utils = render(Page);
 	setAuthedWithOneCollective();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	await waitFor(() =>
 		expect(
 			utils.container.querySelector('[data-testid="section-toggle-unassigned"]')

@@ -12,7 +12,7 @@ import {
 	updateMemberRecord,
 	MemberRecordPartialSaveError
 } from '$lib/roster/memberRecord';
-import { resolveMyLibraryId } from '$lib/library/librarianStore';
+import { resolveMyLibraryId } from '$lib/library/libraryRights';
 import { listSections } from '$lib/sections/sectionData';
 import {
 	assignMemberSection,

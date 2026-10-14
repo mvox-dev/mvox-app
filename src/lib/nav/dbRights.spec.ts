@@ -1,7 +1,7 @@
-// resolveAdmin evaluates rights on the database entity, read by id.
+// resolveDbEditRight evaluates rights on the database entity, read by id.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { adminStore, resetAdmin, resolveAdmin } from './adminStore';
+import { dbEditRight, resetDbEditRight, resolveDbEditRight } from './dbRights';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 const cfg = testCfg('sampledb', 'test-token');
@@ -32,9 +32,9 @@ function databaseBody(dbEntityId: string | null) {
 	return dbEntityId ? { entities: [{ _id: dbEntityId }], count: 1 } : { entities: [], count: 0 };
 }
 
-describe('resolveAdmin', () => {
+describe('resolveDbEditRight', () => {
 	beforeEach(() => {
-		resetAdmin();
+		resetDbEditRight();
 	});
 
 	it('returns admin when personId is in the DATABASE entity _owner', async () => {
@@ -42,7 +42,7 @@ describe('resolveAdmin', () => {
 			database: databaseBody(DB_ENTITY),
 			orgById: { [DB_ENTITY]: { _id: DB_ENTITY, _owner: [{ reference: personId }] } }
 		});
-		expect(await resolveAdmin(cfg, personId, fetchImpl)).toBe('admin');
+		expect(await resolveDbEditRight(cfg, personId, fetchImpl)).toBe('editor');
 	});
 
 	it('returns admin when personId is in the DATABASE entity _editor', async () => {
@@ -50,7 +50,7 @@ describe('resolveAdmin', () => {
 			database: databaseBody(DB_ENTITY),
 			orgById: { [DB_ENTITY]: { _id: DB_ENTITY, _editor: [{ reference: personId }] } }
 		});
-		expect(await resolveAdmin(cfg, personId, fetchImpl)).toBe('admin');
+		expect(await resolveDbEditRight(cfg, personId, fetchImpl)).toBe('editor');
 	});
 
 	it('reads rights off the DATABASE entity by id — never an organization search', async () => {
@@ -58,7 +58,7 @@ describe('resolveAdmin', () => {
 			database: databaseBody(DB_ENTITY),
 			orgById: { [DB_ENTITY]: { _id: DB_ENTITY, _owner: [{ reference: 'someone-else' }] } }
 		});
-		expect(await resolveAdmin(cfg, personId, fetchImpl)).toBe('not-admin');
+		expect(await resolveDbEditRight(cfg, personId, fetchImpl)).toBe('not-editor');
 
 		const urls = (fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) =>
 			String(c[0])
@@ -73,7 +73,7 @@ describe('resolveAdmin', () => {
 			database: databaseBody(DB_ENTITY),
 			orgById: { [DB_ENTITY]: { _id: DB_ENTITY, _owner: [{ reference: 'other' }] } }
 		});
-		expect(await resolveAdmin(cfg, personId, fetchImpl)).toBe('not-admin');
+		expect(await resolveDbEditRight(cfg, personId, fetchImpl)).toBe('not-editor');
 	});
 
 	it('returns not-admin when _owner and _editor are absent (no rights to see the private bucket)', async () => {
@@ -81,46 +81,46 @@ describe('resolveAdmin', () => {
 			database: databaseBody(DB_ENTITY),
 			orgById: { [DB_ENTITY]: { _id: DB_ENTITY } }
 		});
-		expect(await resolveAdmin(cfg, personId, fetchImpl)).toBe('not-admin');
+		expect(await resolveDbEditRight(cfg, personId, fetchImpl)).toBe('not-editor');
 	});
 
-	it("returns ERROR (not 'not-admin') when no database entity is visible — an invisible prerequisite is not a rights answer", async () => {
+	it("returns ERROR (not 'not-editor') when no database entity is visible — an invisible prerequisite is not a rights answer", async () => {
 		const fetchImpl = mockFetch({ database: { entities: [], count: 0 } });
-		expect(await resolveAdmin(cfg, personId, fetchImpl)).toBe('error');
+		expect(await resolveDbEditRight(cfg, personId, fetchImpl)).toBe('error');
 	});
 
 	it('returns error when the database entity is not readable by id', async () => {
 		const fetchImpl = mockFetch({ database: databaseBody(DB_ENTITY), orgById: {} });
-		expect(await resolveAdmin(cfg, personId, fetchImpl)).toBe('error');
+		expect(await resolveDbEditRight(cfg, personId, fetchImpl)).toBe('error');
 	});
 
 	it('returns error on HTTP failure of the database-entity lookup', async () => {
 		const fetchImpl = mockFetch({ databaseStatus: 500 });
-		expect(await resolveAdmin(cfg, personId, fetchImpl)).toBe('error');
+		expect(await resolveDbEditRight(cfg, personId, fetchImpl)).toBe('error');
 	});
 
 	it('returns error on HTTP failure of the entity read', async () => {
 		const fetchImpl = mockFetch({ database: databaseBody(DB_ENTITY), orgStatus: 500 });
-		expect(await resolveAdmin(cfg, personId, fetchImpl)).toBe('error');
+		expect(await resolveDbEditRight(cfg, personId, fetchImpl)).toBe('error');
 	});
 
 	it('returns error on network exception', async () => {
 		const fetchImpl = vi
 			.fn()
 			.mockRejectedValue(new Error('network error')) as unknown as typeof fetch;
-		expect(await resolveAdmin(cfg, personId, fetchImpl)).toBe('error');
+		expect(await resolveDbEditRight(cfg, personId, fetchImpl)).toBe('error');
 	});
 });
 
-describe('adminStore', () => {
+describe('dbEditRight', () => {
 	it('starts at loading', () => {
-		resetAdmin();
-		expect(get(adminStore)).toBe('loading');
+		resetDbEditRight();
+		expect(get(dbEditRight)).toBe('loading');
 	});
 
-	it('resetAdmin sets to loading', () => {
-		adminStore.set('admin');
-		resetAdmin();
-		expect(get(adminStore)).toBe('loading');
+	it('resetDbEditRight sets to loading', () => {
+		dbEditRight.set('editor');
+		resetDbEditRight();
+		expect(get(dbEditRight)).toBe('loading');
 	});
 });

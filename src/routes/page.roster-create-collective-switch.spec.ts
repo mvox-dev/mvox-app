@@ -23,7 +23,7 @@ vi.mock('$lib/roster/memberLifecycle', async () =>
 vi.mock('$lib/invite/inviteData', async (importOriginal) =>
 	(await import('$lib/testing/mocks/admin')).inviteWritesModule(importOriginal, { withdraw: false })
 );
-vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+vi.mock('$lib/library/libraryRights', async (importOriginal) =>
 	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
 );
 vi.mock('$lib/collectives/discover', async () =>
@@ -38,8 +38,8 @@ vi.mock('$app/navigation', async () =>
 
 import Page from './roster/+page.svelte';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { resolveMyLibraryId } from '$lib/library/librarianStore';
-import { adminStore } from '$lib/nav/adminStore';
+import { resolveMyLibraryId } from '$lib/library/libraryRights';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
@@ -281,7 +281,7 @@ describe('/roster — #299/#470 F3: a section write that SETTLES after the switc
 			)
 		);
 		setAuthedWithTwoCollectives();
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		const { container } = render(Page);
 		await waitFor(() => {
 			expect(q(container, 'section-toggle-sec-sop')).not.toBeNull();

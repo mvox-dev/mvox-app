@@ -49,10 +49,10 @@ vi.mock('$lib/rsvp/rsvpData', async (importOriginal) => {
 vi.mock('$lib/admin/roleManagement', async (importOriginal) =>
 	(await import('$lib/testing/mocks/admin')).roleManagementOverRealModule(importOriginal)
 );
-vi.mock('$lib/nav/adminStore', async (importOriginal) =>
-	(await import('$lib/testing/mocks/admin')).adminStoreOverRealModule(importOriginal)
+vi.mock('$lib/nav/dbRights', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).dbRightsOverRealModule(importOriginal)
 );
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule({ libraryId: false })
 );
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
@@ -85,7 +85,7 @@ import AdminPage from './admin/+page.svelte';
 import EventPage from './event/[id]/+page.svelte';
 import LibraryPage from './library/+page.svelte';
 import RosterPage from './roster/+page.svelte';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { dbEditRight, resetDbEditRight } from '$lib/nav/dbRights';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { toListRead } from '$lib/testing/listReadFixtures';
@@ -109,10 +109,10 @@ import {
 import {
 	listAdminsMock,
 	listLibrariansMock,
-	resolveAdminMock,
+	resolveDbEditRightMock,
 	resolveCollectiveNameMarkerMock,
-	resolveLibrarianMock,
-	resolveOwnerTierMock,
+	resolveLibraryEditRightMock,
+	resolveDbRightMock,
 	resolveParentMock
 } from '$lib/testing/mocks/admin';
 import {
@@ -216,8 +216,8 @@ const ROWS: Record<string, Row> = {
 		Page: AdminPage,
 		members: ['m1', 'm2'],
 		arrange: () => {
-			resolveAdminMock.mockResolvedValue('admin');
-			resolveOwnerTierMock.mockResolvedValue('owner');
+			resolveDbEditRightMock.mockResolvedValue('editor');
+			resolveDbRightMock.mockResolvedValue('owner');
 			listAdminsMock.mockResolvedValue({ persons: [], canManage: true });
 			listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
 			resolveParentMock.mockResolvedValue(DB_ENTITY_ID);
@@ -236,7 +236,7 @@ const ROWS: Record<string, Row> = {
 		route: '/roster',
 		Page: RosterPage,
 		members: ['m1', 'm2'],
-		arrange: () => adminStore.set('admin'),
+		arrange: () => dbEditRight.set('editor'),
 		// The section picker's labels keep the profile name by a stated choice; the row names obey.
 		open: async (container) => {
 			await fireEvent.click(await until(container, 'section-toggle-unassigned'));
@@ -279,7 +279,7 @@ const ROWS: Record<string, Row> = {
 		Page: LibraryPage,
 		members: ['m1'],
 		arrange: () => {
-			resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+			resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 			listWorksMock.mockResolvedValue(toListRead([{ id: 'work-1', name: 'Spem in alium', composer: 'Tallis' }]));
 			listEditionsMock.mockResolvedValue(toListRead([{ id: 'edition-1', name: 'Original', publisher: 'B' }]));
 			const copies = [{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' }];
@@ -329,7 +329,7 @@ beforeEach(() => {
 	listMyAttendanceMock.mockResolvedValue(toListRead([]));
 	listAttendanceMock.mockResolvedValue([]);
 	listAllRsvpsForEventMock.mockResolvedValue([]);
-	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+	resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 });
 
 afterEach(() => {
@@ -338,7 +338,7 @@ afterEach(() => {
 	vi.clearAllMocks();
 	resetAppState();
 	resetGate();
-	resetAdmin();
+	resetDbEditRight();
 	history.replaceState({}, '', '/');
 });
 

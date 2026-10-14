@@ -21,7 +21,7 @@ vi.mock('$app/navigation', async () =>
 
 import Page from './roster/+page.svelte';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { cleanupUnstubResetRoster, setAuthedWithOneCollective } from '$lib/testing/pages/roster';
@@ -122,7 +122,7 @@ afterEach(cleanupUnstubResetRoster);
 
 async function renderReady() {
 	setAuthedWithOneCollective();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(container.querySelector('[data-testid="roster-groups"]')).not.toBeNull();

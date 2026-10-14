@@ -23,7 +23,7 @@ vi.mock('$lib/roster/memberLifecycle', async () =>
 vi.mock('$lib/invite/inviteData', async (importOriginal) =>
 	(await import('$lib/testing/mocks/admin')).inviteWritesModule(importOriginal, { withdraw: false })
 );
-vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+vi.mock('$lib/library/libraryRights', async (importOriginal) =>
 	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
 );
 vi.mock('$lib/collectives/discover', async () =>
@@ -36,7 +36,7 @@ vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
 
-import { resetAdmin } from '$lib/nav/adminStore';
+import { resetDbEditRight } from '$lib/nav/dbRights';
 import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { deleteMock, renameMock } from '$lib/testing/mocks/sections';
@@ -62,7 +62,7 @@ afterEach(() => {
 	deleteMock.mockReset();
 	vi.clearAllMocks();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 });
 
 async function openRenameRaw(container: HTMLElement, sectionId: string): Promise<HTMLInputElement> {

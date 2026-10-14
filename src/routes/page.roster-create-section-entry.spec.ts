@@ -29,7 +29,7 @@ vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
 
-import { type AdminState } from '$lib/nav/adminStore';
+import { type EditRightState } from '$lib/nav/dbRights';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { assignMock, createSectionMock } from '$lib/testing/mocks/sections';
@@ -53,7 +53,7 @@ beforeEach(seedCreateSectionMocks);
 
 afterEach(cleanupResetCreateSectionMocks);
 
-async function renderArrangeReady(admin: AdminState = 'admin') {
+async function renderArrangeReady(admin: EditRightState = 'editor') {
 	const container = await renderReady(admin);
 	const arrangeChip = q(container, 'roster-view-chip-arrange') as HTMLElement | null;
 	if (arrangeChip) {
@@ -100,7 +100,7 @@ describe('/roster — the "+ New section" control lives in Arrange mode (finding
 	});
 
 	it('non-admin: roster-new-section does not render (same fail-closed gate as every other admin control — and the Arrange chip itself is unreachable)', async () => {
-		const container = await renderArrangeReady('not-admin');
+		const container = await renderArrangeReady('not-editor');
 		expect(q(container, 'roster-new-section')).toBeNull();
 	});
 

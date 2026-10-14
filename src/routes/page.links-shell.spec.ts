@@ -28,7 +28,7 @@ vi.mock('$app/state', async () =>
 
 import Page from './links/+page.svelte';
 import type { LinkRow } from '$lib/links/linkData';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import {
 	createLinkMock,
 	deleteLinkMock,
@@ -84,8 +84,8 @@ function columnDiv(container: HTMLElement): HTMLElement | null {
 	return hit instanceof HTMLElement ? hit : null;
 }
 
-async function renderReady(tier: 'admin' | 'not-admin') {
-	adminStore.set(tier);
+async function renderReady(tier: 'editor' | 'not-editor') {
+	dbEditRight.set(tier);
 	const utils = render(Page);
 	await waitFor(() => {
 		expect(q(utils.container, 'links-list')).not.toBeNull();
@@ -95,7 +95,7 @@ async function renderReady(tier: 'admin' | 'not-admin') {
 
 describe('#339 — layer 1: the page shell', () => {
 	it("the page root is a <main> whose class is EXACTLY '" + SHELL_CLASS + "'", async () => {
-		const { container } = await renderReady('not-admin');
+		const { container } = await renderReady('not-editor');
 		const root = container.firstElementChild;
 		expect(root).not.toBeNull();
 		expect(root?.tagName).toBe('MAIN');
@@ -103,14 +103,14 @@ describe('#339 — layer 1: the page shell', () => {
 	});
 
 	it('there is exactly ONE main — the shell is a wrapper, not a duplicate', async () => {
-		const { container } = await renderReady('not-admin');
+		const { container } = await renderReady('not-editor');
 		expect(container.querySelectorAll('main').length).toBe(1);
 	});
 });
 
 describe('#339 — layer 2: the centred column', () => {
 	it("directly inside the main, a div whose class is EXACTLY '" + COLUMN_CLASS + "'", async () => {
-		const { container } = await renderReady('not-admin');
+		const { container } = await renderReady('not-editor');
 		const main = shellMain(container);
 		expect(main).not.toBeNull();
 		const directColumnDivs = Array.from(main?.children ?? []).filter(
@@ -122,7 +122,7 @@ describe('#339 — layer 2: the centred column', () => {
 
 describe('#339 — layer 3: the heading', () => {
 	it("the h1 renders m.links_title() with class EXACTLY '" + H1_CLASS + "'", async () => {
-		const { container } = await renderReady('not-admin');
+		const { container } = await renderReady('not-editor');
 		const h1 = container.querySelector('h1');
 		expect(h1).not.toBeNull();
 		expect(h1?.getAttribute('class')).toBe(H1_CLASS);
@@ -130,7 +130,7 @@ describe('#339 — layer 3: the heading', () => {
 	});
 
 	it('the h1 sits inside the column div, not floating beside it', async () => {
-		const { container } = await renderReady('not-admin');
+		const { container } = await renderReady('not-editor');
 		const col = columnDiv(container);
 		expect(col).not.toBeNull();
 		const h1 = container.querySelector('h1');
@@ -141,7 +141,7 @@ describe('#339 — layer 3: the heading', () => {
 
 describe('#339 — scope 2: links-page testid survives the wrap', () => {
 	it('data-testid="links-page" is still present (main or inner div — GREEN\'s choice)', async () => {
-		const { container } = await renderReady('not-admin');
+		const { container } = await renderReady('not-editor');
 		expect(q(container, 'links-page')).not.toBeNull();
 	});
 });
@@ -149,7 +149,7 @@ describe('#339 — scope 2: links-page testid survives the wrap', () => {
 describe('#339 — scope 3: nothing floats outside the column', () => {
 	it('the empty state (links-empty) renders INSIDE the column div — "No links yet." is what he called out as floating', async () => {
 		listLinksMock.mockResolvedValue([]);
-		adminStore.set('not-admin');
+		dbEditRight.set('not-editor');
 		const { container } = render(Page);
 		await waitFor(() => {
 			expect(q(container, 'links-empty')).not.toBeNull();
@@ -160,7 +160,7 @@ describe('#339 — scope 3: nothing floats outside the column', () => {
 	});
 
 	it('the admin add-form rows render INSIDE the column div', async () => {
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		const col = columnDiv(container);
 		expect(col).not.toBeNull();
 		const addForm = q(container, 'links-add-form');
@@ -170,14 +170,14 @@ describe('#339 — scope 3: nothing floats outside the column', () => {
 	});
 
 	it('the list itself renders INSIDE the column div', async () => {
-		const { container } = await renderReady('not-admin');
+		const { container } = await renderReady('not-editor');
 		const col = columnDiv(container);
 		expect(col).not.toBeNull();
 		expect(col?.contains(q(container, 'links-list'))).toBe(true);
 	});
 
 	it('the admin-gated #323 reorder status node stays inside the wrapped tree', async () => {
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		const col = columnDiv(container);
 		expect(col).not.toBeNull();
 		const status = q(container, 'links-reorder-status');
@@ -188,14 +188,14 @@ describe('#339 — scope 3: nothing floats outside the column', () => {
 
 describe('#339 — scope 4 fences: #335 control classes byte-identical', () => {
 	it("links-add-name input keeps '" + ADD_NAME_INPUT_CLASS + "'", async () => {
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		const input = q(container, 'links-add-name');
 		expect(input).not.toBeNull();
 		expect(input?.getAttribute('class')).toBe(ADD_NAME_INPUT_CLASS);
 	});
 
 	it("links-edit-save button keeps '" + EDIT_SAVE_BUTTON_CLASS + "'", async () => {
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		const editBtn = container
 			.querySelectorAll('[data-testid="links-row"]')[0]
 			?.querySelector<HTMLElement>('[data-testid="links-edit"]');

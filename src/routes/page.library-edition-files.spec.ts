@@ -26,7 +26,7 @@ vi.mock('$lib/roster/rosterData', async () =>
 	(await import('$lib/testing/mocks/roster')).activeMembersModule()
 );
 
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule({ libraryId: false })
 );
 
@@ -87,7 +87,7 @@ import {
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
-import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
 import {
 	expandEdition,
 	expandWork,
@@ -150,7 +150,7 @@ afterEach(() => {
 	resolveBorrowerNamesMock.mockReset();
 	resolveCopyNamesMock.mockReset();
 	resolveCopyChainsMock.mockReset();
-	resolveLibrarianMock.mockReset();
+	resolveLibraryEditRightMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listAllEditionsMock.mockReset();
 	listAllCopiesMock.mockReset();
@@ -474,10 +474,10 @@ describe('#275 — the attach control: librarian-only native <input type=file mu
 		expect(container.querySelectorAll('[data-testid^="library-attach-file-"]')).toHaveLength(0);
 	});
 
-	it('hidden while resolveLibrarian is still pending (hidden-if-undeterminable)', async () => {
+	it('hidden while resolveLibraryEditRight is still pending (hidden-if-undeterminable)', async () => {
 		mockBaselineLibrary();
 		signInLibraryReader({ chains: true, seasons: true });
-		resolveLibrarianMock.mockReturnValue(new Promise(() => {}));
+		resolveLibraryEditRightMock.mockReturnValue(new Promise(() => {}));
 
 		const container = await renderWithEditionOpen('edition-1');
 
@@ -809,7 +809,7 @@ describe('#275 — a failed file is reported by NAME and never renders as an att
 describe('#275 — success-apply AND failure-apply are generation-guarded', () => {
 	it('an upload that settles AFTER the collective switched applies NOTHING — no rows, no announcement, no error (a stale mixed result must not leak either half into the new collective)', async () => {
 		signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }, { db: 'secondchoir', name: 'Second Choir', personId: 'person-s' }] });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		findMyMemberIdMock.mockResolvedValue(null);
 		resolveCopyNamesMock.mockResolvedValue(new Map());
 		resolveCopyChainsMock.mockResolvedValue(new Map());

@@ -30,7 +30,7 @@ vi.mock('$app/state', async () =>
 
 import Page from './links/+page.svelte';
 import type { LinkRow } from '$lib/links/linkData';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import {
 	createLinkMock,
@@ -57,7 +57,7 @@ function rowsB(): LinkRow[] {
 
 beforeEach(() => {
 	setAuthedWithTwoCollectives();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	createLinkMock.mockResolvedValue('l-new');
 	updateLinkMock.mockResolvedValue(undefined);
 	reorderLinksMock.mockResolvedValue(undefined);

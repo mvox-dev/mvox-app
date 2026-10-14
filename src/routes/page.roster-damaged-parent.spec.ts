@@ -26,7 +26,7 @@ vi.mock('$app/navigation', async () =>
 
 import Page from './roster/+page.svelte';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { dbEditRight, resetDbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
@@ -110,7 +110,7 @@ afterEach(() => {
 	deleteMock.mockReset();
 	reparentMock.mockReset();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 });
 
 async function renderRosterWithDamage(
@@ -123,7 +123,7 @@ async function renderRosterWithDamage(
 
 async function renderRoster(): Promise<HTMLElement> {
 	setAuthedWithOneCollective();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(q(container, 'roster-groups')).not.toBeNull();

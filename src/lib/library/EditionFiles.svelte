@@ -12,11 +12,11 @@
 		files: EditionFilesState;
 		heldFileIds: Set<string> | null;
 		actions: TreeActions;
-		isLibrarian: boolean;
+		canEditLibrary: boolean;
 		isOffline: boolean;
 	}
 
-	let { work, edition, files, heldFileIds, actions, isLibrarian, isOffline }: Props = $props();
+	let { work, edition, files, heldFileIds, actions, canEditLibrary, isOffline }: Props = $props();
 </script>
 
 {#if (edition.files ?? []).length > 0 || (files.broken.get(edition.id)?.length ?? 0) > 0}
@@ -69,7 +69,7 @@
 {/if}
 
 <!-- Librarian only, absent rather than disabled; a native multi-file input. -->
-{#if isLibrarian}
+{#if canEditLibrary}
 	<div class="mt-1.5 flex flex-col gap-1">
 		<label class="flex flex-col gap-0.5 text-xs text-ink-2">
 			{m.library_edition_file_attach()}

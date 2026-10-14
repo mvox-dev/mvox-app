@@ -1,8 +1,8 @@
 // Library read, librarian and lending mocks; spec and vi.mock factory share one handle each.
 import { vi } from 'vitest';
-import { resolveLibrarianMock } from './admin';
+import { resolveLibraryEditRightMock } from './admin';
 
-export { resolveLibrarianMock };
+export { resolveLibraryEditRightMock };
 
 export const listWorksMock = vi.fn();
 export const listEditionsMock = vi.fn();
@@ -36,13 +36,13 @@ export async function libraryReadsModule(opts: { chains?: boolean } = {}) {
 	};
 }
 
-// Keeps the real writable store and resetLibrarian.
+// Keeps the real writable store and resetLibraryEditRight.
 // libraryId: false leaves resolveMyLibraryId to the real module.
 export async function librarianOverRealModule(opts: { libraryId?: boolean } = {}) {
-	const actual = await vi.importActual<object>('$lib/library/librarianStore');
+	const actual = await vi.importActual<object>('$lib/library/libraryRights');
 	return {
 		...actual,
-		resolveLibrarian: resolveLibrarianMock,
+		resolveLibraryEditRight: resolveLibraryEditRightMock,
 		...(opts.libraryId === false ? {} : { resolveMyLibraryId: resolveMyLibraryIdMock })
 	};
 }
@@ -64,7 +64,7 @@ export async function readyLibrarianModule(importOriginal: () => Promise<unknown
 	return {
 		...((await importOriginal()) as object),
 		resolveMyLibraryId: vi.fn().mockResolvedValue('lib-1'),
-		resolveLibrarian: vi.fn().mockResolvedValue({ state: 'ready', libraryId: 'lib-1' })
+		resolveLibraryEditRight: vi.fn().mockResolvedValue({ state: 'ready', libraryId: 'lib-1' })
 	};
 }
 

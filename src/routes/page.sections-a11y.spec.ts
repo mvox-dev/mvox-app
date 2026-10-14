@@ -69,7 +69,7 @@ vi.mock('$app/navigation', async () =>
 import Page from './roster/+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore, resetAdmin, type AdminState } from '$lib/nav/adminStore';
+import { dbEditRight, resetDbEditRight, type EditRightState } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
@@ -126,12 +126,12 @@ afterEach(() => {
 	createMock.mockReset();
 	reorderMock.mockReset();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 });
 
-async function renderReady(admin: AdminState = 'admin'): Promise<HTMLElement> {
+async function renderReady(admin: EditRightState = 'editor'): Promise<HTMLElement> {
 	setAuthedWithOneCollective();
-	adminStore.set(admin);
+	dbEditRight.set(admin);
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(q(container, 'roster-groups')).not.toBeNull();
@@ -438,7 +438,7 @@ describe("#99 — a11y: every sections error surface is a live region (role='ale
 	it("guard: the section-tree load failure banner has role='alert'", async () => {
 		listSectionsMock.mockRejectedValue(new Error('boom'));
 		setAuthedWithOneCollective();
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		const { container } = render(Page);
 		await waitFor(() => {
 			const banner = q(container, 'roster-sections-load-error');

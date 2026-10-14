@@ -30,7 +30,7 @@ vi.mock('$lib/roster/rosterData', async () =>
 	(await import('$lib/testing/mocks/roster')).activeMembersModule()
 );
 
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule({ libraryId: false })
 );
 
@@ -87,7 +87,7 @@ import {
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
-import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
 import {
 	expandEdition,
 	expandWork,
@@ -146,7 +146,7 @@ afterEach(() => {
 	resolveBorrowerNamesMock.mockReset();
 	resolveCopyNamesMock.mockReset();
 	resolveCopyChainsMock.mockReset();
-	resolveLibrarianMock.mockReset();
+	resolveLibraryEditRightMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listAllEditionsMock.mockReset();
 	listAllCopiesMock.mockReset();

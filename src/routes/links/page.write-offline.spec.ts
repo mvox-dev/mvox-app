@@ -25,7 +25,7 @@ vi.mock('$app/state', () => ({ page: pageStub }));
 
 import Page from './+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import {
 	goOffline,
 	goOnline,
@@ -96,7 +96,7 @@ beforeEach(() => {
 	resetTypeIdCache();
 	installWireRouter();
 	signIn();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 });
 
 afterEach(cleanupClearResetAdminOnLine);

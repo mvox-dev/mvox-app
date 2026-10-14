@@ -15,7 +15,7 @@ vi.mock('$lib/entu-config', async () =>
 vi.mock('$lib/roster/rosterData', async () =>
 	(await import('$lib/testing/mocks/roster')).activeMembersModule()
 );
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule()
 );
 vi.mock('$lib/rsvp/rsvpData', async () =>

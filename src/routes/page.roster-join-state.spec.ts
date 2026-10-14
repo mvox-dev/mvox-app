@@ -19,13 +19,13 @@ vi.mock('$lib/invite/inviteData', async (importOriginal) =>
 vi.mock('$lib/profile/linkedIdentities', async (importOriginal) =>
 	(await import('$lib/testing/mocks/admin')).joinStateDetailsModule(importOriginal)
 );
-vi.mock('$lib/nav/adminStore', async (importOriginal) =>
-	(await import('$lib/testing/mocks/admin')).ownerTierOverRealModule(importOriginal)
+vi.mock('$lib/nav/dbRights', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).dbRightOverRealModule(importOriginal)
 );
 vi.mock('$lib/roster/memberRecord', async (importOriginal) =>
 	(await import('$lib/testing/mocks/roster')).memberRecordModule(importOriginal)
 );
-vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+vi.mock('$lib/library/libraryRights', async (importOriginal) =>
 	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
 );
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
@@ -44,7 +44,7 @@ vi.mock('$app/navigation', async () =>
 import Page from './roster/+page.svelte';
 import type { RosterRow } from '$lib/roster/rosterData';
 import type { SectionNode } from '$lib/sections/sectionData';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { isoDateFormatter } from '$lib/preferences/timeFormat';
@@ -54,7 +54,7 @@ import {
 	listJoinStateDetailsMock,
 	listJoinStatesMock,
 	mintSelfLinkInviteMock,
-	resolveOwnerTierMock,
+	resolveDbRightMock,
 	withdrawInviteMock
 } from '$lib/testing/mocks/admin';
 import {
@@ -146,7 +146,7 @@ beforeEach(() => {
 	listJoinStateDetailsMock.mockImplementation((cfg: { db: string }, personIds: string[]) =>
 		Promise.resolve(detailsFor(cfg.db, personIds))
 	);
-	resolveOwnerTierMock.mockResolvedValue('owner');
+	resolveDbRightMock.mockResolvedValue('owner');
 	mintSelfLinkInviteMock.mockResolvedValue({ inviteToken: 'tok-fresh-1' });
 	withdrawInviteMock.mockResolvedValue(undefined);
 	deactivateMemberMock.mockResolvedValue(undefined);
@@ -168,12 +168,12 @@ function allControls(container: HTMLElement): Element[] {
 }
 
 async function renderRoster(
-	opts: { admin?: 'admin' | 'not-admin'; tier?: 'owner' | 'editor' | 'none' | 'error' } = {}
+	opts: { admin?: 'editor' | 'not-editor'; tier?: 'owner' | 'editor' | 'none' | 'error' } = {}
 ) {
-	resolveOwnerTierMock.mockResolvedValue(opts.tier ?? 'owner');
+	resolveDbRightMock.mockResolvedValue(opts.tier ?? 'owner');
 	const utils = render(Page);
 	setAuthedWithTwoCollectives();
-	adminStore.set(opts.admin ?? 'admin');
+	dbEditRight.set(opts.admin ?? 'editor');
 	await waitFor(() =>
 		expect(
 			utils.container.querySelector('[data-testid="section-toggle-unassigned"]')
@@ -282,7 +282,7 @@ describe('(A) dated status lines — #467: one line per row, four display states
 		expect(adminLines).toEqual(expectedLinesSampledb());
 		cleanup();
 
-		const { container } = await renderRoster({ admin: 'not-admin' });
+		const { container } = await renderRoster({ admin: 'not-editor' });
 		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
 		expect(chipSet(container)).toEqual(adminLines);
 	});
@@ -291,7 +291,7 @@ describe('(A) dated status lines — #467: one line per row, four display states
 		listJoinStateDetailsMock.mockImplementation((cfg: { db: string }, personIds: string[]) =>
 			Promise.resolve(detailsFor(cfg.db, personIds.filter((id) => id !== 'pp-4')))
 		);
-		const { container } = await renderRoster({ admin: 'not-admin' });
+		const { container } = await renderRoster({ admin: 'not-editor' });
 		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
 		const expected = expectedLinesSampledb();
 		delete (expected as Record<string, unknown>)['roster-row-join-state-m4'];
@@ -405,7 +405,7 @@ describe('(A) dated status lines — #467: one line per row, four display states
 			actual.listJoinStateDetails(cfg, ids, withheldFetch)
 		);
 
-		const { container } = await renderRoster({ admin: 'not-admin' });
+		const { container } = await renderRoster({ admin: 'not-editor' });
 		expect(q(container, 'roster-row-m3'), 'the roster rows must be on screen').not.toBeNull();
 		expect(withheldFetch, 'the real producer must have issued the reads').toHaveBeenCalled();
 		expect(chipSet(container)).toEqual({});
@@ -418,7 +418,7 @@ describe('(A) dated status lines — #467: one line per row, four display states
 		);
 		const refused = new Error('listLinkedIdentities: identity read failed: HTTP 403');
 		listJoinStateDetailsMock.mockRejectedValue(refused);
-		const { container } = await renderRoster({ admin: 'not-admin' });
+		const { container } = await renderRoster({ admin: 'not-editor' });
 		expect(q(container, 'roster-row-m3'), 'the roster rows must be on screen').not.toBeNull();
 		expect(chipSet(container)).toEqual({});
 		expect(errSpy).toHaveBeenCalledWith('roster: loading the join states failed', refused);
@@ -505,7 +505,7 @@ describe('(C) the controls gate on _owner ONLY — PO ruling 2026-09-09, probe-o
 	});
 
 	it('a NON-admin gets neither controls nor the note', async () => {
-		const { container } = await renderRoster({ admin: 'not-admin' });
+		const { container } = await renderRoster({ admin: 'not-editor' });
 		expect(allControls(container)).toHaveLength(0);
 		expect(q(container, 'roster-invite-owner-note')).toBeNull();
 	});
@@ -521,8 +521,8 @@ describe('(C) the controls gate on _owner ONLY — PO ruling 2026-09-09, probe-o
 
 	it("INTEGRATION: the route resolves the owner tier for the selected collective's viewer", async () => {
 		await renderRoster();
-		await waitFor(() => expect(resolveOwnerTierMock).toHaveBeenCalled());
-		const matching = resolveOwnerTierMock.mock.calls.some((call) => {
+		await waitFor(() => expect(resolveDbRightMock).toHaveBeenCalled());
+		const matching = resolveDbRightMock.mock.calls.some((call) => {
 			const [cfg, personId] = call as [{ db: string }, string];
 			return cfg.db === 'sampledb' && personId === 'person-p';
 		});
@@ -755,7 +755,7 @@ describe('(H) a superseded load\'s join-state tail writes NOTHING', () => {
 		});
 		const utils = render(Page);
 		setAuthedWithTwoCollectives();
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		await waitFor(() =>
 			expect(
 				[...listJoinStatesMock.mock.calls, ...listJoinStateDetailsMock.mock.calls].some(

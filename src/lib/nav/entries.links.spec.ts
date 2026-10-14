@@ -32,8 +32,8 @@ describe('#256 — NAV_ENTRIES carries the links entry', () => {
 	it('links is visible to plain members — read access is everyone; the admin gate lives on the page controls, not the nav', () => {
 		const links = NAV_ENTRIES.find((e) => e.key === 'links');
 		expect(links).toBeDefined();
-		expect(links!.visible({ isAdmin: false, hasMultipleCollectives: false })).toBe(true);
-		expect(links!.visible({ isAdmin: true, hasMultipleCollectives: true })).toBe(true);
+		expect(links!.visible({ canEditDb: false, hasMultipleCollectives: false })).toBe(true);
+		expect(links!.visible({ canEditDb: true, hasMultipleCollectives: true })).toBe(true);
 	});
 
 	it('label resolves through m.nav_links() and the entry carries an inline svg icon', () => {

@@ -28,7 +28,7 @@ vi.mock('$app/navigation', async () =>
 import Page from './roster/+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
@@ -88,7 +88,7 @@ afterEach(cleanupResetRenameMocks);
 
 async function renderArrangeReady(): Promise<HTMLElement> {
 	setAuthedWithOneCollective();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(q(container, 'roster-groups')).not.toBeNull();

@@ -1,21 +1,21 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
-	import type { AdminState } from '$lib/nav/adminStore';
+	import type { EditRightState } from '$lib/nav/dbRights';
 	import type { MemberOpsState } from '$lib/roster/rosterPageState';
 	import type { ArrangeState } from '$lib/sections/sectionArrangeOps';
 
 	let {
 		arrange,
 		memberOps,
-		admin
-	}: { arrange: ArrangeState; memberOps: MemberOpsState; admin: AdminState } = $props();
+		editRight
+	}: { arrange: ArrangeState; memberOps: MemberOpsState; editRight: EditRightState } = $props();
 </script>
 
 <div data-testid="roster-reorder-status" role="status" aria-live="polite" class="sr-only">
 	{arrange.reorderStatus}
 </div>
 
-{#if admin === 'admin'}
+{#if editRight === 'editor'}
 	<span
 		id="section-reorder-instructions"
 		data-testid="roster-reorder-instructions"

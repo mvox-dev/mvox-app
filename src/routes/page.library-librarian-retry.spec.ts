@@ -29,7 +29,7 @@ vi.mock('$lib/roster/rosterData', async () =>
 	(await import('$lib/testing/mocks/roster')).activeMembersModule()
 );
 
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule()
 );
 
@@ -44,8 +44,8 @@ vi.mock('$lib/library/lendingActions', async () =>
 import Page from './library/+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { get } from 'svelte/store';
-import { librarianStore } from '$lib/library/librarianStore';
-import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import { libraryEditRight } from '$lib/library/libraryRights';
+import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
 import {
 	DB_A,
 	DB_B,
@@ -62,10 +62,10 @@ afterEach(cleanupClearReset);
 type Answer = { state: string; libraryId: string | null };
 
 function answersForA(queue: Array<Promise<Answer>>) {
-	resolveLibrarianMock.mockImplementation((cfg: { db: string }) =>
+	resolveLibraryEditRightMock.mockImplementation((cfg: { db: string }) =>
 		cfg.db === DB_A
-			? (queue.shift() ?? Promise.resolve({ state: 'librarian', libraryId: 'lib-a' }))
-			: Promise.resolve({ state: 'librarian', libraryId: 'lib-b' })
+			? (queue.shift() ?? Promise.resolve({ state: 'editor', libraryId: 'lib-a' }))
+			: Promise.resolve({ state: 'editor', libraryId: 'lib-b' })
 	);
 }
 
@@ -94,7 +94,7 @@ describe('/library — #546 the librarian retry ignores a late answer', () => {
 			)
 		);
 
-		retryA.resolve({ state: 'librarian', libraryId: 'lib-a' });
+		retryA.resolve({ state: 'editor', libraryId: 'lib-a' });
 		await settle();
 
 		await fireEvent.change(q(container, 'bulk-checkout-work-select') as HTMLSelectElement, {
@@ -109,7 +109,7 @@ describe('/library — #546 the librarian retry ignores a late answer', () => {
 			'[data-testid="bulk-checkout-member-list"] input[type="checkbox"]'
 		);
 		expect(members.length).toBe(1);
-		expect(get(librarianStore)).toBe('librarian');
+		expect(get(libraryEditRight)).toBe('editor');
 	});
 
 	it('of two retries, the first answering last is ignored', async () => {
@@ -124,13 +124,13 @@ describe('/library — #546 the librarian retry ignores a late answer', () => {
 
 		await fireEvent.click(q(container, 'librarian-retry-load') as HTMLButtonElement);
 		await fireEvent.click(q(container, 'librarian-retry-load') as HTMLButtonElement);
-		second.resolve({ state: 'librarian', libraryId: 'lib-a' });
+		second.resolve({ state: 'editor', libraryId: 'lib-a' });
 		await waitFor(() => expect(q(container, 'librarian-tools')).not.toBeNull());
 
 		first.resolve({ state: 'error', libraryId: null });
 		await settle();
 
-		expect(get(librarianStore)).toBe('librarian');
+		expect(get(libraryEditRight)).toBe('editor');
 		expect(q(container, 'librarian-tools')).not.toBeNull();
 		expect(q(container, 'librarian-retry-load')).toBeNull();
 	});
@@ -143,18 +143,18 @@ describe('/library — #800 a page left mid-load writes nothing late', () => {
 		answersForA([left.promise, next.promise]);
 		setAuthedWithTwoCollectives();
 		render(Page);
-		await waitFor(() => expect(resolveLibrarianMock).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(resolveLibraryEditRightMock).toHaveBeenCalledTimes(1));
 		cleanup();
 
 		const { container } = render(Page);
-		await waitFor(() => expect(resolveLibrarianMock).toHaveBeenCalledTimes(2));
-		next.resolve({ state: 'librarian', libraryId: 'lib-a' });
+		await waitFor(() => expect(resolveLibraryEditRightMock).toHaveBeenCalledTimes(2));
+		next.resolve({ state: 'editor', libraryId: 'lib-a' });
 		await waitFor(() => expect(q(container, 'librarian-tools')).not.toBeNull());
 
 		left.resolve({ state: 'error', libraryId: null });
 		await settle();
 
-		expect(get(librarianStore)).toBe('librarian');
+		expect(get(libraryEditRight)).toBe('editor');
 		expect(q(container, 'librarian-tools')).not.toBeNull();
 		expect(q(container, 'librarian-retry-load')).toBeNull();
 	});

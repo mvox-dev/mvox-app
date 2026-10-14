@@ -29,7 +29,7 @@ vi.mock('$app/navigation', async () =>
 import Page from './roster/+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore, type AdminState } from '$lib/nav/adminStore';
+import { dbEditRight, type EditRightState } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
@@ -85,9 +85,9 @@ beforeEach(() => {
 
 afterEach(cleanupResetRenameMocks);
 
-async function renderArrangeReady(admin: AdminState = 'admin') {
+async function renderArrangeReady(admin: EditRightState = 'editor') {
 	setAuthedWithOneCollective();
-	adminStore.set(admin);
+	dbEditRight.set(admin);
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(q(container, 'roster-groups')).not.toBeNull();
@@ -326,7 +326,7 @@ describe('/roster — Collapsed and Expanded views carry NO section-management c
 	});
 
 	it('non-admin never sees any arrange chip or management control, in either display mode', async () => {
-		const container = await renderArrangeReady('not-admin');
+		const container = await renderArrangeReady('not-editor');
 		expect(q(container, 'roster-view-chip-arrange')).toBeNull();
 
 		for (const prefix of ['section-remove-', 'arrange-rename-', 'section-drag-handle-', 'roster-new-section']) {

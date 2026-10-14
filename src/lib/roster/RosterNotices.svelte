@@ -1,17 +1,17 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
-	import type { AdminState } from '$lib/nav/adminStore';
+	import type { EditRightState } from '$lib/nav/dbRights';
 	import type { RosterState } from '$lib/roster/rosterPageState';
 	import type { ArrangeState } from '$lib/sections/sectionArrangeOps';
 
 	let {
 		roster,
 		arrange,
-		admin
-	}: { roster: RosterState; arrange: ArrangeState; admin: AdminState } = $props();
+		editRight
+	}: { roster: RosterState; arrange: ArrangeState; editRight: EditRightState } = $props();
 </script>
 
-{#if admin === 'admin' && roster.ownerTier !== 'owner' && roster.ownerTier !== 'loading'}
+{#if editRight === 'editor' && roster.dbRight !== 'owner' && roster.dbRight !== 'loading'}
 	<p data-testid="roster-invite-owner-note" class="text-xs text-ink-2">
 		{m.roster_member_invite_owner_only()}
 	</p>

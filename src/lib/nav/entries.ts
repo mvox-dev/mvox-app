@@ -2,7 +2,7 @@
 import * as m from '$lib/paraglide/messages';
 
 export interface NavContext {
-	isAdmin: boolean;
+	canEditDb: boolean;
 	hasMultipleCollectives: boolean;
 }
 
@@ -60,13 +60,10 @@ export const NAV_ENTRIES: NavEntry[] = [
 		label: () => m.nav_admin(),
 		route: '/admin',
 		icon: adminIcon,
-		visible: (ctx) => ctx.isAdmin,
+		visible: (ctx) => ctx.canEditDb,
 	},
 	{
-		// #256 — Lingikogu (link collection): members READ the collective's
-		// links, so this entry is visible to EVERYONE. Only the page's own
-		// add/edit/reorder/remove controls are admin-gated (absent, not
-		// disabled) — the nav tab itself carries no admin check.
+		// Every member reads the links; only the page's own write controls check a right.
 		key: 'links',
 		label: () => m.nav_links(),
 		route: '/links',

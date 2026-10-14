@@ -26,7 +26,7 @@ const h = vi.hoisted(() => ({
 	mintSelfLinkInviteMock: vi.fn(),
 	withdrawInviteMock: vi.fn(),
 	listJoinStateDetailsMock: vi.fn(),
-	resolveOwnerTierMock: vi.fn()
+	resolveDbRightMock: vi.fn()
 }));
 
 vi.mock('$lib/roster/rosterData', async () =>
@@ -67,11 +67,11 @@ vi.mock('$lib/profile/linkedIdentities', async (importActual) => ({
 	...(await importActual<typeof import('$lib/profile/linkedIdentities')>()),
 	listJoinStateDetails: h.listJoinStateDetailsMock
 }));
-vi.mock('$lib/nav/adminStore', async (importActual) => ({
-	...(await importActual<typeof import('$lib/nav/adminStore')>()),
-	resolveOwnerTier: h.resolveOwnerTierMock
+vi.mock('$lib/nav/dbRights', async (importActual) => ({
+	...(await importActual<typeof import('$lib/nav/dbRights')>()),
+	resolveDbRight: h.resolveDbRightMock
 }));
-vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+vi.mock('$lib/library/libraryRights', async (importOriginal) =>
 	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
 );
 vi.mock('$lib/collectives/discover', async () =>
@@ -86,7 +86,7 @@ vi.mock('$app/navigation', async () =>
 
 import Page from './+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import {
 	goOffline,
@@ -158,7 +158,7 @@ beforeEach(async () => {
 	h.updateMemberRecordMock.mockResolvedValue(undefined);
 	h.mintSelfLinkInviteMock.mockResolvedValue({ inviteToken: 'tok' });
 	h.withdrawInviteMock.mockResolvedValue(undefined);
-	h.resolveOwnerTierMock.mockResolvedValue('owner');
+	h.resolveDbRightMock.mockResolvedValue('owner');
 	h.listJoinStateDetailsMock.mockResolvedValue({
 		'person-p': { state: 'linked' },
 		'pp-2': { state: 'absent' }
@@ -196,7 +196,7 @@ function noWriteSeamCalled() {
 
 async function renderMemberSurface() {
 	setAuthed();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	const { container } = render(Page);
 	await waitFor(() => expect(q(container, 'section-toggle-unassigned')).not.toBeNull());
 	await fireEvent.click(q(container, 'section-toggle-unassigned')!);
@@ -208,7 +208,7 @@ async function renderMemberSurface() {
 
 async function renderArrangeSurface() {
 	setAuthed();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	const { container } = render(Page);
 	await waitFor(() => expect(q(container, 'roster-view-chip-arrange')).not.toBeNull());
 	await fireEvent.click(q(container, 'roster-view-chip-arrange')!);

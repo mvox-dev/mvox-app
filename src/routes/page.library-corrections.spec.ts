@@ -17,7 +17,7 @@ vi.mock('$lib/roster/rosterData', async () =>
 );
 // #434 — the write paths resolve the library id live through `resolveMyLibraryId`,
 // never off the cache-backed librarian resolution, so it is mocked here too.
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule()
 );
 vi.mock('$lib/rsvp/rsvpData', async () =>
@@ -38,7 +38,7 @@ import {
 	resolveCopyChainsMock
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
-import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
 import { signInLibraryReader } from '$lib/testing/pages/library';
 import { useLibraryPage } from '$lib/testing/pages/libraryPage';
 
@@ -59,7 +59,7 @@ describe('#76 — consolidated corrections', () => {
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-1', 'Ada']]));
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: 'Urtext', publisher: 'Baerenreiter', workId: 'work-1' }
 		]));
@@ -73,7 +73,7 @@ describe('#76 — consolidated corrections', () => {
 		const { container } = render(Page);
 
 		// Wait for both the work list and librarian tools to render (allCopies
-		// and allEditions are loaded before librarianStore is set)
+		// and allEditions are loaded before libraryEditRight is set)
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="library-work-work-1"]')).not.toBeNull();
 			expect(container.querySelector('[data-testid="librarian-tools"]')).not.toBeNull();
@@ -91,7 +91,7 @@ describe('#76 — consolidated corrections', () => {
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 
 		const { container } = render(Page);
 
@@ -115,7 +115,7 @@ describe('#76 — consolidated corrections', () => {
 			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' }
 		]));
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Baerenreiter', workId: 'work-1' }
 		]));
@@ -210,7 +210,7 @@ describe('#76 — consolidated corrections', () => {
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		findMyMemberIdMock.mockResolvedValue('member-mine');
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter', workId: 'work-1' }
 		]));
@@ -311,7 +311,7 @@ describe('#76 correction 9 → #207 rule 7: lending dates render as the ISO cale
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a', 'Ada']]));
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: 'Urtext', publisher: 'Baerenreiter', workId: 'work-1' }
 		]));
@@ -352,7 +352,7 @@ describe('#76 correction 9 → #207 rule 7: lending dates render as the ISO cale
 			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' }
 		]));
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: '40-part original', publisher: 'Baerenreiter', workId: 'work-1' }
 		]));

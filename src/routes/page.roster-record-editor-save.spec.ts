@@ -23,7 +23,7 @@ vi.mock('$lib/entu-config', async () =>
 import Page from './roster/+page.svelte';
 import { MemberRecordPartialSaveError, type MemberRecordLookup } from '$lib/roster/memberRecord';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import {
@@ -53,7 +53,7 @@ const rowsOther: RosterRow[] = [
 
 describe('(E) save — lazy create, server-confirmed, announced', () => {
 	it('the fifth sr-only role=status region roster-member-record-status is mounted from first render, empty', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		const region = q(container, 'roster-member-record-status')!;
 		expect(region).not.toBeNull();
 		expect(region.getAttribute('role')).toBe('status');
@@ -63,7 +63,7 @@ describe('(E) save — lazy create, server-confirmed, announced', () => {
 	});
 
 	it('no record + save → createMemberRecord ONCE with the full input (db parent, person, prefilled name/email, typed phone, empty birthdate omitted-as-empty) — and NEVER update', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(phoneInput(container), { target: { value: '+372 5559876' } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -85,7 +85,7 @@ describe('(E) save — lazy create, server-confirmed, announced', () => {
 		createMemberRecordMock.mockImplementation(
 			() => new Promise<string>((res) => (release = () => res('rec-new')))
 		);
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.click(q(container, 'roster-record-save')!);
 		await tick();
@@ -101,7 +101,7 @@ describe('(E) save — lazy create, server-confirmed, announced', () => {
 	});
 
 	it('a SECOND consecutive success RE-ANNOUNCES: the fresh attempt clears the live region first, so the identical text is a real DOM mutation and not a silent no-op', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.click(q(container, 'roster-record-save')!);
 		await waitFor(() =>
@@ -130,7 +130,7 @@ describe('(E) save — lazy create, server-confirmed, announced', () => {
 			state: 'one',
 			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '' }
 		});
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(nameInput(container), { target: { value: 'Uus Nimi' } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -145,7 +145,7 @@ describe('(E) save — lazy create, server-confirmed, announced', () => {
 			state: 'one',
 			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '' }
 		});
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(birthdateInput(container), { target: { value: '1990-03-15' } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -162,7 +162,7 @@ describe('(E) failure tells the truth — typed values stay, nothing pretends to
 			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '' }
 		});
 		updateMemberRecordMock.mockRejectedValue(new Error('memberRecord update failed: 500'));
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(nameInput(container), { target: { value: 'Typed Secret Name' } });
 		await fireEvent.input(phoneInput(container), { target: { value: '+372 5550000' } });
@@ -186,7 +186,7 @@ describe('(E) failure tells the truth — typed values stay, nothing pretends to
 
 	it('a create failure: the alert says nothing was saved and the typed values stay', async () => {
 		createMemberRecordMock.mockRejectedValue(new Error('memberRecord create failed: 500'));
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(phoneInput(container), { target: { value: '+372 5559876' } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -204,7 +204,7 @@ describe('(E) failure tells the truth — typed values stay, nothing pretends to
 			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '' }
 		});
 		updateMemberRecordMock.mockRejectedValue(new MemberRecordPartialSaveError(['name'], 'email'));
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(nameInput(container), { target: { value: 'Landed Name' } });
 		await fireEvent.input(emailInput(container), { target: { value: 'failed@secret.example' } });
@@ -227,7 +227,7 @@ describe('(E) failure tells the truth — typed values stay, nothing pretends to
 			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '' }
 		});
 		updateMemberRecordMock.mockRejectedValue(new MemberRecordPartialSaveError([], 'phone'));
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(phoneInput(container), { target: { value: '+372 5550000' } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -247,7 +247,7 @@ describe('(E) failure tells the truth — typed values stay, nothing pretends to
 
 	it('a failure NEVER sits beside a stale success: the earlier "saved" is gone from the live region while the alert says nothing was saved (#253 lying-banner class)', async () => {
 		const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.click(q(container, 'roster-record-save')!);
 		await waitFor(() =>
@@ -274,7 +274,7 @@ describe('(E) collective switch — #259 a write settling after the switch chang
 		);
 		const utils = render(Page);
 		setAuthedWithTwoCollectives();
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		await waitFor(() => expect(q(utils.container, 'section-toggle-unassigned')).not.toBeNull());
 		await fireEvent.click(q(utils.container, 'section-toggle-unassigned')!);
 		await waitFor(() => expect(q(utils.container, 'roster-row-m2')).not.toBeNull());
@@ -332,7 +332,7 @@ describe('(E) collective switch — #259 a write settling after the switch chang
 
 describe('(E) review F2 — the required NAME is enforced where the write happens', () => {
 	it('CREATE path: an emptied name refuses the save — createMemberRecord never fires, the refusal is a role=alert, and the other typed values stay', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(phoneInput(container), { target: { value: '+372 5559876' } });
 		await fireEvent.input(nameInput(container), { target: { value: '' } });
@@ -354,7 +354,7 @@ describe('(E) review F2 — the required NAME is enforced where the write happen
 	});
 
 	it('whitespace is not a name: "   " is refused exactly like ""', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(nameInput(container), { target: { value: '   ' } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -369,7 +369,7 @@ describe('(E) review F3 — the in-flight guard is ROW-SCOPED, never cleared by 
 		createMemberRecordMock.mockImplementation(
 			() => new Promise<string>((res) => (release = () => res('rec-new')))
 		);
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.click(q(container, 'roster-record-save')!);
 		await tick();
@@ -391,7 +391,7 @@ describe('(E) review F3 — the in-flight guard is ROW-SCOPED, never cleared by 
 
 	it("cancel stays live on another row while a write is in flight — closing an editor writes nothing, so the admin is never trapped", async () => {
 		createMemberRecordMock.mockImplementation(() => new Promise<string>(() => {}));
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.click(q(container, 'roster-record-save')!);
 		await tick();
@@ -404,7 +404,7 @@ describe('(E) review F3 — the in-flight guard is ROW-SCOPED, never cleared by 
 
 	it("the saving row's OWN cancel is disabled while its write is in flight", async () => {
 		createMemberRecordMock.mockImplementation(() => new Promise<string>(() => {}));
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.click(q(container, 'roster-record-save')!);
 		await tick();
@@ -418,7 +418,7 @@ describe('(E) review F1 — clearing the date of birth reaches the data layer as
 			state: 'one',
 			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '1985-11-02' }
 		});
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		expect(birthdateInput(container).value).toBe('1985-11-02');
 		await fireEvent.input(birthdateInput(container), { target: { value: '' } });
@@ -432,7 +432,7 @@ describe('(E) review F1 — clearing the date of birth reaches the data layer as
 			state: 'one',
 			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '1985-11-02' }
 		});
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(birthdateInput(container), { target: { value: '' } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -448,7 +448,7 @@ describe('(E) review F1 — clearing the date of birth reaches the data layer as
 
 describe('(E) review r3 F2 — the one-record check runs AT THE SAVE, not at editor-open', () => {
 	it('the save re-reads the record before writing — a second lookup for the same person', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		expect(loadMemberRecordMock).toHaveBeenCalledTimes(1);
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -458,7 +458,7 @@ describe('(E) review r3 F2 — the one-record check runs AT THE SAVE, not at edi
 	});
 
 	it('a record that appeared AFTER the editor opened turns the save into an UPDATE against the freshly-read id — createMemberRecord never fires, so no duplicate is ever made', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2'); // opened on 'none' — the create path
 		loadMemberRecordMock.mockResolvedValue({
 			state: 'one',
@@ -476,7 +476,7 @@ describe('(E) review r3 F2 — the one-record check runs AT THE SAVE, not at edi
 	});
 
 	it('a save whose fresh lookup comes back DAMAGED writes NOTHING and hands the row to the damaged alert (#264: no guessing, no self-repair)', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(phoneInput(container), { target: { value: '+372 5559876' } });
 		loadMemberRecordMock.mockResolvedValue({ state: 'damaged', count: 2 });
@@ -508,7 +508,7 @@ describe('(E) #280 — create-turned-update asserts ONLY touched fields; an unto
 	};
 
 	it("nothing touched → updateMemberRecord carries {} — the other writer's name and email survive, and the save still COMPLETES (refusal was withdrawn)", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2'); // 'none' — prefill fires on name+email
 		loadMemberRecordMock.mockResolvedValue(racedRecord);
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -523,7 +523,7 @@ describe('(E) #280 — create-turned-update asserts ONLY touched fields; an unto
 	});
 
 	it('a TYPED name IS sent and wins; the still-untouched email prefill rides along with NOTHING', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(nameInput(container), { target: { value: 'Corrected Name' } });
 		loadMemberRecordMock.mockResolvedValue(racedRecord);
@@ -533,7 +533,7 @@ describe('(E) #280 — create-turned-update asserts ONLY touched fields; an unto
 	});
 
 	it('a TYPED blank field (phone) is sent; the untouched prefills AND the untouched blanks (birthdate, id code) all stay out', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(phoneInput(container), { target: { value: '+372 5559876' } });
 		loadMemberRecordMock.mockResolvedValue(racedRecord);
@@ -543,7 +543,7 @@ describe('(E) #280 — create-turned-update asserts ONLY touched fields; an unto
 	});
 
 	it('edit-then-REVERT: a name typed and then restored to the exact prefilled value is NOT sent — the final value equals the display, so it asserts nothing (#280 pinned choice)', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(nameInput(container), { target: { value: 'Corrected Name' } });
 		await fireEvent.input(nameInput(container), { target: { value: 'Berta Bass' } });

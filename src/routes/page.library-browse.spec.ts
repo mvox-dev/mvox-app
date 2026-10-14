@@ -19,7 +19,7 @@ vi.mock('$lib/roster/rosterData', async () =>
 );
 // #434 — the write paths resolve the library id live through `resolveMyLibraryId`,
 // never off the cache-backed librarian resolution, so it is mocked here too.
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule()
 );
 // T6.4/#73 — "my loans" resolves the viewer's own active member the same way
@@ -38,7 +38,7 @@ import {
 	listWorksMock,
 	resolveBorrowerNamesMock
 } from '$lib/testing/mocks/library';
-import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
 import { signInLibraryReader } from '$lib/testing/pages/library';
 import { useLibraryPage } from '$lib/testing/pages/libraryPage';
 
@@ -168,12 +168,12 @@ describe('/library — unresolved borrower name', () => {
 });
 
 describe('#72 — librarian tools composition', () => {
-	it('hides librarian tools while resolveLibrarian is loading (hidden-if-undeterminable)', async () => {
+	it('hides librarian tools while resolveLibraryEditRight is loading (hidden-if-undeterminable)', async () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockReturnValue(new Promise(() => {}));
+		resolveLibraryEditRightMock.mockReturnValue(new Promise(() => {}));
 
 		const { container } = render(Page);
 
@@ -184,12 +184,12 @@ describe('#72 — librarian tools composition', () => {
 		expect(container.querySelector('[data-testid="librarian-load-error"]')).toBeNull();
 	});
 
-	it('shows the librarian placeholder section when resolveLibrarian resolves librarian', async () => {
+	it('shows the librarian placeholder section when resolveLibraryEditRight resolves librarian', async () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 
 		const { container } = render(Page);
 
@@ -199,12 +199,12 @@ describe('#72 — librarian tools composition', () => {
 		expect(container.querySelector('[data-testid="librarian-tools"]')?.textContent).toContain('Librarian tools');
 	});
 
-	it('hides librarian tools when resolveLibrarian resolves not-librarian (fail-closed)', async () => {
+	it('hides librarian tools when resolveLibraryEditRight resolves not-librarian (fail-closed)', async () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 
 		const { container } = render(Page);
 
@@ -214,12 +214,12 @@ describe('#72 — librarian tools composition', () => {
 		expect(container.querySelector('[data-testid="librarian-tools"]')).toBeNull();
 	});
 
-	it('shows a retry action when resolveLibrarian errors; retry re-resolves and reveals tools', async () => {
+	it('shows a retry action when resolveLibraryEditRight errors; retry re-resolves and reveals tools', async () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'error', libraryId: null });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'error', libraryId: null });
 
 		const { container } = render(Page);
 
@@ -228,7 +228,7 @@ describe('#72 — librarian tools composition', () => {
 		});
 		expect(container.querySelector('[data-testid="librarian-tools"]')).toBeNull();
 
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		const retryBtn = container.querySelector('[data-testid="librarian-retry-load"]') as HTMLButtonElement;
 		expect(retryBtn).not.toBeNull();
 		await fireEvent.click(retryBtn);

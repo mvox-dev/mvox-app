@@ -23,15 +23,15 @@ const page = vi.hoisted(() => {
 vi.mock('$lib/library/libraryPageData', () => ({
 	loadLibraryEditions: () => page.editions(),
 	loadLibraryCopies: () => page.editions(),
-	loadLibrarianState: () => page.state(),
+	loadLibraryEditRight: () => page.state(),
 	loadLibrarianPickers: () => page.pickers(),
 	loadLibrarianMemberNames: () => page.names()
 }));
 
-import { resolveLibrarian } from '$lib/library/librarianStore';
+import { resolveLibraryEditRight } from '$lib/library/libraryRights';
 import { createLibrarianLoad, createLibraryTreeLoads } from '$lib/library/libraryPageLoads';
 import { createLibraryState } from '$lib/library/libraryState';
-import { resolveAdmin, resolveOwnerTier } from '$lib/nav/adminStore';
+import { resolveDbEditRight, resolveDbRight } from '$lib/nav/dbRights';
 import { resolveGate } from '$lib/profile/completionGate';
 import { resolveMembership } from '$lib/collective/membershipStore';
 import { checkCollectiveMarker } from '$lib/collectives/marker';
@@ -70,7 +70,7 @@ function memberDeps(actions: object, current = () => true) {
 }
 
 function librarian(stage: 'pickers' | 'names') {
-	page.state = () => Promise.resolve({ state: 'librarian', libraryId: 'lib-1' });
+	page.state = () => Promise.resolve({ state: 'editor', libraryId: 'lib-1' });
 	page.pickers =
 		stage === 'pickers'
 			? fail
@@ -93,19 +93,19 @@ describe('a failed store read is reported (#756)', () => {
 	it.each([
 		{
 			read: 'the librarian rights',
-			run: () => resolveLibrarian(CFG, 'person-p', failFetch),
+			run: () => resolveLibraryEditRight(CFG, 'person-p', failFetch),
 			area: 'library',
 			action: 'reading the librarian rights'
 		},
 		{
 			read: 'the admin rights',
-			run: () => resolveAdmin(CFG, 'person-p', failFetch, 'db-entity'),
+			run: () => resolveDbEditRight(CFG, 'person-p', failFetch, 'db-entity'),
 			area: 'admin',
 			action: 'reading the admin rights'
 		},
 		{
 			read: 'the owner tier',
-			run: () => resolveOwnerTier(CFG, 'person-p', failFetch, 'db-entity'),
+			run: () => resolveDbRight(CFG, 'person-p', failFetch, 'db-entity'),
 			area: 'admin',
 			action: 'reading the owner tier'
 		},
@@ -273,13 +273,13 @@ describe('a non-2xx store read is reported (#756)', () => {
 		},
 		{
 			read: 'the librarian rights',
-			run: () => resolveLibrarian(CFG, 'person-p', failingAt('/entity/lib-1'), 'db-entity'),
+			run: () => resolveLibraryEditRight(CFG, 'person-p', failingAt('/entity/lib-1'), 'db-entity'),
 			area: 'library',
 			action: 'reading the librarian rights'
 		},
 		{
 			read: 'the database entity rights',
-			run: () => resolveAdmin(CFG, 'person-p', failingAt('/entity/db-entity'), 'db-entity'),
+			run: () => resolveDbEditRight(CFG, 'person-p', failingAt('/entity/db-entity'), 'db-entity'),
 			area: 'admin',
 			action: 'reading the database entity rights'
 		},

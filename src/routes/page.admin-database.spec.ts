@@ -10,10 +10,10 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 vi.mock('$lib/admin/roleManagement', async (importOriginal) =>
 	(await import('$lib/testing/mocks/admin')).roleManagementOverRealModule(importOriginal)
 );
-vi.mock('$lib/nav/adminStore', async (importOriginal) =>
-	(await import('$lib/testing/mocks/admin')).adminStoreOverRealModule(importOriginal)
+vi.mock('$lib/nav/dbRights', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).dbRightsOverRealModule(importOriginal)
 );
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule({ libraryId: false })
 );
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
@@ -54,10 +54,10 @@ import {
 	listAdminsMock,
 	listJoinStatesMock,
 	listLibrariansMock,
-	resolveAdminMock,
+	resolveDbEditRightMock,
 	resolveCollectiveNameMarkerMock,
-	resolveLibrarianMock,
-	resolveOwnerTierMock,
+	resolveLibraryEditRightMock,
+	resolveDbRightMock,
 	resolveParentMock,
 	updateCollectiveNameMock
 } from '$lib/testing/mocks/admin';
@@ -68,20 +68,20 @@ import { cleanupClearReset, q } from '$lib/testing/pages/dom';
 import { ANNA } from '$lib/testing/pages/adminRoleFixtures';
 
 // Defaults the hoisted handles carried before they moved to the shared mocks.
-resolveOwnerTierMock.mockResolvedValue('error');
+resolveDbRightMock.mockResolvedValue('error');
 listJoinStatesMock.mockResolvedValue({});
 
 const ROSTER = [{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' }];
 
 beforeEach(() => {
-	resolveAdminMock.mockResolvedValue('admin');
+	resolveDbEditRightMock.mockResolvedValue('editor');
 	resolveDatabaseEntityIdMock.mockResolvedValue(DB_ENTITY);
 	entuFetchMock.mockRejectedValue(
 		new Error(
 			'wire disabled in this spec — collective resolution must go through resolveDatabaseEntityId'
 		)
 	);
-	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+	resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 	listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
 	listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
 	loadRosterMock.mockResolvedValue(toListRead(ROSTER));

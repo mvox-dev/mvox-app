@@ -81,7 +81,7 @@ describe('#434 — the shared readers hard-wire no flag', () => {
 		'src/lib/collective/rosterNames.ts',
 		'src/lib/library/libraryReads.ts',
 		'src/lib/library/libraryAvailability.ts',
-		'src/lib/library/librarianStore.ts',
+		'src/lib/library/libraryRights.ts',
 		'src/lib/rsvp/rsvpData.ts',
 		'src/lib/repertoire/repertoireData.ts'
 	])('%s takes EntuFetchOptions and never hard-wires CACHED_READ', (path) => {
@@ -120,7 +120,7 @@ describe('#434 — the shared readers hard-wire no flag', () => {
 	});
 
 	it('the librarian resolution threads its own opts all the way down', () => {
-		const store = src('src/lib/library/librarianStore.ts');
+		const store = src('src/lib/library/libraryRights.ts');
 		expect(store).toContain('resolveDatabaseEntityId(cfg, fetchImpl, opts)');
 		expect(store).toContain('resolveMyLibraryId(cfg, fetchImpl, dbEntityId, opts)');
 	});

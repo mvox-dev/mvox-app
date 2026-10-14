@@ -13,7 +13,7 @@ import type {
 	MemberRecordPartialSaveError,
 	updateMemberRecord
 } from '$lib/roster/memberRecord';
-import type { resolveMyLibraryId } from '$lib/library/librarianStore';
+import type { resolveMyLibraryId } from '$lib/library/libraryRights';
 import type { assignMemberSection, unassignMemberSection } from '$lib/sections/sectionActions';
 import type { MemberOpsState, RosterState } from '$lib/roster/rosterPageState';
 import { createSectionOps } from '$lib/roster/rosterSectionOps';

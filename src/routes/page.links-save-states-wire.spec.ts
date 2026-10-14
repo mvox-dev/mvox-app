@@ -27,7 +27,7 @@ vi.mock('$app/state', async () =>
 
 import Page from './links/+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { resetAdmin } from '$lib/nav/adminStore';
+import { resetDbEditRight } from '$lib/nav/dbRights';
 import { resetAppState } from '$lib/testing/appReset';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
 import { DB_ENTITY, TYPE_ID, rowNames, setAuthedAdmin, wireCalls } from '$lib/testing/pages/links';
@@ -110,7 +110,7 @@ afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 });
 
 async function renderReady() {

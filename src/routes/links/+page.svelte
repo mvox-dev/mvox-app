@@ -5,7 +5,7 @@
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
 	import { selectedCollectiveIdentityStore } from '$lib/collectives/store';
-	import { adminStore } from '$lib/nav/adminStore';
+	import { dbEditRight } from '$lib/nav/dbRights';
 	import { listLinks, type LinkRow } from '$lib/links/linkData';
 	import { createLink, updateLink, reorderLinks, deleteLink } from '$lib/links/linkActions';
 	import { normalizeUrl } from '$lib/links/normalizeUrl';
@@ -18,7 +18,7 @@
 	import { writesAvailable } from '$lib/net/online';
 
 	const selected = $derived($selectedCollectiveIdentityStore);
-	const admin = $derived($adminStore);
+	const editRight = $derived($dbEditRight);
 	const isOffline = $derived(!$writesAvailable);
 
 	let status = $state<RouteLoadStatus>('loading');
@@ -246,7 +246,7 @@
 	<div data-testid="links-page" class="mx-auto flex w-full max-w-md flex-col gap-4">
 	<ListOfStuff title={m.links_title()}>
 		<div class="flex flex-col gap-4">
-			{#if admin === 'admin'}
+			{#if editRight === 'editor'}
 				<!-- Visible, not sr-only, by choice: a saved move otherwise looks identical to one that
 				     failed to persist. Present from first render, so its text change fires aria-live. -->
 				<div
@@ -277,13 +277,13 @@
 			{/if}
 
 			<!-- One reason for every disabled write control; admin-gated, as only admins see them. -->
-			{#if admin === 'admin' && isOffline}
+			{#if editRight === 'editor' && isOffline}
 				<p data-testid="links-write-unavailable" class="text-sm text-ink-2">
 					{m.write_unavailable_no_signal()}
 				</p>
 			{/if}
 
-			{#if admin === 'admin'}
+			{#if editRight === 'editor'}
 				<LinksAddForm
 					bind:addName
 					bind:addUrl
@@ -320,7 +320,7 @@
 							{row}
 							index={i}
 							rowCount={rows.length}
-							isAdmin={admin === 'admin'}
+							canEditDb={editRight === 'editor'}
 							{isOffline}
 							{reorderPending}
 							editing={editingId === row.id}

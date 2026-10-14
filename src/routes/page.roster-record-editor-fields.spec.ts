@@ -44,7 +44,7 @@ useRecordEditorPage();
 
 describe('(B) four fields — #239 idiom: wrapping label whose visible span IS the sole accessible name', () => {
 	it('name: required text input, label roster_record_name_label, no aria-label doubling', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		const input = nameInput(container);
 		expect(input.tagName).toBe('INPUT');
@@ -56,7 +56,7 @@ describe('(B) four fields — #239 idiom: wrapping label whose visible span IS t
 	});
 
 	it('phone: type=tel; email: type=email; birthdate: NATIVE date input (#207) — each with its own wrapping label, none with aria-label', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		const phone = phoneInput(container);
 		expect(phone.type).toBe('tel');
@@ -76,7 +76,7 @@ describe('(B) four fields — #239 idiom: wrapping label whose visible span IS t
 
 describe('(C) prefill — first open, no-record only (R4)', () => {
 	it('no record: name = the name the ROSTER shows (row.name), email = the roster\'s email column, phone and date of birth EMPTY', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		expect(nameInput(container).value).toBe('Berta Bass');
 		expect(emailInput(container).value).toBe('berta@example.com');
@@ -85,7 +85,7 @@ describe('(C) prefill — first open, no-record only (R4)', () => {
 	});
 
 	it("LEAK GUARD: the name prefill NEVER surfaces a private-tier profile name — resolveField's private-first ordering is the wrong resolver for a domain-shared destination (#28/#58 class)", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		expect(nameInput(container).value).toBe('Berta Bass');
 		expect(nameInput(container).value).not.toBe('Secret Private Name');
@@ -96,7 +96,7 @@ describe('(C) prefill — first open, no-record only (R4)', () => {
 			rosterTwo[0],
 			{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: '', sectionIds: [], dbEntityId: 'db-1' }
 		]));
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		expect(emailInput(container).value).toBe('');
 	});
@@ -106,7 +106,7 @@ describe('(C) prefill — first open, no-record only (R4)', () => {
 			state: 'one',
 			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '' }
 		});
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		expect(nameInput(container).value).toBe('Recorded Name');
 	});
@@ -116,7 +116,7 @@ describe('(C) prefill — first open, no-record only (R4)', () => {
 			state: 'one',
 			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '' }
 		});
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		expect(phoneInput(container).value).toBe('');
 		expect(emailInput(container).value).toBe('');
@@ -127,7 +127,7 @@ describe('(C) prefill — first open, no-record only (R4)', () => {
 			state: 'one',
 			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '1985-11-02' }
 		});
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		expect(birthdateInput(container).value).toBe('1985-11-02');
 	});
@@ -135,7 +135,7 @@ describe('(C) prefill — first open, no-record only (R4)', () => {
 
 describe('(#285) the FIFTH field — Isikukood, after Sünnikuupäev, #239 idiom, no prefill', () => {
 	it('renders inside the open editor: type=text, kebab testid roster-record-id-code, wrapping label whose visible text ([roster_record_id_code_label]) is the SOLE accessible name — no aria-label', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		const input = idCodeInput(container);
 		expect(input).not.toBeNull();
@@ -148,7 +148,7 @@ describe('(#285) the FIFTH field — Isikukood, after Sünnikuupäev, #239 idiom
 	});
 
 	it('sits INSIDE the same <li> as the rest of the editor (whole-block admin gate inherited — no per-field gating), AFTER the birthdate block in DOM order (ordinal 6)', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		const li = q(container, 'roster-row-m2')!;
 		const idCode = li.querySelector('[data-testid="roster-record-id-code"]');
@@ -160,7 +160,7 @@ describe('(#285) the FIFTH field — Isikukood, after Sünnikuupäev, #239 idiom
 	});
 
 	it('NO PREFILL on the no-record path: opens EMPTY (nothing to prefill from — the profile layer has no such field) even while name/email prefill from the row', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		expect(nameInput(container).value).toBe('Berta Bass'); // siblings DO prefill
 		expect(idCodeInput(container).value).toBe('');
@@ -171,7 +171,7 @@ describe('(#285) the FIFTH field — Isikukood, after Sünnikuupäev, #239 idiom
 			state: 'one',
 			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '', id_code: '' }
 		});
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		expect(idCodeInput(container).value).toBe('');
 	});
@@ -188,7 +188,7 @@ describe('(#285) the FIFTH field — Isikukood, after Sünnikuupäev, #239 idiom
 				id_code: '50001010017'
 			}
 		});
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		expect(idCodeInput(container).value).toBe('50001010017');
 	});
@@ -198,7 +198,7 @@ describe('(#285) the FIFTH field — Isikukood, after Sünnikuupäev, #239 idiom
 		createMemberRecordMock.mockImplementation(
 			() => new Promise<string>((res) => (release = () => res('rec-new')))
 		);
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.click(q(container, 'roster-record-save')!);
 		await tick();
@@ -212,7 +212,7 @@ describe('(#285) the FIFTH field — Isikukood, after Sünnikuupäev, #239 idiom
 			state: 'one',
 			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '', id_code: '' }
 		});
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(idCodeInput(container), { target: { value: '50001010017' } });
 		await fireEvent.click(q(container, 'roster-record-save')!);

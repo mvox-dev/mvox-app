@@ -17,11 +17,11 @@
 		files: EditionFilesState;
 		view: LendingView;
 		actions: TreeActions;
-		isLibrarian: boolean;
+		canEditLibrary: boolean;
 		isOffline: boolean;
 	}
 
-	let { work, edition, lib, files, view, actions, isLibrarian, isOffline }: Props = $props();
+	let { work, edition, lib, files, view, actions, canEditLibrary, isOffline }: Props = $props();
 
 	const COPY_SORT_LABEL = {
 		nr: m.library_copy_sort_nr,
@@ -90,11 +90,11 @@
 						checkoutError={lib.inlineCheckoutErrors.get(copy.id)}
 						{view}
 						{actions}
-						{isLibrarian}
+						{canEditLibrary}
 						{isOffline}
 					/>
 				{/each}
-				{#if !isLibrarian}
+				{#if !canEditLibrary}
 					{@const availableCount = copies.filter((c) => !view.activeLendingForCopy(c.id)).length}
 					{#if availableCount > 0}
 						<div
@@ -114,7 +114,7 @@
 			{files}
 			heldFileIds={lib.heldFileIds}
 			{actions}
-			{isLibrarian}
+			{canEditLibrary}
 			{isOffline}
 		/>
 	{/if}

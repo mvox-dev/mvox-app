@@ -18,7 +18,7 @@
 		checkoutError: string | undefined;
 		view: LendingView;
 		actions: TreeActions;
-		isLibrarian: boolean;
+		canEditLibrary: boolean;
 		isOffline: boolean;
 	}
 
@@ -32,7 +32,7 @@
 		checkoutError,
 		view,
 		actions,
-		isLibrarian,
+		canEditLibrary,
 		isOffline
 	}: Props = $props();
 
@@ -40,12 +40,12 @@
 	const activeLending = $derived(view.activeLendingForCopy(copy.id));
 </script>
 
-{#if isLibrarian || activeLending}
+{#if canEditLibrary || activeLending}
 	<div data-testid="library-copy-{copy.id}" class="flex items-center justify-between text-xs">
 		<span class="text-ink">{copy.name || (copy.copyNumber ? `#${copy.copyNumber}` : m.library_copy_name_unknown())}</span>
 		<span class="flex items-center gap-1">
 			{#if availability.status === 'available'}
-				{#if isLibrarian}
+				{#if canEditLibrary}
 					{@const editionCopyIds = view.editionCopyIds(editionId)}
 					<span class="flex flex-col items-end gap-0.5">
 						<select
@@ -96,7 +96,7 @@
 						{/if}</RedactedText
 					>
 				</span>
-				{#if isLibrarian && activeLending}
+				{#if canEditLibrary && activeLending}
 					<button
 						type="button"
 						data-testid="library-return-{copy.id}"

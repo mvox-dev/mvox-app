@@ -43,7 +43,7 @@
 	import { membershipStore, resetMembership, resolveMembership } from '$lib/collective/membershipStore';
 	import NavShell from '$lib/components/nav/NavShell.svelte';
 	import { NAV_ENTRIES } from '$lib/nav/entries';
-	import { adminStore, resetAdmin, resolveAdmin } from '$lib/nav/adminStore';
+	import { dbEditRight, resetDbEditRight, resolveDbEditRight } from '$lib/nav/dbRights';
 	import { getLocale } from '$lib/paraglide/runtime.js';
 	// Here, not on the profile page: Chromium fires beforeinstallprompt once per load.
 	import { startInstallAffordance } from '$lib/install/installState';
@@ -147,13 +147,13 @@
 		const selected = $selectedCollectiveIdentityStore;
 		const g = ++adminGen;
 		if (auth.status !== 'authenticated' || !selected) {
-			resetAdmin();
+			resetDbEditRight();
 			return;
 		}
-		resetAdmin();
+		resetDbEditRight();
 		const cfg = cfgFor(selected.db);
-		resolveAdmin(cfg, selected.personId).then((state) => {
-			if (g === adminGen) adminStore.set(state);
+		resolveDbEditRight(cfg, selected.personId).then((state) => {
+			if (g === adminGen) dbEditRight.set(state);
 		});
 	});
 
@@ -188,7 +188,7 @@
 	activeRoute={page.url.pathname}
 	completionLocked={$completionGateStore === 'incomplete'}
 	anonymous={$authStore.status !== 'authenticated'}
-	isAdmin={$adminStore === 'admin'}
+	canEditDb={$dbEditRight === 'editor'}
 	toolbar={feedbackEditor.open ? feedbackBar : undefined}
 	toolbarLabel={m.feedback_editor_label()}
 	overlay={feedbackEditor.open ? feedbackOverlay : undefined}

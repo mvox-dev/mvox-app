@@ -1,19 +1,19 @@
-// Is the signed-in person an admin of the selected collective, and at which tier?
+// Which Entu right does the signed-in person hold on the selected collective's database entity?
 import { writable, type Writable } from 'svelte/store';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { reportProblem } from '$lib/problems/reportProblem';
 
-export type AdminState = 'loading' | 'admin' | 'not-admin' | 'error';
+export type EditRightState = 'loading' | 'editor' | 'not-editor' | 'error';
 
-export const adminStore: Writable<AdminState> = writable('loading');
+export const dbEditRight: Writable<EditRightState> = writable('loading');
 
-export function resetAdmin(): void {
-	adminStore.set('loading');
+export function resetDbEditRight(): void {
+	dbEditRight.set('loading');
 }
 
 // entuFetch loads lazily to keep its $env chain out of the root layout's module eval.
-// Rights are read off the database entity (#161); 'not-admin' comes only from a real read,
-// and an unreadable prerequisite is 'error', never a silent "not admin".
+// Rights are read off the database entity (#161); 'not-editor' comes only from a real read,
+// and an unreadable prerequisite is 'error', never a silent "not editor".
 async function readDbRightsLists(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch,
@@ -62,33 +62,33 @@ async function readDbRightsLists(
 	};
 }
 
-export async function resolveAdmin(
+export async function resolveDbEditRight(
 	cfg: EntuCfg,
 	personId: string,
 	fetchImpl: typeof fetch = fetch,
 	dbEntityId?: string
-): Promise<AdminState> {
+): Promise<EditRightState> {
 	try {
 		const rights = await readDbRightsLists(cfg, fetchImpl, dbEntityId);
 		if (rights === 'error') return 'error';
 		const isOwner = rights.owners.includes(personId);
 		const isEditor = rights.editors.includes(personId);
-		return isOwner || isEditor ? 'admin' : 'not-admin';
+		return isOwner || isEditor ? 'editor' : 'not-editor';
 	} catch (e) {
 		reportProblem({ area: 'admin', action: 'reading the admin rights', error: e });
 		return 'error';
 	}
 }
 
-export type OwnerTier = 'owner' | 'editor' | 'none' | 'error';
+export type DbRight = 'owner' | 'editor' | 'none' | 'error';
 
-// Owner, not just admin: an invite onto another person needs db-entity `_owner` (#294).
-export async function resolveOwnerTier(
+// `_owner`, not just the edit right: an invite onto another person needs db-entity `_owner` (#294).
+export async function resolveDbRight(
 	cfg: EntuCfg,
 	personId: string,
 	fetchImpl: typeof fetch = fetch,
 	dbEntityId?: string
-): Promise<OwnerTier> {
+): Promise<DbRight> {
 	try {
 		const rights = await readDbRightsLists(cfg, fetchImpl, dbEntityId);
 		if (rights === 'error') return 'error';

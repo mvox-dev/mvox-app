@@ -29,7 +29,7 @@ vi.mock('$lib/roster/rosterData', async () =>
 	(await import('$lib/testing/mocks/roster')).activeMembersModule()
 );
 
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule({ libraryId: false })
 );
 
@@ -53,7 +53,7 @@ import {
 	resolveCopyNamesMock
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
-import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
 import {
 	DB_A,
 	DB_B,
@@ -110,8 +110,8 @@ beforeEach(() => {
 	listActiveMembersMock.mockImplementation((cfg: { db: string }) =>
 		Promise.resolve(toListRead(membersFor(cfg.db)))
 	);
-	resolveLibrarianMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve({ state: 'librarian', libraryId: cfg.db === DB_A ? 'lib-a' : 'lib-b' })
+	resolveLibraryEditRightMock.mockImplementation((cfg: { db: string }) =>
+		Promise.resolve({ state: 'editor', libraryId: cfg.db === DB_A ? 'lib-a' : 'lib-b' })
 	);
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a1', 'Ada Lovelace']]));

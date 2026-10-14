@@ -11,11 +11,11 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 vi.mock('$lib/admin/roleManagement', async () =>
 	(await import('$lib/testing/mocks/admin')).roleManagementModule({ errors: true })
 );
-vi.mock('$lib/nav/adminStore', async () =>
-	(await import('$lib/testing/mocks/admin')).adminStoreModule()
+vi.mock('$lib/nav/dbRights', async () =>
+	(await import('$lib/testing/mocks/admin')).dbRightsModule()
 );
-vi.mock('$lib/library/librarianStore', async () =>
-	(await import('$lib/testing/mocks/admin')).librarianStoreModule()
+vi.mock('$lib/library/libraryRights', async () =>
+	(await import('$lib/testing/mocks/admin')).libraryRightsModule()
 );
 vi.mock('$lib/profile/linkedIdentities', async () =>
 	(await import('$lib/testing/mocks/admin')).joinStatesModule()
@@ -60,9 +60,9 @@ import {
 	listLibrariansMock,
 	removeAdminMock,
 	removeLibrarianMock,
-	resolveAdminMock,
-	resolveLibrarianMock,
-	resolveOwnerTierMock
+	resolveDbEditRightMock,
+	resolveLibraryEditRightMock,
+	resolveDbRightMock
 } from '$lib/testing/mocks/admin';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import {
@@ -82,7 +82,7 @@ import { renderReady } from '$lib/testing/pages/adminRolesRender';
 
 // Defaults the hoisted handles carried before they moved to the shared mocks.
 listJoinStatesMock.mockResolvedValue({});
-resolveOwnerTierMock.mockResolvedValue('error');
+resolveDbRightMock.mockResolvedValue('error');
 
 const DORA_ADMIN = {
 	id: 'p-dora',
@@ -118,15 +118,15 @@ describe('/admin — access gate', () => {
 		await waitFor(() => {
 			expect(q(container, 'admin-roles-no-collective')).not.toBeNull();
 		});
-		expect(resolveAdminMock).not.toHaveBeenCalled();
+		expect(resolveDbEditRightMock).not.toHaveBeenCalled();
 		expect(listAdminsMock).not.toHaveBeenCalled();
 		expect(listLibrariansMock).not.toHaveBeenCalled();
 	});
 
-	it("resolveAdmin → 'not-admin': the no-access block, and NO role data is fetched (the lists are rights-bearing reads)", async () => {
+	it("resolveDbEditRight → 'not-editor': the no-access block, and NO role data is fetched (the lists are rights-bearing reads)", async () => {
 		selectSampledb();
 		loadOk();
-		resolveAdminMock.mockResolvedValue('not-admin');
+		resolveDbEditRightMock.mockResolvedValue('not-editor');
 
 		const { container } = render(Page);
 		await waitFor(() => {
@@ -138,7 +138,7 @@ describe('/admin — access gate', () => {
 		expect(listAdminsMock).not.toHaveBeenCalled();
 		expect(listLibrariansMock).not.toHaveBeenCalled();
 
-		expect(resolveAdminMock).toHaveBeenCalledWith(
+		expect(resolveDbEditRightMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG),
 			'admin-p',
 			undefined,
@@ -146,10 +146,10 @@ describe('/admin — access gate', () => {
 		);
 	});
 
-	it("resolveAdmin → 'error': the load-error state with retry — a network failure is NEVER rendered as not-admin", async () => {
+	it("resolveDbEditRight → 'error': the load-error state with retry — a network failure is NEVER rendered as not-admin", async () => {
 		selectSampledb();
 		loadOk();
-		resolveAdminMock.mockResolvedValueOnce('error');
+		resolveDbEditRightMock.mockResolvedValueOnce('error');
 
 		const { container } = render(Page);
 		await waitFor(() => {
@@ -157,7 +157,7 @@ describe('/admin — access gate', () => {
 		});
 		expect(q(container, 'admin-roles-no-access')).toBeNull();
 
-		resolveAdminMock.mockResolvedValue('admin');
+		resolveDbEditRightMock.mockResolvedValue('editor');
 		const retry = q<HTMLButtonElement>(container, 'admin-roles-retry-load');
 		expect(retry).not.toBeNull();
 		await fireEvent.click(retry!);
@@ -168,7 +168,7 @@ describe('/admin — access gate', () => {
 });
 
 describe('/admin — role lists', () => {
-	it('renders the admin + librarian lists off listAdmins(cfg, dbEntityId) / listLibrarians(cfg, libraryId) — org from resolveDatabaseEntityId, library from resolveLibrarian (the EXISTING resolutions, no new lookups)', async () => {
+	it('renders the admin + librarian lists off listAdmins(cfg, dbEntityId) / listLibrarians(cfg, libraryId) — org from resolveDatabaseEntityId, library from resolveLibraryEditRight (the EXISTING resolutions, no new lookups)', async () => {
 		selectSampledb();
 		loadOk();
 
@@ -187,7 +187,7 @@ describe('/admin — role lists', () => {
 		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG)
 		);
-		expect(resolveLibrarianMock).toHaveBeenCalledWith(
+		expect(resolveLibraryEditRightMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG),
 			'admin-p',
 			undefined,
@@ -236,10 +236,10 @@ describe('/admin — role lists', () => {
 		expect(container.textContent).not.toContain('(editor)');
 	});
 
-	it('resolveLibrarian answering libraryId: null → the no-library state; listLibrarians is NOT called; the admin list still renders', async () => {
+	it('resolveLibraryEditRight answering libraryId: null → the no-library state; listLibrarians is NOT called; the admin list still renders', async () => {
 		selectSampledb();
 		loadOk();
-		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 
 		const { container } = render(Page);
 		await waitFor(() => {
@@ -249,10 +249,10 @@ describe('/admin — role lists', () => {
 		expect(listLibrariansMock).not.toHaveBeenCalled();
 	});
 
-	it("resolveLibrarian → { state: 'error', libraryId: null }: the load-error state with retry — a FAILED library read is NEVER rendered as \"no library exists\"", async () => {
+	it("resolveLibraryEditRight → { state: 'error', libraryId: null }: the load-error state with retry — a FAILED library read is NEVER rendered as \"no library exists\"", async () => {
 		selectSampledb();
 		loadOk();
-		resolveLibrarianMock.mockResolvedValueOnce({ state: 'error', libraryId: null });
+		resolveLibraryEditRightMock.mockResolvedValueOnce({ state: 'error', libraryId: null });
 
 		const { container } = render(Page);
 		await waitFor(() => {
@@ -262,7 +262,7 @@ describe('/admin — role lists', () => {
 		expect(container.textContent).not.toContain('No library entity is visible');
 		expect(listLibrariansMock).not.toHaveBeenCalled();
 
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		const retry = q<HTMLButtonElement>(container, 'admin-roles-retry-load');
 		expect(retry).not.toBeNull();
 		await fireEvent.click(retry!);
@@ -807,7 +807,7 @@ describe('/admin — #164 self Remove button is NOT rendered on the own row', ()
 });
 
 describe('/admin — write gate (canManage)', () => {
-	it("an org EDITOR (resolveAdmin 'admin', but no _owner value → canManage false) gets the lists READ-ONLY: no combobox, every Remove disabled, a localized explanation — the API would 403 every one of those writes", async () => {
+	it("an org EDITOR (resolveDbEditRight 'editor', but no _owner value → canManage false) gets the lists READ-ONLY: no combobox, every Remove disabled, a localized explanation — the API would 403 every one of those writes", async () => {
 		selectSampledb();
 		loadOk();
 		listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, BELA], false));
@@ -893,13 +893,13 @@ describe('/admin — a collective switch that lands mid-load', () => {
 			releaseAlpha = resolve;
 		});
 
-		resolveAdminMock.mockResolvedValue('admin');
+		resolveDbEditRightMock.mockResolvedValue('editor');
 		resolveDatabaseEntityIdMock.mockImplementation((cfg: { db: string }) =>
 			cfg.db === 'alpha' ? alphaGate.then(() => 'org-alpha') : Promise.resolve('org-beta')
 		);
-		resolveLibrarianMock.mockImplementation((cfg: { db: string }) =>
+		resolveLibraryEditRightMock.mockImplementation((cfg: { db: string }) =>
 			Promise.resolve({
-				state: 'librarian',
+				state: 'editor',
 				libraryId: cfg.db === 'alpha' ? 'lib-alpha' : 'lib-beta'
 			})
 		);
@@ -940,12 +940,12 @@ describe('/admin — a collective switch that lands mid-load', () => {
 });
 
 describe('/admin — navigation entry', () => {
-	it('NAV_ENTRIES carries an admin-only /admin entry (visible ⇔ ctx.isAdmin, same gate as /admin/invite)', () => {
+	it('NAV_ENTRIES carries an admin-only /admin entry (visible ⇔ ctx.canEditDb, same gate as /admin/invite)', () => {
 		const entry = NAV_ENTRIES.find((e) => e.route === '/admin');
 		expect(entry, 'expected a NAV_ENTRIES entry routing to /admin').toBeDefined();
-		expect(entry!.visible({ isAdmin: true, hasMultipleCollectives: false })).toBe(true);
-		expect(entry!.visible({ isAdmin: false, hasMultipleCollectives: false })).toBe(false);
-		expect(entry!.visible({ isAdmin: false, hasMultipleCollectives: true })).toBe(false);
+		expect(entry!.visible({ canEditDb: true, hasMultipleCollectives: false })).toBe(true);
+		expect(entry!.visible({ canEditDb: false, hasMultipleCollectives: false })).toBe(false);
+		expect(entry!.visible({ canEditDb: false, hasMultipleCollectives: true })).toBe(false);
 	});
 });
 

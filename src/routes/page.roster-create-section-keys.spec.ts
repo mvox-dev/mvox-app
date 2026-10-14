@@ -29,7 +29,7 @@ vi.mock('$app/navigation', async () =>
 );
 
 import Page from './roster/+page.svelte';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { createSectionMock } from '$lib/testing/mocks/sections';
 import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
 import {
@@ -46,7 +46,7 @@ afterEach(cleanupResetCreateSectionMocks);
 
 async function renderArrangeReady() {
 	setAuthedWithOneCollective();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(container.querySelector('[data-testid="roster-groups"]')).not.toBeNull();

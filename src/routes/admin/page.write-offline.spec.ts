@@ -28,11 +28,11 @@ vi.mock('$lib/admin/roleManagement', () => ({
 	addLibrarian: h.addLibrarianMock,
 	removeLibrarian: h.removeLibrarianMock
 }));
-vi.mock('$lib/nav/adminStore', async () =>
-	(await import('$lib/testing/mocks/admin')).adminStoreModule()
+vi.mock('$lib/nav/dbRights', async () =>
+	(await import('$lib/testing/mocks/admin')).dbRightsModule()
 );
-vi.mock('$lib/library/librarianStore', async () =>
-	(await import('$lib/testing/mocks/admin')).librarianStoreModule()
+vi.mock('$lib/library/libraryRights', async () =>
+	(await import('$lib/testing/mocks/admin')).libraryRightsModule()
 );
 vi.mock('$lib/profile/linkedIdentities', async () =>
 	(await import('$lib/testing/mocks/admin')).joinStatesModule()
@@ -81,10 +81,10 @@ import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
 	listJoinStatesMock,
-	resolveAdminMock,
+	resolveDbEditRightMock,
 	resolveCollectiveNameMarkerMock,
-	resolveLibrarianMock,
-	resolveOwnerTierMock,
+	resolveLibraryEditRightMock,
+	resolveDbRightMock,
 	updateCollectiveNameMock
 } from '$lib/testing/mocks/admin';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
@@ -99,9 +99,9 @@ const BELA = { id: 'p-bela', name: 'Bela Brauer', role: 'editor' as const, value
 const CILLA = { id: 'p-cilla', name: 'Cilla Cane', role: 'editor' as const, valueIds: ['pv-c'] };
 
 function loadOk() {
-	resolveAdminMock.mockResolvedValue('admin');
+	resolveDbEditRightMock.mockResolvedValue('editor');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
-	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 	h.listAdminsMock.mockResolvedValue({ persons: [ANNA, BELA], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [CILLA], canManage: true });
 	loadRosterMock.mockResolvedValue(toListRead(ROSTER));
@@ -114,7 +114,7 @@ function loadOk() {
 	h.resolveInviteParentMock.mockResolvedValue('org-1');
 	resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	updateCollectiveNameMock.mockResolvedValue(undefined);
-	resolveOwnerTierMock.mockResolvedValue('error');
+	resolveDbRightMock.mockResolvedValue('error');
 	listJoinStatesMock.mockResolvedValue({});
 }
 
@@ -122,10 +122,10 @@ beforeEach(async () => {
 	for (const mock of Object.values(h)) mock.mockReset();
 	listJoinStatesMock.mockReset();
 	loadRosterMock.mockReset();
-	resolveAdminMock.mockReset();
+	resolveDbEditRightMock.mockReset();
 	resolveCollectiveNameMarkerMock.mockReset();
-	resolveLibrarianMock.mockReset();
-	resolveOwnerTierMock.mockReset();
+	resolveLibraryEditRightMock.mockReset();
+	resolveDbRightMock.mockReset();
 	updateCollectiveNameMock.mockReset();
 	listSectionsMock.mockReset();
 	resolveDatabaseEntityIdMock.mockReset();
@@ -235,10 +235,10 @@ describe('/admin — writes while offline (#434 slice 6 review F1)', () => {
 		for (const mock of Object.values(h)) mock.mockClear();
 		listJoinStatesMock.mockClear();
 		loadRosterMock.mockClear();
-		resolveAdminMock.mockClear();
+		resolveDbEditRightMock.mockClear();
 		resolveCollectiveNameMarkerMock.mockClear();
-		resolveLibrarianMock.mockClear();
-		resolveOwnerTierMock.mockClear();
+		resolveLibraryEditRightMock.mockClear();
+		resolveDbRightMock.mockClear();
 		updateCollectiveNameMock.mockClear();
 		listSectionsMock.mockClear();
 		resolveDatabaseEntityIdMock.mockClear();

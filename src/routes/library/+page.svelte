@@ -20,7 +20,7 @@
 	import { createLibraryWrites } from '$lib/library/libraryPageWrites';
 	import AsOfLine from '$lib/components/offline/AsOfLine.svelte';
 	import { resetServedFromCache, servedFromCache } from '$lib/entu/readCache';
-	import { librarianStore } from '$lib/library/librarianStore';
+	import { libraryEditRight } from '$lib/library/libraryRights';
 	import { formatFileSize } from '$lib/library/editionFiles';
 	import { createPresenceRefresh } from '$lib/files/presenceRefresh';
 	import { listSeasons } from '$lib/seasons/entuSeasons';
@@ -50,7 +50,7 @@
 
 	const selected = $derived($selectedCollectiveStore);
 	const isOffline = $derived(!$writesAvailable);
-	const isLibrarian = $derived($librarianStore === 'librarian');
+	const canEditLibrary = $derived($libraryEditRight === 'editor');
 
 	let status = $state<RouteLoadStatus>('loading');
 	const lib = $state(createLibraryState());
@@ -247,7 +247,7 @@
 					/>
 				{/if}
 
-				{#if isLibrarian}
+				{#if canEditLibrary}
 					<section data-testid="librarian-tools" class="rounded-md border border-dashed border-ink-5 px-4 py-3 text-sm">
 						{m.library_librarian_tools()}
 
@@ -279,7 +279,7 @@
 							submit={writes.submitCreateWork}
 						/>
 					</section>
-				{:else if $librarianStore === 'error'}
+				{:else if $libraryEditRight === 'error'}
 					<div data-testid="librarian-load-error" class="flex items-center gap-2" role="alert">
 						<p class="text-xs text-red-700">{m.library_librarian_load_error()}</p>
 						<button
@@ -353,7 +353,7 @@
 								files={fileUploads}
 								{view}
 								actions={treeActions}
-								{isLibrarian}
+								{canEditLibrary}
 								{isOffline}
 							/>
 						{/each}

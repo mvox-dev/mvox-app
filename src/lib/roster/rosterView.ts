@@ -28,9 +28,9 @@ const VIEW_MODE_LABEL: Record<RosterViewMode, () => string> = {
 	arrange: m.roster_view_arrange
 };
 
-export function viewModeOptions(isAdmin: boolean) {
+export function viewModeOptions(canEditDb: boolean) {
 	return (Object.keys(VIEW_MODE_LABEL) as RosterViewMode[])
-		.filter((mode) => mode !== 'arrange' || isAdmin)
+		.filter((mode) => mode !== 'arrange' || canEditDb)
 		.map((mode) => ({
 			value: mode,
 			label: VIEW_MODE_LABEL[mode](),

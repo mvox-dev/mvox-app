@@ -9,11 +9,11 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 vi.mock('$lib/admin/roleManagement', async () =>
 	(await import('$lib/testing/mocks/admin')).roleManagementModule({ errors: true })
 );
-vi.mock('$lib/nav/adminStore', async () =>
-	(await import('$lib/testing/mocks/admin')).adminStoreModule()
+vi.mock('$lib/nav/dbRights', async () =>
+	(await import('$lib/testing/mocks/admin')).dbRightsModule()
 );
-vi.mock('$lib/library/librarianStore', async () =>
-	(await import('$lib/testing/mocks/admin')).librarianStoreModule()
+vi.mock('$lib/library/libraryRights', async () =>
+	(await import('$lib/testing/mocks/admin')).libraryRightsModule()
 );
 vi.mock('$lib/profile/linkedIdentities', async () =>
 	(await import('$lib/testing/mocks/admin')).joinStatesModule()
@@ -50,14 +50,14 @@ import {
 	listAdminsMock,
 	listJoinStatesMock,
 	listLibrariansMock,
-	resolveOwnerTierMock
+	resolveDbRightMock
 } from '$lib/testing/mocks/admin';
 import { ANNA, CILLA, listing, loadOk, selectSampledb } from '$lib/testing/pages/admin';
 import { cleanupClearReset, q } from '$lib/testing/pages/dom';
 import { renderReady } from '$lib/testing/pages/adminRolesRender';
 
 listJoinStatesMock.mockResolvedValue({});
-resolveOwnerTierMock.mockResolvedValue('error');
+resolveDbRightMock.mockResolvedValue('error');
 
 const GHOST_ADMIN_ID = '69c7f8688489bfcb0e8ab0a1';
 const GHOST_LIBRARIAN_ID = '69c7f8688489bfcb0e8ac0c2';

@@ -20,7 +20,7 @@ export interface ArrangeDragDeps {
 	roster: RosterState;
 	arrange: ArrangeState;
 	ops: ArrangeOps;
-	isAdmin: () => boolean;
+	canEditDb: () => boolean;
 	visibleSections: () => SectionNode[];
 	arrangeRows: () => ArrangeRow[];
 }
@@ -177,7 +177,7 @@ export function createArrangeDrag(deps: ArrangeDragDeps) {
 	}
 
 	function reorderableHandleIds(): string[] {
-		if (!deps.isAdmin()) return [];
+		if (!deps.canEditDb()) return [];
 		const ids: string[] = [];
 		function walk(nodes: SectionNode[]): void {
 			for (const n of nodes) {

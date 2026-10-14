@@ -12,11 +12,11 @@ import {
 	listLibrariansMock,
 	removeAdminMock,
 	removeLibrarianMock,
-	resolveAdminMock,
+	resolveDbEditRightMock,
 	resolveCollectiveNameMarkerMock,
 	resolveInviteParentMock,
-	resolveLibrarianMock,
-	resolveOwnerTierMock,
+	resolveLibraryEditRightMock,
+	resolveDbRightMock,
 	resolveParentMock,
 	updateCollectiveNameMock
 } from '$lib/testing/mocks/admin';
@@ -65,9 +65,9 @@ export function selectSampledb(): void {
 }
 
 export function loadOk(): void {
-	resolveAdminMock.mockResolvedValue('admin');
+	resolveDbEditRightMock.mockResolvedValue('editor');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
-	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 	listAdminsMock.mockResolvedValue(listing([ANNA, BELA]));
 	listLibrariansMock.mockResolvedValue(listing([CILLA]));
 	loadRosterMock.mockResolvedValue(toListRead(ROSTER));
@@ -80,7 +80,7 @@ export function loadOk(): void {
 	resolveInviteParentMock.mockResolvedValue('org-1');
 	resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	updateCollectiveNameMock.mockResolvedValue(undefined);
-	resolveOwnerTierMock.mockResolvedValue('error');
+	resolveDbRightMock.mockResolvedValue('error');
 	listJoinStatesMock.mockResolvedValue({});
 }
 
@@ -92,8 +92,8 @@ export function resetAdminMocks(): void {
 		listLibrariansMock,
 		addLibrarianMock,
 		removeLibrarianMock,
-		resolveAdminMock,
-		resolveLibrarianMock,
+		resolveDbEditRightMock,
+		resolveLibraryEditRightMock,
 		resolveDatabaseEntityIdMock,
 		loadRosterMock,
 		listSectionsMock,

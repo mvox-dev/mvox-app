@@ -27,7 +27,7 @@ vi.mock('$app/navigation', async () =>
 
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { resetAdmin } from '$lib/nav/adminStore';
+import { resetDbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
@@ -84,7 +84,7 @@ afterEach(() => {
 	unassignMock.mockReset();
 	createSectionMock.mockReset();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 });
 
 async function createNamed(container: HTMLElement, name: string): Promise<void> {

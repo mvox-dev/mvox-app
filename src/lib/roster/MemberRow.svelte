@@ -5,7 +5,7 @@
 	import SectionPicker from '$lib/sections/SectionPicker.svelte';
 	import type { RosterRow } from '$lib/roster/rosterData';
 	import type { Collective } from '$lib/collectives/types';
-	import type { AdminState } from '$lib/nav/adminStore';
+	import type { EditRightState } from '$lib/nav/dbRights';
 	import type { MemberOpsState, RosterState } from '$lib/roster/rosterPageState';
 	import type { MemberOps } from '$lib/roster/rosterMemberOps';
 	import {
@@ -23,7 +23,7 @@
 		row,
 		showSection,
 		groupSectionId,
-		admin,
+		editRight,
 		selected,
 		isOffline,
 		roster,
@@ -34,7 +34,7 @@
 		row: RosterRow;
 		showSection: boolean;
 		groupSectionId: string | null;
-		admin: AdminState;
+		editRight: EditRightState;
 		selected: Collective | null;
 		isOffline: boolean;
 		roster: RosterState;
@@ -75,7 +75,7 @@
 	{#if showSection && rowSectionNames.length > 0}
 		<span data-testid="roster-row-section" class="text-xs text-ink-2">{rowSectionNames.join(', ')}</span>
 	{/if}
-	{#if admin === 'admin' && memberOps.recordEditorMemberId !== row.memberId}
+	{#if editRight === 'editor' && memberOps.recordEditorMemberId !== row.memberId}
 		<button
 			type="button"
 			data-testid="roster-row-card-{row.memberId}"
@@ -85,13 +85,13 @@
 			<span class="sr-only">{m.roster_record_edit_label()} <RedactedText>{row.profileName ?? row.name}</RedactedText></span>
 		</button>
 	{/if}
-	{#if admin === 'admin' && memberOps.recordEditorMemberId === row.memberId}
+	{#if editRight === 'editor' && memberOps.recordEditorMemberId === row.memberId}
 		<div class="mt-1 flex flex-col gap-2">
 			<MemberRecordEditor {row} {memberOps} {ops} {isOffline} />
 			<MemberInvite {row} {roster} {memberOps} {ops} {isOffline} />
 		</div>
 	{/if}
-	{#if admin === 'admin' && row.personId !== selected?.personId && (memberOps.recordEditorMemberId === row.memberId || memberOps.pendingDeactivateId === row.memberId)}
+	{#if editRight === 'editor' && row.personId !== selected?.personId && (memberOps.recordEditorMemberId === row.memberId || memberOps.pendingDeactivateId === row.memberId)}
 		<MemberDeactivate {row} {selected} {memberOps} {ops} {isOffline} />
 	{/if}
 	{#if row.ownerIds?.includes(selected?.personId ?? '') && !roster.sectionsError}

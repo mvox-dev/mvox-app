@@ -21,7 +21,7 @@
 		files: EditionFilesState;
 		view: LendingView;
 		actions: TreeActions;
-		isLibrarian: boolean;
+		canEditLibrary: boolean;
 		isOffline: boolean;
 	}
 
@@ -32,7 +32,7 @@
 		files,
 		view,
 		actions,
-		isLibrarian,
+		canEditLibrary,
 		isOffline
 	}: Props = $props();
 
@@ -60,7 +60,7 @@
 		onclick={() => actions.toggleWork(work.id)}
 	>
 		<span class="flex flex-col">
-			<span class="text-sm text-ink">{work.name}{#if isLibrarian}{@const avail = view.workAvailability(work.id)}{#if avail.total > 0} ({m.library_work_availability(avail)}){/if}{/if}</span>
+			<span class="text-sm text-ink">{work.name}{#if canEditLibrary}{@const avail = view.workAvailability(work.id)}{#if avail.total > 0} ({m.library_work_availability(avail)}){/if}{/if}</span>
 			<span class="text-xs text-ink-2">{work.composer || m.library_work_composer_unknown()}</span>
 		</span>
 		<span aria-hidden="true">{isOpen ? '▾' : '▸'}</span>
@@ -104,14 +104,14 @@
 				<p class="text-xs text-ink-2">{m.library_editions_empty()}</p>
 			{:else}
 				{#each editions as edition (edition.id)}
-					<EditionRow {work} {edition} {lib} {files} {view} {actions} {isLibrarian} {isOffline} />
+					<EditionRow {work} {edition} {lib} {files} {view} {actions} {canEditLibrary} {isOffline} />
 				{/each}
 			{/if}
 
 			<!-- #271 — after the whole chain, not inside a branch: a work with no editions is
 			     the one that needs this most. Only once 'idle': inserting into a list never
 			     fetched would leave the work half-populated. -->
-			{#if isLibrarian && lib.editionNodeStatus.get(work.id) === 'idle'}
+			{#if canEditLibrary && lib.editionNodeStatus.get(work.id) === 'idle'}
 				<InlineCreateForm
 					kind="edition"
 					suffix="-{work.id}"
