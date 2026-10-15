@@ -602,6 +602,28 @@ describe('season card #277 review F3 — a series cascade that resolves after a 
 		expect(loadFullAgendaMock).toHaveBeenCalledTimes(agendaLoadsBeforeLanding);
 	});
 
+	it('#926 — a SERIES delete running leaves the other season’s expand enabled', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		serveSeriesPerSeason();
+		deleteEventSeriesMock.mockImplementation(() => new Promise<number>(() => {}));
+		const container = await renderReady();
+
+		await openPanelForSeason(container, 'Season 2026');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-series-series-a1')).not.toBeNull();
+		});
+		await armAndConfirmSeriesDelete(container, 'series-a1');
+		await waitFor(() => {
+			expect(deleteEventSeriesMock).toHaveBeenCalled();
+		});
+
+		const expands = Array.from(
+			container.querySelectorAll<HTMLButtonElement>('[data-testid="season-card-expand"]')
+		);
+		expect(expands.length).toBeGreaterThan(0);
+		expect(expands.every((b) => !b.disabled)).toBe(true);
+	});
+
 	it('a REJECTED cascade for A after the switch paints no error slot in B’s panel', async () => {
 		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
 		serveSeriesPerSeason();
