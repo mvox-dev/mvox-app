@@ -7,12 +7,17 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bracket')
 );
 vi.mock('$app/state', async () => (await import('$lib/testing/mocks/events')).appStateModule());
+vi.mock('$lib/repertoire/managePickers', async (importOriginal) =>
+	(await import('$lib/testing/mocks/managePickers')).managePickersGatedModule(importOriginal)
+);
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
 import {
+	installHoldWorld,
 	installWorld,
+	renameCollective,
 	renderEventWorks,
 	useRepertoireWiringPage,
 	type WorldOptions
@@ -188,6 +193,55 @@ describe('#321 review F2 — the event page repertoire pickers state a truncated
 
 		expect(container.querySelector(`[data-testid="${WORK_OPTION}"]`)).toBeNull();
 		expect(container.querySelector(`[data-testid="${PROGRAMME_OPTION}"]`)).toBeNull();
+	});
+});
+
+
+describe('#311 — across a reload the Add Work picker hides only once a load completes empty', () => {
+	const SELECT = '[data-testid="work-manage-add-work-select"]';
+
+	async function reloadWithPickersHeld() {
+		const world = installHoldWorld({ seasonEditor: true, eventEditor: true, programItems: [] });
+		const { container } = await renderEventWorks();
+		await vi.waitFor(() => {
+			expect(container.querySelector(`${SELECT} option[value="work-3"]`)).not.toBeNull();
+		});
+		world.arm();
+		renameCollective('Renamed choir');
+		await vi.waitFor(() => expect(world.heldCount()).toBe(1));
+		await vi.waitFor(() => {
+			expect(container.querySelector('[data-testid="work-row"]')).not.toBeNull();
+		});
+		expect(container.querySelector(SELECT), 'reload in flight: the select stays').not.toBeNull();
+		return { world, container };
+	}
+
+	it('resolving works-EMPTY: the select stays through the window, then hides', async () => {
+		const { world, container } = await reloadWithPickersHeld();
+		world.release({ worksEmpty: true });
+		await vi.waitFor(() => expect(container.querySelector(SELECT)).toBeNull());
+		expect(container.querySelector('[data-testid="work-manage-add-work-button"]')).toBeNull();
+		expect(container.querySelectorAll('[data-testid="work-row"]').length).toBeGreaterThan(0);
+	});
+
+	it('resolving NON-empty: the select never vanishes, and ends with the real options', async () => {
+		const { world, container } = await reloadWithPickersHeld();
+		world.release();
+		await vi.waitFor(() => {
+			expect(container.querySelector(`${SELECT} option[value="work-3"]`)).not.toBeNull();
+		});
+	});
+
+	it('a FAILED picker load never hides the select', async () => {
+		const { world, container } = await reloadWithPickersHeld();
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		world.release({ fail: true });
+		await new Promise((r) => setTimeout(r, 30));
+		expect(errorSpy.mock.calls.map((call) => call[0])).toEqual(
+			expect.arrayContaining(['repertoire pickers: loading the library works failed'])
+		);
+		errorSpy.mockRestore();
+		expect(container.querySelector(SELECT)).not.toBeNull();
 	});
 });
 

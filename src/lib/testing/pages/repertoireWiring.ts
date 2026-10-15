@@ -7,6 +7,8 @@ import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { resetAppState } from '$lib/testing/appReset';
 import { pageStub } from '$lib/testing/mocks/events';
 import { signIn } from '$lib/testing/session';
+import { collectiveState } from '$lib/collectives/store';
+import { pickerGate } from '$lib/testing/mocks/managePickers';
 
 const EVENT_START = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
 
@@ -144,6 +146,42 @@ export function postsTo(fetchMock: ReturnType<typeof installWorld>, fragment: st
 		([url, init]) =>
 			String(url).includes(fragment) && (init as RequestInit | undefined)?.method === 'POST'
 	);
+}
+
+// The picker read waits at the gate; on release the works read answers as `mode` says.
+export function installHoldWorld(options: WorldOptions = {}) {
+	const base = installWorld(options);
+	let mode: 'normal' | 'worksEmpty' | 'fail' = 'normal';
+	pickerGate.armed = false;
+	pickerGate.waiting = [];
+	vi.stubGlobal(
+		'fetch',
+		vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+			const url = String(input);
+			const libraryRead = url.includes('_type.string=work') || url.includes('_type.string=edition');
+			if (libraryRead && mode === 'fail') return json({ error: 'boom' }, 500);
+			if (url.includes('_type.string=work') && mode === 'worksEmpty') return json({ entities: [] });
+			return base(input, init);
+		})
+	);
+	return {
+		arm: () => (pickerGate.armed = true),
+		heldCount: () => pickerGate.waiting.length,
+		release(next: { worksEmpty?: boolean; fail?: boolean } = {}) {
+			mode = next.fail ? 'fail' : next.worksEmpty ? 'worksEmpty' : 'normal';
+			pickerGate.armed = false;
+			for (const go of pickerGate.waiting.splice(0)) go();
+		}
+	};
+}
+
+// A rename republishes the selected collective: the event page reloads in place.
+export function renameCollective(name: string): void {
+	collectiveState.set({
+		status: 'ready',
+		collectives: [{ db: 'sampledb', name, personId: 'person-p' }],
+		erroredDbs: []
+	});
 }
 
 export function useRepertoireWiringPage(): void {
