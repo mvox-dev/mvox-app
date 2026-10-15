@@ -34,13 +34,12 @@ Outside the lint:
 
 ## Fallback and the way back
 
-Moved aside, not deleted: `teams/mvox-dev/memory/fallback/` holds the 14 old markdown memory
-files plus `pipeline-args/` (89 JSON) and `research/` (53 JSON), unchanged. The lint does not
-read it; the polyphony fence and CI notes-only path already cover `teams/mvox-dev/memory/`.
-The lead's harness auto-memory files move to a fallback directory beside them (lead's step;
-see the report). Way back: revert PR #901's squash commit on main.
+GATE 3 ruled 2026-10-15 (Mihkel's go): `teams/mvox-dev/memory/fallback/` (157 files) and
+`03-ruled-dead.md` are deleted; git holds both at `fd701a4c`. The lead's harness auto-memory
+fallback is deleted too; a tarball of it is kept outside the repo at
+`~/.claude/memory-fallback-autolead-2026-10-15.tgz`. Way back: `git checkout fd701a4c -- <path>`.
 
-## Events that must happen before GATE 3
+## Events that had to happen before GATE 3 (all ran by 2026-10-15)
 
 1. A cold start: `/mvox-wake` reads `memory/rules.yaml` + `memory/team-lead.yaml` and restores
    the task list from `current`.

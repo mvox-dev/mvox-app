@@ -22,10 +22,10 @@ facts:
     ref: teams/mvox-dev/docs
     refute: "ls teams/mvox-dev/docs docs"
     verified: "2026-10-14"
-  - fact: "The pre-kit markdown memory sits in teams/mvox-dev/memory/fallback/ until GATE 3 rules its deletion; nothing reads it."
-    ref: teams/mvox-dev/memory/fallback/README.md
-    refute: "=ref"
-    verified: "2026-10-14"
+  - fact: "GATE 3 deleted the pre-kit memory fallback on 2026-10-15; git holds it at fd701a4c (teams/mvox-dev/memory/fallback/)."
+    ref: teams/mvox-dev/memory-adoption/05-debt.md
+    refute: "git show fd701a4c:teams/mvox-dev/memory/fallback/README.md fails"
+    verified: "2026-10-15"
   - fact: "Kit PRs merge with a merge commit, never squash, so git subtree pull keeps working."
     ref: teams/mvox-dev/memory-adoption/06-report.md
     refute: "git subtree pull --prefix memory-kit <kit-url> <tag> --squash fails after a kit PR merged"
