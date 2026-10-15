@@ -42,7 +42,7 @@ const testEntries: NavEntry[] = [
 		label: () => 'Invite',
 		route: '/admin/invite',
 		icon: '<svg data-testid="icon-invite"></svg>',
-		visible: (ctx) => ctx.canEditDb,
+		visible: (ctx) => ctx.hasMultipleCollectives,
 	},
 ];
 
@@ -59,7 +59,7 @@ describe('NavShell', () => {
 		expect(container.querySelector('nav')).toBeNull();
 	});
 
-	it('renders nav with member entries for authenticated user, hides admin entry', () => {
+	it('renders nav with member entries for authenticated user, hides a gated entry', () => {
 		render(NavShell, {
 			props: {
 				children: testChildren,
@@ -74,13 +74,13 @@ describe('NavShell', () => {
 		expect(screen.queryByText('Invite')).toBeNull();
 	});
 
-	it('renders admin entry when canEditDb is true', () => {
+	it('renders a gated entry when its context flag is true', () => {
 		render(NavShell, {
 			props: {
 				children: testChildren,
 				entries: testEntries,
 				activeRoute: '/',
-				canEditDb: true,
+				hasMultipleCollectives: true,
 			},
 		});
 		expect(screen.getByText('Invite')).toBeTruthy();
@@ -227,20 +227,6 @@ describe('NavShell — collective switcher', () => {
 		});
 		expect(screen.getByText('Collectives')).toBeTruthy();
 	});
-
-	it('shows both invite and collectives entries when both flags are true', () => {
-		render(NavShell, {
-			props: {
-				children: testChildren,
-				entries: entriesWithCollectives,
-				activeRoute: '/',
-				canEditDb: true,
-				hasMultipleCollectives: true,
-			},
-		});
-		expect(screen.getByText('Invite')).toBeTruthy();
-		expect(screen.getByText('Collectives')).toBeTruthy();
-	});
 });
 
 describe('NavShell — prefix route matching', () => {
@@ -274,7 +260,7 @@ describe('NavShell — prefix route matching', () => {
 				children: testChildren,
 				entries: testEntries,
 				activeRoute: '/admin/invite',
-				canEditDb: true,
+				hasMultipleCollectives: true,
 			},
 		});
 		const inviteLink = screen.getByText('Invite').closest('a');
@@ -292,7 +278,7 @@ describe('NavShell — prefix route matching', () => {
 				label: () => 'Admin',
 				route: '/admin',
 				icon: '<svg></svg>',
-				visible: (ctx) => ctx.canEditDb,
+				visible: (ctx) => ctx.hasMultipleCollectives,
 			},
 		];
 		const { container } = render(NavShell, {
@@ -300,7 +286,7 @@ describe('NavShell — prefix route matching', () => {
 				children: testChildren,
 				entries: nested,
 				activeRoute: '/admin/invite',
-				canEditDb: true,
+				hasMultipleCollectives: true,
 			},
 		});
 		const active = Array.from(container.querySelectorAll('a[aria-current="page"]'));
@@ -316,7 +302,7 @@ describe('NavShell — prefix route matching', () => {
 				label: () => 'Admin',
 				route: '/admin',
 				icon: '<svg></svg>',
-				visible: (ctx) => ctx.canEditDb,
+				visible: (ctx) => ctx.hasMultipleCollectives,
 			},
 		];
 		const { container } = render(NavShell, {
@@ -324,7 +310,7 @@ describe('NavShell — prefix route matching', () => {
 				children: testChildren,
 				entries: nested,
 				activeRoute: '/admin',
-				canEditDb: true,
+				hasMultipleCollectives: true,
 			},
 		});
 		const active = Array.from(container.querySelectorAll('a[aria-current="page"]'));
@@ -362,7 +348,7 @@ describe('NavShell — no visible entries', () => {
 				label: () => 'Invite',
 				route: '/admin/invite',
 				icon: '<svg></svg>',
-				visible: (ctx) => ctx.canEditDb,
+				visible: (ctx) => ctx.hasMultipleCollectives,
 			},
 		];
 		const { container } = render(NavShell, {
@@ -370,7 +356,7 @@ describe('NavShell — no visible entries', () => {
 				children: testChildren,
 				entries: allHidden,
 				activeRoute: '/',
-				canEditDb: false,
+				hasMultipleCollectives: false,
 			},
 		});
 		expect(container.querySelector('nav')).toBeNull();

@@ -111,7 +111,6 @@ function q<T extends HTMLElement>(root: ParentNode, testid: string): T | null {
 
 function renderShell(opts: {
 	activeRoute?: string;
-	canEditDb?: boolean;
 	hasMultipleCollectives?: boolean;
 }) {
 	return render(NavShell, {
@@ -119,7 +118,6 @@ function renderShell(opts: {
 			children: testChildren,
 			entries: NAV_ENTRIES,
 			activeRoute: opts.activeRoute ?? '/',
-			canEditDb: opts.canEditDb ?? false,
 			hasMultipleCollectives: opts.hasMultipleCollectives ?? false
 		}
 	});
@@ -182,44 +180,19 @@ afterEach(() => {
 	resetAppState();
 });
 
-describe('#140 — NAV_ENTRIES after the merge', () => {
-	it('carries exactly 6 entries — the separate invite entry is gone; links joined (#256); collectives left with its page (#338)', () => {
-		expect(NAV_ENTRIES.map((e) => e.key)).toHaveLength(6);
-		expect(NAV_ENTRIES.find((e) => e.key === 'invite')).toBeUndefined();
-		expect(NAV_ENTRIES.find((e) => e.route === '/admin/invite')).toBeUndefined();
-	});
-
-	it('keeps a single admin-only entry routing to /admin (visible ⇔ ctx.canEditDb)', () => {
-		const adminEntries = NAV_ENTRIES.filter((e) => e.route.startsWith('/admin'));
-		expect(adminEntries).toHaveLength(1);
-		const admin = adminEntries[0];
-		expect(admin.route).toBe('/admin');
-		expect(admin.visible({ canEditDb: true, hasMultipleCollectives: false })).toBe(true);
-		expect(admin.visible({ canEditDb: false, hasMultipleCollectives: false })).toBe(false);
-		expect(admin.visible({ canEditDb: false, hasMultipleCollectives: true })).toBe(false);
+describe('#916 — NAV_ENTRIES: five tabs, Admin lives under Profile', () => {
+	it('carries exactly 5 entries in order, none routing under /admin (#916; invite #140, links #256, collectives #338)', () => {
+		expect(NAV_ENTRIES.map((e) => e.key)).toEqual(['agenda', 'roster', 'profile', 'library', 'links']);
+		expect(NAV_ENTRIES.find((e) => e.route.startsWith('/admin'))).toBeUndefined();
 	});
 });
 
-describe('#140 — NavShell × real NAV_ENTRIES', () => {
-	it('renders exactly 6 top-level nav entries for a full-context admin (#256 added links; #338 removed collectives)', () => {
-		const { container } = renderShell({ canEditDb: true, hasMultipleCollectives: true });
-		expect(navAnchors(container)).toHaveLength(6);
-	});
-
-	it('renders an Admin entry for admins — and NO separate Invite entry', () => {
-		const { container, getByText, queryByText } = renderShell({ canEditDb: true });
-		const adminLink = getByText('Admin').closest('a');
-		expect(adminLink?.getAttribute('href')).toBe('/admin');
-		expect(queryByText('Invite')).toBeNull();
-		expect(
-			navAnchors(container).filter((a) => a.getAttribute('href') === '/admin/invite')
-		).toHaveLength(0);
-	});
-
-	it('hides the Admin entry from non-admins — 5 member entries (#256: links is member-visible, members READ the collection), no admin affordance', () => {
-		const { container, queryByText } = renderShell({ canEditDb: false });
-		expect(queryByText('Admin')).toBeNull();
-		expect(queryByText('Invite')).toBeNull();
+describe('#916 — NavShell × real NAV_ENTRIES', () => {
+	it.each([
+		['an admin with several collectives', true],
+		['a member with one collective', false]
+	])('renders the same 5 top-level entries for %s', (_who, hasMultipleCollectives) => {
+		const { container, queryByText } = renderShell({ hasMultipleCollectives });
 		expect(navAnchors(container).map((a) => a.getAttribute('href'))).toEqual([
 			'/',
 			'/roster',
@@ -227,25 +200,22 @@ describe('#140 — NavShell × real NAV_ENTRIES', () => {
 			'/library',
 			'/links'
 		]);
+		expect(queryByText('Admin')).toBeNull();
+		expect(queryByText('Invite')).toBeNull();
 	});
 
-	it('highlights the Admin tab on /admin — the single aria-current entry', () => {
-		const { container, getByText } = renderShell({ activeRoute: '/admin', canEditDb: true });
-		const adminLink = getByText('Admin').closest('a');
-		expect(adminLink?.getAttribute('aria-current')).toBe('page');
-		expect(container.querySelectorAll('a[aria-current="page"]')).toHaveLength(1);
-	});
+	it.each(['/profile', '/admin', '/admin/invite'])(
+		'highlights the Profile tab on %s — the single aria-current entry',
+		(activeRoute) => {
+			const { container } = renderShell({ activeRoute });
+			const active = Array.from(container.querySelectorAll('a[aria-current="page"]'));
+			expect(active.map((a) => a.getAttribute('href'))).toEqual(['/profile']);
+		}
+	);
 
-	it('highlights the Admin tab on /admin/invite too (prefix match — the merged tab owns the whole /admin subtree)', () => {
-		const { container, getByText } = renderShell({
-			activeRoute: '/admin/invite',
-			canEditDb: true
-		});
-		const adminLink = getByText('Admin').closest('a');
-		expect(adminLink?.getAttribute('aria-current')).toBe('page');
-		const active = Array.from(container.querySelectorAll('a[aria-current="page"]'));
-		expect(active.map((a) => a.getAttribute('href'))).toEqual(['/admin']);
-		expect(container.querySelectorAll('.nav-entry--active')).toHaveLength(1);
+	it('does not highlight Profile on a sibling route sharing a string prefix', () => {
+		const { container } = renderShell({ activeRoute: '/administrivia' });
+		expect(container.querySelectorAll('a[aria-current="page"]')).toHaveLength(0);
 	});
 });
 

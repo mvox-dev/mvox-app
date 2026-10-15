@@ -2,7 +2,6 @@
 import * as m from '$lib/paraglide/messages';
 
 export interface NavContext {
-	canEditDb: boolean;
 	hasMultipleCollectives: boolean;
 }
 
@@ -10,6 +9,8 @@ export interface NavEntry {
 	key: string;
 	label: () => string;
 	route: string;
+	/** Further route subtrees this tab is current on. */
+	alsoActiveOn?: string[];
 	icon: string;
 	visible: (ctx: NavContext) => boolean;
 }
@@ -21,8 +22,6 @@ const rosterIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 const profileIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2"/></svg>';
 
 const libraryIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
-
-const adminIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/></svg>';
 
 const linksIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
 
@@ -45,6 +44,8 @@ export const NAV_ENTRIES: NavEntry[] = [
 		key: 'profile',
 		label: () => m.nav_profile(),
 		route: '/profile',
+		// The collective's admin section sits at the end of /profile (#916).
+		alsoActiveOn: ['/admin'],
 		icon: profileIcon,
 		visible: () => true,
 	},
@@ -54,13 +55,6 @@ export const NAV_ENTRIES: NavEntry[] = [
 		route: '/library',
 		icon: libraryIcon,
 		visible: () => true,
-	},
-	{
-		key: 'admin',
-		label: () => m.nav_admin(),
-		route: '/admin',
-		icon: adminIcon,
-		visible: (ctx) => ctx.canEditDb,
 	},
 	{
 		// Every member reads the links; only the page's own write controls check a right.

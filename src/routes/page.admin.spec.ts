@@ -48,7 +48,6 @@ vi.mock('$lib/entu-config', async () =>
 import Page from './admin/+page.svelte';
 import type { RolePerson } from '$lib/admin/roleManagement';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { NAV_ENTRIES } from '$lib/nav/entries';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
@@ -936,16 +935,6 @@ describe('/admin — a collective switch that lands mid-load', () => {
 		expect(q(container, 'admin-roles-admins-read-only')).not.toBeNull();
 		expect(q(section(container, 'admin-roles-admins'), 'admin-add-admin-select')).toBeNull();
 		expect(listAdminsMock.mock.calls.map((c: unknown[]) => c[1])).not.toContain('org-alpha');
-	});
-});
-
-describe('/admin — navigation entry', () => {
-	it('NAV_ENTRIES carries an admin-only /admin entry (visible ⇔ ctx.canEditDb, same gate as /admin/invite)', () => {
-		const entry = NAV_ENTRIES.find((e) => e.route === '/admin');
-		expect(entry, 'expected a NAV_ENTRIES entry routing to /admin').toBeDefined();
-		expect(entry!.visible({ canEditDb: true, hasMultipleCollectives: false })).toBe(true);
-		expect(entry!.visible({ canEditDb: false, hasMultipleCollectives: false })).toBe(false);
-		expect(entry!.visible({ canEditDb: false, hasMultipleCollectives: true })).toBe(false);
 	});
 });
 
