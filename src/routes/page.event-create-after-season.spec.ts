@@ -378,7 +378,7 @@ describe('#167 review F1 — a lapsed season alongside a just-created one', () =
 });
 
 describe('#167 review F2 — the database-entity answer is not applied to one gate only', () => {
-	it('a CURRENT season with no visible rights + `_owner` on the database entity → event creation AND season creation AND repertoire management, not a contradictory mix', async () => {
+	it('a CURRENT season with no visible rights + `_owner` on the database entity → event creation AND season creation, not a contradictory mix', async () => {
 		loadFullAgendaMock.mockResolvedValue(currentSeasonAgenda(currentSeasonNoVisibleRights()));
 		resolveManageRightsMock.mockResolvedValue('editor');
 		const container = await renderReadyWithRow();
@@ -388,19 +388,6 @@ describe('#167 review F2 — the database-entity answer is not applied to one ga
 		});
 		await waitFor(() => {
 			expect(q(container, 'season-create')).not.toBeNull();
-		});
-		await waitFor(() => {
-			expect(listWorksMock).toHaveBeenCalled();
-		});
-		expect(listRepertoireItemsMock).toHaveBeenCalledWith(expect.anything(), CURRENT_SEASON_ID);
-		await waitFor(() => {
-			expect(loadWorksByEventIdMock).toHaveBeenCalledWith(
-				expect.anything(),
-				['ev-1'],
-				CURRENT_SEASON_ID,
-				expect.anything(),
-				{ includeInactive: true, cache: 'store' }
-			);
 		});
 	});
 
@@ -413,7 +400,6 @@ describe('#167 review F2 — the database-entity answer is not applied to one ga
 		expect(q(container, 'season-card-expand')).toBeNull();
 		expect(q(container, 'event-create')).toBeNull();
 		expect(q(container, 'season-create')).toBeNull();
-		expect(listWorksMock).not.toHaveBeenCalled();
 		expect(loadWorksByEventIdMock).not.toHaveBeenCalledWith(
 			expect.anything(),
 			expect.anything(),
@@ -456,58 +442,8 @@ describe('#167 review F3 — the database-entity probe is not paid per agenda lo
 	});
 });
 
-describe('#167 review round 2, F1 — the upgraded works read is not clobbered by the filtered one it raced', () => {
-	const retiredRow: WorkRow = {
-		id: 'ri-retired',
-		kind: 'repertoire',
-		workId: 'w-1',
-		editionId: '',
-		workName: 'Vana laul',
-		composer: '',
-		status: 'retired',
-		editionName: '',
-		ordinal: null,
-		fileId: '',
-		fileName: '',
-		externalLinks: [],
-		canBorrow: false,
-		notes: ''
-	};
-
-	it('the FILTERED read settling LAST does not drop the retired rows the database-entity upgrade fetched', async () => {
-		loadFullAgendaMock.mockResolvedValue(currentSeasonAgenda(currentSeasonNoVisibleRights()));
-		resolveManageRightsMock.mockResolvedValue('editor');
-
-		let releaseFiltered: (value: Record<string, WorkRow[]>) => void = () => {};
-		const filtered = new Promise<Record<string, WorkRow[]>>((resolve) => {
-			releaseFiltered = resolve;
-		});
-		loadWorksByEventIdMock.mockImplementation(
-			(
-				_cfg: unknown,
-				_ids: unknown,
-				_seasonId: unknown,
-				_fetch: unknown,
-				opts: { includeInactive: boolean }
-			) => (opts.includeInactive ? Promise.resolve({ 'ev-1': [retiredRow] }) : filtered)
-		);
-
-		const container = await renderReadyWithRow();
-
-		await waitFor(() => {
-			expect(q(container, 'works-line')).not.toBeNull();
-		});
-
-		releaseFiltered({});
-		await flush();
-
-		expect(q(container, 'works-line')).not.toBeNull();
-		expect(q(container, 'works-manage-empty')).toBeNull();
-	});
-});
-
 describe('#167 review round 2, F2 — a visible grant on the manageable season does not suppress the probe', () => {
-	it('lapsed current season with NO visible rights + a future season that HAS them: the database entity is still asked, so repertoire management is not left dead under live controls', async () => {
+	it('lapsed current season with NO visible rights + a future season that HAS them: the database entity is still asked', async () => {
 		const lapsed: Season = {
 			id: 'season-lapsed',
 			name: 'Season 2025',
@@ -549,22 +485,9 @@ describe('#167 review round 2, F2 — a visible grant on the manageable season d
 				'person-p'
 			);
 		});
-		await waitFor(() => {
-			expect(listWorksMock).toHaveBeenCalled();
-		});
-		expect(listRepertoireItemsMock).toHaveBeenCalledWith(expect.anything(), lapsed.id);
-		await waitFor(() => {
-			expect(loadWorksByEventIdMock).toHaveBeenCalledWith(
-				expect.anything(),
-				['ev-1'],
-				lapsed.id,
-				expect.anything(),
-				{ includeInactive: true, cache: 'store' }
-			);
-		});
 	});
 
-	it('fail-closed on the same shape: no database-entity grant leaves the current season’s repertoire surface read-only and filtered', async () => {
+	it('fail-closed on the same shape: no database-entity grant leaves the current season’s works read filtered', async () => {
 		const lapsed: Season = {
 			id: 'season-lapsed',
 			name: 'Season 2025',

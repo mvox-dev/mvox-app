@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { ComponentProps } from 'svelte';
-	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import AgendaList from '$lib/agenda/AgendaList.svelte';
 	import AgendaMonthView from '$lib/agenda/AgendaMonthView.svelte';
@@ -9,7 +8,7 @@
 	import ListOfStuff from '$lib/components/ListOfStuff.svelte';
 	import { agendaViewStore } from '$lib/preferences/agendaView';
 	import { completionGateStore } from '$lib/profile/completionGate';
-	import { attendancePanelOf, myAttendanceByEventIdOf } from '$lib/agenda/agendaWorksManage';
+	import { attendancePanelOf, myAttendanceByEventIdOf } from '$lib/agenda/agendaAttendanceView';
 	import type { AgendaLoadState } from '$lib/agenda/agendaLoad';
 	import type { AgendaPageView } from '$lib/agenda/agendaPageView.svelte';
 
@@ -21,7 +20,6 @@
 		selected,
 		pendingEventIds,
 		justCreatedEventId,
-		onpdfclick,
 		onrsvpchange,
 		ontakeattendance,
 		onattendancetoggle,
@@ -32,7 +30,6 @@
 		selected: { db: string };
 		pendingEventIds: Set<string>;
 		justCreatedEventId: string | null;
-		onpdfclick: ListProps['onpdfclick'];
 		onrsvpchange: ListProps['onrsvpchange'];
 		ontakeattendance: ListProps['ontakeattendance'];
 		onattendancetoggle: Parameters<typeof attendancePanelOf>[1];
@@ -93,10 +90,6 @@
 		recentItems={view.filteredRecentItems}
 		conductorEventIds={ag.attendanceEventIds}
 		{myAttendanceByEventId}
-		worksByEventId={ag.worksByEventId}
-		worksManage={view.worksManage}
-		heldFileIds={ag.heldFileIds}
-		partLinkDb={selected.db}
 		scheduleItemsByEventId={ag.scheduleByEventId}
 		{attendancePanel}
 		{justCreatedEventId}
@@ -104,7 +97,6 @@
 		recentEmptyState={ag.agendaTypeFilter !== 'all' && ag.recentItems.length > 0
 			? agendaRecentFilterEmptyState
 			: undefined}
-		{onpdfclick}
 		{onrsvpchange}
 		{ontakeattendance}
 	/>
@@ -118,11 +110,3 @@
 	/>
 {/if}
 </ListOfStuff>
-{#if ag.manageError}
-	<FormError data-testid="repertoire-manage-error" class="pt-2">
-		{m.repertoire_manage_error()}
-	</FormError>
-{/if}
-<div data-testid="repertoire-manage-status" role="status" aria-live="polite" class="sr-only">
-	{ag.manageStatus}
-</div>

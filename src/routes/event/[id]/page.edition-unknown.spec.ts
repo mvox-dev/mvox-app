@@ -3,7 +3,7 @@
 // The work-edition picker says unknown for a zero-match row under a truncated
 // `listAllEditions` read, then states the fact once that work's scoped read lands complete.
 // Real page and data layer; only the wire fetch is stubbed.
-import { render, waitFor } from '@testing-library/svelte';
+import { cleanup, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
@@ -226,6 +226,16 @@ describe('/event/[id] #329 — a zero-match row under a TRUNCATED edition read s
 		]);
 		expect(li.querySelector('[data-testid="work-edition-unknown"]')).toBeNull();
 		expect(li.querySelector('[data-testid="work-no-edition"]')).toBeNull();
+	});
+
+	it('a MATCHED row renders byte-identically under truncated and complete reads', async () => {
+		const truncatedRender = await renderWorks({ editionCount: 4000 });
+		const truncatedHtml = workRowOf(truncatedRender.container, 'Spem in alium').outerHTML;
+		cleanup();
+		vi.unstubAllGlobals();
+
+		const completeRender = await renderWorks();
+		expect(workRowOf(completeRender.container, 'Spem in alium').outerHTML).toBe(truncatedHtml);
 	});
 });
 

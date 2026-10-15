@@ -272,15 +272,6 @@ function repertoireSection(container: HTMLElement): HTMLElement {
 	return section;
 }
 
-function agendaWorksExpanded(container: HTMLElement): HTMLElement {
-	const panel = q(container, 'season-manage-panel');
-	const outside = qa(container, 'works-expanded').filter((el) => !panel?.contains(el));
-	if (outside.length !== 1) {
-		throw new Error(`expected exactly one agenda-side works-expanded, got ${outside.length}`);
-	}
-	return outside[0];
-}
-
 function rowByName(scope: ParentNode, workName: string): HTMLElement | null {
 	return (
 		qa(scope, 'work-row').find(
@@ -450,7 +441,7 @@ describe('#234 — divergence (manageable ≠ current): the section tracks the P
 	});
 });
 
-describe('#234 — panel-side add/remove syncs the agenda fallback works rows', () => {
+describe('#234 — panel-side add/remove', () => {
 	function alignedAgendaWithEvent() {
 		loadFullAgendaMock.mockResolvedValue(
 			fullAgendaResult({ seasons: [runningSeason()], upcoming: [EV_FALLBACK] })
@@ -459,11 +450,7 @@ describe('#234 — panel-side add/remove syncs the agenda fallback works rows', 
 
 	async function bothSurfacesOpen(): Promise<HTMLElement> {
 		setAuthed();
-		const container = await renderAgendaReady('works-line');
-		await fireEvent.click(q(container, 'works-line') as HTMLElement);
-		await waitFor(() => {
-			expect(qa(agendaWorksExpanded(container), 'work-row').length).toBe(2);
-		});
+		const container = await renderAgendaReady('agenda-row-ev-1');
 		await openPanel(container);
 		await waitFor(() => {
 			expect(qa(repertoireSection(container), 'work-row').length).toBe(2);
@@ -471,15 +458,13 @@ describe('#234 — panel-side add/remove syncs the agenda fallback works rows', 
 		return container;
 	}
 
-	it('remove in the panel deletes the repertoire_item and the row leaves BOTH the section and the agenda fallback line', async () => {
+	it('remove in the panel deletes the repertoire_item and the row leaves the section', async () => {
 		const fetchMock = installWorld({
 			repertoireBySeason: { 'season-1': [RI_ACTIVE, RI_RETIRED] }
 		});
 		alignedAgendaWithEvent();
 		const container = await bothSurfacesOpen();
 		const section = repertoireSection(container);
-
-		expect(rowByName(agendaWorksExpanded(container), 'Spem in alium')).not.toBeNull();
 
 		const spem = rowByName(section, 'Spem in alium')!;
 		await fireEvent.click(q(spem, 'work-manage-remove') as HTMLElement);
@@ -490,13 +475,10 @@ describe('#234 — panel-side add/remove syncs the agenda fallback works rows', 
 		await waitFor(() => {
 			expect(rowByName(repertoireSection(container), 'Spem in alium')).toBeNull();
 		});
-		await waitFor(() => {
-			expect(rowByName(agendaWorksExpanded(container), 'Spem in alium')).toBeNull();
-		});
-		expect(rowByName(agendaWorksExpanded(container), 'Old warhorse')).not.toBeNull();
+		expect(rowByName(repertoireSection(container), 'Old warhorse')).not.toBeNull();
 	});
 
-	it('add in the panel creates the repertoire_item and the new row reaches BOTH the section and the agenda fallback line', async () => {
+	it('add in the panel creates the repertoire_item and the new row reaches the section', async () => {
 		const fetchMock = installWorld({
 			repertoireBySeason: { 'season-1': [RI_ACTIVE, RI_RETIRED] }
 		});
@@ -513,9 +495,6 @@ describe('#234 — panel-side add/remove syncs the agenda fallback works rows', 
 		});
 		await waitFor(() => {
 			expect(rowByName(repertoireSection(container), 'Nunc dimittis')).not.toBeNull();
-		});
-		await waitFor(() => {
-			expect(rowByName(agendaWorksExpanded(container), 'Nunc dimittis')).not.toBeNull();
 		});
 	});
 });
@@ -766,80 +745,6 @@ describe('#234 review 2 F1 — a panel-PRESERVING reload leaves the section stan
 
 		const options = Array.from(addWorkSelect(section).querySelectorAll('option'));
 		expect(options.map((o) => o.value)).toEqual(['', 'work-3']);
-	});
-});
-
-describe('#234 review 2 F2 — an AGENDA-side repertoire write syncs the panel section', () => {
-	function alignedAgendaWithEvent() {
-		loadFullAgendaMock.mockResolvedValue(
-			fullAgendaResult({ seasons: [runningSeason()], upcoming: [EV_FALLBACK] })
-		);
-	}
-
-	async function bothSurfacesOpen(): Promise<HTMLElement> {
-		setAuthed();
-		const container = await renderAgendaReady('works-line');
-		await fireEvent.click(q(container, 'works-line') as HTMLElement);
-		await waitFor(() => {
-			expect(qa(agendaWorksExpanded(container), 'work-row').length).toBe(2);
-		});
-		await openPanel(container);
-		await waitFor(() => {
-			expect(qa(repertoireSection(container), 'work-row').length).toBe(2);
-		});
-		return container;
-	}
-
-	function panelAddOptions(container: HTMLElement): string[] {
-		return Array.from(
-			addWorkSelect(repertoireSection(container)).querySelectorAll('option')
-		).map((o) => o.value);
-	}
-
-	it('remove on the agenda fallback line drops the row from the panel section AND gives the work back to its add-work select', async () => {
-		const fetchMock = installWorld({
-			repertoireBySeason: { 'season-1': [RI_ACTIVE, RI_RETIRED] }
-		});
-		alignedAgendaWithEvent();
-		const container = await bothSurfacesOpen();
-		expect(panelAddOptions(container)).toEqual(['', 'work-3']);
-
-		const spem = rowByName(agendaWorksExpanded(container), 'Spem in alium')!;
-		await fireEvent.click(q(spem, 'work-manage-remove') as HTMLElement);
-
-		await waitFor(() => {
-			expect(deletesTo(fetchMock, '/entity/ri-1').length).toBe(1);
-		});
-		await waitFor(() => {
-			expect(rowByName(repertoireSection(container), 'Spem in alium')).toBeNull();
-		});
-		await waitFor(() => {
-			expect(panelAddOptions(container)).toEqual(['', 'work-1', 'work-3']);
-		});
-	});
-
-	it('add on the agenda fallback line reaches the panel section AND leaves its add-work select, so a second Add cannot duplicate the item', async () => {
-		const fetchMock = installWorld({
-			repertoireBySeason: { 'season-1': [RI_ACTIVE, RI_RETIRED] }
-		});
-		alignedAgendaWithEvent();
-		const container = await bothSurfacesOpen();
-
-		const agenda = agendaWorksExpanded(container);
-		const agendaSelect = q(agenda, 'work-manage-add-work-select') as HTMLSelectElement;
-		expect(agendaSelect, "the agenda fallback line's add-work select").not.toBeNull();
-		await fireEvent.change(agendaSelect, { target: { value: 'work-3' } });
-		await fireEvent.click(q(agenda, 'work-manage-add-work-button') as HTMLElement);
-
-		await waitFor(() => {
-			expect(postsTo(fetchMock, '/entity').length).toBeGreaterThan(0);
-		});
-		await waitFor(() => {
-			expect(rowByName(repertoireSection(container), 'Nunc dimittis')).not.toBeNull();
-		});
-		await waitFor(() => {
-			expect(q(repertoireSection(container), 'work-manage-add-work-select')).toBeNull();
-		});
 	});
 });
 

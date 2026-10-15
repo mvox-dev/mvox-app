@@ -1,19 +1,16 @@
 // @vitest-environment happy-dom
-// The agenda page wires repertoire management to the data layer.
+// The event page wires repertoire management to the data layer (moved from the agenda, #921).
 import { fireEvent } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
-vi.mock('$lib/agenda/agendaData', async () =>
-	(await import('$lib/testing/moduleHandles')).agendaDataModule()
-);
+vi.mock('$app/state', async () => (await import('$lib/testing/mocks/events')).appStateModule());
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 import {
 	installWorld,
 	postsTo,
-	renderAndExpand,
+	renderEventWorks,
 	RI_ACTIVE,
 	useRepertoireWiringPage
 } from '$lib/testing/pages/repertoireWiring';
@@ -35,11 +32,10 @@ function rowEl(container: HTMLElement, workName: string): HTMLElement {
 	return li as HTMLElement;
 }
 
-describe('+page — repertoire management wiring (#91 TR.3)', () => {
-	it('a season editor SEES the management controls on the agenda row', async () => {
+describe('/event/[id] — repertoire management wiring (#91 TR.3)', () => {
+	it('a season editor SEES the management controls on the event page', async () => {
 		installWorld({ seasonEditor: true });
-		setAuthedWithOneCollective();
-		const { container } = await renderAndExpand();
+		const { container } = await renderEventWorks();
 
 		await vi.waitFor(() => {
 			expect(container.querySelector('[data-testid="work-status-active"]')).not.toBeNull();
@@ -50,8 +46,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 
 	it('a NON-editor sees the works read-only — no management controls anywhere', async () => {
 		installWorld({ seasonEditor: false, eventEditor: false });
-		setAuthedWithOneCollective();
-		const { container } = await renderAndExpand();
+		const { container } = await renderEventWorks();
 
 		await vi.waitFor(() => {
 			expect(container.querySelectorAll('[data-testid="work-row"]').length).toBeGreaterThan(0);
@@ -63,8 +58,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 
 	it('an editor reads the UNFILTERED repertoire, so a retired work is on screen and re-activatable', async () => {
 		const fetchMock = installWorld({ seasonEditor: true });
-		setAuthedWithOneCollective();
-		const { container } = await renderAndExpand();
+		const { container } = await renderEventWorks();
 
 		await vi.waitFor(() => {
 			expect(container.querySelectorAll('[data-testid="work-manage-row"]').length).toBe(2);
@@ -85,8 +79,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 
 	it('changing a status writes it through: value-id lookup, ONE atomic overwrite-POST carrying the old id (#264) — no DELETE round-trip', async () => {
 		const fetchMock = installWorld({ seasonEditor: true });
-		setAuthedWithOneCollective();
-		const { container } = await renderAndExpand();
+		const { container } = await renderEventWorks();
 
 		await vi.waitFor(() => {
 			expect(container.querySelector('[data-testid="work-status-active"]')).not.toBeNull();
@@ -106,8 +99,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 
 	it('the status change lands OPTIMISTICALLY — the picker updates on tap, before any refetch', async () => {
 		installWorld({ seasonEditor: true, repertoireItems: [RI_ACTIVE] });
-		setAuthedWithOneCollective();
-		const { container } = await renderAndExpand();
+		const { container } = await renderEventWorks();
 
 		await vi.waitFor(() => {
 			expect(rowStatus(container, 'Spem in alium')).toBe('active');
@@ -118,8 +110,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 
 	it('adding a work creates a repertoire_item under the SEASON, with NO explicit _sharing (#133: inherited from the domain-tier season parent)', async () => {
 		const fetchMock = installWorld({ seasonEditor: true });
-		setAuthedWithOneCollective();
-		const { container } = await renderAndExpand();
+		const { container } = await renderEventWorks();
 
 		await vi.waitFor(() => {
 			const select = container.querySelector(
@@ -144,10 +135,9 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		]);
 	});
 
-	it('issues NO per-entity rights probe — rights ride on the agenda read', async () => {
+	it('issues NO per-entity rights probe — rights ride on the event read', async () => {
 		const fetchMock = installWorld({ seasonEditor: true });
-		setAuthedWithOneCollective();
-		const { container } = await renderAndExpand();
+		const { container } = await renderEventWorks();
 
 		await vi.waitFor(() => {
 			expect(container.querySelector('[data-testid="work-status-active"]')).not.toBeNull();
@@ -158,10 +148,9 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		expect(rightsProbes).toEqual([]);
 	});
 
-	it('an in-place write does NOT trigger a full agenda-works refetch', async () => {
+	it('an in-place write does NOT trigger a full works refetch', async () => {
 		const fetchMock = installWorld({ seasonEditor: true, repertoireItems: [RI_ACTIVE] });
-		setAuthedWithOneCollective();
-		const { container } = await renderAndExpand();
+		const { container } = await renderEventWorks();
 
 		await vi.waitFor(() => {
 			expect(container.querySelector('[data-testid="work-status-active"]')).not.toBeNull();
@@ -182,8 +171,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 
 	it('the status write is ONE atomic overwrite-POST carrying the old value id — no DELETE round-trip remains', async () => {
 		const fetchMock = installWorld({ seasonEditor: true, repertoireItems: [RI_ACTIVE] });
-		setAuthedWithOneCollective();
-		const { container } = await renderAndExpand();
+		const { container } = await renderEventWorks();
 
 		await vi.waitFor(() => {
 			expect(container.querySelector('[data-testid="work-status-active"]')).not.toBeNull();
@@ -215,8 +203,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 			return base(input, init);
 		});
 		vi.stubGlobal('fetch', fetchMock);
-		setAuthedWithOneCollective();
-		const { container } = await renderAndExpand();
+		const { container } = await renderEventWorks();
 
 		await vi.waitFor(() => {
 			expect(container.querySelector('[data-testid="work-manage-add-work-select"]')).not.toBeNull();
@@ -249,8 +236,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 
 	it('a removed work becomes pickable again without waiting for a page reload', async () => {
 		installWorld({ seasonEditor: true, repertoireItems: [RI_ACTIVE] });
-		setAuthedWithOneCollective();
-		const { container } = await renderAndExpand();
+		const { container } = await renderEventWorks();
 
 		const optionCount = () =>
 			container.querySelector('[data-testid="work-manage-add-work-select"]')?.querySelectorAll('option')
@@ -267,8 +253,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 
 	it('Remove on a repertoire row DELETEs the repertoire_item entity', async () => {
 		const fetchMock = installWorld({ seasonEditor: true, repertoireItems: [RI_ACTIVE] });
-		setAuthedWithOneCollective();
-		const { container } = await renderAndExpand();
+		const { container } = await renderEventWorks();
 
 		await vi.waitFor(() => {
 			expect(container.querySelector('[data-testid="work-manage-remove"]')).not.toBeNull();

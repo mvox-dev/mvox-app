@@ -10,15 +10,10 @@ import { listScheduleItemsByEventId } from '$lib/schedule/scheduleData';
 import { listRepertoireItems } from '$lib/repertoire/repertoireData';
 import {
 	canMarkAttendance,
-	createProgramItem,
 	createRepertoireItem,
 	createRepertoireWriteQueue,
-	deleteProgramItem,
 	deleteRepertoireItem,
 	manageRightsFrom,
-	pinEdition,
-	planProgramMove,
-	reorderProgramItems,
 	resolveManageRights,
 	updateRepertoireStatus
 } from '$lib/repertoire/repertoireActions';
@@ -77,12 +72,7 @@ export function agendaRepertoireSeams(): Pick<
 		actions: {
 			createRepertoireItem: (...a) => createRepertoireItem(...a),
 			updateRepertoireStatus: (...a) => updateRepertoireStatus(...a),
-			pinEdition: (...a) => pinEdition(...a),
-			deleteProgramItem: (...a) => deleteProgramItem(...a),
-			deleteRepertoireItem: (...a) => deleteRepertoireItem(...a),
-			planProgramMove: (...a) => planProgramMove(...a),
-			reorderProgramItems: (...a) => reorderProgramItems(...a),
-			createProgramItem: (...a) => createProgramItem(...a)
+			deleteRepertoireItem: (...a) => deleteRepertoireItem(...a)
 		},
 		createRepertoireWriteQueue,
 		listRepertoireItems: (...a) => listRepertoireItems(...a)

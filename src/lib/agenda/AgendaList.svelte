@@ -17,8 +17,6 @@
 	import type { RsvpByEventId, RsvpStatus } from '$lib/rsvp/rsvpData';
 	import RsvpControl from '$lib/components/agenda/RsvpControl.svelte';
 	import RsvpNonMemberHint from '$lib/components/agenda/RsvpNonMemberHint.svelte';
-	import RepertoireElement from '$lib/agenda/RepertoireElement.svelte';
-	import type { WorkRow, WorksManage } from '$lib/repertoire/types';
 	import AttendanceSurface from '$lib/components/attendance/AttendanceSurface.svelte';
 	import type { AttendancePanel } from '$lib/attendance/types';
 	import AttendanceBadge, { type BadgeStatus } from '$lib/components/attendance/AttendanceBadge.svelte';
@@ -40,11 +38,6 @@
 		ontakeattendance?: (item: AgendaItem) => void;
 		attendancePanel?: AttendancePanel;
 		myAttendanceByEventId?: Record<string, BadgeStatus>;
-		worksByEventId?: Record<string, WorkRow[]>;
-		onpdfclick?: (fileId: string) => void;
-		heldFileIds?: ReadonlySet<string> | null;
-		partLinkDb?: string;
-		worksManage?: WorksManage;
 		emptyState?: Snippet;
 		recentEmptyState?: Snippet;
 		scheduleItemsByEventId?: Record<string, ScheduleItem[]>;
@@ -65,11 +58,6 @@
 		ontakeattendance,
 		attendancePanel,
 		myAttendanceByEventId = {},
-		worksByEventId = {},
-		onpdfclick,
-		heldFileIds = null,
-		partLinkDb,
-		worksManage,
 		emptyState,
 		recentEmptyState,
 		scheduleItemsByEventId = {},
@@ -91,22 +79,6 @@
 			.sort(compareScheduleItems)
 			.map((row) => `${formatTime(tallinnHHMM(new Date(row.datetime)), $timeFormatStore)} ${row.name}`)
 			.join(' · ');
-	}
-
-	function worksContext(eventId: string): 'repertoire' | 'programme' {
-		return worksByEventId[eventId]?.some((r) => r.kind === 'program') ? 'programme' : 'repertoire';
-	}
-	const NO_KEYS: ReadonlySet<string> = new Set<string>();
-	const NO_OPTIONS: never[] = [];
-	const NO_OPTIONS_BY_ID: Record<string, never[]> = {};
-
-	function eventRightsFor(eventId: string) {
-		return worksManage?.eventRightsByEventId[eventId] ?? 'not-editor';
-	}
-	function showWorks(eventId: string): boolean {
-		if (worksByEventId[eventId]?.length) return true;
-		if (!worksManage) return false;
-		return worksManage.seasonRights === 'editor' || eventRightsFor(eventId) === 'editor';
 	}
 
 	function badgeStatus(eventId: string): BadgeStatus {
@@ -169,36 +141,6 @@
 	}
 </script>
 
-{#snippet worksElement(item: AgendaItem)}
-	{#if showWorks(item.id)}
-		<RepertoireElement
-			rows={worksByEventId[item.id] ?? NO_OPTIONS}
-			{onpdfclick}
-			{heldFileIds}
-			{partLinkDb}
-			context={worksContext(item.id)}
-			seasonRights={worksManage?.seasonRights ?? 'not-editor'}
-			eventRights={eventRightsFor(item.id)}
-			pickableWorksList={worksManage?.pickableWorksList ?? NO_OPTIONS}
-			pickableWorksVisible={worksManage?.pickableWorksVisible}
-			pickableWorksPartial={worksManage?.pickableWorksPartial ?? false}
-			pickableEditions={worksManage?.pickableEditionsByEventId[item.id] ?? NO_OPTIONS}
-			pickableEditionsVisible={worksManage?.pickableEditionsVisibleByEventId[item.id]}
-			pickableEditionsPartial={worksManage?.pickableEditionsPartial ?? false}
-			editionOptionsByRowId={worksManage?.editionOptionsByRowId ?? NO_OPTIONS_BY_ID}
-			editionsResolvedWorkIds={worksManage?.editionsResolvedWorkIds ?? NO_KEYS}
-			pendingKeys={worksManage?.pendingKeys ?? NO_KEYS}
-			onaddwork={(workId) => worksManage?.onaddwork(workId)}
-			onstatuschange={(itemId, status) => worksManage?.onstatuschange(itemId, status)}
-			onpinedition={(itemId, editionId) => worksManage?.onpinedition(itemId, editionId)}
-			onremoveitem={(itemId) => worksManage?.onremoveitem(item.id, itemId)}
-			onmoveitem={(itemId, direction) => worksManage?.onmoveitem(item.id, itemId, direction)}
-			onaddprogramitem={(editionId, ordinal) =>
-				worksManage?.onaddprogramitem(item.id, editionId, ordinal)}
-		/>
-	{/if}
-{/snippet}
-
 {#snippet scheduleLine(item: AgendaItem)}
 	{#if scheduleItemsByEventId[item.id]?.length}
 		<span data-testid="agenda-schedule-line-{item.id}" class="text-[10px] text-ink-2"
@@ -222,7 +164,6 @@
 	{#if item.location}
 		<span data-testid={locationTestid} class="truncate text-xs text-ink-2">{item.location}</span>
 	{/if}
-	{@render worksElement(item)}
 	{@render scheduleLine(item)}
 {/snippet}
 

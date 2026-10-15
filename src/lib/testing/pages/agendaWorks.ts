@@ -57,13 +57,6 @@ export function agendaEvent(id: string, name: string) {
 	};
 }
 
-export function cleanupUnstubResetAgenda(): void {
-	cleanup();
-	vi.unstubAllGlobals();
-	loadFullAgendaMock.mockReset();
-	resetAppState();
-}
-
 export const past = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
 
 export const recent = [

@@ -411,57 +411,6 @@ describe('AgendaList — per-event write-failure indicator (failedEventIds)', ()
 	});
 });
 
-describe('AgendaList — Works line per row (#90 TR.2)', () => {
-	const worksByEventId = {
-		r1: [
-			{
-				id: 'ri-1',
-				kind: 'repertoire' as const,
-				workId: 'work-1',
-				editionId: 'ed-1',
-				workName: 'Spem in alium',
-				composer: 'Thomas Tallis',
-				status: 'active' as const,
-				editionName: '40-part original',
-				ordinal: null,
-				fileId: '',
-				fileName: '',
-				externalLinks: [],
-				canBorrow: false,
-				notes: ''
-			}
-		]
-	};
-
-	it("renders the Works line inside the row whose event id has works — and the line names that row's works", () => {
-		const { container } = render(AgendaList, { items: itemSameDay, worksByEventId });
-		const row = container.querySelector('[data-testid="agenda-row-r1"]');
-		const line = row?.querySelector('[data-testid="works-line"]');
-		expect(line).not.toBeNull();
-		expect(line?.textContent).toContain('Spem in alium');
-	});
-
-	it('renders NO Works line for a row without works — the element is per-event, absent when empty', () => {
-		const { container } = render(AgendaList, { items: itemSameDay, worksByEventId });
-		const row2 = container.querySelector('[data-testid="agenda-row-r2"]');
-		expect(row2?.querySelector('[data-testid="works-line"]')).toBeNull();
-	});
-
-	it('renders NO Works line anywhere when worksByEventId is not provided at all', () => {
-		const { container } = render(AgendaList, { items: itemSameDay });
-		expect(container.querySelector('[data-testid="works-line"]')).toBeNull();
-	});
-
-	it('forwards onpdfclick down to the row\'s works element (the page signs the url at click time)', async () => {
-		const onpdfclick = vi.fn();
-		const works = { r1: [{ ...worksByEventId.r1[0], fileId: 'file-1' }] };
-		const { container } = render(AgendaList, { items: itemSameDay, worksByEventId: works, onpdfclick });
-		await fireEvent.click(container.querySelector('[data-testid="works-line"]')!);
-		await fireEvent.click(container.querySelector('[data-testid="work-link-pdf"]')!);
-		expect(onpdfclick).toHaveBeenCalledWith('file-1');
-	});
-});
-
 describe('AgendaList — event detail links (#101 TE.1)', () => {
 
 	it('upcoming row carries a link to /event/{id}', () => {
@@ -776,41 +725,6 @@ describe('#466 whole card opens the event', () => {
 		await fireEvent.click(row.querySelector('[data-testid="attendance-panel"]')!);
 		await fireEvent.click(row.querySelector('[data-testid="attendance-collapse-btn"]')!);
 		expect(onclose).toHaveBeenCalledTimes(1);
-		expect(gotoMock).not.toHaveBeenCalled();
-	});
-
-	it('(b) recent: the works-line toggle and the PDF button keep working and never navigate', async () => {
-		const onpdfclick = vi.fn();
-		const worksByEventId = {
-			p9: [
-				{
-					id: 'ri-1',
-					kind: 'repertoire' as const,
-					workId: 'work-1',
-					editionId: 'ed-1',
-					workName: 'Spem in alium',
-					composer: 'Thomas Tallis',
-					status: 'active' as const,
-					editionName: '40-part original',
-					ordinal: null,
-					fileId: 'file-1',
-					fileName: '',
-					externalLinks: [],
-					canBorrow: false,
-					notes: ''
-				}
-			]
-		};
-		const { container } = render(AgendaList, {
-			items: itemSameDay,
-			recentItems: [recentP9],
-			worksByEventId,
-			onpdfclick
-		});
-		const row = container.querySelector('[data-testid="agenda-recent-row-p9"]')!;
-		await fireEvent.click(row.querySelector('[data-testid="works-line"]')!);
-		await fireEvent.click(row.querySelector('[data-testid="work-link-pdf"]')!);
-		expect(onpdfclick).toHaveBeenCalledWith('file-1');
 		expect(gotoMock).not.toHaveBeenCalled();
 	});
 

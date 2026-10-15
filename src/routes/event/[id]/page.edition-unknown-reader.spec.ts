@@ -36,6 +36,8 @@ import { cleanupRealTimersReset, editorTokenAtNow } from '$lib/testing/pages/eve
 import { setAuthed } from '$lib/testing/pages/eventRsvp';
 import { EDITIONS, seasonEntity, workRowOf } from '$lib/testing/pages/eventEdition';
 import { bareEventEntity } from '$lib/testing/pages/eventFixtures';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
+import { signIn } from '$lib/testing/session';
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -72,10 +74,44 @@ const WORKS = [
 
 /** `editionCount` above the returned row count makes the collective-wide edition read
  *  truncated, as `deriveListRead` reports it; absent, the read is complete. */
-function wireStub(opts: { editionCount?: number } = {}) {
+type WireOpts = { editionCount?: number; programItems?: unknown[] };
+
+// The program row the reader sees: pinned to ed-9, which no edition read returns.
+const PROGRAM_ITEMS = [
+	{ _id: 'pi-2', name: [{ string: 'Ghost piece' }], edition: [{ reference: 'ed-9' }], ordinal: [{ number: 1 }] }
+];
+
+// Orlando's one reader row, pinned to an edition its complete read does name.
+const ORLANDO = {
+	repertoire: [
+		{
+			_id: 'ri-or',
+			name: [{ string: 'Fresh piece' }],
+			work: [{ reference: 'w-or' }],
+			edition: [{ reference: 'ed-or' }],
+			status: [{ string: 'active' }]
+		}
+	],
+	works: [{ _id: 'w-or', name: [{ string: 'Fresh piece' }] }],
+	editions: [
+		{ _id: 'ed-or', name: [{ string: 'Carus 40.688' }], _parent: [{ reference: 'w-or', entity_type: 'work' }] }
+	]
+};
+
+function orlandoWire(url: string): Response | undefined {
+	if (!url.includes('/orlando/')) return undefined;
+	if (url.includes('_type.string=repertoire_item')) return json({ entities: ORLANDO.repertoire });
+	if (url.includes('_type.string=work')) return json({ entities: ORLANDO.works });
+	if (url.includes('_type.string=edition')) return json({ entities: ORLANDO.editions });
+	return undefined;
+}
+
+function wireStub(opts: WireOpts = {}) {
 	return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = String(input);
 		const method = init?.method ?? 'GET';
+		const orlando = orlandoWire(url);
+		if (orlando) return orlando;
 		if (method === 'DELETE') return json({ deleted: true });
 		if (method === 'POST') return json({ _id: 'new-1' });
 		if (url.includes('/entity/ev1')) return json({ entity: bareEventEntity() });
@@ -84,7 +120,8 @@ function wireStub(opts: { editionCount?: number } = {}) {
 		if (url.includes('_type.string=member') && url.includes('person.reference=p-viewer'))
 			return json({ entities: [{ _id: 'member-1' }] });
 		if (url.includes('_type.string=repertoire_item')) return json({ entities: REPERTOIRE_ITEMS });
-		if (url.includes('_type.string=program_item')) return json({ entities: [] });
+		if (url.includes('_type.string=program_item'))
+			return json({ entities: opts.programItems ?? [] });
 		if (url.includes('_type.string=work')) return json({ entities: WORKS });
 		if (url.includes('_type.string=edition')) {
 			return json({
@@ -97,7 +134,19 @@ function wireStub(opts: { editionCount?: number } = {}) {
 	});
 }
 
-async function renderAsReader(opts: { editionCount?: number } = {}) {
+async function renderProgramAsReader(opts: WireOpts = {}) {
+	vi.stubGlobal('fetch', wireStub({ ...opts, programItems: PROGRAM_ITEMS }));
+	pageStub.params = { id: 'ev1' };
+	pageStub.url = new URL('http://localhost/event/ev1');
+	setAuthed();
+	const rendered = render(Page);
+	await waitFor(() => {
+		expect(rendered.container.querySelector('[data-testid="work-row"]')).not.toBeNull();
+	});
+	return workRowOf(rendered.container, 'Ghost piece');
+}
+
+async function renderAsReader(opts: WireOpts = {}) {
 	const fetchStub = wireStub(opts);
 	vi.stubGlobal('fetch', fetchStub);
 	pageStub.params = { id: 'ev1' };
@@ -211,6 +260,62 @@ describe("/event/[id] #331 — the reader's COMPLETE read keeps every stated fac
 		expect(li.textContent).not.toContain('[repertoire_edition_unknown]');
 		expect(li.querySelector('[data-testid="work-no-edition"]')).toBeNull();
 		expect(li.textContent).not.toContain('[repertoire_no_edition]');
+	});
+});
+
+
+describe('/event/[id] #337 — a reader’s program row through the shared element', () => {
+	it('a program row whose pin the truncated wire read could not name says UNKNOWN, never "no pinned edition"', async () => {
+		const li = await renderProgramAsReader({ editionCount: 4000 });
+		const unknown = li.querySelector('[data-testid="work-edition-unknown"]');
+		expect(unknown, 'work-edition-unknown on the reader’s program row').not.toBeNull();
+		expect(unknown!.textContent).toContain('[repertoire_edition_unknown]');
+		expect(li.querySelector('[data-testid="work-no-edition"]')).toBeNull();
+		expect(li.textContent).not.toContain('[repertoire_no_edition]');
+		expect(li.querySelector('[data-testid="work-edition-picker"]')).toBeNull();
+		expect(li.querySelector('[data-testid="work-manage-row"]')).toBeNull();
+	});
+
+	it('a program row pinned to an edition the complete read does not hold gets the dangling wording', async () => {
+		const li = await renderProgramAsReader();
+		const unknown = li.querySelector('[data-testid="work-edition-unknown"]');
+		expect(unknown, 'work-edition-unknown on the reader’s program row').not.toBeNull();
+		expect(unknown!.textContent).toContain('[repertoire_edition_unknown_pinned]');
+		expect(li.textContent).not.toContain('[repertoire_edition_unknown]');
+		expect(li.querySelector('[data-testid="work-no-edition"]')).toBeNull();
+		expect(li.querySelector('[data-testid="work-edition-picker"]')).toBeNull();
+		expect(li.querySelector('[data-testid="work-manage-row"]')).toBeNull();
+	});
+});
+
+describe('/event/[id] #331 — a collective switch carries no stale unknown state across', () => {
+	it("truncated rows left behind never caption the next collective's complete rows", async () => {
+		vi.stubGlobal('fetch', wireStub({ editionCount: 4000 }));
+		pageStub.params = { id: 'ev1' };
+		pageStub.url = new URL('http://localhost/event/ev1');
+		signIn({
+			token: 'jwt-editor',
+			collectives: [
+				{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' },
+				{ db: 'orlando', name: 'Orlando', personId: 'p-viewer' }
+			],
+			selected: 'sampledb'
+		});
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="work-edition-unknown"]')).not.toBeNull();
+		});
+
+		selectedCollectiveDbStore.set('orlando');
+		await waitFor(() => {
+			expect(
+				workRowOf(container, 'Fresh piece').querySelector('[data-testid="work-edition"]')!
+					.textContent
+			).toContain('Carus 40.688');
+		});
+		expect(container.querySelector('[data-testid="work-edition-unknown"]')).toBeNull();
+		expect(container.textContent).not.toContain('[repertoire_edition_unknown]');
+		expect(container.textContent).not.toContain('Old warhorse');
 	});
 });
 

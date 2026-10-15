@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { createHash } from 'node:crypto';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, fireEvent } from '@testing-library/svelte';
+import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -38,22 +38,6 @@ const pageStub = vi.hoisted(() => ({
 	state: {} as Record<string, unknown>
 }));
 vi.mock('$app/state', () => ({ page: pageStub }));
-const pdfjs = vi.hoisted(() => ({
-	getDocument: vi.fn((_src: unknown) => ({
-		promise: Promise.resolve({
-			numPages: 1,
-			getPage: async () => ({
-				getViewport: ({ scale }: { scale: number }) => ({ width: 600 * scale, height: 800 * scale, scale }),
-				render: () => ({ promise: Promise.resolve(), cancel: vi.fn() })
-			})
-		}),
-		destroy: vi.fn()
-	}))
-}));
-vi.mock('pdfjs-dist', () => ({ GlobalWorkerOptions: { workerSrc: '' }, getDocument: pdfjs.getDocument }));
-vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', async () =>
-	(await import('$lib/testing/mocks/files')).pdfWorkerUrlModule()
-);
 vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleStubs')).rsvpDataModule()
 );
@@ -75,12 +59,10 @@ vi.mock('$lib/files/appLabelStore', async () =>
 );
 
 import Page from './+page.svelte';
-import PartPage from './part/[fileId]/+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
 import { resetRetentionForTests } from '$lib/files/retention';
 import { resetAppState } from '$lib/testing/appReset';
-import { gotoMock } from '$lib/testing/routeMocks';
 import { loadWorksByEventIdMock } from '$lib/testing/moduleHandles';
 import { signFileUrlMock } from '$lib/testing/mocks/files';
 import { recent, setAuthedWithTwoCollectives, upcoming } from '$lib/testing/pages/agendaWorks';
@@ -99,41 +81,6 @@ function stubByteFetch(bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46])) {
 	});
 	return fetchMock;
 }
-
-function partNavigations(): unknown[][] {
-	return gotoMock.mock.calls.filter((c) => String(c[0]).startsWith('/part/'));
-}
-
-async function recentPdf(container: HTMLElement, fileId = 'file-score'): Promise<HTMLElement> {
-	const row = '[data-testid="agenda-recent-row-ev-0"]';
-	return vi.waitFor(() => {
-		const line = container.querySelector(`${row} [data-testid="works-line"]`);
-		expect(line).not.toBeNull();
-		if (!container.querySelector(`${row} [data-testid="work-row"]`)) {
-			void fireEvent.click(line!);
-		}
-		const badge = container.querySelector(`${row} [data-testid="file-presence-${fileId}"]`);
-		expect(badge).not.toBeNull();
-		const pdf = badge!.closest('[data-testid="work-row"]')?.querySelector('[data-testid="work-link-pdf"]');
-		expect(pdf).not.toBeNull();
-		return pdf as HTMLElement;
-	});
-}
-
-const fartherFuture = new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString();
-const upcomingTwo = [
-	upcoming[0],
-	{
-		id: 'ev-2',
-		name: 'Concert',
-		startDatetime: fartherFuture,
-		durationMinutes: 90,
-		location: '',
-		conductors: [],
-		owners: [],
-		editors: []
-	}
-];
 
 function workRow(overrides: Record<string, unknown> = {}) {
 	return {
@@ -166,8 +113,6 @@ afterEach(() => {
 	listFullAgendaMock.mockReset();
 	loadWorksByEventIdMock.mockReset();
 	signFileUrlMock.mockReset();
-	gotoMock.mockReset();
-	pdfjs.getDocument.mockClear();
 	vi.unstubAllGlobals();
 	resetAppState();
 });
@@ -197,262 +142,28 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 		);
 	});
 
-	it('renders the resolved works inside the matching agenda row — the element a member actually sees', async () => {
+	it('#921 — no card shows works or an add-works control, even to a season editor', async () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 			upcoming,
-			recent: [],
+			recent,
 			seasonId: 'season-1',
-			seasonConductors: [], seasonOwners: [], seasonEditors: []
+			seasonConductors: [], seasonOwners: [], seasonEditors: ['person-p']
 		}));
-		loadWorksByEventIdMock.mockResolvedValue({ 'ev-1': [workRow()] });
+		loadWorksByEventIdMock.mockResolvedValue({ 'ev-1': [workRow()], 'ev-0': [workRow()] });
 		setAuthedWithOneCollective();
 
 		const { container } = render(Page);
 
 		await vi.waitFor(() => {
 			expect(container.querySelector('[data-testid="agenda-row-ev-1"]')).not.toBeNull();
+			expect(container.querySelector('[data-testid="agenda-recent-row-ev-0"]')).not.toBeNull();
 		});
-		await vi.waitFor(() => {
-			const line = container
-				.querySelector('[data-testid="agenda-row-ev-1"]')
-				?.querySelector('[data-testid="works-line"]');
-			expect(line).not.toBeNull();
-			expect(line?.textContent).toContain('Spem in alium');
-		});
-	});
-
-	it("signs ONLY the next event's parts on open; a click on any other part signs nothing", async () => {
-		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
-			upcoming: upcomingTwo,
-			recent: [],
-			seasonId: 'season-1',
-			seasonConductors: [], seasonOwners: [], seasonEditors: []
-		}));
-		loadWorksByEventIdMock.mockResolvedValue({
-			'ev-1': [
-				workRow({ id: 'ri-a1', fileId: 'file-a1', fileName: 'a1.pdf' }),
-				workRow({ id: 'ri-a2', fileId: 'file-a2', fileName: 'a2.pdf' })
-			],
-			'ev-2': [workRow({ id: 'ri-b1', fileId: 'file-b1', fileName: 'b1.pdf' })]
-		});
-		signFileUrlMock.mockImplementation(
-			async (_cfg: unknown, fileId: string) => `https://s3.example/signed-${fileId}`
-		);
-		const fetchMock = stubByteFetch();
-		const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
-		setAuthedWithOneCollective();
-
-		const { container } = render(Page);
-
-		await vi.waitFor(() => {
-			expect(fakeByteStore.heldFor('sampledb', 'person-p').sort()).toEqual([
-				'file-a1',
-				'file-a2'
-			]);
-		});
-		expect(signFileUrlMock.mock.calls.map((c) => c[1])).toEqual(['file-a1', 'file-a2']);
-		const signOrder = signFileUrlMock.mock.invocationCallOrder;
-		const fetchOrder = fetchMock.mock.invocationCallOrder;
-		expect(signOrder[0]).toBeLessThan(fetchOrder[0]);
-		expect(fetchOrder[0]).toBeLessThan(signOrder[1]);
-		expect(signOrder[1]).toBeLessThan(fetchOrder[1]);
-		expect(String(fetchMock.mock.calls[0][0])).toBe('https://s3.example/signed-file-a1');
-		expect(String(fetchMock.mock.calls[1][0])).toBe('https://s3.example/signed-file-a2');
-
-		await fireEvent.click(
-			container.querySelector('[data-testid="agenda-row-ev-2"] [data-testid="works-line"]')!
-		);
-		const pdf = container.querySelector(
-			'[data-testid="agenda-row-ev-2"] [data-testid="work-link-pdf"]'
-		);
-		expect(pdf?.getAttribute('href')).toBeNull();
-		await fireEvent.click(pdf!);
-
-		expect(gotoMock.mock.calls.filter((c) => String(c[0]).startsWith('/part/'))).toEqual([
-			[
-				'/part/file-b1?db=sampledb',
-				{
-					state: {
-						partLabel: {
-							work: 'Spem in alium',
-							composer: 'Thomas Tallis',
-							edition: '40-part original',
-							filename: 'b1.pdf'
-						}
-					}
-				}
-			]
-		]);
-		expect(signFileUrlMock.mock.calls.map((c) => c[1])).toEqual(['file-a1', 'file-a2']);
-		expect(openSpy).not.toHaveBeenCalled();
-	});
-
-	it('a part click goes to /part/{fileId}?db=… with the row label in the navigation state, and opens no tab', async () => {
-		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
-			upcoming,
-			recent,
-			seasonId: 'season-1',
-			seasonConductors: [], seasonOwners: [], seasonEditors: []
-		}));
-		loadWorksByEventIdMock.mockResolvedValue({
-			'ev-1': [],
-			'ev-0': [workRow({ fileId: 'file-score', fileName: 'SOPRAN.pdf' })]
-		});
-		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
-		const fetchMock = stubByteFetch();
-		const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
-		setAuthedWithOneCollective();
-
-		const { container } = render(Page);
-		const pdf = await recentPdf(container);
-		await fireEvent.click(pdf);
-
-		expect(partNavigations()).toEqual([
-			[
-				'/part/file-score?db=sampledb',
-				{
-					state: {
-						partLabel: {
-							work: 'Spem in alium',
-							composer: 'Thomas Tallis',
-							edition: '40-part original',
-							filename: 'SOPRAN.pdf'
-						}
-					}
-				}
-			]
-		]);
-		expect(openSpy).not.toHaveBeenCalled();
-		expect(signFileUrlMock).not.toHaveBeenCalled();
-		expect(fetchMock).not.toHaveBeenCalled();
-		expect(fakeByteStore.puts).toEqual([]);
-	});
-
-	it('the click moves no bytes, however often: two opens are two navigations and zero signs, fetches or store writes', async () => {
-		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
-			upcoming,
-			recent,
-			seasonId: 'season-1',
-			seasonConductors: [], seasonOwners: [], seasonEditors: []
-		}));
-		loadWorksByEventIdMock.mockResolvedValue({
-			'ev-1': [],
-			'ev-0': [workRow({ fileId: 'file-score' })]
-		});
-		signFileUrlMock.mockRejectedValue(new Error('403'));
-		const fetchMock = stubByteFetch();
-		const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
-		setAuthedWithOneCollective();
-
-		const { container } = render(Page);
-		const pdf = await recentPdf(container);
-		await fireEvent.click(pdf);
-		await fireEvent.click(pdf);
-
-		expect(partNavigations().map((c) => c[0])).toEqual([
-			'/part/file-score?db=sampledb',
-			'/part/file-score?db=sampledb'
-		]);
-		expect(openSpy).not.toHaveBeenCalled();
-		expect(signFileUrlMock).not.toHaveBeenCalled();
-		expect(fetchMock).not.toHaveBeenCalled();
-		expect(fakeByteStore.puts).toEqual([]);
-		expect(container.querySelector('[data-testid="repertoire-pdf-error"]')).toBeNull();
-	});
-
-	it('OFFLINE: a held part opens from the agenda with the network down, and the viewer serves it from the store', async () => {
-		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
-			upcoming,
-			recent: [],
-			seasonId: 'season-1',
-			seasonConductors: [], seasonOwners: [], seasonEditors: []
-		}));
-		loadWorksByEventIdMock.mockResolvedValue({ 'ev-1': [workRow({ fileId: 'file-score' })] });
-		signFileUrlMock.mockRejectedValue(new TypeError('Failed to fetch'));
-		const fetchMock = vi.fn(async () => {
-			throw new TypeError('Failed to fetch');
-		});
-		vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
-			const url = typeof input === 'string' ? input : input.toString();
-			if (url.startsWith('https://s3.example/')) return fetchMock();
-			throw new TypeError('Failed to fetch');
-		});
-		fakeByteStore.seed({ db: 'sampledb', personId: 'person-p' }, 'file-score', {
-			bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]).buffer,
-			filetype: 'application/pdf',
-			sha256: 'sha-cached'
-		});
-		const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
-		setAuthedWithOneCollective();
-
-		const { container } = render(Page);
-		await vi.waitFor(() => {
-			expect(container.querySelector('[data-testid="works-line"]')).not.toBeNull();
-		});
-		await fireEvent.click(container.querySelector('[data-testid="works-line"]')!);
-		const link = await vi.waitFor(() => {
-			const el = container.querySelector('[data-testid="part-link-file-score"]');
-			expect(el).not.toBeNull();
-			return el as HTMLElement;
-		});
-		expect(link.getAttribute('href')).toBe('/part/file-score?db=sampledb');
-		await fireEvent.click(link);
-
-		const [[target, options]] = partNavigations();
-		expect(target).toBe('/part/file-score?db=sampledb');
-		expect(openSpy).not.toHaveBeenCalled();
-		cleanup();
-
-		const url = new URL(String(target), 'http://localhost');
-		pageStub.params = { fileId: url.pathname.split('/')[2] };
-		pageStub.url = url;
-		pageStub.state = (options as { state: typeof pageStub.state }).state;
-		const viewer = render(PartPage);
-		await vi.waitFor(() => {
-			expect(
-				viewer.container.querySelector('[data-testid="part-viewer-page-indicator"]')
-			).not.toBeNull();
-		});
-		const src = pdfjs.getDocument.mock.calls[0][0] as { url: string };
-		expect(src.url).toMatch(/^blob:/);
-		expect(signFileUrlMock).not.toHaveBeenCalled();
-		expect(fetchMock).not.toHaveBeenCalled();
-	});
-
-	it('the link carries the db of the collective selected at click time, for each collective', async () => {
-		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
-			upcoming,
-			recent,
-			seasonId: 'season-1',
-			seasonConductors: [], seasonOwners: [], seasonEditors: []
-		}));
-		loadWorksByEventIdMock.mockImplementation((cfg: { db: string }) =>
-			Promise.resolve({
-				'ev-1': [],
-				'ev-0': [workRow({ fileId: cfg.db === 'sampledb' ? 'file-score' : 'file-crede' })]
-			})
-		);
-		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
-		stubByteFetch();
-		const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
-		setAuthedWithTwoCollectives();
-
-		const { container } = render(Page);
-		await fireEvent.click(await recentPdf(container));
-		selectedCollectiveDbStore.set('crede');
-		await vi.waitFor(() => {
-			expect(loadWorksByEventIdMock.mock.calls.some((c) => c[0].db === 'crede')).toBe(true);
-		});
-		await fireEvent.click(await recentPdf(container, 'file-crede'));
-
-		expect(partNavigations().map((c) => c[0])).toEqual([
-			'/part/file-score?db=sampledb',
-			'/part/file-crede?db=crede'
-		]);
-		expect(openSpy).not.toHaveBeenCalled();
-		expect(signFileUrlMock).not.toHaveBeenCalled();
-		expect(fakeByteStore.heldFor('sampledb', 'person-p')).toEqual([]);
-		expect(fakeByteStore.heldFor('crede', 'person-c')).toEqual([]);
+		await vi.waitFor(() => expect(loadWorksByEventIdMock).toHaveBeenCalled());
+		await new Promise((r) => setTimeout(r, 0));
+		for (const testid of ['works-line', 'work-row', 'work-manage-add-work', 'work-manage-add-programme']) {
+			expect(container.querySelector(`[data-testid="${testid}"]`), testid).toBeNull();
+		}
+		expect(container.textContent).not.toContain('Spem in alium');
 	});
 
 	it('a failed works read leaves the agenda intact, just work-free', async () => {
@@ -537,7 +248,7 @@ describe("#409 — the next event's parts reach the device on app open", () => {
 		expect(getSpy.mock.calls.map((c) => c[1])).toEqual(['file-a2']);
 	});
 
-	it('after the prefetch writes, presence is re-queried ONCE and the fetched parts render the on-device badge — no reload, no click', async () => {
+	it('after the prefetch writes, presence is re-queried ONCE — no reload, no click', async () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 			upcoming,
 			recent: [],
@@ -557,7 +268,7 @@ describe("#409 — the next event's parts reach the device on app open", () => {
 		stubByteFetch();
 		setAuthedWithOneCollective();
 
-		const { container } = render(Page);
+		render(Page);
 
 		await vi.waitFor(() => {
 			expect(fakeByteStore.heldFor('sampledb', 'person-p').sort()).toEqual([
@@ -571,15 +282,6 @@ describe("#409 — the next event's parts reach the device on app open", () => {
 		for (const call of heldSpy.mock.calls) {
 			expect(call.slice(0, 2)).toEqual(['sampledb', 'person-p']);
 		}
-		await fireEvent.click(
-			container.querySelector('[data-testid="agenda-row-ev-1"] [data-testid="works-line"]')!
-		);
-		await vi.waitFor(() => {
-			const a1 = container.querySelector('[data-testid="file-presence-file-a1"]');
-			const a2 = container.querySelector('[data-testid="file-presence-file-a2"]');
-			expect(a1?.textContent?.trim()).toBe('[file_presence_on_device]');
-			expect(a2?.textContent?.trim()).toBe('[file_presence_on_device]');
-		});
 	});
 
 	it("nothing runs while the app is closed: the prefetch fires from the page's own load chain — no visibility/focus/sync hooks", async () => {

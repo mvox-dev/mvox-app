@@ -9,17 +9,13 @@ import type { ManageRightsState, WorkRow } from '$lib/repertoire/types';
 import type { Season } from '$lib/seasons/types';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { mergePendingRows as mergeRows } from '$lib/repertoire/repertoirePending';
-import { refetchSeasonRepertoire, refetchWorkRows } from '$lib/repertoire/refetchWorkRows';
-import { readManagePickers } from '$lib/repertoire/managePickers';
+import { refetchWorkRows } from '$lib/repertoire/refetchWorkRows';
 import { reportProblem } from '$lib/problems/reportProblem';
 import type { AgendaLoadDeps, AgendaLoadState, LoadCounters } from '$lib/agenda/agendaLoad';
 
 export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, deps: AgendaLoadDeps) {
 	const {
 		refreshPresence,
-		listWorks,
-		listAllEditions,
-		listRepertoireItems,
 		listScheduleItemsByEventId,
 		manageRightsFrom,
 		resolveManageRights
@@ -34,19 +30,6 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 		ag.ownedSeasonIds = new Set();
 		ag.seasonCreateRights = 'not-editor';
 		ag.eventManageRights = {};
-		ag.seasonRepertoire = [];
-		ag.libraryWorks = [];
-		ag.libraryEditions = [];
-		ag.libraryWorksPartial = false;
-		ag.libraryEditionsPartial = false;
-		ag.scopedEditionsByWorkId = {};
-		seq.scopedEditionWorkIdsRequested = new Set<string>();
-		ag.libraryPickersLoading = true;
-		ag.libraryPickersLoadSucceeded = false;
-		ag.worksRowsLoading = true;
-		ag.managePendingKeys = new Set();
-		ag.manageError = false;
-		ag.manageStatus = '';
 	}
 
 	function deriveSeasonCreateRights(
@@ -90,28 +73,12 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 		return probe;
 	}
 
-	function upgradeRepertoireManagement(
-		cfg: EntuCfg,
-		eventIds: string[],
-		seasonId: string | null,
-		thisRequest: number
-	) {
-		loadManagePickers(cfg, seasonId, thisRequest);
-		const thisWorksLoad = ++seq.worksLoadId;
-		ag.worksRowsLoading = true;
-		refetchWorkRows(cfg, eventIds, seasonId, worksRefetch(thisRequest, thisWorksLoad, true));
-	}
-
 	function worksRefetch(thisRequest: number, thisWorksLoad: number, includeInactive: boolean) {
 		return {
 			includeInactive,
 			isCurrent: () => thisRequest === seq.requestId && thisWorksLoad === seq.worksLoadId,
 			onRows: (byEvent: Record<string, WorkRow[]>) => {
 				ag.worksByEventId = mergePendingRows(byEvent);
-				ag.worksRowsLoading = false;
-			},
-			onFailure: () => {
-				ag.worksRowsLoading = false;
 			}
 		};
 	}
@@ -122,31 +89,19 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 		seasonId: string | null,
 		thisRequest: number
 	) {
-		const canManage =
-			ag.seasonManageRights === 'editor' ||
-			Object.values(ag.eventManageRights).some((right) => right === 'editor');
-		if (canManage) {
-			loadManagePickers(cfg, seasonId, thisRequest);
-		} else {
-			ag.libraryPickersLoading = false;
-		}
-
 		const thisWorksLoad = ++seq.worksLoadId;
-		ag.worksRowsLoading = true;
 		refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {
 			includeInactive: ag.seasonManageRights === 'editor'
 		})
 			.then((byEvent) => {
 				if (thisRequest !== seq.requestId || thisWorksLoad !== seq.worksLoadId) return;
 				ag.worksByEventId = byEvent;
-				ag.worksRowsLoading = false;
 				runPressureSweepThenPrefetch(cfg, thisRequest);
 			})
 			.catch((e) => {
 				if (thisRequest !== seq.requestId || thisWorksLoad !== seq.worksLoadId) return;
 				reportProblem({ area: 'agenda', action: 'loading the work rows', error: e });
 				ag.worksByEventId = {};
-				ag.worksRowsLoading = false;
 			});
 	}
 
@@ -212,17 +167,6 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 			});
 	}
 
-	function loadManagePickers(cfg: EntuCfg, seasonId: string | null, thisRequest: number) {
-		void readManagePickers(cfg, seasonId, { listWorks, listAllEditions, listRepertoireItems }).then(
-			(read) => {
-				if (thisRequest !== seq.requestId) return;
-				Object.assign(ag, read.pickers);
-				ag.libraryPickersLoading = false;
-				ag.libraryPickersLoadSucceeded = read.complete;
-			}
-		);
-	}
-
 	function mergePendingRows(byEvent: Record<string, WorkRow[]>): Record<string, WorkRow[]> {
 		const merged: Record<string, WorkRow[]> = {};
 		for (const [eventId, rows] of Object.entries(byEvent)) {
@@ -242,27 +186,16 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 		const thisWorksLoad = ++seq.worksLoadId;
 		const editor = ag.seasonManageRights === 'editor';
 		refetchWorkRows(cfg, eventIds, seasonId, worksRefetch(thisRequest, thisWorksLoad, editor));
-		if (seasonId !== null && editor) {
-			refetchSeasonRepertoire(
-				cfg,
-				seasonId,
-				listRepertoireItems,
-				() => thisRequest === seq.requestId,
-				(items) => (ag.seasonRepertoire = items)
-			);
-		}
 	}
 
 	return {
 		resetManagement,
 		deriveSeasonCreateRights,
 		loadDatabaseEntityRights,
-		upgradeRepertoireManagement,
 		loadWorksAndManagement,
 		runPressureSweepThenPrefetch,
 		prefetchNextEventPartsAfterSettle,
 		loadScheduleItems,
-		loadManagePickers,
 		mergePendingRows,
 		refreshWorksAfterWrite
 	};
