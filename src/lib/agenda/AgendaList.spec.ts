@@ -484,42 +484,72 @@ describe('AgendaList — event detail links (#101 TE.1)', () => {
 	});
 });
 
-describe('#207 rule 7 — ISO dates on tabular rows, narrative headers preserved', () => {
-	it('recent-row date cell renders the Tallinn ISO calendar day, while the day-group header for the same date keeps weekday + month name', () => {
-		const upcoming = [item('r1', '2026-06-15T09:00:00.000Z')];
-		const recent = [item('p1', '2026-06-15T16:00:00.000Z')];
-		const { container } = render(AgendaList, { items: upcoming, recentItems: recent });
-
-		const cell = container.querySelector(
-			'[data-testid="agenda-recent-row-p1"] [data-testid="recent-row-date"]'
+describe('#918 — past events sit under day headers, not beside a date', () => {
+	const recentHeaders = (c: HTMLElement) =>
+		[...c.querySelectorAll('[data-testid="agenda-recent"] [data-testid="agenda-date-header"]')].map(
+			(h) => h.textContent?.trim()
 		);
-		expect(cell).not.toBeNull();
-		expect(cell?.textContent?.trim()).toBe('2026-06-15');
+	async function showAll(c: HTMLElement) {
+		await fireEvent.click(c.querySelector('[data-testid="agenda-recent-show-more"]')!);
+	}
 
-		const header = container.querySelector('[data-testid="agenda-date-header"]');
-		const headerText = header?.textContent ?? '';
-		expect(headerText).toMatch(/Monday/i);
-		expect(headerText).toMatch(/June/i);
-		expect(headerText).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+	it("a past card's left column holds its time, and no date", () => {
+		const recent = [item('p1', '2026-06-15T16:00:00.000Z')];
+		const { container } = render(AgendaList, { items: [], recentItems: recent });
+		const row = container.querySelector('[data-testid="agenda-recent-row-p1"]')!;
+		const column = row.querySelector('a[aria-hidden="true"]')!;
+		expect(column.querySelector('[data-testid="row-time"]')?.textContent?.trim()).toBe('19:00');
+		expect(column.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+		expect(column.textContent).not.toMatch(/June|15\./);
+		expect(row.querySelector('[data-testid="recent-row-date"]')).toBeNull();
 	});
 
-	it('DST edges: recent rows near the Tallinn transitions render the Tallinn ISO calendar day, not the UTC one', async () => {
+	it('one narrative header per Tallinn day, newest day first, each over its own cards', async () => {
 		const recent = [
-			item('spring', '2026-03-28T23:30:00.000Z'),
-			item('fall', '2026-10-24T22:30:00.000Z')
+			item('p1', '2026-06-15T16:00:00.000Z'),
+			item('p2', '2026-06-15T09:00:00.000Z'),
+			item('p3', '2026-06-10T16:00:00.000Z')
+		];
+		const { container } = render(AgendaList, { items: [], recentItems: recent });
+		await showAll(container);
+		expect(recentHeaders(container)).toEqual(['Monday, June 15', 'Wednesday, June 10']);
+		const order = [
+			...container.querySelectorAll(
+				'[data-testid="agenda-recent"] [data-testid="agenda-date-header"], [data-testid^="agenda-recent-row-"]'
+			)
+		].map((el) => el.getAttribute('data-testid'));
+		expect(order).toEqual([
+			'agenda-date-header',
+			'agenda-recent-row-p1',
+			'agenda-recent-row-p2',
+			'agenda-date-header',
+			'agenda-recent-row-p3'
+		]);
+	});
+
+	it('DST edges: the header names the Tallinn calendar day, not the UTC one', async () => {
+		const recent = [
+			item('fall', '2026-10-24T22:30:00.000Z'),
+			item('spring', '2026-03-28T23:30:00.000Z')
 		];
 		const { container } = render(AgendaList, { items: itemSameDay, recentItems: recent });
+		await showAll(container);
+		expect(recentHeaders(container)).toEqual(['Sunday, October 25', 'Sunday, March 29']);
+	});
 
-		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
-		expect(showMore, '#471 show-more button').not.toBeNull();
-		await fireEvent.click(showMore!);
-
-		const dateOf = (id: string) =>
-			container
-				.querySelector(`[data-testid="agenda-recent-row-${id}"] [data-testid="recent-row-date"]`)
-				?.textContent?.trim();
-		expect(dateOf('spring')).toBe('2026-03-29');
-		expect(dateOf('fall')).toBe('2026-10-25');
+	it('Recent carries no today/tomorrow pill and no gap-week marker', async () => {
+		const now = Date.now();
+		const recent = [
+			item('today', new Date(now - 60_000).toISOString()),
+			item('old', new Date(now - 60 * 24 * 3600_000).toISOString())
+		];
+		const { container } = render(AgendaList, { items: [], recentItems: recent });
+		await showAll(container);
+		const section = container.querySelector('[data-testid="agenda-recent"]')!;
+		expect(section.querySelectorAll('[data-testid="agenda-date-header"]').length).toBe(2);
+		expect(section.querySelector('[data-testid^="agenda-relative-"]')).toBeNull();
+		expect(section.querySelector('[data-testid="agenda-gap-marker"]')).toBeNull();
+		expect(section.querySelector('.bg-highlight')).toBeNull();
 	});
 });
 
@@ -552,19 +582,17 @@ describe('#251 — date-group headers render in the app language', () => {
 		});
 	});
 
-	it("app language 'et': grouping keys stay ISO — same-day items share one header and the recent-row date cell still reads '2026-06-15'", () => {
+	it("app language 'et': grouping keys stay ISO — same-day items share one header, past and upcoming alike", () => {
 		setAppLocale('et');
 		const recent = [item('p1', '2026-06-15T16:00:00.000Z')];
 		const { container } = render(AgendaList, { items: itemSameDay, recentItems: recent });
 
-		const headers = container.querySelectorAll('[data-testid="agenda-date-header"]');
-		expect(headers.length).toBe(1);
-		expect(
-			container
-				.querySelector('[data-testid="agenda-recent-row-p1"] [data-testid="recent-row-date"]')
-				?.textContent?.trim()
-		).toBe('2026-06-15');
-		expect(headers[0]?.textContent ?? '').not.toMatch(/\d{4}-\d{2}-\d{2}/);
+		const headers = (section: string) =>
+			container.querySelectorAll(`[data-testid="${section}"] [data-testid="agenda-date-header"]`);
+		expect(headers('agenda-list').length).toBe(1);
+		expect(headers('agenda-recent').length).toBe(1);
+		expect(headers('agenda-recent')[0]?.textContent?.trim()).toBe('esmaspäev, 15. juuni');
+		expect(headers('agenda-list')[0]?.textContent ?? '').not.toMatch(/\d{4}-\d{2}-\d{2}/);
 	});
 
 	it("app language 'et': formatter output is natural-case ('esmaspäev…') beneath #250's untouched CSS uppercase", () => {
@@ -579,7 +607,7 @@ describe('#251 — date-group headers render in the app language', () => {
 });
 
 describe('#220 — AM/PM preference on agenda times', () => {
-	it("'ampm': upcoming row-time renders '12:00 PM' and a 09:30 recent row renders '9:30 AM' — dates untouched (rule 7)", async () => {
+	it("'ampm': upcoming row-time renders '12:00 PM' and a 09:30 recent row renders '9:30 AM' — day headers untouched", async () => {
 		const { timeFormatStore } = await import('$lib/preferences/timeFormat');
 		timeFormatStore.set('ampm');
 		try {
@@ -600,11 +628,9 @@ describe('#220 — AM/PM preference on agenda times', () => {
 			expect(spanTexts).toContain('9:30 AM');
 			expect(spanTexts).not.toContain('09:30');
 
-			expect(
-				recentRow!.querySelector('[data-testid="recent-row-date"]')?.textContent?.trim()
-			).toBe('2026-06-15');
 			const headerText =
-				container.querySelector('[data-testid="agenda-date-header"]')?.textContent ?? '';
+				container.querySelector('[data-testid="agenda-recent"] [data-testid="agenda-date-header"]')
+					?.textContent ?? '';
 			expect(headerText).toMatch(/Monday/i);
 			expect(headerText).toMatch(/June/i);
 			expect(headerText).not.toMatch(/\b(AM|PM)\b/);

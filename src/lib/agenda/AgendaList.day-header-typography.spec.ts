@@ -153,15 +153,19 @@ describe('AgendaList — #250 scope fence (unchanged neighbours)', () => {
 		expect(marker?.classList.contains('text-ink-2')).toBe(true);
 	});
 
-	it('layout guard (happy-dom cannot measure typography): Recent-row date keeps text-[10px] text-ink-2', () => {
+	it('layout guard (happy-dom cannot measure typography): a Recent day header wears the upcoming header classes (#918)', () => {
 		const { container } = render(AgendaList, {
 			items: plainItems,
 			recentItems: [item('p1', '2026-05-01T09:00:00.000Z')]
 		});
-		const date = container.querySelector<HTMLElement>('[data-testid="recent-row-date"]');
-		expect(date).not.toBeNull();
-		expect(date?.classList.contains('text-[10px]')).toBe(true);
-		expect(date?.classList.contains('text-ink-2')).toBe(true);
+		const recentHeader = container.querySelector<HTMLElement>(
+			'[data-testid="agenda-recent"] [data-testid="agenda-date-header"]'
+		);
+		const upcomingHeader = container.querySelector<HTMLElement>(
+			'[data-testid="agenda-list"] [data-testid="agenda-date-header"]'
+		);
+		expect(recentHeader).not.toBeNull();
+		expect(recentHeader!.className).toBe(upcomingHeader!.className);
 	});
 
 	it('testids and grouping stay intact: one day group per Tallinn day, header inside it', () => {

@@ -87,10 +87,10 @@
 
 	const headerFmt = $derived(longDayFormatter());
 
-	const groups = $derived.by(() => {
+	function groupByDay(list: AgendaItem[], fmt: Intl.DateTimeFormat) {
 		const seen = new Map<string, AgendaItem[]>();
 		const order: string[] = [];
-		for (const item of items) {
+		for (const item of list) {
 			const d = new Date(item.startDatetime);
 			const key = tallinnDayKey(d);
 			if (!seen.has(key)) {
@@ -101,10 +101,18 @@
 		}
 		return order.map((key) => ({
 			key,
-			header: headerFmt.format(new Date(key + 'T12:00:00')), // noon avoids DST edge on the key date
+			header: fmt.format(new Date(key + 'T12:00:00')), // noon avoids DST edge on the key date
 			rows: seen.get(key)!
 		}));
-	});
+	}
+
+	const groups = $derived(groupByDay(items, headerFmt));
+	const recentGroups = $derived(
+		groupByDay(showAllRecent ? recentItems : recentItems.slice(0, 1), headerFmt)
+	);
+
+	const DATE_HEADER =
+		'flex items-baseline gap-2 pt-6 pb-2 text-base font-semibold tracking-wide text-ink uppercase';
 
 	const now = new Date();
 	const todayKey = tallinnDayKey(now);
@@ -140,6 +148,13 @@
 		void goto(`/event/${id}`);
 	}
 </script>
+
+{#snippet timeColumn(item: AgendaItem)}
+	<a href="/event/{item.id}" aria-hidden="true" tabindex="-1" class="flex flex-col font-mono">
+		<span data-testid="row-time" class="text-sm text-ink">{formatTime(tallinnHHMM(new Date(item.startDatetime)), $timeFormatStore)}</span>
+		<span data-testid="row-duration" class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
+	</a>
+{/snippet}
 
 {#snippet scheduleLine(item: AgendaItem)}
 	{#if scheduleItemsByEventId[item.id]?.length}
@@ -178,83 +193,82 @@
 		{#if recentItems.length === 0 && recentEmptyState}
 			{@render recentEmptyState()}
 		{/if}
-		{#each showAllRecent ? recentItems : recentItems.slice(0, 1) as item (item.id)}
-			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<!-- svelte-ignore a11y_click_events_have_key_events -->
-			<div
-				data-testid="agenda-recent-row-{item.id}"
-				class="grid grid-cols-[60px_1fr] gap-3 border-b border-dashed border-ink-5 py-2 last:border-b-0"
-				class:bg-highlight={item.id === justCreatedEventId}
-				onclick={(event) => openEventOnCardTap(event, item.id)}
-			>
-				<AgendaCreatedMark show={item.id === justCreatedEventId} />
-				<a href="/event/{item.id}" aria-hidden="true" tabindex="-1" class="flex flex-col font-mono">
-					<span data-testid="recent-row-date" class="text-[10px] text-ink-2">{tallinnDayKey(new Date(item.startDatetime))}</span>
-					<span class="text-sm text-ink">{formatTime(tallinnHHMM(new Date(item.startDatetime)), $timeFormatStore)}</span>
-					<span class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
-				</a>
-				<div class="flex min-w-0 flex-col gap-1">
-					<div class="flex items-start justify-between gap-2">
-						<div class="flex min-w-0 flex-col gap-1">{@render rowBody(item)}</div>
-						{#if conductorEventIds.has(item.id) && ontakeattendance && !(attendancePanel && attendancePanel.item.id === item.id)}
-							<TakeAttendanceButton eventName={item.name} onclick={() => ontakeattendance?.(item)} />
-						{/if}
-					</div>
-					{#if membership === 'member'}
-						{@const answer = rsvpAnswerText(rsvpByEventId[item.id]?.status)}
-						<div class="flex items-center gap-1">
-							<AttendanceBadge status={badgeStatus(item.id)} testid="attendance-badge-{item.id}" />
-							{#if answer}
-								<span
-									data-testid="attendance-answer-{item.id}"
-									class="font-mono text-[9px] tracking-wide text-ink-2">({answer})</span
-								>
+		{#each recentGroups as group (group.key)}
+			<div data-testid="agenda-date-header" class={DATE_HEADER}><span>{group.header}</span></div>
+			{#each group.rows as item (item.id)}
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<div
+					data-testid="agenda-recent-row-{item.id}"
+					class="grid grid-cols-[60px_1fr] gap-3 border-b border-dashed border-ink-5 py-2 last:border-b-0"
+					class:bg-highlight={item.id === justCreatedEventId}
+					onclick={(event) => openEventOnCardTap(event, item.id)}
+				>
+					<AgendaCreatedMark show={item.id === justCreatedEventId} />
+					{@render timeColumn(item)}
+					<div class="flex min-w-0 flex-col gap-1">
+						<div class="flex items-start justify-between gap-2">
+							<div class="flex min-w-0 flex-col gap-1">{@render rowBody(item)}</div>
+							{#if conductorEventIds.has(item.id) && ontakeattendance && !(attendancePanel && attendancePanel.item.id === item.id)}
+								<TakeAttendanceButton eventName={item.name} onclick={() => ontakeattendance?.(item)} />
 							{/if}
 						</div>
-					{/if}
-					{#if attendancePanel && attendancePanel.item.id === item.id}
-						<div data-card-controls>
-							<AttendanceSurface
-								item={attendancePanel.item}
-								members={attendancePanel.members}
-								attendanceByMemberId={attendancePanel.attendanceByMemberId}
-								rsvpByMemberId={attendancePanel.rsvpByMemberId}
-								loading={attendancePanel.loading}
-								error={attendancePanel.error}
-								pendingMemberIds={attendancePanel.pendingMemberIds}
-								failedMemberIds={attendancePanel.failedMemberIds}
-								savedMemberIds={attendancePanel.savedMemberIds}
-								membersPartial={attendancePanel.membersPartial}
-								ontoggle={attendancePanel.ontoggle}
-								onclose={attendancePanel.onclose}
-							/>
-						</div>
-					{/if}
-					{#if !showAllRecent && recentItems.length > 1}
-						<button
-							type="button"
-							data-testid="agenda-recent-show-more"
-							class="self-end rounded-md border border-ink px-2 py-1 font-mono text-[9px] tracking-wide text-ink hover:bg-ink hover:text-paper"
-							onclick={async (event) => {
-								const section = (event.currentTarget as HTMLElement).closest(
-									'[data-testid="agenda-recent"]'
-								);
-								const firstRevealedId = recentItems[1]?.id;
-								showAllRecent = true;
-								await tick();
-								if (!section || firstRevealedId === undefined) return;
-								section
-									.querySelector<HTMLElement>(
-										`[data-testid="agenda-recent-row-${firstRevealedId}"] a[aria-label]`
-									)
-									?.focus();
-							}}
-						>
-							{m.agenda_recent_show_more()}
-						</button>
-					{/if}
+						{#if membership === 'member'}
+							{@const answer = rsvpAnswerText(rsvpByEventId[item.id]?.status)}
+							<div class="flex items-center gap-1">
+								<AttendanceBadge status={badgeStatus(item.id)} testid="attendance-badge-{item.id}" />
+								{#if answer}
+									<span
+										data-testid="attendance-answer-{item.id}"
+										class="font-mono text-[9px] tracking-wide text-ink-2">({answer})</span
+									>
+								{/if}
+							</div>
+						{/if}
+						{#if attendancePanel && attendancePanel.item.id === item.id}
+							<div data-card-controls>
+								<AttendanceSurface
+									item={attendancePanel.item}
+									members={attendancePanel.members}
+									attendanceByMemberId={attendancePanel.attendanceByMemberId}
+									rsvpByMemberId={attendancePanel.rsvpByMemberId}
+									loading={attendancePanel.loading}
+									error={attendancePanel.error}
+									pendingMemberIds={attendancePanel.pendingMemberIds}
+									failedMemberIds={attendancePanel.failedMemberIds}
+									savedMemberIds={attendancePanel.savedMemberIds}
+									membersPartial={attendancePanel.membersPartial}
+									ontoggle={attendancePanel.ontoggle}
+									onclose={attendancePanel.onclose}
+								/>
+							</div>
+						{/if}
+						{#if !showAllRecent && recentItems.length > 1}
+							<button
+								type="button"
+								data-testid="agenda-recent-show-more"
+								class="self-end rounded-md border border-ink px-2 py-1 font-mono text-[9px] tracking-wide text-ink hover:bg-ink hover:text-paper"
+								onclick={async (event) => {
+									const section = (event.currentTarget as HTMLElement).closest(
+										'[data-testid="agenda-recent"]'
+									);
+									const firstRevealedId = recentItems[1]?.id;
+									showAllRecent = true;
+									await tick();
+									if (!section || firstRevealedId === undefined) return;
+									section
+										.querySelector<HTMLElement>(
+											`[data-testid="agenda-recent-row-${firstRevealedId}"] a[aria-label]`
+										)
+										?.focus();
+								}}
+							>
+								{m.agenda_recent_show_more()}
+							</button>
+						{/if}
+					</div>
 				</div>
-			</div>
+			{/each}
 		{/each}
 	</section>
 {/if}
@@ -287,7 +301,7 @@
 			<section data-testid="agenda-day-group" class="flex flex-col">
 				<div
 					data-testid="agenda-date-header"
-					class="flex items-baseline gap-2 pt-6 pb-2 text-base font-semibold tracking-wide text-ink uppercase"
+					class={DATE_HEADER}
 					class:bg-highlight={group.relative === 'today'}
 				>
 					{#if group.relative === 'today'}
@@ -307,10 +321,7 @@
 						onclick={(event) => openEventOnCardTap(event, item.id)}
 					>
 						<AgendaCreatedMark show={item.id === justCreatedEventId} />
-						<a href="/event/{item.id}" aria-hidden="true" tabindex="-1" class="flex flex-col font-mono">
-							<span data-testid="row-time" class="text-sm text-ink">{formatTime(tallinnHHMM(new Date(item.startDatetime)), $timeFormatStore)}</span>
-							<span data-testid="row-duration" class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
-						</a>
+						{@render timeColumn(item)}
 						<div class="flex min-w-0 flex-col gap-1">
 							{@render rowBody(item, 'row-location')}
 							{#if membership === 'non-member'}
