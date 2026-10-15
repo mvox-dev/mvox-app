@@ -189,6 +189,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	cleanup();
+	vi.unstubAllGlobals();
 	loadFullAgendaMock.mockReset();
 	loadRosterMock.mockReset();
 	createSeasonMock.mockReset();
@@ -389,6 +390,36 @@ describe('#167 review F2 — the database-entity answer is not applied to one ga
 		await waitFor(() => {
 			expect(q(container, 'season-create')).not.toBeNull();
 		});
+	});
+
+	it('#934 — a database editor on an invisible-rights season keeps the season panel and create button, and the agenda works reads stay active-only after a repertoire write', async () => {
+		loadFullAgendaMock.mockResolvedValue(currentSeasonAgenda(currentSeasonNoVisibleRights()));
+		resolveManageRightsMock.mockResolvedValue('editor');
+		listRepertoireItemsMock.mockResolvedValue([
+			{ id: 'ri-1', workId: 'work-1', editionId: '', status: 'active', name: 'Spem in alium' }
+		]);
+		vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ deleted: true }))));
+		const container = await renderReadyWithRow();
+
+		await waitFor(() => {
+			expect(q(container, 'season-create')).not.toBeNull();
+		});
+		await fireEvent.click(q(container, 'season-card-expand') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'work-manage-remove')).not.toBeNull();
+		});
+		loadWorksByEventIdMock.mockClear();
+		await fireEvent.click(q(container, 'work-manage-remove') as HTMLElement);
+		await waitFor(() => {
+			expect(loadWorksByEventIdMock).toHaveBeenCalled();
+		});
+		expect(loadWorksByEventIdMock).not.toHaveBeenCalledWith(
+			expect.anything(),
+			expect.anything(),
+			expect.anything(),
+			expect.anything(),
+			expect.objectContaining({ includeInactive: true })
+		);
 	});
 
 	it('fail-closed: the same shape with no database-entity rights leaves EVERY gate shut and the works read filtered', async () => {

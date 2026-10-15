@@ -225,7 +225,6 @@ export function createSelectedLoad(
 								ag.manageableSeasonRights = 'editor';
 							}
 							ag.seasonCreateRights = 'editor';
-							if (currentRightsInvisible) ag.seasonManageRights = 'editor';
 						});
 					}
 					ag.attendanceEventIds = new Set(
