@@ -35,3 +35,6 @@ staging:
   - label: DEFERRED
     record: "Re-open #434 s6 too if a cached page calls goto on its own route (use replaceState instead)."
     ref: "#434"
+  - label: PATTERN
+    record: "A store-gated section outside the page status gate: contract rows must set the store or test none."
+    ref: "#916"
