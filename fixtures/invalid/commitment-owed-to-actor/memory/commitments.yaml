@@ -1,0 +1,7 @@
+commitments:
+  - trigger: "Monday comes."
+    obligation: "Water the plants: owed to the actor alone, a habit, not a commitment."
+    actor: "Mihkel"
+    owed_to: "Mihkel"
+    within: "1 day"
+    ref: "#30"

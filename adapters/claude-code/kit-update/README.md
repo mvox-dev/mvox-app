@@ -129,6 +129,10 @@ kit_home: ../desk        # absolute, or relative to this conf's own folder
 - **Absolute paths:** POSIX, a drive letter (`C:\` or `C:/`) or UNC. `~` is not expanded: write
   the path absolute or relative to the conf.
 - **Never silent:** a broken pointer, or a pointed home without `memory-kit/VERSION`, is one visible notice (notify, else a transcript line), and nothing is checked. `/kit-update` names the home and the pointer.
+- **No conf where the home is looked for** (kit #31): when the folder taken for the home (the start
+  folder, or the `home` option's) has no `memory-kit.conf`, one visible notice says so and names
+  the fix (`kit_home: <path>` in a conf there), and `/kit-update` shows the same text. Before, it
+  read as pinned and said nothing, which looked the same as "nothing newer".
 - The lint and the tools follow the same pointer (`lint/kit_home.py`). This plugin's copy of the
   rules is `hooks/kit-home.ts`, identical in all three plugins; `lint/run-fixtures.sh` fails when
   the copies differ.

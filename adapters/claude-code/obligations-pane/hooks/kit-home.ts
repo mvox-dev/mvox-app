@@ -51,6 +51,12 @@ export function confValueOf(conf: string, key: string): string {
   return ''
 }
 
+/** What a reader says when the folder it took for the home has no memory-kit.conf (kit #31): silence
+ *  there looked the same as "nothing newer". lint/kit_home.py no_conf_notice says it alike. */
+export function noConfNotice(folder: string): string {
+  return `${normalizePath(folder)} has no memory-kit.conf, so it is not a kit home; if the home is elsewhere, put kit_home: <path> in a memory-kit.conf here`
+}
+
 const topKeys = (conf: string) => conf.split(/\r?\n/).flatMap(line => /^([A-Za-z_][\w-]*):/.exec(line)?.[1] ?? [])
 
 /** The home for a start folder, by its memory-kit.conf's kit_home (see the head of this file). */

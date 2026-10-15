@@ -1,6 +1,6 @@
 {
   "name": "obligations-pane",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Side pane showing the memory-kit obligations tier (memory/obligations.yaml), soonest expiry first; read-only",
   "author": {
     "name": "Mihkel Putrin\u0161"

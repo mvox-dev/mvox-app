@@ -39,8 +39,12 @@ UPGRADE = """## Per version
 class FakeHost:
     """subprocess.run for the tool: git and the lint answered from a table, every call recorded."""
 
-    def __init__(self, tags, upgrade=UPGRADE, pull="ok", reset_rc=0, fetch="ok"):
+    def __init__(self, tags, upgrade=UPGRADE, pull="ok", reset_rc=0, fetch="ok", status="", diff=""):
         self.tags, self.upgrade, self.pull, self.reset_rc, self.fetch = tags, upgrade, pull, reset_rc, fetch
+        # `git status --porcelain` as the home would answer it with every untracked file shown;
+        # the fake applies the flags and the pathspec the tool passes.
+        self.status = status
+        self.diff = diff  # `git diff --name-only` between the start and the pulled commit
         self.calls = []
 
     def __call__(self, argv, **kw):
@@ -53,7 +57,13 @@ class FakeHost:
             return done()  # the lint gate passes
         cmd = argv[3] if argv[:2] == ["git", "-C"] else words[0]
         if cmd == "status":
-            return done()
+            lines = self.status.splitlines()
+            if "--untracked-files=no" in argv:
+                lines = [l for l in lines if not l.startswith("??")]
+            if "--" in argv:
+                prefix = argv[argv.index("--") + 1].rstrip("/") + "/"
+                lines = [l for l in lines if l[3:].startswith(prefix)]
+            return done(out="".join(l + "\n" for l in lines))
         if cmd == "fetch":
             if self.fetch == "hang":
                 raise subprocess.TimeoutExpired(argv, kw.get("timeout"))
@@ -69,7 +79,7 @@ class FakeHost:
         if cmd == "reset":
             return done(rc=self.reset_rc, err="" if self.reset_rc == 0 else "fatal: Unable to create '.git/index.lock': File exists.")
         if cmd == "diff":
-            return done()
+            return done(out=self.diff)
         raise AssertionError(f"unexpected command: {argv}")
 
     def timeout_of(self, cmd):
@@ -238,6 +248,22 @@ class KitHomePointer(unittest.TestCase):
         self.assertEqual(kit_home.resolve(self.root / "start").ignored, ["watch_sources", "memory_dir"])
 
 
+class NoConf(unittest.TestCase):
+    """Kit #31: a start folder with no memory-kit.conf is said plainly, worded as the plugins'
+    hooks/kit-home.ts words it."""
+
+    def test_the_notice_is_the_plugins_text(self):
+        self.assertEqual(kit_home.no_conf_notice("/u/start/"), "/u/start has no memory-kit.conf, so it is not a kit home; if the home is elsewhere, put kit_home: <path> in a memory-kit.conf here")
+
+    def test_kit_update_on_a_folder_with_no_conf_says_so_exit_2(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = ku.main(["kit-update.py", d])
+            self.assertEqual(code, 2)
+            self.assertIn(f"kit-update: {d} has no memory-kit.conf, so it is not a kit home; if the home is elsewhere, put kit_home: <path> in a memory-kit.conf here. kit-update checks nothing until it has one.", out.getvalue())
+
+
 class ToolsFollowThePointer(unittest.TestCase):
     def test_kit_update_runs_on_the_home_the_pointer_names(self):
         host = FakeHost(tags=["v0.1.0-alpha.13", "v0.1.0-alpha.14"])
@@ -284,6 +310,131 @@ class ToolsFollowThePointer(unittest.TestCase):
                 code = due.main(["obligations-due.py", str(root / "start")])
             self.assertEqual(code, 0)
             self.assertIn("from the desk", out.getvalue())
+
+
+class UntrackedFiles(unittest.TestCase):
+    """Kit #25: an untracked scratch folder outside memory-kit/ refused the update. The undo is a
+    reset --hard, which leaves untracked files alone, and the pull writes only under memory-kit/."""
+
+    def test_untracked_files_outside_the_kit_do_not_refuse(self):
+        code, out = run_tool(FakeHost(tags=["v0.1.0-alpha.13", "v0.1.0-alpha.14"], status="?? scratchpad/notes.md\n?? todo.txt"))
+        self.assertEqual(code, 0, out)
+        self.assertIn("updated 0.1.0-alpha.13 -> 0.1.0-alpha.14", out)
+
+    def test_a_tracked_change_anywhere_refuses_and_is_named(self):
+        code, out = run_tool(FakeHost(tags=["v0.1.0-alpha.13", "v0.1.0-alpha.14"], status=" M memory/rules.yaml\n?? todo.txt"))
+        self.assertEqual(code, 1)
+        self.assertIn("uncommitted changes", out)
+        self.assertIn("memory/rules.yaml", out)
+        self.assertNotIn("todo.txt", out)
+
+    def test_an_untracked_file_under_the_kit_refuses_and_is_named(self):
+        code, out = run_tool(FakeHost(tags=["v0.1.0-alpha.13", "v0.1.0-alpha.14"], status="?? memory-kit/lint/stray.py\n?? todo.txt"))
+        self.assertEqual(code, 1)
+        self.assertIn("untracked under memory-kit/", out)
+        self.assertIn("memory-kit/lint/stray.py", out)
+        self.assertNotIn("todo.txt", out)
+
+    def test_many_files_are_named_five_then_counted(self):
+        status = "\n".join(f" M memory/facts/f{i}.yaml" for i in range(8))
+        code, out = run_tool(FakeHost(tags=["v0.1.0-alpha.13", "v0.1.0-alpha.14"], status=status))
+        self.assertEqual(code, 1)
+        self.assertIn("memory/facts/f4.yaml +3 more", out)
+
+
+class PluginSteps(unittest.TestCase):
+    """Kit #23: a subtree pull never updates an installed plugin (the harness keeps its own copy),
+    so /reload-plugins alone left po-team's pane at 0.1.0. The tool names the whole sequence."""
+
+    TAGS = ["v0.1.0-alpha.13", "v0.1.0-alpha.14"]
+
+    def test_changed_plugins_get_the_marketplace_update_each_update_then_reload(self):
+        diff = ("memory-kit/adapters/claude-code/watch/hooks/watch.ts\n"
+                "memory-kit/adapters/claude-code/obligations-pane/README.md\n"
+                "memory-kit/adapters/claude-code/watch/README.md\n")
+        code, out = run_tool(FakeHost(tags=self.TAGS, diff=diff))
+        self.assertEqual(code, 0, out)
+        lines = out.splitlines()
+        i = lines.index("kit-update:   claude plugin marketplace update memory-kit")
+        self.assertEqual(lines[i + 1:i + 4], [
+            "kit-update:   claude plugin update obligations-pane@memory-kit",
+            "kit-update:   claude plugin update watch@memory-kit",
+            "kit-update:   then /reload-plugins in every session of this home",
+        ])
+        self.assertIn("plugins changed: obligations-pane, watch", out)
+
+    def test_the_marketplace_alone_changed_needs_no_plugin_update(self):
+        code, out = run_tool(FakeHost(tags=self.TAGS, diff="memory-kit/adapters/claude-code/.claude-plugin/marketplace.json\n"))
+        self.assertEqual(code, 0, out)
+        self.assertIn("claude plugin marketplace update memory-kit", out)
+        self.assertNotIn("claude plugin update ", out)
+
+    def test_no_adapter_change_says_nothing_about_plugins(self):
+        code, out = run_tool(FakeHost(tags=self.TAGS))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("plugin", out)
+
+
+class Flags(unittest.TestCase):
+    """Kit #32: --help ran a real update, because every unknown -- flag was dropped silently."""
+
+    def run_main(self, *argv):
+        host = FakeHost(tags=["v0.1.0-alpha.13", "v0.1.0-alpha.14"])
+        real, ku.subprocess.run = ku.subprocess.run, host
+        out = io.StringIO()
+        try:
+            with redirect_stdout(out):
+                code = ku.main(["kit-update.py", *argv])
+        finally:
+            ku.subprocess.run = real
+        return code, out.getvalue(), host.calls
+
+    def test_help_prints_the_usage_and_runs_nothing(self):
+        for flag in ("--help", "-h"):
+            code, out, calls = self.run_main(flag)
+            self.assertEqual(code, 0, flag)
+            self.assertIn("kit-update.py [home] [--dry-run]", out)
+            self.assertEqual(calls, [], flag)
+
+    def test_an_unknown_flag_is_bad_usage_exit_2_and_runs_nothing(self):
+        for flag in ("--dry-rn", "-n", "--force"):
+            code, out, calls = self.run_main(".", flag)
+            self.assertEqual(code, 2, flag)
+            self.assertIn(f"unknown option {flag}", out)
+            self.assertEqual(calls, [], flag)
+
+    def test_two_homes_is_bad_usage(self):
+        code, out, calls = self.run_main("a", "b")
+        self.assertEqual(code, 2)
+        self.assertIn("one home at most", out)
+        self.assertEqual(calls, [])
+
+
+class TheShippedUpgradeMd(unittest.TestCase):
+    def test_the_next_hop_is_named_and_reads_as_no_data_step(self):
+        # The real file, not a copy: a heading the tool cannot parse makes every home's update a
+        # manual one.
+        text = (HERE.parent / "UPGRADE.md").read_text(encoding="utf-8")
+        self.assertIsNone(ku.data_steps_ok(text, ["0.1.0-alpha.14", "0.1.0-alpha.15"]))
+        self.assertIsNone(ku.data_steps_ok(text, ["0.1.0-alpha.12", "0.1.0-alpha.13", "0.1.0-alpha.14", "0.1.0-alpha.15"]))
+
+
+class ObligationsDueShowsWhoIsOwed(unittest.TestCase):
+    def test_a_row_with_owed_to_names_both_parties_and_one_without_is_unchanged(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d)
+            tree(root, {
+                "memory/obligations.yaml": (
+                    "obligations:\n"
+                    "  - obligation: answer the email\n    actor: Pepys\n    owed_to: the board\n    expires: 2000-01-01\n"
+                    "  - obligation: from before owed_to\n    actor: Pepys\n    expires: 2000-01-02\n"),
+            })
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = due.main(["obligations-due.py", str(root)])
+            self.assertEqual(code, 0)
+            self.assertIn("- 2000-01-01  Pepys -> the board: answer the email", out.getvalue())
+            self.assertIn("- 2000-01-02  Pepys: from before owed_to", out.getvalue())
 
 
 if __name__ == "__main__":

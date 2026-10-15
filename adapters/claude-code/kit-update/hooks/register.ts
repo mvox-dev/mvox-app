@@ -21,7 +21,7 @@ import {
   upgradeUrl,
 } from './release'
 import type { Channel } from './release'
-import { isAbsolute, resolveKitHome } from './kit-home'
+import { isAbsolute, noConfNotice, resolveKitHome } from './kit-home'
 import type { KitHome } from './kit-home'
 
 const MINUTE = 60_000
@@ -75,6 +75,17 @@ async function homeOf($: EngineInterface, settings: Settings): Promise<KitHome> 
   return { home: isAbsolute(settings.home) ? settings.home : `${start}/${settings.home}`, ignored: [] }
 }
 let startCwd = ''
+
+/** tools/kit-update.py says the same. */
+const noConfText = (home: string) => `${noConfNotice(home)}. kit-update checks nothing until it has one.`
+
+async function existsOrNot($: EngineInterface, path: string): Promise<boolean> {
+  try {
+    return await $.fs.exists(path)
+  } catch {
+    return false
+  }
+}
 
 /** One notice to the human, once per text: notify, else a transcript line (the watch's lesson). */
 async function tellOnce($: EngineInterface, text: string): Promise<void> {
@@ -217,8 +228,10 @@ async function homeState($: EngineInterface, settings: Settings) {
   const pointer = found.pointer
   const ignored = 'problem' in found ? [] : found.ignored
   const conf = pointerProblem !== undefined ? '' : await readOrEmpty($, `${home}/memory-kit.conf`)
+  // kit #31: no conf reads as pinned and checks nothing, which looked the same as "nothing newer".
+  const noConf = pointerProblem === undefined && !(await existsOrNot($, `${home}/memory-kit.conf`))
   const version = pointerProblem !== undefined ? undefined : kitVersionOf(await readOrEmpty($, `${home}/memory-kit/VERSION`))
-  return { home, pointer, pointerProblem, ignored, conf, version, ...channelOf(conf), upstream: confValue(conf, 'upstream') }
+  return { home, pointer, pointerProblem, noConf, ignored, conf, version, ...channelOf(conf), upstream: confValue(conf, 'upstream') }
 }
 
 async function tick($: EngineInterface, settings: Settings): Promise<void> {
@@ -228,6 +241,10 @@ async function tick($: EngineInterface, settings: Settings): Promise<void> {
     const h = await homeState($, settings)
     if (h.pointerProblem !== undefined) {
       await tellOnce($, `${h.pointerProblem}. Nothing is checked until it is fixed.`)
+      return
+    }
+    if (h.noConf) {
+      await tellOnce($, noConfText(h.home))
       return
     }
     if (h.pointer !== undefined) {
@@ -263,6 +280,7 @@ async function tick($: EngineInterface, settings: Settings): Promise<void> {
 async function status($: EngineInterface, settings: Settings): Promise<string> {
   const h = await homeState($, settings)
   if (h.pointerProblem !== undefined) return `${h.pointerProblem}.\nNothing is checked until it is fixed.`
+  if (h.noConf) return noConfText(h.home)
   const via = h.pointer !== undefined ? `, by kit_home in ${h.pointer}` : ''
   const lines = [`channel: ${h.channel}${h.problem !== undefined ? ` (${h.problem})` : ''}`, `this home: ${h.version ?? 'no memory-kit/VERSION'} (${h.home}${via})`]
   if (h.channel === 'pinned') {

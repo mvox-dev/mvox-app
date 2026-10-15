@@ -167,6 +167,29 @@ describe('kit_home: the start folder points at the home (kit #18)', () => {
   })
 })
 
+describe('no memory-kit.conf where the home is looked for (kit #31)', () => {
+  const NOTICE = (folder: string) =>
+    `${folder} has no memory-kit.conf, so it is not a kit home; if the home is elsewhere, put kit_home: <path> in a memory-kit.conf here. kit-update checks nothing until it has one.`
+
+  test('the start folder: one visible notice, no request; /kit-update says the same', async ($, on) => {
+    const world = worldOf(on, {})
+    const clock = mock.clock(on, { now: NOW })
+    await start($, clock)
+    await clock.advance(3 * HOUR)
+    expect(world.requests).toEqual([])
+    expect(world.notified).toEqual([NOTICE(CWD)])
+    const { text } = await $.command.run({ command: 'kit-update', args: '', origin: { kind: 'composer' } } as never)
+    expect(text).toBe(NOTICE(CWD))
+  })
+
+  test('a home option naming a folder with no conf: the notice names that folder', { options: { home: '/home/u/elsewhere' } }, async ($, on) => {
+    const world = worldOf(on, { '/home/u/elsewhere/memory-kit/VERSION': '0.1.0-alpha.12\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await start($, clock)
+    expect(world.notified).toEqual([NOTICE('/home/u/elsewhere')])
+  })
+})
+
 describe('no request at all', () => {
   for (const channel of ['pinned', undefined] as const) {
     test(`update: ${channel ?? '(absent, so pinned)'} never prompts and never asks upstream`, async ($, on) => {

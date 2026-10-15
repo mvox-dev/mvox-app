@@ -26,6 +26,7 @@ export const CORE_FACTS_CAP = 10;
 
 // -- obligations
 export const OBLIGATION_CHAR_CAP = 120;   // the obligation field; longer means it is a project
+                                          // (also a commitment's trigger and obligation)
 
 // -- lessons
 export const LESSON_INDEX_LINE_CAP = 120;   // the index is GENERATED, never hand-carried

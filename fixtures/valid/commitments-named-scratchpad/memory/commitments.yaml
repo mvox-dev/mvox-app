@@ -1,0 +1,6 @@
+# A scratchpad a home named commitments.yaml before the tier existed: still a scratchpad.
+current:
+  - label: WIP
+    record: "Draft the board answer."
+    ref: "#30"
+staging: []

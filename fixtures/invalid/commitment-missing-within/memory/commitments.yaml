@@ -1,0 +1,6 @@
+commitments:
+  - trigger: "An email from the board arrives."
+    obligation: "Answer it. With no 'within', the obligation it creates has no deadline."
+    actor: "Passepartout"
+    owed_to: "the board"
+    ref: "#30"

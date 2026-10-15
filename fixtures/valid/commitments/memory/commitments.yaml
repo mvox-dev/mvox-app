@@ -1,0 +1,13 @@
+commitments:
+  - trigger: "An email from the board arrives."
+    obligation: "Answer the board's email."
+    actor: "Passepartout"
+    owed_to: "the board"
+    within: "3 days"
+    ref: "#30"
+  - trigger: "A second collective is provisioned."
+    obligation: "Re-check the park."
+    actor: "Passepartout"
+    owed_to: "Mihkel"
+    within: "1 week"
+    ref: ""

@@ -28,7 +28,8 @@ or relative to that conf's folder), the lint runs on the home it names: that hom
 Failures are shape: a cap exceeded, a ref outside the grammar, a missing or unknown key, a
 bad date, an inline URL, a lesson indexed with no file or on disk with no index line, a lesson
 summary cut by an unquoted ` #` (YAML reads the rest of the line as a comment, so the generated
-index agrees with the cut value; only the raw front matter shows it).
+index agrees with the cut value; only the raw front matter shows it), an obligation's `owed_to`
+that is the actor, "us" or "we" (kit #29: owed to no one else, it is a to-do).
 
 Notes never fail a gate. They are the honest gaps the kit wants counted rather than hidden:
 
@@ -39,6 +40,7 @@ Notes never fail a gate. They are the honest gaps the kit wants counted rather t
 | blank `check` on an obligation | some waiting has no observable signal |
 | blank `revoke` on a grant | the tier's own alarm, not a schema error |
 | an expired obligation | the tier working: run the check, then re-state or resolve |
+| an obligation with no `owed_to` | rows from before the field must not close an upgraded home's gate; the count shows how many may be to-dos |
 | `enforcement: recognition` | counted so a corpus that fires nothing is visible |
 
 `run-fixtures.sh` is the conformance test -- see `fixtures/README.md`.
