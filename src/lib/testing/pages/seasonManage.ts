@@ -12,7 +12,7 @@ export function currentSeason(viewerIsEditor: boolean): Season {
 		startDate: SEASON_START,
 		endDate: SEASON_END,
 		conductors: ['p-grace'],
-		owners: [],
+		owners: viewerIsEditor ? ['person-p'] : [],
 		editors: viewerIsEditor ? ['person-p'] : []
 	};
 }

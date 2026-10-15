@@ -114,7 +114,8 @@ import { renderReady } from '$lib/testing/pages/seasonRender';
 
 function agendaResult(opts: { editor?: boolean; conductors?: string[] } = {}) {
 	const { editor = true, conductors = [] } = opts;
-	const season = { ...currentSeason(editor), conductors };
+	const owners = editor ? ['person-p'] : [];
+	const season = { ...currentSeason(editor), conductors, owners };
 	return fullAgendaResult({
 		seasonId: season.id,
 		seasonConductors: season.conductors,
@@ -1115,7 +1116,7 @@ function expectTouchTarget(
 }
 
 describe('agenda admin — layout guard (happy-dom cannot measure size): every control keeps the 44px floor', () => {
-	it('page-level entry points (#261): the collapsed card’s expand button and [+ Season]', async () => {
+	it('page-level entry points (#261): the collapsed card’s expand button, its 🗑 (#917) and [+ Season]', async () => {
 		const container = await renderReady();
 		await waitFor(() => {
 			expect(q(container, SEASON_CARD_EXPAND)).not.toBeNull();
@@ -1124,6 +1125,7 @@ describe('agenda admin — layout guard (happy-dom cannot measure size): every c
 
 		expectTouchTarget(container, SEASON_CARD_EXPAND);
 		expectTouchTarget(container, 'season-create');
+		expectTouchTarget(container, 'season-row-delete', { iconOnly: true });
 		expect(q(container, 'season-manage-delete-season')).toBeNull();
 	});
 

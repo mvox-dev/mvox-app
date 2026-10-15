@@ -128,15 +128,19 @@ function upcomingSeason(): Season {
 	};
 }
 
-function agendaResult(opts: { editor?: boolean; withUpcomingSeason?: boolean } = {}) {
-	const { editor = true, withUpcomingSeason = false } = opts;
-	const season = currentSeason(editor);
+function agendaResult(
+	opts: { editor?: boolean; owner?: boolean; withUpcomingSeason?: boolean } = {}
+) {
+	const { editor = true, owner = editor, withUpcomingSeason = false } = opts;
+	const season = { ...currentSeason(editor), owners: owner ? ['person-p'] : [] };
 	return fullAgendaResult({
 		seasonId: season.id,
 		seasonConductors: season.conductors,
 		seasonOwners: season.owners,
 		seasonEditors: season.editors,
-		seasons: withUpcomingSeason ? [season, upcomingSeason()] : [season]
+		seasons: withUpcomingSeason
+			? [season, { ...upcomingSeason(), owners: season.owners }]
+			: [season]
 	});
 }
 
@@ -337,7 +341,8 @@ describe('season card #261 — zero seasons: [+ Season] is the ONLY control for 
 });
 
 describe('season card #261 — the collapsed card displays only the season name', () => {
-	it('the card text is the season name and NOTHING else — no trashcan, no gear, no plus, no confirm/cancel, no describing words', async () => {
+	it('the card text is the season name and NOTHING else — the owner’s trashcan (#917), no gear, no plus, no confirm/cancel, no describing words', async () => {
+		loadFullAgendaMock.mockResolvedValue(agendaResult({ owner: true }));
 		const container = await renderReady();
 		await waitFor(() => {
 			expect(q(container, CARD)).not.toBeNull();
@@ -345,8 +350,9 @@ describe('season card #261 — the collapsed card displays only the season name'
 		const card = q(container, CARD) as HTMLElement;
 
 		expect(visibleText(card)).toBe('Season 2026');
-		expect(card.querySelectorAll('button')).toHaveLength(1);
-		expect(q(container, 'season-manage-delete-season'), 'no trashcan collapsed').toBeNull();
+		const buttons = Array.from(card.querySelectorAll('button'));
+		expect(buttons.map((b) => b.dataset.testid)).toEqual(['season-card-expand', 'season-row-delete']);
+		expect(q(container, 'season-manage-delete-season'), 'no open-row trashcan collapsed').toBeNull();
 		expect(q(container, 'season-manage-gear'), 'the gear is removed').toBeNull();
 		expect(q(container, 'season-manage-delete-season-confirm')).toBeNull();
 		expect(q(container, 'season-manage-delete-season-cancel')).toBeNull();
@@ -674,6 +680,33 @@ describe('season card #261 — the gear is gone, and its close-refusal moved to 
 			).toBe(false);
 		});
 		await collapseSeasonCard(container);
+	});
+
+	it('#917 — mid bulk-series run a closed row’s trashcan is disabled like its expand button, and lifts when the run finishes', async () => {
+		loadFullAgendaMock.mockResolvedValue(agendaResult({ owner: true, withUpcomingSeason: true }));
+		const container = await renderReady();
+		const resolvers = await startHangingSeriesRun(container);
+		const rowTrash = () =>
+			container.querySelector<HTMLButtonElement>(
+				'[data-testid="season-row-delete"][data-season-manage-id="season-2"]'
+			) as HTMLButtonElement;
+
+		expect(rowTrash().disabled).toBe(true);
+		await fireEvent.click(rowTrash());
+		expect(q(container, 'season-row-delete-confirm')).toBeNull();
+
+		resolvers[0]('ev-new-1');
+		await waitFor(() => {
+			expect(resolvers.length).toBe(2);
+		});
+		resolvers[1]('ev-new-2');
+		await waitFor(() => {
+			expect(resolvers.length).toBe(3);
+		});
+		resolvers[2]('ev-new-3');
+		await waitFor(() => {
+			expect(rowTrash().disabled).toBe(false);
+		});
 	});
 });
 

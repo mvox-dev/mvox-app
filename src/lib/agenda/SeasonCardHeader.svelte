@@ -1,10 +1,11 @@
-<!-- #641 — the season card's expand list and the open season's title row with its delete. -->
+<!-- #641 — the season card's rows and the open season's title row; #917: a delete on each row. -->
 <script lang="ts">
 	import { reportProblem } from '$lib/problems/reportProblem';
 	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
+	import { focusAfterRender } from '$lib/a11y/focusable';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
 	import DeleteConfirmPair from '$lib/components/DeleteConfirmPair.svelte';
 	import type { Season } from '$lib/seasons/types';
@@ -20,6 +21,7 @@
 		sm: SeasonManagePanelState;
 		selected: Collective | null;
 		manageableSeasonEntries: Season[];
+		ownedSeasonIds: Set<string>;
 		manageableSeasonId: string | null;
 		seasonManageOpen: boolean;
 		showSeasonCard: boolean;
@@ -42,6 +44,7 @@
 		sm = $bindable(),
 		selected,
 		manageableSeasonEntries,
+		ownedSeasonIds,
 		manageableSeasonId,
 		seasonManageOpen,
 		showSeasonCard,
@@ -60,20 +63,30 @@
 		apiDeleteSeason
 	}: Props = $props();
 
-	const SEASON_DELETE_ROW_ID = '__season__';
+	// One delete slot for the card: arming a row disarms any other.
+	const seasonDeleteRowId = (seasonId: string): string => `__season__:${seasonId}`;
+	const openRowId = $derived(
+		manageableSeasonId === null ? null : seasonDeleteRowId(manageableSeasonId)
+	);
+	// #917 — Entu deletes a season only for its _owner; an _editor gets no trashcan.
+	const openRowOwned = $derived(
+		manageableSeasonId !== null && ownedSeasonIds.has(manageableSeasonId)
+	);
+	const rowName = (ms: Season): string =>
+		ms.id === manageableSeasonId ? seasonManageDeleteName : ms.name;
 
-	async function armSeasonManageSeasonDelete(): Promise<void> {
+	async function armSeasonDelete(seasonId: string, confirmTestid: string): Promise<void> {
 		if (isOffline) return;
 		const cfg = selected ? cfgFor(selected.db) : null;
-		const seasonId = manageableSeasonId;
+		const rowId = seasonDeleteRowId(seasonId);
 		const generation = sm.seasonManageDeleteGeneration;
-		await armSeasonManageDelete(SEASON_DELETE_ROW_ID, 'season-manage-delete-season-confirm');
-		if (!cfg || seasonId === null) return;
+		await armSeasonManageDelete(rowId, confirmTestid);
+		if (!cfg) return;
 		try {
 			const scope = await apiCountSeasonScope(cfg, seasonId);
 			if (
 				generation === sm.seasonManageDeleteGeneration &&
-				sm.seasonManageDeleteArmed === SEASON_DELETE_ROW_ID
+				sm.seasonManageDeleteArmed === rowId
 			) {
 				sm.seasonManageDeleteScope = scope;
 			}
@@ -83,16 +96,25 @@
 		}
 	}
 
-	function onSeasonManageSeasonDelete(): void {
-		if (!selected || manageableSeasonId === null) return;
+	async function disarmRowDelete(seasonId: string): Promise<void> {
+		sm.seasonManageDeleteArmed = null;
+		sm.seasonManageArmedSeriesCount = null;
+		sm.seasonManageDeleteScope = null;
+		await focusAfterRender(() =>
+			document.querySelector<HTMLElement>(
+				`[data-testid="season-row-delete"][data-season-manage-id="${seasonId}"]`
+			)
+		);
+	}
+
+	function onSeasonDelete(seasonId: string, seasonName: string): void {
+		if (!selected) return;
 		if (sm.seasonManageDeletePendingId !== null) return;
 		if (isOffline) return;
 		const cfg = cfgFor(selected.db);
-		const seasonId = manageableSeasonId;
-		const seasonName = seasonManageDeleteName;
 		runSeasonManageDelete({
 			slot: seasonManageDeleteSlot,
-			rowId: SEASON_DELETE_ROW_ID,
+			rowId: seasonDeleteRowId(seasonId),
 			logId: seasonId,
 			list: 'season',
 			call: (onProgress) => apiDeleteSeason(cfg, seasonId, undefined, { onProgress }),
@@ -102,25 +124,78 @@
 			}
 		});
 	}
+
+	function confirmLabel(name: string): string {
+		const scope = sm.seasonManageDeleteScope;
+		return scope !== null
+			? m.season_delete_confirm_scope({
+					name,
+					series: scope.series,
+					events: scope.events,
+					repertoire: scope.repertoireItems
+				})
+			: m.season_manage_delete_confirm({ name });
+	}
+
+	function confirmText(): string {
+		const scope = sm.seasonManageDeleteScope;
+		return scope !== null
+			? m.season_delete_confirm_scope_short({
+					series: scope.series,
+					events: scope.events,
+					repertoire: scope.repertoireItems
+				})
+			: m.season_manage_delete_confirm_short();
+	}
 </script>
 
 {#each manageableSeasonEntries as ms (ms.id)}
 	{#if !seasonManageOpen || ms.id !== manageableSeasonId}
-		<h2>
-			<button
-				type="button"
-				data-testid="season-card-expand"
-				data-season-manage-id={ms.id}
-				aria-expanded="false"
-				disabled={seriesRunUnfinished && ms.id !== manageableSeasonId}
-				class="group flex w-full min-h-11 items-center gap-2 rounded-sm px-1.5 text-left font-display text-lg text-ink hover:bg-ink-5 disabled:opacity-50 disabled:hover:bg-transparent"
-				onclick={() => openSeasonManagePanelFor(ms.id)}
-			>
-				<span class="sr-only">{m.season_manage_expand_label()}</span>
-				<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">▸</span>
-				<span>{ms.id === manageableSeasonId ? seasonManageDeleteName : ms.name}</span>
-			</button>
-		</h2>
+		{@const rowBusy = seriesRunUnfinished && ms.id !== manageableSeasonId}
+		<div class="flex flex-wrap items-center gap-2">
+			<h2 class="flex min-w-0 flex-1">
+				<button
+					type="button"
+					data-testid="season-card-expand"
+					data-season-manage-id={ms.id}
+					aria-expanded="false"
+					disabled={rowBusy}
+					class="group flex w-full min-h-11 items-center gap-2 rounded-sm px-1.5 text-left font-display text-lg text-ink hover:bg-ink-5 disabled:opacity-50 disabled:hover:bg-transparent"
+					onclick={() => openSeasonManagePanelFor(ms.id)}
+				>
+					<span class="sr-only">{m.season_manage_expand_label()}</span>
+					<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">▸</span>
+					<span>{ms.id === manageableSeasonId ? seasonManageDeleteName : ms.name}</span>
+				</button>
+			</h2>
+			{#if ownedSeasonIds.has(ms.id)}
+				{#if sm.seasonManageDeleteArmed === seasonDeleteRowId(ms.id)}
+					<DeleteConfirmPair
+						confirmTestid="season-row-delete-confirm"
+						cancelTestid="season-row-delete-cancel"
+						confirmLabel={confirmLabel(rowName(ms))}
+						cancelLabel={m.season_manage_delete_cancel({ name: rowName(ms) })}
+						confirmText={confirmText()}
+						cancelText={m.season_manage_delete_cancel_short()}
+						pending={sm.seasonManageDeletePendingId !== null}
+						busy={sm.seasonManageDeletePendingId === seasonDeleteRowId(ms.id)}
+						{isOffline}
+						confirmClass="ml-auto"
+						onconfirm={() => onSeasonDelete(ms.id, rowName(ms))}
+						oncancel={() => void disarmRowDelete(ms.id)}
+					/>
+				{:else}
+					<DeleteTrigger
+						data-testid="season-row-delete"
+						data-season-manage-id={ms.id}
+						aria-label={m.season_manage_season_delete({ name: rowName(ms) })}
+						class="ml-auto"
+						disabled={isOffline || rowBusy}
+						onclick={() => void armSeasonDelete(ms.id, 'season-row-delete-confirm')}
+					/>
+				{/if}
+			{/if}
+		</div>
 	{/if}
 {/each}
 {#if seasonManageOpen}
@@ -144,42 +219,35 @@
 					</span>
 				</button>
 			</h2>
-			{#if sm.seasonManageDeleteArmed === SEASON_DELETE_ROW_ID}
+			{#if openRowOwned && sm.seasonManageDeleteArmed === openRowId}
 				<DeleteConfirmPair
 					confirmTestid="season-manage-delete-season-confirm"
 					cancelTestid="season-manage-delete-season-cancel"
-					confirmLabel={sm.seasonManageDeleteScope !== null
-						? m.season_delete_confirm_scope({
-								name: seasonManageDeleteName,
-								series: sm.seasonManageDeleteScope.series,
-								events: sm.seasonManageDeleteScope.events,
-								repertoire: sm.seasonManageDeleteScope.repertoireItems
-							})
-						: m.season_manage_delete_confirm({ name: seasonManageDeleteName })}
+					confirmLabel={confirmLabel(seasonManageDeleteName)}
 					cancelLabel={m.season_manage_delete_cancel({ name: seasonManageDeleteName })}
-					confirmText={sm.seasonManageDeleteScope !== null
-						? m.season_delete_confirm_scope_short({
-								series: sm.seasonManageDeleteScope.series,
-								events: sm.seasonManageDeleteScope.events,
-								repertoire: sm.seasonManageDeleteScope.repertoireItems
-							})
-						: m.season_manage_delete_confirm_short()}
+					confirmText={confirmText()}
 					cancelText={m.season_manage_delete_cancel_short()}
 					pending={sm.seasonManageDeletePendingId !== null}
-					busy={sm.seasonManageDeletePendingId === SEASON_DELETE_ROW_ID}
+					busy={sm.seasonManageDeletePendingId === openRowId}
 					{isOffline}
 					confirmClass="ml-auto"
-					onconfirm={onSeasonManageSeasonDelete}
+					onconfirm={() => {
+						if (manageableSeasonId !== null)
+							onSeasonDelete(manageableSeasonId, seasonManageDeleteName);
+					}}
 					oncancel={() => void disarmSeasonManageDelete('season-manage-delete-season')}
 					onkeydown={onSeasonManagePanelKeydown}
 				/>
-			{:else}
+			{:else if openRowOwned}
 				<DeleteTrigger
 					data-testid="season-manage-delete-season"
 					aria-label={m.season_manage_season_delete({ name: seasonManageDeleteName })}
 					class="ml-auto"
 					disabled={isOffline}
-					onclick={() => void armSeasonManageSeasonDelete()}
+					onclick={() => {
+						if (manageableSeasonId !== null)
+							void armSeasonDelete(manageableSeasonId, 'season-manage-delete-season-confirm');
+					}}
 					onkeydown={onSeasonManagePanelKeydown}
 				/>
 			{/if}

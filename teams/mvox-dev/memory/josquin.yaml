@@ -17,4 +17,10 @@ staging:
   - label: GOTCHA
     record: "Fixtures for a rights gate: give admin shape as a builder; member shape stays rightless"
     ref: "src/lib/testing/pages/links.ts"
+  - label: GOTCHA
+    record: "prettier is not installed in mvox-app; pnpm exec prettier fails silently under >/dev/null"
+    ref: "#917"
+  - label: GOTCHA
+    record: "Season fixtures put the viewer in _editor only; an _owner gate needs owners added to them"
+    ref: "src/lib/testing/pages/seasonPanel.ts"
 # (*MVOX:Josquin*)

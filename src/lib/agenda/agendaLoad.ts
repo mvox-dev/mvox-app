@@ -57,6 +57,7 @@ export function createAgendaLoadState() {
 		manageableSeasonId: null as string | null,
 		manageableSeasonRights: 'not-editor' as ManageRightsState,
 		manageableSeasonRightsById: {} as Record<string, ManageRightsState>,
+		ownedSeasonIds: new Set() as Set<string>,
 		seasonCreateRights: 'not-editor' as ManageRightsState,
 		eventManageRights: {} as Record<string, ManageRightsState>,
 		seasons: [] as Season[],

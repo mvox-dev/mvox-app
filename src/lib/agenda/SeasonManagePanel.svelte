@@ -31,6 +31,7 @@
 		manageableSeasonId: string | null;
 		manageableSeasonRights: ManageRightsState;
 		manageableSeasonRightsById: Record<string, ManageRightsState>;
+		ownedSeasonIds: Set<string>;
 		seasonManageOpen: boolean;
 		seasonManagePanelEl: HTMLDivElement | null;
 		seriesCreateOpen: boolean;
@@ -90,6 +91,7 @@
 		manageableSeasonId = $bindable(),
 		manageableSeasonRights = $bindable(),
 		manageableSeasonRightsById,
+		ownedSeasonIds,
 		seasonManageOpen = $bindable(),
 		seasonManagePanelEl = $bindable(),
 		seriesCreateOpen = $bindable(),
@@ -277,6 +279,7 @@
 			bind:sm
 			{selected}
 			{manageableSeasonEntries}
+			{ownedSeasonIds}
 			{manageableSeasonId}
 			{seasonManageOpen}
 			{showSeasonCard}

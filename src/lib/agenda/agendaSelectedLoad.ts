@@ -175,6 +175,10 @@ export function createSelectedLoad(
 						nextManageableRightsById[s.id] = manageRightsFrom(s.owners, s.editors, personId);
 					}
 					ag.manageableSeasonRightsById = nextManageableRightsById;
+					// #917 — Entu deletes an entity only for its _owner.
+					ag.ownedSeasonIds = new Set(
+						candidateSeasons.filter((s) => s.owners.includes(personId)).map((s) => s.id)
+					);
 					const keptSeasonId =
 						heldSeasonId !== null && candidateSeasons.some((s) => s.id === heldSeasonId)
 							? heldSeasonId
