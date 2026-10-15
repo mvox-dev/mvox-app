@@ -2,6 +2,9 @@
 # Only Josquin writes here. History lives in git; this keeps what the next issue needs.
 current: []
 staging:
+  - label: LEARNED
+    record: "To hold the event page's picker read, gate the module (mocks/managePickers.ts), not the wire"
+    ref: "#933"
   - label: GOTCHA
     record: "comment-rules.spec checks every touched file: a 1-word rename drags legacy comments into scope"
     ref: "src/lib/testing/commentRules.ts"

@@ -267,6 +267,11 @@ lessons:
   learned: '2026-09-15'
   ref: urls/mem-perotin-9d2803d
   enforcement: recognition
+- slug: memory-notes-ride-feature-prs
+  summary: For an implementer whose own memory notes go in its feature PR.
+  learned: '2026-10-15'
+  ref: '#931'
+  enforcement: recognition
 - slug: mock-and-prop-pitfalls
   summary: Writing Svelte page tests with mocks, seams and props.
   learned: '2026-10-11'

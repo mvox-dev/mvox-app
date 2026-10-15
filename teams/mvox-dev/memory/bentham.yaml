@@ -38,3 +38,6 @@ staging:
   - label: PATTERN
     record: "A store-gated section outside the page status gate: contract rows must set the store or test none."
     ref: "#916"
+  - label: PATTERN
+    record: "A 'covered elsewhere' claim: check reload and race cases apart; first-load specs rarely hold them."
+    ref: "#933"
