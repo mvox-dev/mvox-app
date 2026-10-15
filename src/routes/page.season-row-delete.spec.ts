@@ -257,4 +257,82 @@ describe('#917 — deleting a closed season from its row', () => {
 	});
 });
 
+describe('#926 — rows lock while a season delete runs', () => {
+	async function startHangingRowDelete(container: HTMLElement) {
+		let finish: (v: { series: number; events: number; repertoireItems: number }) => void = () => {};
+		deleteSeasonMock.mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					finish = resolve;
+				})
+		);
+		await waitFor(() => {
+			expect(rowTrash(container, NEXT_ID)).not.toBeNull();
+		});
+		await fireEvent.click(rowTrash(container, NEXT_ID) as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'season-row-delete-confirm')).not.toBeNull();
+		});
+		await fireEvent.click(q(container, 'season-row-delete-confirm') as HTMLElement);
+		await waitFor(() => {
+			expect(deleteSeasonMock).toHaveBeenCalledTimes(1);
+		});
+		return (scope: { series: number; events: number; repertoireItems: number }) => finish(scope);
+	}
+
+	it('other rows’ expand and trashcan are disabled mid-delete, and a click opens nothing', async () => {
+		const container = await renderReady();
+		const finish = await startHangingRowDelete(container);
+
+		await waitFor(() => {
+			expect(expandButton(container, SEASON_ID).disabled).toBe(true);
+			expect(rowTrash(container, SEASON_ID)?.disabled).toBe(true);
+		});
+		await fireEvent.click(expandButton(container, SEASON_ID));
+		await fireEvent.click(rowTrash(container, SEASON_ID) as HTMLElement);
+		expect(q(container, 'season-manage-panel'), 'the panel stays shut').toBeNull();
+		expect(q(container, 'season-row-delete-confirm'), 'only the running confirm pair').not.toBeNull();
+		expect(container.querySelectorAll('[data-testid="season-row-delete-confirm"]')).toHaveLength(1);
+
+		const loadsBefore = loadFullAgendaMock.mock.calls.length;
+		finish({ series: 2, events: 9, repertoireItems: 4 });
+		await waitFor(() => {
+			expect(q(container, 'season-manage-delete-status')?.textContent?.trim()).toBe(
+				'season_delete_success {"name":"Season 2027"}'
+			);
+		});
+		expect(loadFullAgendaMock.mock.calls.length).toBeGreaterThan(loadsBefore);
+		await waitFor(() => {
+			expect(expandButton(container, SEASON_ID).disabled).toBe(false);
+			expect(rowTrash(container, SEASON_ID)?.disabled).toBe(false);
+		});
+	});
+
+	it('with a season open, its trashcan is disabled mid-delete but its collapse still works', async () => {
+		const container = await renderReady();
+		await fireEvent.click(expandButton(container, SEASON_ID));
+		await waitFor(() => {
+			expect(q(container, 'season-manage-panel')).not.toBeNull();
+		});
+		const finish = await startHangingRowDelete(container);
+
+		await waitFor(() => {
+			expect((q(container, 'season-manage-delete-season') as HTMLButtonElement).disabled).toBe(true);
+		});
+		const collapse = q(container, 'season-card-collapse') as HTMLButtonElement;
+		expect(collapse.disabled).toBe(false);
+		await fireEvent.click(collapse);
+		await waitFor(() => {
+			expect(q(container, 'season-manage-panel')).toBeNull();
+		});
+
+		finish({ series: 2, events: 9, repertoireItems: 4 });
+		await waitFor(() => {
+			expect(q(container, 'season-manage-delete-status')?.textContent?.trim()).toBe(
+				'season_delete_success {"name":"Season 2027"}'
+			);
+		});
+	});
+});
+
 // (*MVOX:Josquin*)
