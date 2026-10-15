@@ -5,17 +5,14 @@
 
 current:
   - label: WIP
-    record: "Queue: #917 (own branch), #916, then one branch #920 #921 #918 #919; briefs from research"
+    record: "Queue: #926 (own branch, brief next), then one branch #920 #921 #918 #919; research done"
     ref: scratchpad/findings-session.md
   - label: WIP
-    record: "GATE 3 done: cold start read (2026-10-14; no TaskCreate tool); josquin-914 wrote josquin.yaml"
+    record: "GATE 3: 4 of 5 events done (Bentham wrote bentham.yaml on #916); a non-memkit lesson still open"
     ref: teams/mvox-dev/memory-adoption/05-debt.md
   - label: WIP
-    record: "GATE 3 waits on: this checkpoint PR's CI lint; Bentham writing bentham.yaml; a non-memkit lesson"
-    ref: teams/mvox-dev/memory-adoption/05-debt.md
-  - label: WIP
-    record: "Kit on alpha.15 (PR #923); plugins updated, /reload-plugins pending; commitments tier not adopted"
-    ref: memory-kit/VERSION
+    record: "Report filed as memory-kit #38; comment there when GATE 3 events land"
+    ref: teams/mvox-dev/memory-adoption/06-report.md
   - label: DECISION
     record: "Adopt memory-kit fully for team memory and the lead's auto-memory; work autonomously"
     ref: mihkel:2026-10-14
@@ -31,9 +28,6 @@ current:
   - label: DECISION
     record: "Hub mail comes via the watch plugin; never drain team-lead.json by hand"
     ref: memory-kit.conf
-  - label: WIP
-    record: "06-report.md: fix the squash section, fill proving; file by 2026-10-28"
-    ref: teams/mvox-dev/memory-adoption/06-report.md
   - label: DEFERRED
     record: "Untested: agenda view toggle with no chips."
     ref: src/lib/agenda/AgendaListArea.svelte
