@@ -2,8 +2,8 @@
 # Only Josquin writes here. History lives in git; this keeps what the next issue needs.
 current:
   - label: WIP
-    record: "#914 pushed on refactor/914-rights-names; awaiting Bentham review"
-    ref: "#914"
+    record: "#916 pushed on feat/916-admin-under-profile; awaiting Bentham review"
+    ref: "#916"
 staging:
   - label: GOTCHA
     record: "comment-rules.spec checks every touched file: a 1-word rename drags legacy comments into scope"
@@ -23,4 +23,13 @@ staging:
   - label: GOTCHA
     record: "Season fixtures put the viewer in _editor only; an _owner gate needs owners added to them"
     ref: "src/lib/testing/pages/seasonPanel.ts"
+  - label: GOTCHA
+    record: "loadRoster calls listMyProfiles: a whole-module profileData mock empties every roster"
+    ref: "src/lib/roster/rosterRow.ts"
+  - label: GOTCHA
+    record: "Specs count too: editing page-shell.spec.ts drags its 40-line header into comment-rules"
+    ref: "#916"
+  - label: PATTERN
+    record: "A section shown on a store right: load() stores the request, an $effect runs it once editor"
+    ref: "src/lib/profile/CollectiveAdminSection.svelte"
 # (*MVOX:Josquin*)
