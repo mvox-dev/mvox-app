@@ -31,6 +31,10 @@ export interface Obligation {
   obligation: string;
   /** Who must act. Never "us" without a name. */
   actor: string;
+  /** Who is waiting: a name, never "us" or "we", never the actor (kit #29). A row nobody else
+   *  is owed is a to-do, and a to-do is not a kit tier: it goes in the home's own work queue.
+   *  Optional so rows written before it pass: the lint counts a missing one, fails a wrong one. */
+  owed_to?: string;
   /** When the waiting began, not when it was written down. */
   since: IsoDate;
   /** How to find out it is already done: a command, a page, a person. Blank is counted. */

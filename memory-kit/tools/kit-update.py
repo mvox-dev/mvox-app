@@ -2,6 +2,7 @@
 """Move a home's vendored memory-kit to the newest release its channel allows.
 
     python3 memory-kit/tools/kit-update.py [home] [--dry-run]
+    python3 memory-kit/tools/kit-update.py --help       this text; runs nothing
 
 The home's memory-kit.conf names the channel:
 
@@ -14,15 +15,17 @@ A folder that is not the home may hold a pointer conf, `kit_home: <path>` (absol
 to that conf): the tool then runs on the home it names, one hop (lint/kit_home.py, kit #18).
 
 What it does, and what it never does:
-  - refuses a dirty tree, a new major version, and any step whose UPGRADE.md entry does not
-    begin "no data step" (those need the full UPGRADE.md steps, by hand);
+  - refuses a dirty tree (a tracked change anywhere, an untracked file under memory-kit/; an
+    untracked file elsewhere is safe, #25), a new major version, and any step whose UPGRADE.md
+    entry does not begin "no data step" (those need the full UPGRADE.md steps, by hand);
   - git subtree pull --squash of the target tag, then the lint gate over the home;
   - on a lint failure, undoes the pull (back to the commit it started from) and says why;
   - commits locally and NEVER pushes: each home's own push rule applies;
-  - says when a plugin changed, so the session runs /reload-plugins.
+  - when a plugin changed, names the steps that update it: the marketplace update, a plugin
+    update per changed plugin, then /reload-plugins (a pull alone never updates one, #23).
 
 Exit: 0 updated or nothing to do, 1 refused or failed (and anything changed undone), 2 bad usage
-or setup, 3 the undo itself failed: the tree may be partly pulled (the message says how to recover).
+(an unknown option, more than one home) or setup, 3 the undo itself failed: the tree may be partly pulled (the message says how to recover).
 Kit #15. The kit-update plugin prompts a session to run this when a release appears.
 """
 import os
@@ -125,6 +128,32 @@ def undo(home, start, why):
     return EXIT_ROLLBACK_FAILED
 
 
+def paths_of(porcelain):
+    """The paths in `git status --porcelain` output (a rename shows its new path)."""
+    return [line[3:].split(" -> ")[-1] for line in porcelain.splitlines() if line.strip()]
+
+
+def named(paths):
+    """The first five paths, then a count of the rest."""
+    more = f" +{len(paths) - 5} more" if len(paths) > 5 else ""
+    return ", ".join(paths[:5]) + more
+
+
+def plugin_steps(changed):
+    """What to run when the pull changed files under memory-kit/adapters. A pull never updates an
+    installed plugin: the harness keeps its own copy from the install, so /reload-plugins alone
+    reloads the old one (#23, po-team's pane stayed at 0.1.0)."""
+    names = sorted({p.split("/")[3] for p in changed
+                    if p.startswith("memory-kit/adapters/claude-code/") and p.count("/") >= 4
+                    and not p.split("/")[3].startswith(".")})
+    lines = [f"plugins changed: {', '.join(names)}" if names else "the plugin marketplace changed",
+             "a pull never updates an installed plugin; run, in order (each plugin this home has installed):",
+             "  claude plugin marketplace update memory-kit"]
+    lines += [f"  claude plugin update {n}@memory-kit" for n in names]
+    lines.append("  then /reload-plugins in every session of this home")
+    return lines
+
+
 def lint_passes(home):
     """The home's lint gate, run with the home path. (passed, stdout)."""
     r = subprocess.run(["bash", str(home / "memory-kit/lint/memory-lint.sh"), str(home), "--gate"],
@@ -133,8 +162,20 @@ def lint_passes(home):
 
 
 def main(argv):
-    args = [a for a in argv[1:] if not a.startswith("--")]
-    dry = "--dry-run" in argv
+    # Every option is known or refused: a dropped unknown one let --help run a real update (#32).
+    opts = [a for a in argv[1:] if a.startswith("-")]
+    args = [a for a in argv[1:] if not a.startswith("-")]
+    if "--help" in opts or "-h" in opts:
+        print(__doc__.strip())
+        return 0
+    for o in opts:
+        if o != "--dry-run":
+            say(f"unknown option {o} (usage: kit-update.py [home] [--dry-run]; --help for more)")
+            return 2
+    if len(args) > 1:
+        say(f"one home at most, got {len(args)}: {' '.join(args)}")
+        return 2
+    dry = "--dry-run" in opts
     start = pathlib.Path(args[0] if args else ".").resolve()
     found = kit_home.resolve(start)
     if found.problem:
@@ -144,7 +185,10 @@ def main(argv):
     if found.pointer:
         say(f"following kit_home in {found.pointer} to {home}")
     vfile, cfile = home / "memory-kit" / "VERSION", home / "memory-kit.conf"
-    if not vfile.exists() or not cfile.exists():
+    if not cfile.exists():
+        say(f"{kit_home.no_conf_notice(home)}. kit-update checks nothing until it has one.")
+        return 2
+    if not vfile.exists():
         say(f"{home} is not a kit home (needs memory-kit/VERSION and memory-kit.conf)")
         return 2
     conf = cfile.read_text(encoding="utf-8")
@@ -185,8 +229,15 @@ def main(argv):
     if key(target)[0] != key(cur_tag)[0]:
         say(f"{current} -> {target[1:]} is a new major version: upgrade by hand per UPGRADE.md")
         return 1
-    if git(home, "status", "--porcelain").stdout.strip():
-        say("the home has uncommitted changes; commit or stash them first")
+    # Tracked changes anywhere refuse; untracked files only under memory-kit/, where the pull writes
+    # and the lint reads. Elsewhere they are safe: the undo (reset --hard) leaves them alone (#25).
+    tracked = paths_of(git(home, "status", "--porcelain", "--untracked-files=no").stdout)
+    if tracked:
+        say(f"the home has uncommitted changes; commit or stash them first: {named(tracked)}")
+        return 1
+    stray = paths_of(git(home, "status", "--porcelain", "--untracked-files=all", "--", "memory-kit").stdout)
+    if stray:
+        say(f"files untracked under memory-kit/ (the pull writes there); remove or commit them first: {named(stray)}")
         return 1
     if not lint_passes(home)[0]:
         say("the home fails its own lint gate before any update; fix that first")
@@ -223,7 +274,8 @@ def main(argv):
     plugins = git(home, "diff", "--name-only", start, "HEAD", "--", "memory-kit/adapters").stdout.split()
     say(f"updated {current} -> {target[1:]} ({channel}); lint gate passes; committed locally, not pushed")
     if plugins:
-        say("a plugin changed: run /reload-plugins")
+        for line in plugin_steps(plugins):
+            say(line)
     return 0
 
 

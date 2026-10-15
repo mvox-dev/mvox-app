@@ -13,6 +13,7 @@ DATA = {
             "obligation": "Start print M3T06 on keldri (on the printer since 2026-10-13 07:28, not started). "
             "It's queued: see urls/prusa-start-ooze-issue # not a comment",
             "actor": "Mihkel",
+            "owed_to": "Passepartout",
             "since": datetime.date(2026, 10, 13),
             "check": "grep -c '\\[ \\]' PRINT-QUEUE.md",
             "expires": datetime.date(2026, 10, 21),
@@ -21,6 +22,7 @@ DATA = {
         {
             "obligation": 'Say "hi": a colon-space and a \'quote\'',
             "actor": "O'Brien",
+            "owed_to": None,
             "since": "2026-10-01",
             "check": "",
             "expires": "2026-10-28",
@@ -30,6 +32,7 @@ DATA = {
             "obligation": "Explain why the INDX start gcode retracts an extra 0.04 mm, asked on their settings repo, "
             "and enough words to wrap the line well past eighty columns",
             "actor": "Mihkel Putrinš – Wõrgu Wõlurid",
+            "owed_to": "the board: “Wõrgu Wõlurid” # not a comment",
             "since": datetime.date(2026, 10, 1),
             "check": "Ilmub märge — “done” 😀 and a long line with unicode that wraps past the eighty column limit",
             "expires": datetime.date(2026, 12, 31),
@@ -38,6 +41,7 @@ DATA = {
         {
             "obligation": "yes",
             "actor": "a\ttab and a \\ backslash",
+            "owed_to": "null",
             "since": "2026-10-02",
             "check": "true",
             "expires": "2026-11-01",

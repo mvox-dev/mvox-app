@@ -28,6 +28,7 @@ The world still files natural language under "prose" and code under "engineering
 | D4 | Codeberg is primary; GitHub carries a mirror. |
 | D5 | Proven-first: nothing enters the kit unproven in at least one consumer. Semver; a migration script per major. See `GOVERNANCE.md`. |
 | D6 | Core tiers only in v0.x: scratchpad, obligations, facts, dormant, rules, lessons, urls, secrets, keys. Refute-by-genus ships as guidance. Team-only artefacts stay with their team until a second consumer wants them. |
+| D6.1 | 2026-10-15 (Mihkel): commitments is an optional tier; a home opts in by creating the file. |
 | D7 | One lint, two modes: `--gate` (fail-closed) and `--report` (exit 0). One principle: **a gate must pass on the tree it is introduced to.** A fresh home gates everything from day one; an existing home gates what already passes and gauges the rest. |
 
 ## Roadmap

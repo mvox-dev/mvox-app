@@ -1,5 +1,82 @@
 # Changelog
 
+## v0.1.0-alpha.15 -- 2026-10-15 -- who is owed, standing commitments, kit-update fixes
+
+Plugin versions this release: watch 0.3.1, obligations-pane 0.5.0, kit-update 0.3.0.
+Tested platforms add macOS with the system Python 3.9.6 (mac-sysops: 35/35 fixtures at alpha.14).
+
+- **Obligations name who is owed: `owed_to`** (#29, po-team; ruled by the household). An
+  obligation has a counterparty who is waiting and would notice if it lapsed; that is why it rots
+  when the counterparty acts. po-team's 16 rows held 3 obligations, 6 to-dos and 7 watches.
+  - The rule: `owed_to` names someone other than the actor, and never "us" or "we". What the
+    assistant owes the human is an obligation (`owed_to: <human>`); what someone owes themself
+    is a to-do.
+  - **To-dos are not a kit tier.** They go in the home's own work queue (a backlog file;
+    scratchpad `current` for what is next). The types, ADOPTION, the skeleton's obligations file
+    and the lesson `obligations-are-not-facts` say so.
+  - A minor upgrade is a pull, so a row without `owed_to` never fails: the lint counts it
+    (`obligations with no owed_to`) and notes it. A row with one is gated: `owed_to` equal to the
+    actor, or "us" or "we" (the exact word, trimmed, any case), fails. Fixtures
+    `valid/obligations-owed-to`, `invalid/obligation-owed-to-actor`, `invalid/obligation-owed-to-us`,
+    `invalid/obligation-owed-to-we`.
+  - `tools/obligations-due.py` prints `actor -> owed_to:` on a row that has it.
+  - The obligations pane reads `owed_to` (its parser refused unknown keys, so a row with one made
+    the whole file unreadable) and shows it as the tool prints it: `actor -> owed_to: text`, the
+    party owed bold in its own colour. A row without one looks as before.
+- **A commitments tier, optional** (#30, po-team; ruled by the household). Some things never
+  leave the table: a promise ("answer the board's email within 3 days") or a watch ("if a second
+  collective is provisioned, re-check the park"). Each time its trigger happens it creates an
+  obligation, which goes to `obligations.yaml` and is deleted when resolved. Until now these sat
+  in obligations with an invented expiry (#27), or in rules and prose.
+  - `memory/commitments.yaml`, `types/memory-commitments.ts`. A row: `trigger`, `obligation`
+    (what is then owed), `actor`, `owed_to`, `within` (how long, in words), `ref`. No `expires`:
+    it never expires; only a ruling retires it.
+  - **A home opts in by creating the file**; without it nothing changes. The skeleton does not
+    ship one.
+  - Gated whole, since no row predates the tier: every field but `ref` is required, `owed_to`
+    follows the #29 rule (never the actor, "us" or "we"), `trigger` and `obligation` share the
+    obligation cap (120 chars). Fixtures `valid/commitments`, `invalid/commitment-missing-owed-to`,
+    `invalid/commitment-owed-to-actor`, `invalid/commitment-has-expires`,
+    `invalid/commitment-missing-within`.
+  - The lint used to read any other top-level `<name>.yaml` as a scratchpad, `commitments.yaml`
+    included; it now reads that name as this tier, unless the file is scratchpad-shaped
+    (`current`/`staging`, no `commitments` key), so a home's scratchpad of that name still
+    passes. Fixture `valid/commitments-named-scratchpad`.
+  - Not read by the obligations pane or `obligations-due.py`: a commitment has no date.
+- **The lint banner names VERSION; a stale caps.yaml fails the fixture run** (#26, mvox and the
+  workshop). alpha.14 shipped caps.yaml still at alpha.13, so every lint banner said alpha.13.
+  - The banner reads the kit's `VERSION`, the one place the version lives (caps.yaml's copy only
+    for a kit without one).
+  - `lint/run-fixtures.sh` now runs `tools/extract-caps.py --check` and checks the banner: a
+    release that bumps VERSION without regenerating caps.yaml fails it. **Release step:** after
+    bumping VERSION, run `python3 tools/extract-caps.py`.
+  - caps.yaml regenerated (version line only).
+- **kit-update.py refuses an unknown option** (#32, the workshop). It kept only the arguments
+  not starting with `--` and looked for `--dry-run`, so any other flag was dropped: `--help` ran a
+  real update, and a typo'd `--dry-rn` would too. Now `--help` (or `-h`) prints the usage and runs
+  nothing; any other option, or a second home, is bad usage: exit 2, nothing run.
+- **kit-update.py no longer refuses a home for untracked files outside the kit** (#25, mvox). An
+  untracked `scratchpad/` folder refused the update as "uncommitted changes". The undo is a
+  `reset --hard`, which leaves untracked files alone, and the pull writes only under
+  `memory-kit/`. Now a tracked change anywhere still refuses, and so does an untracked file under
+  `memory-kit/` (the pull writes there, and the lint reads the kit); an untracked file elsewhere
+  does not. The refusal names the files (five, then a count).
+- **kit-update.py names the plugin-update steps** (#23, po-team). A subtree pull never updates an
+  installed plugin (the harness keeps its own copy from the install), so po-team's pane stayed at
+  0.1.0 through `/reload-plugins`. When the pull changed anything under `adapters/`, the tool now
+  names the changed plugins and the sequence, as UPGRADE.md does: `claude plugin marketplace
+  update memory-kit`, `claude plugin update <plugin>@memory-kit` for each changed one the home
+  has installed, then `/reload-plugins` in every session of the home. It names them; it does not
+  run them.
+- **kit-update says when the start folder has no memory-kit.conf** (#31, the workshop). With no
+  conf (and no pointer), the plugin read the channel as pinned and the version as missing and
+  returned without a word: 13 hours of silence that looked like "nothing newer". Now it is one
+  visible notice, and `/kit-update` shows it: "<folder> has no memory-kit.conf, so it is not a kit
+  home; if the home is elsewhere, put kit_home: <path> in a memory-kit.conf here. kit-update checks
+  nothing until it has one." `tools/kit-update.py` says the same, exit 2. The notice text is
+  shared: `noConfNotice` in each plugin's identical `hooks/kit-home.ts`, `no_conf_notice` in
+  `lint/kit_home.py`, tested to the same string.
+
 ## v0.1.0-alpha.14 -- 2026-10-14 -- the pointer home, one drain per home, ultrareview fixes
 
 Plugin versions this release: watch 0.3.0, obligations-pane 0.4.0, kit-update 0.2.0.

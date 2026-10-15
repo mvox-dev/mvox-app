@@ -89,5 +89,22 @@ else
   pass=$((pass+1))
 fi
 
+# caps.yaml is generated from types/caps.ts and VERSION; a stale one ships the wrong numbers or
+# the wrong version (kit #26: alpha.14 shipped caps.yaml at alpha.13). A release that bumps
+# VERSION without regenerating fails here.
+if stale=$(python3 "$KIT/tools/extract-caps.py" --check 2>&1); then
+  pass=$((pass+1))
+else
+  fail=$((fail+1)); echo "STALE CAPS       $stale"
+fi
+
+# The lint banner names the kit's VERSION, the one place the version lives (kit #26).
+want="memory-kit lint $(head -n 1 "$KIT/VERSION") -- "
+if "$DIR/memory-lint.sh" "$KIT/fixtures/valid/minimal" --gate 2>&1 | head -n 1 | grep -qF -- "$want"; then
+  pass=$((pass+1))
+else
+  fail=$((fail+1)); echo "WRONG BANNER     the lint banner does not begin '$want'"
+fi
+
 echo "fixtures: $pass passed, $fail failed"
 [ "$fail" -eq 0 ] || exit 1

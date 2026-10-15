@@ -61,6 +61,13 @@ def _same(a, b):
     return os.path.normcase(os.path.normpath(str(a))) == os.path.normcase(os.path.normpath(str(b)))
 
 
+def no_conf_notice(folder):
+    """What a reader says when the folder it took for the home has no memory-kit.conf (kit #31),
+    worded as the plugins' noConfNotice."""
+    folder = os.path.normpath(str(folder)).replace(os.sep, "/")
+    return f"{folder} has no memory-kit.conf, so it is not a kit home; if the home is elsewhere, put kit_home: <path> in a memory-kit.conf here"
+
+
 def resolve(start):
     """The home for a start folder, by its memory-kit.conf's kit_home (see the module doc)."""
     start = pathlib.Path(os.path.normpath(str(start)))

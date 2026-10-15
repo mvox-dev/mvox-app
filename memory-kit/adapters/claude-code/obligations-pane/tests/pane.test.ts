@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
-import { LINK_FG, MODEL_COLORS, PANE_BG } from '../hooks/obligations'
+import { actorColor, LINK_FG, MODEL_COLORS, PANE_BG } from '../hooks/obligations'
 import { PRUSA_URL_FILE, WORKSHOP_YAML } from './fixtures/data'
 import { PANE, PLUGIN, SESSION, tagsAnswer, worldOf } from './fixtures/world'
 
@@ -106,6 +106,33 @@ describe('empty states', () => {
     expect(texts).toContain('no obligations')
     // No memory-kit/VERSION here: nothing in the version slot, never a guess.
     expect(texts.find(t => t.includes('expired'))).toBe('0 expired · 0 due ≤7d')
+    await ui.unmount()
+  })
+
+  test('owed_to: "actor -> owed_to: obligation"; a row without one as before (kit #29)', async ($, on) => {
+    worldOf(on, {
+      'memory/obligations.yaml': [
+        'obligations:',
+        '  - obligation: answer the email',
+        '    actor: Passepartout',
+        '    owed_to: the board',
+        '    expires: 2026-10-15',
+        '  - obligation: from before owed_to',
+        '    actor: Mihkel',
+        '    expires: 2026-10-16',
+        '',
+      ].join('\n'),
+    })
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    const texts = await textOf(ui)
+    expect(texts).toContain('2026-10-15 Passepartout -> the board: answer the email')
+    expect(texts).toContain('2026-10-16 Mihkel from before owed_to')
+    // The party owed is drawn as an actor is: bold, in its own stable colour.
+    const owed = await ui.find({ type: 'Text', text: /^the board$/ })
+    expect(owed?.props.bold).toBe(true)
+    expect(owed?.props.color).toBe(actorColor('the board'))
     await ui.unmount()
   })
 

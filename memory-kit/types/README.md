@@ -22,7 +22,8 @@ The types state the convention, the fixtures are the contract.
 | `memory-scratchpad.ts` | what to act on next; `current` + `staging` |
 | `memory-facts.ts` | claims about the present, with a refutation address |
 | `memory-dormant.ts` | facts parked, not deleted |
-| `memory-obligations.ts` | what someone must do: actor, check, expiry |
+| `memory-obligations.ts` | what someone must do: actor, owed_to, check, expiry |
+| `memory-commitments.ts` | optional: standing promises and watches that create obligations |
 | `memory-rules.ts` | standing norms, read on every spawn |
 | `memory-lessons.ts` | situational knowledge, read at the moment of use |
 | `memory-urls.ts` | one URL per file |

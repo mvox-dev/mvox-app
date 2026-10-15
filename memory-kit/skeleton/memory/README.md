@@ -10,6 +10,7 @@ never touches anything here.
 | `<name>.yaml` | scratchpad | every session start |
 | `rules.yaml` | rules | every session start |
 | `obligations.yaml` | obligations | when something is owed, and on its expiry |
+| `commitments.yaml` | commitments (optional; create it to opt in) | when a trigger happens: it creates an obligation |
 | `facts/` | facts | when the subject comes up; swept on a cadence |
 | `dormant/` | parked facts | only when a `reviewed` date says so |
 | `lessons/` | lessons | at the moment of use |

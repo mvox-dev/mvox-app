@@ -37,7 +37,8 @@ doing several jobs at once; that is the normal finding.
 
 Tiers: `facts` (claims about the present with an address that could prove them wrong),
 `scratchpad` (what to act on next), `obligations` (what someone owes, with who, since when,
-how to check, and when to check), `rules` (standing norms, read every session), `lessons`
+how to check, and when to check), `commitments` (optional: standing promises and watches, each
+creating an obligation when its trigger happens; never expiring), `rules` (standing norms, read every session), `lessons`
 (situational knowledge with a why), `dormant` (parked facts), `urls`, `secrets`, `keys`.
 
 Write `adoption/01-map.md`: a table of source file -> tier(s) -> count, plus a list of
@@ -68,8 +69,13 @@ Useful genus test, when a claim resists placement:
 - rots only when re-decided -> a **ruling**; keep it, and when it is reversed keep one dated
   line naming what replaced it
 - names someone you are waiting on, or something someone owes -> an **obligation**, not a
-  fact and not a scratchpad row. Give it an `actor`, a `since`, a `check` (how to see whether
-  it is done) and an `expires`. `expires` is the date you run the check, not the other party's
+  fact and not a scratchpad row. Give it an `actor`, an `owed_to` (who is waiting: never the
+  actor, never "us" or "we"), a `since`, a `check` (how to see whether it is done) and an
+  `expires`.
+  Something nobody else is owed is a to-do, not an obligation: it goes in the home's own work
+  queue, which is not a kit tier. A standing promise or a watch ("whenever X, do Y within N
+  days") is a **commitment** if the home uses that tier, not an obligation with an invented
+  expiry. `expires` is the date you run the check, not the other party's
   deadline: on that date you check, then re-state, resolve or hand it to the human. (A
   scratchpad row would vanish at the next regeneration or squat a row for weeks; see the
   kit lesson `memory-kit/memory/lessons/obligations-are-not-facts.md`.)

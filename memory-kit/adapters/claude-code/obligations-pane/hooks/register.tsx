@@ -461,7 +461,18 @@ export const register: Register = (on, options) => {
             </Text>{' '}
             <Text bold color={actorColor(item.actor)}>
               {fitActor(item.actor)}
-            </Text>{' '}
+            </Text>
+            {/* kit #29: 'actor -> owed_to:', as tools/obligations-due.py prints it. An array, not a
+                fragment: the engine refused a fragment here (Box inside an inline element). */}
+            {item.owed_to !== ''
+              ? [
+                  ' -> ',
+                  <Text key="owed" bold color={actorColor(item.owed_to)}>
+                    {fitActor(item.owed_to)}
+                  </Text>,
+                  ':',
+                ]
+              : null}{' '}
             {segmentsOf(item.obligation, snap.urls).map(segment)}
             {trailing.map((s, i) => [' ', segment(s, 100 + i)])}
           </Text>
