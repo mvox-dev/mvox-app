@@ -26,6 +26,7 @@
 	let rows = $state<LinkRow[]>([]);
 	const controls = $derived(linkControls(rows, selected?.personId ?? null));
 	const NO_CONTROLS: LinkControls = { edit: false, remove: false, move: false };
+	const anyRowControl = $derived([...controls.values()].some((c) => c.edit || c.remove || c.move));
 
 	// Plain, not $state: writes read it at tap time and it never drives a render.
 	let currentCfg: { db: string; token: string } | null = null;
@@ -279,8 +280,8 @@
 				</p>
 			{/if}
 
-			<!-- One reason for every disabled write control, beside the add form it shares a gate with. -->
-			{#if editRight === 'editor' && isOffline}
+			<!-- One reason for every disabled write control, to anyone who sees one. -->
+			{#if (editRight === 'editor' || anyRowControl) && isOffline}
 				<p data-testid="links-write-unavailable" class="text-sm text-ink-2">
 					{m.write_unavailable_no_signal()}
 				</p>

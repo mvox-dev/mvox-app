@@ -139,6 +139,14 @@ describe('#914 — arrange controls, for a db editor, follow the right on each s
 		expect(has(expander, 'arrange-indent-sec-bass')).toBe(true);
 	});
 
+	it('indent needs the edit right on every child of the new parent: the move renumbers them', async () => {
+		const blocked = await renderPage({ alto: 'owner', sop: 'owner', sop1: 'expander' }, 'arrange');
+		expect(has(blocked, 'arrange-indent-sec-alto')).toBe(false);
+		cleanupResetRenameMocks();
+		const open = await renderPage({ alto: 'owner', sop: 'owner' }, 'arrange');
+		expect(has(open, 'arrange-indent-sec-alto')).toBe(true);
+	});
+
 	it('unindent to the top level shows to the section _owner when the top-level siblings are editable', async () => {
 		const c = await renderPage({ sop2: 'owner' }, 'arrange');
 		expect(has(c, 'arrange-unindent-sec-sop2')).toBe(true);

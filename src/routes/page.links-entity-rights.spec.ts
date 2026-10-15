@@ -28,7 +28,8 @@ import Page from './links/+page.svelte';
 import type { LinkRow } from '$lib/links/linkData';
 import { dbEditRight } from '$lib/nav/dbRights';
 import { listLinksMock } from '$lib/testing/mocks/links';
-import { cleanupClearAdmin, rowEls, setAuthed } from '$lib/testing/pages/links';
+import { cleanupClearResetAdminOnLine, rowEls, setAuthed } from '$lib/testing/pages/links';
+import { goOffline } from '$lib/testing/networkSignal';
 import { q } from '$lib/testing/pages/dom';
 
 const ME = 'person-p';
@@ -46,9 +47,9 @@ function withGrants(grants: Grant[]): LinkRow[] {
 	}));
 }
 
-async function renderWith(grants: Grant[]): Promise<HTMLElement> {
+async function renderWith(grants: Grant[], db: 'editor' | 'not-editor' = 'editor'): Promise<HTMLElement> {
 	listLinksMock.mockResolvedValue(withGrants(grants));
-	dbEditRight.set('editor');
+	dbEditRight.set(db);
 	const { container } = render(Page);
 	await waitFor(() => expect(rowEls(container).length).toBe(3));
 	return container;
@@ -59,7 +60,7 @@ function controlsPerRow(container: HTMLElement, testid: string): boolean[] {
 }
 
 beforeEach(setAuthed);
-afterEach(cleanupClearAdmin);
+afterEach(cleanupClearResetAdminOnLine);
 
 describe('#914 — each link control shows only to a person Entu lets write that link', () => {
 	it('a db editor with no right on any link: the add form shows, no row has edit, remove or move', async () => {
@@ -84,7 +85,7 @@ describe('#914 — each link control shows only to a person Entu lets write that
 		const some = await renderWith(['owner', 'editor', 'none']);
 		expect(controlsPerRow(some, 'links-move-up')).toEqual([false, false, false]);
 		expect(controlsPerRow(some, 'links-move-down')).toEqual([false, false, false]);
-		cleanupClearAdmin();
+		cleanupClearResetAdminOnLine();
 		setAuthed();
 		const all = await renderWith(['owner', 'editor', 'editor']);
 		expect(controlsPerRow(all, 'links-move-up')).toEqual([true, true, true]);
@@ -103,6 +104,17 @@ describe('#914 — each link control shows only to a person Entu lets write that
 		await waitFor(() => expect(rowEls(container).length).toBe(3));
 		expect(container.querySelector('[data-testid="links-edit"]')).toBeNull();
 		expect(container.querySelector('[data-testid="links-move-up"]')).toBeNull();
+	});
+	it('offline: the reason shows to a person who sees a disabled link control without the db right', async () => {
+		const owner = await renderWith(['owner', 'none', 'none'], 'not-editor');
+		await goOffline();
+		expect(q(owner, 'links-add-form')).toBeNull();
+		expect(q(owner, 'links-write-unavailable')).not.toBeNull();
+		cleanupClearResetAdminOnLine();
+		setAuthed();
+		const member = await renderWith(['none', 'none', 'none'], 'not-editor');
+		await goOffline();
+		expect(q(member, 'links-write-unavailable')).toBeNull();
 	});
 });
 
