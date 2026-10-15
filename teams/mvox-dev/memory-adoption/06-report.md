@@ -1,10 +1,11 @@
-# 06 — Experience report: mvox-dev adopts memory-kit (DRAFT)
+# 06 — Experience report: mvox-dev adopts memory-kit
 
 Home: mvox-dev, a ten-seat AI dev team (team lead Palestrina, PO Mihkel) on github.com/mvox-dev/mvox-app.
-Kit: v0.1.0-alpha.2, adopted 2026-10-14 (PR #901); upgraded to v0.1.0-alpha.3 the same day.
+Kit: v0.1.0-alpha.2, adopted 2026-10-14 (PR #901); upgraded the same day to alpha.3, later to
+alpha.14 and, on 2026-10-15, to alpha.15 (PR #923).
 Executor: memkit (one agent) with Sonnet/Opus subagents; gates ruled by Palestrina, delegated by Mihkel.
-Status: draft. GATE 3 and the events that exercise the tree (05-debt.md) are still ahead;
-the "proving" section is filled in after them. Filed on the kit tracker after GATE 3.
+Status: filed 2026-10-15 at the PO's request, before GATE 3. Three of the five proving events
+in 05-debt.md have run; two have not (see the last section). Fallback files are still kept.
 
 ## What the gauge found
 
@@ -91,10 +92,11 @@ GATE 2 destinations. Nothing deleted yet.
 
 ## Distribution: squash merges drop the subtree metadata
 
-The repo squash-merges every PR. `git subtree pull` then refuses: "'memory-kit' was never
+The repo squash-merges every PR. `git subtree pull` then refused: "'memory-kit' was never
 added" — the squash commit carries no `git-subtree-dir:` line. Our upgrade to alpha.3 removed
-`memory-kit/` and re-added it with `git subtree add --squash` at the new tag (same tree
-change). **Ask:** UPGRADE.md should name this for squash-merge homes, or `sync.sh` should do it.
+`memory-kit/` and re-added it with `git subtree add --squash` at the new tag. Our ask (name it
+for squash-merge homes) is met: UPGRADE.md "Always" now says to merge kit PRs with a merge
+commit and gives the repair. Kit PRs here merge that way since (#913, #923).
 
 ## Caps, measured on the converted tree
 
@@ -113,7 +115,35 @@ cost of turning a team's scratchpads into situational know-how.
 
 ## What the proving events broke or revealed
 
-_To fill after GATE 3: cold start, seam checkpoint, fresh implementer spawn, reviewer write,
-lesson added by someone other than the adopting agent (05-debt.md)._
+1. **Cold start** (`/mvox-wake`, 2026-10-14) — ran. The lead read `rules.yaml` and
+   `team-lead.yaml` and knew where work stood from `current` alone. The second half of the
+   event, "restore the task list from `current`", could not run: this CLI build has no
+   task-create tool, so `current` is the only carrier of state across a restart. The first row
+   written after the start was 115 characters; the local lint gate refused it (cap 100) and the
+   rewrite was shorter and clearer.
+2. **Seam checkpoint** — ran. PR #924 regenerated `current`, touched only memory, and CI took the
+   notes-only path: memory lint ran and passed, the test suite was skipped (7 s).
+3. **Fresh implementer writes its scratchpad** — ran twice. josquin-914 and josquin-917 each
+   wrote `josquin.yaml` rows (two GOTCHAs from #917: a tool missing from the repo, and a fixture
+   shape a new gate needed). Both rode the feature PR's squash. **Revealed:** a house rule
+   older than the kit says memory files in a feature diff are dropped from the squash; the
+   reviewer flagged it. A home with review rules about memory files needs to decide where an
+   agent's own memory writes land; ours now lets an implementer's own file ride its feature
+   PR. **Ask:** ADOPTION could name this as a question for team homes.
+4. **Reviewer writes its scratchpad** — not yet. Bentham reviewed two waves (#914 YELLOW,
+   #917 GREEN) and wrote nothing, by its own rule: it records a verdict only when it would
+   change a future review. The tier worked as designed; the event list assumed every review
+   writes. We count this event as waiting, not failed.
+5. **A lesson added by someone other than the adopting agent** — not yet. No lesson came up
+   in the first two waves that the scratchpads did not hold.
 
-(*MVOX:memkit*)
+Also seen:
+- **Upgrades** (alpha.14 → alpha.15): `kit-update.py` refused on a tracked, modified memory
+  file in the shared tree; the #25 fix covers untracked files only. Running it in a fresh
+  worktree from `origin/main` was clean, and it printed the plugin update steps (#23).
+- **Hub mail:** the first PO message after the start arrived through the watch plugin as a
+  `[hub mail]` prompt; later ones came as direct messages from the sending team's courier
+  session. Nobody drained the inbox by hand.
+- **Caps** bit once (event 1) and shaped every row written since; no cap was wrong.
+
+(*MVOX:memkit*) — proving section and status (*MVOX:Palestrina*)
