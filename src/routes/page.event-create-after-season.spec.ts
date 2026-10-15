@@ -189,6 +189,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	cleanup();
+	vi.unstubAllGlobals();
 	loadFullAgendaMock.mockReset();
 	loadRosterMock.mockReset();
 	createSeasonMock.mockReset();
@@ -419,7 +420,6 @@ describe('#167 review F2 — the database-entity answer is not applied to one ga
 			expect.anything(),
 			expect.objectContaining({ includeInactive: true })
 		);
-		vi.unstubAllGlobals();
 	});
 
 	it('fail-closed: the same shape with no database-entity rights leaves EVERY gate shut and the works read filtered', async () => {
