@@ -175,8 +175,16 @@ claude plugin marketplace add ./memory-kit/adapters/claude-code
 claude plugin install obligations-pane@memory-kit
 ```
 
-The plugin is read from that folder, so a kit upgrade (subtree pull) updates it; run
-`/reload-plugins` in a running session. Optional: `/plugin configure obligations-pane@memory-kit`
+A kit upgrade (subtree pull) does not update the installed plugin: the harness keeps its own
+copy from the install (kit #23). After a pull that changed it, `claude plugin marketplace update
+memory-kit`, `claude plugin update obligations-pane@memory-kit`, then `/reload-plugins` in a
+running session; `tools/kit-update.py` runs the first two itself when `claude` is on PATH (#37).
+
+**Scope.** This installs at user scope: every session on the machine loads the plugin. What it
+does in a folder that is not a kit home, and the project-scope alternative:
+[Install scope](../README.md#install-scope-kit-35).
+
+Optional: `/plugin configure obligations-pane@memory-kit`
 to set the footer's agent name. `/obligations` opens the pane at any width.
 
 Or for one session only: `claude --plugin-dir ./memory-kit/adapters/claude-code/obligations-pane`.

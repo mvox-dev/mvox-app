@@ -191,6 +191,17 @@ Each line arrives as `[lelle] from=… id=… subject=…`. The session then col
 with its own `recv`, after recording it. **Custody stays with the session**: the poller only
 looks, and the watch only delivers the line.
 
+**Ack only what you read, by id** (kit #39). `evr-mail recv` without `--peek` acks everything
+waiting on the hub, not what the peek showed: mail that arrived after the spool line is acked
+too. framework-research acked two messages unread that way on 2026-10-15; both needed resends.
+
+- The rule: ack by id the messages you have read and recorded, and nothing else. An ack with no
+  ids acks nothing; refuse it rather than fall back to "all".
+- apex-research's `mail-ack.py <ids>`, which refuses an empty list, is a working model. The hub
+  acks by id already; `recv --ack <ids>` is for the evr-mail owner to add, not the kit.
+- Until a home's mail tool acks by id: `recv` prints every message before it acks it, so read and
+  record everything that run printed, not only the ones the spool line named.
+
 `spool/spool-poll.py` (Python 3, stdlib only) is the poller, generic over the command. It is
 built from the fleet's `lelle-watch.py --spool` rules (pepys desk, semafor, hr2):
 
@@ -223,6 +234,34 @@ python3 memory-kit/adapters/claude-code/watch/spool/spool-poll.py \
   The lock is `flock` on POSIX, the same lock the `flock` command takes, and `msvcrt` on Windows.
   A second poller finds the lock held, says so and exits 0. The default names (`.lelle-spool.lock`,
   `.lelle-spool-seen.json`, `.lelle-spool.log`) are the ones the fleet's poller already uses.
+- **JSON instead of a regex** (`--json`, kit #39, hr2). Give the peek command its JSON form
+  (`recv --peek --json --limit 500`) and `--json` in place of `--match`. The first JSON value in
+  the output must be a list of objects, each with an `id`; each object is an item. `--line` reads
+  the object's fields, nested ones by index: `from={from_team} id={id} subject={entry[summary]}`.
+  A missing field is empty. Without `--line`, the line is the object as JSON. The subject arrives
+  whole (the text peek cuts long ones), and output that is not such a list fails the run, so a
+  format change shows as a `health:` line instead of going quiet. evr-mail prints its
+  `collected N` line after the JSON; that tail is ignored.
+- **A reminder for mail left waiting** (`--remind N`, minutes, off by default; kit #39, after
+  semafor). A spool line is delivered once; a session that never runs `recv` heard nothing more.
+  With `--remind 15`, an id still in the peek 15 minutes after the poller first saw it gets one
+  more line: `waiting: id=<id> age=<age> -- <its line>`. The age runs from the hub's deposit
+  stamp when the peek carries one: `--deposited` is a template like `--line`, by default
+  `{deposited}`, a named group of `--match` (add `(?:\s+deposited=(?P<deposited>\S+))?` after the
+  id in the text regex), or `--deposited '{deposited_at}'` with `--json`. Without a stamp, from
+  when the poller first saw it. Once per id; a restarted poller may remind once more, after N
+  minutes of its own. Each line is a delivered item, so a full turn.
+- **Liveness** (kit #39). A dead poller was silent: four seats named it, and framework-research
+  could not date an outage. Each successful run writes `.<stem>.alive` beside the spool:
+  `<UTC time> pid=<pid> every=<s> timeout=<s>`. It is **stale** when older than two intervals
+  and a timeout (150 s at the defaults: alive, but not polling, or hung).
+  - `--status --spool PATH` prints whether a poller holds the lock (its pid), the last successful
+    poll and its age, and `stale: ...` when it is. Exit 0 running and fresh, 1 otherwise.
+  - `--keep-alive` prints one line when the poller holding the lock is stale, and when it starts
+    one after an outage it says when the last successful poll was. Otherwise it prints nothing.
+    `[unverified]`: whether the harness shows a SessionStart hook's output to the session.
+  - A failing hub also stops the stamp, and the `health:` lines say why; `--status` tells the two
+    apart by the lock: held and stale is a poller that runs but cannot poll.
 - `--once` polls once and exits, for a scheduler. Bad usage exits 2.
 - **The race it cannot close.** A line written in the instant between the watch's rename of the
   spool and its read of the aside lands in the aside after the read, and is not delivered.
@@ -262,9 +301,12 @@ exec python3 memory-kit/adapters/claude-code/watch/spool/spool-poll.py --keep-al
 - **POSIX** (Linux, macOS): this replaces the `flock -n … setsid nohup …` hook (semafor's). It
   uses no `flock` or `setsid` commands, which macOS lacks, and it takes the same lock, so an
   old poller still running blocks a new one.
-- **Windows** (`[unverified]`: the tests run on Linux): `--keep-alive` starts the poller with
-  `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`, and asks to break away from the hook's job
-  object, without that if the job refuses. The hook command runs under Git Bash or PowerShell
+- **Windows** (`[unverified]`: the tests run on Linux and check the flags passed): `--keep-alive`
+  starts the poller with `CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP`, and asks to break away
+  from the hook's job object, without that if the job refuses. Each peek also runs with
+  `CREATE_NO_WINDOW` (kit #39). Until alpha.16 it was `DETACHED_PROCESS`, which leaves the poller
+  no console, so each peek of a console program opened a visible one: a flash every 30 s (the
+  desk and framework-research; `CREATE_NO_WINDOW` fixed it in their own pollers). The hook command runs under Git Bash or PowerShell
   as the harness runs hooks there; `python` may be the name instead of `python3`. Until a desk
   confirms that the poller outlives the session that started it, starting it by hand each
   session (as the desk does today) is the safe course.
@@ -506,6 +548,10 @@ The marketplace entry to add upstream (`adapters/claude-code/.claude-plugin/mark
 ```
 
 For one session only: `claude --plugin-dir ./memory-kit/adapters/claude-code/watch`.
+
+**Scope.** This installs at user scope: every session on the machine loads the plugin. What it
+does in a folder that is not a kit home, and the project-scope alternative:
+[Install scope](../README.md#install-scope-kit-35).
 
 ## Develop
 

@@ -905,3 +905,45 @@ describe('one drain per home (kit #17)', () => {
     expect(again.text).toContain('drained by this session')
   })
 })
+
+describe('a folder that is not a kit home (kit #35: a user-scope install loads the watch in every session)', () => {
+  // No memory-kit.conf, no memory, no inbox: a session started anywhere else on the machine.
+  test('silent: nothing delivered, no notice, no transcript line, no process, no claim, no file written', async ($, on) => {
+    const world = worldOf(on, {})
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start({ ...SESSION, cwd: '/home/u/src/other-repo' })
+    await $.prompt.submit(typed('hello') as never)
+    await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
+    await clock.advance(10 * MIN)
+    expect(world.attempts).toEqual([])
+    expect(world.notified).toEqual([])
+    expect(world.logs).toEqual([])
+    expect(world.commands).toEqual([])
+    expect([...world.store.keys()]).toEqual([])
+    expect([...world.files.keys()]).toEqual([])
+  })
+
+  test('retireOnIdle on at user scope: still no ask there, one debug line only', { options: { retireOnIdle: true, pollSeconds: 60 } }, async ($, on) => {
+    const world = worldOf(on, {})
+    const clock = mock.clock(on, { now: NOW })
+    world.tokens = 50_000
+    await $.session.start({ ...SESSION, cwd: '/home/u/src/other-repo' })
+    await $.prompt.submit(typed('hello') as never)
+    world.tokens = 700_000
+    await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
+    await clock.advance(2 * HOUR)
+    expect(world.attempts).toEqual([])
+    expect(world.notified).toEqual([])
+    expect(world.logs).toEqual(['debug: watch: retireOnIdle is on, but memory-kit.conf names no watch_retire_step: never asking'])
+  })
+
+  test('/watch there says what it found: the folder as home, no watch_sources', async ($, on) => {
+    worldOf(on, {})
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start({ ...SESSION, cwd: '/home/u/src/other-repo' })
+    await clock.advance(0)
+    const { text } = await $.command.run({ command: 'watch', args: '', origin: { kind: 'composer' } } as never)
+    expect(text).toContain('home: /home/u/src/other-repo')
+    expect(text).toContain('no watch_sources in /home/u/src/other-repo/memory-kit.conf; nothing to watch.')
+  })
+})

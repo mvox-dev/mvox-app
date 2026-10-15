@@ -19,7 +19,8 @@ import tempfile
 import textwrap
 import time
 import unittest
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
+from unittest import mock
 
 sys.dont_write_bytecode = True
 HERE = pathlib.Path(__file__).resolve().parent
@@ -194,10 +195,244 @@ class Lock(Folder):
 
 class Usage(unittest.TestCase):
     def test_bad_usage_exits_2_and_names_the_problem(self):
-        for argv in ([], ["--spool", "x"], ["--spool", "x", "--match", "id=(?P<id>.)"], ["--spool", "x", "--match", "(", "--", "true"]):
+        for argv in ([], ["--spool", "x"], ["--spool", "x", "--match", "id=(?P<id>.)"], ["--spool", "x", "--match", "(", "--", "true"],
+                     ["--spool", "x", "--json", "--match", "id=(?P<id>.)", "--", "true"], ["--spool", "x", "--", "true"],
+                     ["--spool", "x", "--json", "--remind", "soon", "--", "true"], ["--status"]):
             with self.subTest(argv=argv), redirect_stderr(io.StringIO()) as err:
                 self.assertEqual(sp.main(argv), 2)
                 self.assertIn("usage: spool-poll.py", err.getvalue())
+
+    def test_status_needs_the_spool_alone_and_json_replaces_match(self):
+        self.assertEqual(sp.parse(["--status", "--spool", "x"])[0], "status")
+        mode, config = sp.parse(["--spool", "x", "--json", "--remind", "15", "--deposited", "{deposited_at}", "--", "evr-mail", "recv", "--peek", "--json"])
+        self.assertEqual((mode, config.match, config.json_items, config.remind, config.deposited), ("loop", None, True, 15.0, "{deposited_at}"))
+        self.assertEqual(sp.parse(["--spool", "x", "--match", "id=(?P<id>.)", "--", "true"])[1].deposited, "{deposited}")
+
+
+# What `evr-mail recv --peek --json` prints (hr2's poller reads it): the consignments as a JSON
+# list, then the same tail lines as the text form. Kit #39.
+def json_peek(*consignments):
+    tail = f"collected {len(consignments)} (oldest 00:16:00)\n(--peek: not acking; custody stays with the hub)\n"
+    return json.dumps(list(consignments), indent=2, ensure_ascii=False) + "\n" + (tail if consignments else "collected 0 -- nothing waiting\n")
+
+
+def consignment(env_id, sender="pepys", summary="Hello", deposited="2026-10-15T13:50:00Z"):
+    return {"id": env_id, "from_team": sender, "deposited_at": deposited, "entry": {"summary": summary, "text": "body"}}
+
+
+JSON_LINE = "from={from_team} id={id} subject={entry[summary]}"
+T0 = 1_792_072_200.0  # 2026-10-15T13:50:00Z, a wall clock for the reminder and the heartbeat
+MINUTE = 60.0
+
+
+class WindowsFlags(Folder):
+    """Kit #39 (desk, framework-research): DETACHED_PROCESS flashed a console every poll on Windows;
+    CREATE_NO_WINDOW fixed it. This box is not Windows: the flags passed are what is checked."""
+
+    def test_the_peek_runs_with_create_no_window_on_windows_and_with_no_flags_elsewhere(self):
+        run = FakeRun((0, peek_output()))
+        with mock.patch.object(sp, "WINDOWS", True):
+            self.poller(run).poll(now=0)
+        self.assertEqual(run.calls[0][1]["creationflags"], sp.CREATE_NO_WINDOW)
+        self.assertEqual(sp.CREATE_NO_WINDOW, 0x08000000)
+        run = FakeRun((0, peek_output()))
+        with mock.patch.object(sp, "WINDOWS", False):
+            self.poller(run).poll(now=0)
+        self.assertNotIn("creationflags", run.calls[0][1])
+
+    def keep_alive_popen(self, windows, fail_first=False):
+        popen = mock.Mock(side_effect=[OSError("breakaway refused"), mock.Mock()] if fail_first else None)
+        argv = ["--keep-alive", "--spool", str(self.spool), "--match", LELLE_MATCH, "--", "true"]
+        mode, config = sp.parse(argv)
+        with mock.patch.object(sp, "WINDOWS", windows), mock.patch.object(sp.subprocess, "Popen", popen):
+            self.assertEqual(sp.keep_alive(argv, config), 0)
+        return popen
+
+    def test_keep_alive_on_windows_starts_the_poller_with_no_window_never_detached_process(self):
+        popen = self.keep_alive_popen(windows=True)
+        flags = popen.call_args.kwargs["creationflags"]
+        self.assertEqual(flags, sp.CREATE_NO_WINDOW | sp.CREATE_NEW_PROCESS_GROUP | sp.CREATE_BREAKAWAY_FROM_JOB)
+        self.assertEqual(flags & 0x00000008, 0)  # DETACHED_PROCESS: the console flash
+        self.assertNotIn("start_new_session", popen.call_args.kwargs)
+
+    def test_keep_alive_on_windows_where_the_job_refuses_breakaway_still_has_no_window(self):
+        popen = self.keep_alive_popen(windows=True, fail_first=True)
+        self.assertEqual(popen.call_count, 2)
+        self.assertEqual(popen.call_args.kwargs["creationflags"], sp.CREATE_NO_WINDOW | sp.CREATE_NEW_PROCESS_GROUP)
+
+    def test_keep_alive_on_posix_is_its_own_session_and_passes_no_flags(self):
+        popen = self.keep_alive_popen(windows=False)
+        self.assertTrue(popen.call_args.kwargs["start_new_session"])
+        self.assertNotIn("creationflags", popen.call_args.kwargs)
+
+
+class Heartbeat(Folder):
+    """Kit #39: a dead poller was silent (four seats); FR could not date an outage. Each successful
+    poll stamps .<stem>.alive beside the spool; --status and --keep-alive read it."""
+
+    def alive(self):
+        return sp.alive_path(self.spool).read_text(encoding="utf-8")
+
+    def status(self, *extra):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = sp.main(["--status", "--spool", str(self.spool), *extra])
+        return code, out.getvalue()
+
+    def test_a_successful_poll_stamps_the_heartbeat_and_a_failed_one_does_not(self):
+        self.assertEqual(sp.alive_path(self.spool).name, ".lelle-spool.alive")
+        p = self.poller(FakeRun((0, peek_output()), (1, "")), every=30, timeout=90)
+        p.poll(now=0, wall=T0)
+        self.assertEqual(self.alive(), f"{sp.stamp(T0)} pid={os.getpid()} every=30 timeout=90\n")
+        self.assertEqual(sp.stamp(T0), "2026-10-15T13:50:00Z")
+        p.poll(now=30, wall=T0 + 30)
+        self.assertEqual(self.alive(), f"{sp.stamp(T0)} pid={os.getpid()} every=30 timeout=90\n")
+
+    def test_status_with_no_poller_and_no_heartbeat_says_so_exit_1(self):
+        code, out = self.status()
+        self.assertEqual(code, 1)
+        self.assertIn("poller: not running", out)
+        self.assertIn("last successful poll: none recorded", out)
+
+    def test_status_with_a_running_poller_and_a_fresh_heartbeat_exit_0(self):
+        self.poller(FakeRun((0, peek_output()))).poll(now=0, wall=T0)
+        held = sp.take_lock(sp.lock_path(self.spool))
+        held.write("4242\n")
+        held.flush()
+        try:
+            with mock.patch.object(sp.time, "time", return_value=T0 + 40):
+                code, out = self.status()
+        finally:
+            held.close()
+        self.assertEqual(code, 0, out)
+        self.assertIn("poller: running, pid 4242", out)
+        self.assertIn("last successful poll: 2026-10-15T13:50:00Z, 40 s ago", out)
+        self.assertNotIn("stale", out)
+
+    def test_status_with_a_stale_heartbeat_says_stale_exit_1(self):
+        # Stale: older than two intervals and a timeout (30 s, 90 s: 150 s), the poller's own figures.
+        self.poller(FakeRun((0, peek_output())), every=30, timeout=90).poll(now=0, wall=T0)
+        held = sp.take_lock(sp.lock_path(self.spool))
+        try:
+            with mock.patch.object(sp.time, "time", return_value=T0 + 151):
+                code, out = self.status()
+        finally:
+            held.close()
+        self.assertEqual(code, 1, out)
+        self.assertIn("stale: no successful poll for 151 s (more than 150 s)", out)
+
+    def test_keep_alive_reports_a_running_poller_whose_heartbeat_is_stale_and_starts_nothing(self):
+        self.poller(FakeRun((0, peek_output()))).poll(now=0, wall=T0)
+        held = sp.take_lock(sp.lock_path(self.spool))
+        held.write("4242\n")
+        held.flush()
+        argv = ["--keep-alive", "--spool", str(self.spool), "--match", LELLE_MATCH, "--", "true"]
+        popen, out = mock.Mock(), io.StringIO()
+        try:
+            for when, says in ((T0 + 60, ""), (T0 + 600, "stale")):
+                out.truncate(0)
+                with redirect_stdout(out), mock.patch.object(sp.time, "time", return_value=when), mock.patch.object(sp.subprocess, "Popen", popen):
+                    self.assertEqual(sp.main(argv), 0)
+                if says:
+                    self.assertIn("spool-poll: the poller (pid 4242) holds the lock, but its last successful poll was 10 min ago (2026-10-15T13:50:00Z)", out.getvalue())
+                else:
+                    self.assertEqual(out.getvalue(), "")
+        finally:
+            held.close()
+        popen.assert_not_called()
+
+    def test_keep_alive_starting_a_poller_after_an_outage_dates_it(self):
+        self.poller(FakeRun((0, peek_output()))).poll(now=0, wall=T0)
+        argv = ["--keep-alive", "--spool", str(self.spool), "--match", LELLE_MATCH, "--", "true"]
+        out = io.StringIO()
+        with redirect_stdout(out), mock.patch.object(sp.time, "time", return_value=T0 + 2 * 3600), mock.patch.object(sp.subprocess, "Popen", mock.Mock()):
+            self.assertEqual(sp.main(argv), 0)
+        self.assertIn("spool-poll: no poller was running; the last successful poll was 2 h ago (2026-10-15T13:50:00Z); started one", out.getvalue())
+
+
+class Reminder(Folder):
+    """Kit #39 (semafor): a delivered id was announced once; a session that never ran recv heard
+    nothing again. With --remind N, an id still in the peek N minutes after this poller first saw
+    it gets one `waiting:` line, its age from the hub's deposited stamp when the peek carries one."""
+
+    MATCH = LELLE_MATCH.replace(r"id=(?P<id>\S+)", r"id=(?P<id>\S+)(?:\s+deposited=(?P<deposited>\S+))?")
+
+    def test_one_waiting_line_after_n_minutes_its_age_from_deposited(self):
+        out = "collected 1\n--- 1/1  from=pepys  id=a1  deposited=2026-10-15T13:45:00Z\nsubject: Hello\n"
+        p = self.poller(FakeRun((0, out)), match=self.MATCH, remind=15)
+        for minute in (0, 14, 15, 16, 45):
+            p.poll(now=minute * MINUTE, wall=T0 + minute * MINUTE)
+        self.assertEqual(self.lines(), ["from=pepys id=a1 subject=Hello", "waiting: id=a1 age=20m -- from=pepys id=a1 subject=Hello"])
+
+    def test_without_a_stamp_the_age_counts_from_when_this_poller_first_saw_it(self):
+        p = self.poller(FakeRun((0, peek_output(("pepys", "a1", "Hello")))), remind=15)
+        for minute in (0, 15, 90):
+            p.poll(now=minute * MINUTE, wall=T0 + minute * MINUTE)
+        self.assertEqual(self.lines(), ["from=pepys id=a1 subject=Hello", "waiting: id=a1 age=15m -- from=pepys id=a1 subject=Hello"])
+
+    def test_a_collected_id_is_not_reminded_and_off_by_default(self):
+        p = self.poller(FakeRun((0, peek_output(("pepys", "a1", "Hello"))), (0, peek_output())), remind=15)
+        for minute in (0, 1, 30):
+            p.poll(now=minute * MINUTE, wall=T0 + minute * MINUTE)
+        self.assertEqual(self.lines(), ["from=pepys id=a1 subject=Hello"])
+        self.spool.unlink()
+        p = self.poller(FakeRun((0, peek_output(("pepys", "b2", "Two")))))
+        for minute in (0, 60, 600):
+            p.poll(now=minute * MINUTE, wall=T0 + minute * MINUTE)
+        self.assertEqual(self.lines(), ["from=pepys id=b2 subject=Two"])
+
+    def test_ages_in_hours(self):
+        self.assertEqual([sp.age_of(s) for s in (59, 60, 17 * 60 + 5, 3600, 2 * 3600 + 5 * 60)], ["0m", "1m", "17m", "1h00m", "2h05m"])
+
+
+class JsonInput(Folder):
+    """Kit #39 (hr2): `recv --peek --json` instead of a regex over text, which breaks quietly on a
+    format change and gets long subjects cut. --json reads the first JSON value of the output."""
+
+    def poller_json(self, run, **kw):
+        args = dict(match=None, json_items=True, line=JSON_LINE, healthy=None)
+        args.update(kw)
+        return self.poller(run, **args)
+
+    def test_each_object_is_an_item_keyed_by_id_written_by_the_template_with_index_access(self):
+        long = "A subject far longer than the text peek would show " * 3
+        run = FakeRun((0, json_peek(consignment("a1"), consignment("b2", "hr2", long.strip()))))
+        self.poller_json(run).poll(now=0)
+        self.assertEqual(self.lines(), ["from=pepys id=a1 subject=Hello", f"from=hr2 id=b2 subject={long.strip()}"])
+
+    def test_a_missing_field_is_empty_and_without_line_the_item_is_its_json_on_one_line(self):
+        self.poller_json(FakeRun((0, json_peek({"id": "c3", "from_team": "x"})))).poll(now=0)
+        self.assertEqual(self.lines(), ["from=x id=c3 subject="])
+        self.spool.unlink()
+        self.poller_json(FakeRun((0, json_peek({"id": "d4", "n": 1}))), line=None).poll(now=0)
+        self.assertEqual(self.lines(), ['{"id": "d4", "n": 1}'])
+
+    def test_an_empty_list_is_healthy_and_spools_nothing(self):
+        p = self.poller_json(FakeRun((0, json_peek())), tolerate=1)
+        p.poll(now=0, wall=T0)
+        self.assertEqual(self.lines(), [])
+        self.assertTrue(sp.alive_path(self.spool).exists())
+
+    def test_output_that_is_not_a_json_list_of_objects_with_ids_is_a_failure(self):
+        for out, why in [
+            ("collected 1\n--- 1/1 from=x id=z\n", "output is not JSON"),
+            ('{"id": "z"}\n', "output is not a JSON list"),
+            ('[{"from_team": "x"}]\n', "item 1 has no id"),
+            ('["z"]\n', "item 1 is not an object"),
+        ]:
+            with self.subTest(why=why):
+                if self.spool.exists():
+                    self.spool.unlink()
+                self.poller_json(FakeRun((0, out)), tolerate=1).poll(now=0)
+                self.assertEqual(len(self.lines()), 1, self.lines())
+                self.assertTrue(self.lines()[0].startswith(f"health: {why}"), self.lines())
+
+    def test_the_reminder_reads_deposited_through_its_template(self):
+        run = FakeRun((0, json_peek(consignment("a1", deposited="2026-10-15T13:40:00Z"))))
+        p = self.poller_json(run, remind=15, deposited="{deposited_at}")
+        for minute in (0, 15):
+            p.poll(now=minute * MINUTE, wall=T0 + minute * MINUTE)
+        self.assertEqual(self.lines()[-1], "waiting: id=a1 age=25m -- from=pepys id=a1 subject=Hello")
 
 
 FAKE_PEEK = textwrap.dedent("""\
@@ -253,6 +488,17 @@ class KeepAlive(Folder):
         self.assertNotIn("another poller", sp.log_path(self.spool).read_text(encoding="utf-8"))
         # Its own session: a signal to the starter's process group does not reach it.
         self.assertNotEqual(os.getpgid(pid), os.getpgid(0))
+
+    def test_a_live_poller_stamps_its_heartbeat_and_status_says_running_and_fresh(self):
+        script = [sys.executable, str(HERE / "spool-poll.py")]
+        self.assertEqual(subprocess.run([*script, "--status", "--spool", str(self.spool)], capture_output=True, timeout=10).returncode, 1)
+        subprocess.run([*script, "--keep-alive", *self.argv], timeout=10)
+        self.assertTrue(self.wait_for(lambda: sp.alive_path(self.spool).exists()))
+        r = subprocess.run([*script, "--status", "--spool", str(self.spool)], capture_output=True, text=True, timeout=10)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        pid = sp.lock_path(self.spool).read_text(encoding="utf-8").strip()
+        self.assertIn(f"poller: running, pid {pid}", r.stdout)
+        self.assertIn(f"pid={pid} every=0.2 timeout=90", sp.alive_path(self.spool).read_text(encoding="utf-8"))
 
     def test_a_poller_started_by_hand_while_one_runs_exits_0_and_says_so(self):
         subprocess.run([sys.executable, str(HERE / "spool-poll.py"), "--keep-alive", *self.argv], timeout=10)
