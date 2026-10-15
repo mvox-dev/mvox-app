@@ -8,11 +8,8 @@ current:
     record: "Queue empty after PR #933; offered Gama a cleanup (season-rights upgrade for unseen reads)"
     ref: scratchpad/findings-session.md
   - label: WIP
-    record: "GATE 3 events all ran (lesson memory-notes-ride-feature-prs, 2026-10-15); rule GATE 3 next"
+    record: "GATE 3 done 2026-10-15: fallback deleted (git: fd701a4c); adoption closed"
     ref: teams/mvox-dev/memory-adoption/05-debt.md
-  - label: WIP
-    record: "Comment the last proving events on memory-kit #38 via Passepartout"
-    ref: teams/mvox-dev/memory-adoption/06-report.md
   - label: DECISION
     record: "Adopt memory-kit fully for team memory and the lead's auto-memory; work autonomously"
     ref: mihkel:2026-10-14
@@ -23,8 +20,8 @@ current:
     record: "About page (urls/mvox-about) is the public baseline for publishers; it names no partner or dispute"
     ref: "2026-06-14"
   - label: DECISION
-    record: "Kit updates: run kit-update.py on a worktree; merge the PR with a merge commit, not squash"
-    ref: memory-kit/UPGRADE.md
+    record: "Apply verified memory-kit updates without asking: worktree, kit-update.py, merge commit"
+    ref: mihkel:2026-10-15
   - label: DECISION
     record: "Hub mail comes via the watch plugin; never drain team-lead.json by hand"
     ref: memory-kit.conf
