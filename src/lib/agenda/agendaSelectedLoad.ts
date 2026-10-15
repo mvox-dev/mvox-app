@@ -84,12 +84,6 @@ export function createSelectedLoad(
 		ag.attendanceFailedByEvent = new Map();
 		ag.myAttendance = [];
 		ag.attendancePartial = false;
-		ag.seasonSummaryExpanded = false;
-		ag.seasonMemberRates = [];
-		ag.seasonRatesLoaded = false;
-		ag.seasonRatesLoading = false;
-		ag.seasonRatesError = false;
-		ag.seasonRatesPartial = false;
 		ag.seasons = [];
 		closeSeasonCreateForm();
 		deps.closeEventCreateForm();

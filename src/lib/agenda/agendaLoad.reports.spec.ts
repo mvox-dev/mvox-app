@@ -70,8 +70,7 @@ function setup(reads: Partial<Record<string, Read>> = {}) {
 				'listMyAttendance',
 				'resolveManageRights',
 				'listScheduleItemsByEventId',
-				'listAttendance',
-				'loadActiveAndArchivedRosters'
+				'listAttendance'
 			].map((name) => [name, reads[name] ?? never])
 		),
 		selected: () => ({ db: 'sampledb', personId: 'person-p' }),
@@ -140,16 +139,6 @@ describe('agenda reads that fail are reported (#756)', () => {
 			run: (l: Loader) => l.loader.loadScheduleItems(CFG, ['ev-1'], l.seq.requestId),
 			action: 'loading the schedule items',
 			shown: (l: Loader) => expect(l.ag.scheduleByEventId).toEqual({})
-		},
-		{
-			read: 'the season rates',
-			reads: { listAttendance: fail },
-			run: (l: Loader) => {
-				l.ag.recentItems = [{ id: 'ev-1' } as (typeof l.ag.recentItems)[number]];
-				l.loader.handleExpandSeasonSummary();
-			},
-			action: 'loading the season attendance rates',
-			shown: (l: Loader) => expect(l.ag.seasonRatesError).toBe(true)
 		},
 		{
 			read: 'the database entity rights',

@@ -1,6 +1,5 @@
 // Agenda data load: the page owns the state object and every write; reads from modules that
 // also write reach this file through `deps`, so the write-gate fence still sees them in the page.
-import type { MemberAttendanceRate } from '$lib/attendance/attendanceSummary';
 import type { CollectiveIdentity } from '$lib/collectives/store';
 import type { RosterRow } from '$lib/roster/rosterData';
 import type { SectionNode } from '$lib/sections/sectionData';
@@ -16,7 +15,6 @@ import type { Copy, Edition, Work } from '$lib/library/libraryData';
 import type { CANONICAL_EVENT_TYPES } from '$lib/events/eventTypeLabels';
 import type * as AttendanceData from '$lib/attendance/attendanceData';
 import type * as LibraryData from '$lib/library/libraryData';
-import type * as MemberLifecycle from '$lib/roster/memberLifecycle';
 import type * as RepertoireActions from '$lib/repertoire/repertoireActions';
 import type * as ManageRights from '$lib/repertoire/manageRights';
 import type * as RepertoireData from '$lib/repertoire/repertoireData';
@@ -82,12 +80,6 @@ export function createAgendaLoadState() {
 		panelRepertoireLoading: false,
 		panelRepertoireItemsOk: false,
 		panelWorksSourcesOk: false,
-		seasonSummaryExpanded: false,
-		seasonMemberRates: [] as MemberAttendanceRate[],
-		seasonRatesLoaded: false,
-		seasonRatesLoading: false,
-		seasonRatesError: false,
-		seasonRatesPartial: false,
 		attendanceItem: null as AgendaItem | null,
 		attendanceLoading: false,
 		attendanceError: false,
@@ -152,7 +144,6 @@ export interface AgendaLoadDeps {
 	listAllCopies: typeof LibraryData.listAllCopies;
 	listRepertoireItems: typeof RepertoireData.listRepertoireItems;
 	listScheduleItemsByEventId: typeof ScheduleData.listScheduleItemsByEventId;
-	loadActiveAndArchivedRosters: typeof MemberLifecycle.loadActiveAndArchivedRosters;
 	canMarkAttendance: typeof RepertoireActions.canMarkAttendance;
 	manageRightsFrom: typeof RepertoireActions.manageRightsFrom;
 	manageRightsOrNone: typeof ManageRights.manageRightsOrNone;

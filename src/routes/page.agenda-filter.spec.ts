@@ -320,7 +320,7 @@ describe('#214 — filtered-empty state', () => {
 	});
 });
 
-describe('#214 review F3 — a type filter never hides the season summary', () => {
+describe('#214 review F3 — a type filter that empties Recent says so', () => {
 	async function renderAsMember(
 		upcoming: AgendaItem[],
 		recent: AgendaItem[]
@@ -329,19 +329,18 @@ describe('#214 review F3 — a type filter never hides the season summary', () =
 		completionGateStore.set('complete');
 		const container = await renderAgenda(upcoming, recent);
 		await waitFor(() => {
-			expect(container.querySelector('[data-testid="season-summary"]')).not.toBeNull();
+			expect(container.querySelector('[data-testid="agenda-recent"]')).not.toBeNull();
 		});
 		return container;
 	}
 
-	it('a member filtering to a type with zero matching RECENT rows still sees the summary', async () => {
+	it('a member filtering to a type with zero matching RECENT rows sees the empty notice', async () => {
 		const container = await renderAsMember([UP_REHEARSAL], [RECENT_SOCIAL]);
 
 		await fireEvent.click(chip(container, 'agenda-filter-rehearsal'));
 
 		expect(recentRowIds(container)).toEqual([]);
 		expect(container.querySelector('[data-testid="agenda-recent"]')).not.toBeNull();
-		expect(container.querySelector('[data-testid="season-summary"]')).not.toBeNull();
 		expect(
 			container.querySelector('[data-testid="agenda-recent-filter-empty"]')?.textContent?.trim()
 		).toBe('[msg:filter-recent-empty]');

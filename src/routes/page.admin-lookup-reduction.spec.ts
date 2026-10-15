@@ -45,6 +45,10 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
+vi.mock('$lib/profile/seasonAttendance', async () =>
+	(await import('$lib/testing/mocks/profile')).noSeasonAttendanceModule()
+);
+
 import Page from './profile/+page.svelte';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';

@@ -1,6 +1,5 @@
 // The agenda page's read and write seams, handed to its loader and repertoire queues.
 import { findMyMemberId, listMyRsvps, rsvpsByEventId } from '$lib/rsvp/rsvpData';
-import { loadActiveAndArchivedRosters } from '$lib/roster/memberLifecycle';
 import {
 	listAttendance,
 	listMyAttendance,
@@ -42,7 +41,6 @@ type LoaderReads = Pick<
 	| 'listAllCopies'
 	| 'listRepertoireItems'
 	| 'listScheduleItemsByEventId'
-	| 'loadActiveAndArchivedRosters'
 	| 'canMarkAttendance'
 	| 'manageRightsFrom'
 	| 'manageRightsOrNone'
@@ -64,7 +62,6 @@ export function agendaLoaderReads(): LoaderReads {
 		listAllCopies: (...a) => listAllCopies(...a),
 		listRepertoireItems: (...a) => listRepertoireItems(...a),
 		listScheduleItemsByEventId: (...a) => listScheduleItemsByEventId(...a),
-		loadActiveAndArchivedRosters: (...a) => loadActiveAndArchivedRosters(...a),
 		canMarkAttendance: (...a) => canMarkAttendance(...a),
 		manageRightsFrom: (...a) => manageRightsFrom(...a),
 		manageRightsOrNone: (...a) => manageRightsOrNone(...a),

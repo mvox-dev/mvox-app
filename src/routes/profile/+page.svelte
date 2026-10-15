@@ -32,6 +32,7 @@
 	import LinkedAccountsSection from '$lib/profile/LinkedAccountsSection.svelte';
 	import ProfileStorageSection from '$lib/profile/ProfileStorageSection.svelte';
 	import CollectiveAdminSection from '$lib/profile/CollectiveAdminSection.svelte';
+	import SeasonAttendanceSection from '$lib/profile/SeasonAttendanceSection.svelte';
 
 	const LEVELS: readonly Level[] = ['public', 'domain', 'private'];
 
@@ -47,6 +48,7 @@
 	let collectiveAdmin = $state<CollectiveAdminSection>();
 	let linkedAccounts = $state<LinkedAccountsSection>();
 	let storageSection = $state<ProfileStorageSection>();
+	let seasonAttendance = $state<SeasonAttendanceSection>();
 
 	const domainNameMissing = $derived($completionGateStore === 'incomplete');
 
@@ -81,6 +83,7 @@
 		linkedAccounts?.reset();
 		collectiveAdmin?.reset();
 		storageSection?.reset();
+		seasonAttendance?.reset();
 		ops.reset();
 	}
 
@@ -97,6 +100,7 @@
 			// Fired apart from the fields read: the admin section must load even when
 			// listMyProfiles rejects.
 			collectiveAdmin?.load(cfg, personId, g);
+			void seasonAttendance?.load(cfg, personId, g);
 			const profiles = await listMyProfiles(cfg, personId);
 			if (!isCurrent()) return;
 			pf.loadedProfiles = profiles;
@@ -193,6 +197,8 @@
 <main class="min-h-screen bg-paper px-6 py-10 text-ink">
 	<div class="mx-auto flex w-full max-w-md flex-col gap-4">
 		<h1 class="font-display text-2xl">{m.profile_title()}</h1>
+
+		<SeasonAttendanceSection bind:this={seasonAttendance} generation={() => routeLoad.generation} />
 
 		<ProfileChrome />
 

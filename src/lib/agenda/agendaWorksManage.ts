@@ -6,7 +6,6 @@ import type { createRepertoireRowHandlers } from '$lib/repertoire/repertoireRowH
 import { pickableEditionOptions, withoutProgrammed } from '$lib/repertoire/editionOptions';
 import type { AttendancePanel } from '$lib/attendance/types';
 import type { AttendanceStatus, MyAttendance } from '$lib/attendance/attendanceData';
-import { deriveAttendanceRate } from '$lib/attendance/attendanceSummary';
 
 export function pickableEditionsByEventIdOf(
 	works: readonly Work[],
@@ -97,10 +96,4 @@ export function myAttendanceByEventIdOf(
 	const map: Record<string, AttendanceStatus> = {};
 	for (const a of myAttendance) map[a.eventId] = a.status;
 	return map;
-}
-
-export function mySeasonRateOf(ag: AgendaLoadState) {
-	const recentIds = new Set(ag.recentItems.map((i) => i.id));
-	const mySeasonAttendance = ag.myAttendance.filter((a) => recentIds.has(a.eventId));
-	return deriveAttendanceRate(mySeasonAttendance, ag.recentItems.length);
 }

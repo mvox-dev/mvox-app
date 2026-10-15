@@ -40,7 +40,6 @@
 		ontakeattendance?: (item: AgendaItem) => void;
 		attendancePanel?: AttendancePanel;
 		myAttendanceByEventId?: Record<string, BadgeStatus>;
-		seasonSummary?: Snippet;
 		worksByEventId?: Record<string, WorkRow[]>;
 		onpdfclick?: (fileId: string) => void;
 		heldFileIds?: ReadonlySet<string> | null;
@@ -66,7 +65,6 @@
 		ontakeattendance,
 		attendancePanel,
 		myAttendanceByEventId = {},
-		seasonSummary,
 		worksByEventId = {},
 		onpdfclick,
 		heldFileIds = null,
@@ -236,9 +234,6 @@
 		>
 			{m.agenda_recent()}
 		</h2>
-		{#if seasonSummary && membership === 'member'}
-			{@render seasonSummary()}
-		{/if}
 		{#if recentItems.length === 0 && recentEmptyState}
 			{@render recentEmptyState()}
 		{/if}

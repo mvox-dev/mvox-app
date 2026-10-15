@@ -93,7 +93,6 @@
 		rowStore,
 		openAttendancePanel,
 		closeAttendancePanel,
-		handleExpandSeasonSummary,
 		loadPanelRepertoire
 	} = createAgendaLoader(ag, seq, {
 		selected: () => selected,
@@ -361,7 +360,6 @@
 							onpdfclick={handlePdfClick}
 							onrsvpchange={handleRsvpChange}
 							ontakeattendance={openAttendancePanel}
-							onexpandseasonsummary={handleExpandSeasonSummary}
 							onattendancetoggle={handleAttendanceToggle}
 							onattendanceclose={closeAttendancePanel}
 						/>

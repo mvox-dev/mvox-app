@@ -83,6 +83,7 @@ vi.mock('$lib/roster/memberLifecycle', async (importOriginal) => ({
 
 import AgendaPage from './+page.svelte';
 import EventPage from './event/[id]/+page.svelte';
+import ProfilePage from './profile/+page.svelte';
 import LibraryPage from './library/+page.svelte';
 import RosterPage from './roster/+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
@@ -149,6 +150,13 @@ type Row = {
 };
 
 const MEMBER = { memberId: 'member-1', personId: 'p-ada', name: 'Ada Lovelace', email: '', sectionIds: [] };
+
+const SEASON_READ = {
+	entities: [{ _id: 's1', start_date: [{ date: '2026-01-01' }], _owner: [{ reference: 'p-viewer' }] }]
+};
+const EVENTS_READ = {
+	entities: [{ _id: 'past-1', start_datetime: [{ datetime: '2026-06-10T16:00:00.000Z' }] }]
+};
 
 const agendaReady = (c: HTMLElement) => waitFor(() => expect(q(c, 'agenda-skeleton')).toBeNull());
 const libraryReady = (c: HTMLElement) =>
@@ -237,35 +245,23 @@ const ROWS: Record<string, Row> = {
 		},
 		switches: false
 	},
-	'/ season summary': {
-		route: '/',
-		Page: AgendaPage,
+	'/profile season summary': {
+		route: '/profile',
+		Page: ProfilePage,
 		notice: 'season-summary-partial-notice',
 		key: 'season_summary_partial_notice',
 		read: loadActiveAndArchivedRostersMock,
 		items: [MEMBER],
 		wrap: (active) => ({ active, inactive: complete([]) }),
 		arrange: () => {
-			loadFullAgendaMock.mockResolvedValue(
-				fullAgendaResult({
-					recent: [
-						{
-							id: 'past-1',
-							name: 'Rehearsal past-1',
-							startDatetime: '2026-06-10T16:00:00.000Z',
-							durationMinutes: 90,
-							location: '',
-							conductors: [],
-							owners: [],
-							editors: []
-						}
-					],
-					seasons: [],
-					upcoming: [],
-					seasonId: 's1',
-					seasonConductors: [],
-					seasonOwners: ['p-viewer'],
-					seasonEditors: []
+			const base = globalThis.fetch;
+			vi.stubGlobal(
+				'fetch',
+				vi.fn(async (input: RequestInfo | URL) => {
+					const url = String(input);
+					if (url.includes('_type.string=season')) return new Response(JSON.stringify(SEASON_READ));
+					if (url.includes('_type.string=event&')) return new Response(JSON.stringify(EVENTS_READ));
+					return base(input);
 				})
 			);
 			listAttendanceMock.mockResolvedValue([{ attendanceId: 'a1', memberId: 'member-1', status: 'present' }]);

@@ -7,14 +7,9 @@
 	import AgendaTypeFilter from '$lib/agenda/AgendaTypeFilter.svelte';
 	import AgendaViewToggle from '$lib/agenda/AgendaViewToggle.svelte';
 	import ListOfStuff from '$lib/components/ListOfStuff.svelte';
-	import SeasonSummary from '$lib/components/attendance/SeasonSummary.svelte';
 	import { agendaViewStore } from '$lib/preferences/agendaView';
 	import { completionGateStore } from '$lib/profile/completionGate';
-	import {
-		attendancePanelOf,
-		myAttendanceByEventIdOf,
-		mySeasonRateOf
-	} from '$lib/agenda/agendaWorksManage';
+	import { attendancePanelOf, myAttendanceByEventIdOf } from '$lib/agenda/agendaWorksManage';
 	import type { AgendaLoadState } from '$lib/agenda/agendaLoad';
 	import type { AgendaPageView } from '$lib/agenda/agendaPageView.svelte';
 
@@ -29,7 +24,6 @@
 		onpdfclick,
 		onrsvpchange,
 		ontakeattendance,
-		onexpandseasonsummary,
 		onattendancetoggle,
 		onattendanceclose
 	}: {
@@ -41,14 +35,12 @@
 		onpdfclick: ListProps['onpdfclick'];
 		onrsvpchange: ListProps['onrsvpchange'];
 		ontakeattendance: ListProps['ontakeattendance'];
-		onexpandseasonsummary: () => void;
 		onattendancetoggle: Parameters<typeof attendancePanelOf>[1];
 		onattendanceclose: Parameters<typeof attendancePanelOf>[2];
 	} = $props();
 
 	const attendancePanel = $derived(attendancePanelOf(ag, onattendancetoggle, onattendanceclose));
 	const myAttendanceByEventId = $derived(myAttendanceByEventIdOf(ag.myAttendance));
-	const mySeasonRate = $derived(mySeasonRateOf(ag));
 
 	const gatedMembership = $derived(
 		ag.membership === 'member' && $completionGateStore !== 'complete' ? 'loading' : ag.membership
@@ -115,20 +107,7 @@
 		{onpdfclick}
 		{onrsvpchange}
 		{ontakeattendance}
-	>
-		{#snippet seasonSummary()}
-			<SeasonSummary
-				myRate={mySeasonRate}
-				canExpand={ag.seasonManageRights === 'editor'}
-				expanded={ag.seasonSummaryExpanded}
-				memberRates={ag.seasonMemberRates}
-				membersPartial={ag.seasonRatesPartial}
-				loading={ag.seasonRatesLoading}
-				error={ag.seasonRatesError}
-				onexpand={onexpandseasonsummary}
-			/>
-		{/snippet}
-	</AgendaList>
+	/>
 	{/key}
 {:else}
 	<AgendaMonthView
