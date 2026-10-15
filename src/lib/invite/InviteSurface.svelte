@@ -10,7 +10,7 @@
 	import { buildInviteUrl } from '$lib/invite/invite-links';
 	import { parseInviteToken } from '$lib/invite/parse-invite-token';
 	import { createInviteLinkCopier } from '$lib/invite/copy-invite-link';
-	import type { OwnerTier } from '$lib/nav/adminStore';
+	import type { DbRight } from '$lib/nav/dbRights';
 	import { writesAvailable } from '$lib/net/online';
 	import type { JoinState } from '$lib/profile/linkedIdentities';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
@@ -73,7 +73,7 @@
 	const canSubmit = $derived(dbId !== '' && dbEntityId !== '');
 	const isOffline = $derived(!$writesAvailable);
 
-	let ownerTier = $state<OwnerTier | 'loading'>('loading');
+	let dbRight = $state<DbRight | 'loading'>('loading');
 	let joinStates = $state<Record<string, JoinState>>({});
 	let personListError = $state(false);
 	let selectedPersonId = $state('');
@@ -83,8 +83,8 @@
 	const selectedPerson = $derived(
 		uninvitedPersons.find((p) => p.personId === selectedPersonId) ?? null
 	);
-	const showPersonSelect = $derived(controlled && ownerTier === 'owner' && uninvitedPersons.length > 0);
-	const ownerNoteVisible = $derived(controlled && (ownerTier === 'editor' || ownerTier === 'none'));
+	const showPersonSelect = $derived(controlled && dbRight === 'owner' && uninvitedPersons.length > 0);
+	const ownerNoteVisible = $derived(controlled && (dbRight === 'editor' || dbRight === 'none'));
 
 	const submitLabel = $derived(
 		status === 'creating'
@@ -107,7 +107,7 @@
 		personListError = false;
 		void loadPersonInviteData({ db: presetDb, token }, presetDbEntityId, viewerPersonId, personIds).then(
 			(loaded) => {
-				ownerTier = loaded.ownerTier;
+				dbRight = loaded.dbRight;
 				joinStates = loaded.joinStates;
 				personListError = loaded.personListError;
 			}

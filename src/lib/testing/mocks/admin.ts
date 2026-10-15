@@ -1,9 +1,9 @@
 // Admin, librarian, join-state and collective-name mocks shared across specs.
 import { vi } from 'vitest';
 
-export const resolveAdminMock = vi.fn();
-export const resolveOwnerTierMock = vi.fn();
-export const resolveLibrarianMock = vi.fn();
+export const resolveDbEditRightMock = vi.fn();
+export const resolveDbRightMock = vi.fn();
+export const resolveLibraryEditRightMock = vi.fn();
 export const listJoinStatesMock = vi.fn();
 export const resolveCollectiveNameMarkerMock = vi.fn();
 export const updateCollectiveNameMock = vi.fn();
@@ -49,14 +49,14 @@ export class RoleGrantMissingError extends Error {
 	}
 }
 
-// 'admin': only resolveAdmin; 'both': resolveOwnerTier too.
-export function adminStoreModule(wired: 'admin' | 'both' = 'both') {
-	if (wired === 'admin') return { resolveAdmin: resolveAdminMock };
-	return { resolveAdmin: resolveAdminMock, resolveOwnerTier: resolveOwnerTierMock };
+// 'dbEditRight': only resolveDbEditRight; 'both': resolveDbRight too.
+export function dbRightsModule(wired: 'dbEditRight' | 'both' = 'both') {
+	if (wired === 'dbEditRight') return { resolveDbEditRight: resolveDbEditRightMock };
+	return { resolveDbEditRight: resolveDbEditRightMock, resolveDbRight: resolveDbRightMock };
 }
 
-export function librarianStoreModule() {
-	return { resolveLibrarian: resolveLibrarianMock };
+export function libraryRightsModule() {
+	return { resolveLibraryEditRight: resolveLibraryEditRightMock };
 }
 
 export function joinStatesModule() {
@@ -127,16 +127,16 @@ export async function joinStateDetailsModule(importOriginal: Real) {
 	};
 }
 
-export async function adminStoreOverRealModule(importOriginal: Real) {
+export async function dbRightsOverRealModule(importOriginal: Real) {
 	return {
 		...(await real(importOriginal)),
-		resolveAdmin: resolveAdminMock,
-		resolveOwnerTier: resolveOwnerTierMock
+		resolveDbEditRight: resolveDbEditRightMock,
+		resolveDbRight: resolveDbRightMock
 	};
 }
 
-export async function ownerTierOverRealModule(importOriginal: Real) {
-	return { ...(await real(importOriginal)), resolveOwnerTier: resolveOwnerTierMock };
+export async function dbRightOverRealModule(importOriginal: Real) {
+	return { ...(await real(importOriginal)), resolveDbRight: resolveDbRightMock };
 }
 
 // (*MVOX:Josquin*)

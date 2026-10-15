@@ -27,7 +27,7 @@ vi.mock('$app/state', async () =>
 
 import Page from './links/+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { resetAdmin } from '$lib/nav/adminStore';
+import { resetDbEditRight } from '$lib/nav/dbRights';
 import { resetAppState } from '$lib/testing/appReset';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
 import { DB_ENTITY, TYPE_ID, rowNames, setAuthedAdmin, wireCalls } from '$lib/testing/pages/links';
@@ -49,7 +49,9 @@ function serveList() {
 			_id: l._id,
 			name: [{ string: l.name }],
 			url: [{ string: `https://example.test/${l._id}` }],
-			display_order: [{ number: l.order }]
+			display_order: [{ number: l.order }],
+			_owner: [{ reference: 'person-p', inherited: true }],
+			_editor: [{ reference: 'person-p', inherited: true }]
 		}))
 	});
 }
@@ -110,7 +112,7 @@ afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 });
 
 async function renderReady() {

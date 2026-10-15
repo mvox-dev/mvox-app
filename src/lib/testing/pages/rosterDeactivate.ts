@@ -2,8 +2,8 @@
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, expect, vi } from 'vitest';
 import Page from '../../../routes/roster/+page.svelte';
-import { resolveMyLibraryId } from '$lib/library/librarianStore';
-import { adminStore } from '$lib/nav/adminStore';
+import { resolveMyLibraryId } from '$lib/library/libraryRights';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import {
@@ -23,10 +23,10 @@ export const rosterTwo = [
 	{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [], dbEntityId: 'db-1' }
 ];
 
-export async function renderRosterAs(admin: 'admin' | 'not-admin') {
+export async function renderRosterAs(admin: 'editor' | 'not-editor') {
 	const utils = render(Page);
 	setAuthedWithOneCollective();
-	adminStore.set(admin);
+	dbEditRight.set(admin);
 	await waitFor(() =>
 		expect(
 			utils.container.querySelector('[data-testid="section-toggle-unassigned"]')

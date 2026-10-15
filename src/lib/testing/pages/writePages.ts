@@ -11,7 +11,7 @@ import LibraryPage from '../../../routes/library/+page.svelte';
 import LinksPage from '../../../routes/links/+page.svelte';
 import ProfilePage from '../../../routes/profile/+page.svelte';
 import RosterPage from '../../../routes/roster/+page.svelte';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { completionGateStore } from '$lib/profile/completionGate';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { toListRead } from '$lib/testing/listReadFixtures';
@@ -33,10 +33,10 @@ import {
 	listAdminsMock,
 	listJoinStatesMock,
 	listLibrariansMock,
-	resolveAdminMock,
+	resolveDbEditRightMock,
 	resolveCollectiveNameMarkerMock,
 	resolveInviteParentMock,
-	resolveOwnerTierMock,
+	resolveDbRightMock,
 	resolveParentMock
 } from '$lib/testing/mocks/admin';
 import {
@@ -49,7 +49,7 @@ import {
 	resolveBorrowerNamesMock,
 	resolveCopyChainsMock,
 	resolveCopyNamesMock,
-	resolveLibrarianMock,
+	resolveLibraryEditRightMock,
 	resolveMyLibraryIdMock
 } from '$lib/testing/mocks/library';
 
@@ -82,9 +82,9 @@ async function postThrough(cfg: { db: string; token: string }) {
 function arrangeAdmin() {
 	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
-	resolveAdminMock.mockResolvedValue('admin');
-	resolveOwnerTierMock.mockResolvedValue('error');
-	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+	resolveDbEditRightMock.mockResolvedValue('editor');
+	resolveDbRightMock.mockResolvedValue('error');
+	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 	listAdminsMock.mockResolvedValue({
 		persons: [{ id: 'p-anna', name: 'Anna Arro', role: 'owner', valueIds: ['pv-1'] }],
 		canManage: true
@@ -106,8 +106,8 @@ function arrangeAdmin() {
 
 function arrangeAdminRights() {
 	signIn();
-	adminStore.set('admin');
-	resolveAdminMock.mockResolvedValue('admin');
+	dbEditRight.set('editor');
+	resolveDbEditRightMock.mockResolvedValue('editor');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 }
 
@@ -142,7 +142,7 @@ function arrangeAgenda() {
 
 function arrangeLibrary() {
 	signIn();
-	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 	resolveMyLibraryIdMock.mockResolvedValue('lib-1');
 	resolveCopyNamesMock.mockResolvedValue(new Map());
 	resolveCopyChainsMock.mockResolvedValue(new Map());
@@ -257,8 +257,8 @@ export const WRITE_PAGES: Record<string, WritePage> = {
 			url.includes('_type.string=link')
 				? {
 						entities: [
-							{ _id: 'link-1', name: [{ string: 'Scores' }], url: [{ string: 'https://a.test' }], display_order: [{ number: 1 }] },
-							{ _id: 'link-2', name: [{ string: 'Rota' }], url: [{ string: 'https://b.test' }], display_order: [{ number: 2 }] }
+							{ _id: 'link-1', name: [{ string: 'Scores' }], url: [{ string: 'https://a.test' }], display_order: [{ number: 1 }], _owner: [{ reference: 'person-p', inherited: true }] },
+							{ _id: 'link-2', name: [{ string: 'Rota' }], url: [{ string: 'https://b.test' }], display_order: [{ number: 2 }], _owner: [{ reference: 'person-p', inherited: true }] }
 						]
 					}
 				: undefined,
@@ -292,6 +292,7 @@ export const WRITE_PAGES: Record<string, WritePage> = {
 				parentId: null,
 				dbEntityId: 'org-1',
 				depth: 0,
+				ownerIds: ['person-p'],
 				children: []
 			});
 			listSectionsMock.mockResolvedValue([root('sec-s', 'Soprano', 1), root('sec-a', 'Alto', 2)]);
@@ -330,16 +331,16 @@ export const WRITE_PAGE_HANDLES = [
 	listWorksMock,
 	loadFullAgendaMock,
 	loadRosterMock,
-	resolveAdminMock,
+	resolveDbEditRightMock,
 	resolveBorrowerNamesMock,
 	resolveCollectiveNameMarkerMock,
 	resolveCopyChainsMock,
 	resolveCopyNamesMock,
 	resolveDatabaseEntityIdMock,
 	resolveInviteParentMock,
-	resolveLibrarianMock,
+	resolveLibraryEditRightMock,
 	resolveMyLibraryIdMock,
-	resolveOwnerTierMock,
+	resolveDbRightMock,
 	resolveParentMock
 ];
 

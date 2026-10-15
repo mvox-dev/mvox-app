@@ -26,7 +26,7 @@ vi.mock('$lib/roster/rosterData', async () =>
 	(await import('$lib/testing/mocks/roster')).activeMembersModule()
 );
 
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule({ libraryId: false })
 );
 
@@ -80,7 +80,7 @@ import {
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
-import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
 import { expandWork, mockLibrarian, signInLibraryReader } from '$lib/testing/pages/library';
 import { expectTouchTarget } from '$lib/testing/pages/dom';
 
@@ -117,7 +117,7 @@ afterEach(() => {
 	resolveBorrowerNamesMock.mockReset();
 	resolveCopyNamesMock.mockReset();
 	resolveCopyChainsMock.mockReset();
-	resolveLibrarianMock.mockReset();
+	resolveLibraryEditRightMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listAllEditionsMock.mockReset();
 	listAllCopiesMock.mockReset();
@@ -228,7 +228,7 @@ describe('#271 — create-edition control placement on /library (integration)', 
 	it('ABSENT (not disabled) for a non-librarian — the editions still render (inline gate on the tree, fail-closed)', async () => {
 		mockBaselineLibrary();
 		signInLibraryReader({ chains: true, seasons: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 
 		const container = await renderReady();
 		await expandWork(container, 'work-1');
@@ -239,10 +239,10 @@ describe('#271 — create-edition control placement on /library (integration)', 
 		expect(container.querySelectorAll('[data-testid^="create-edition-"]')).toHaveLength(0);
 	});
 
-	it('hidden while resolveLibrarian is still pending (hidden-if-undeterminable)', async () => {
+	it('hidden while resolveLibraryEditRight is still pending (hidden-if-undeterminable)', async () => {
 		mockBaselineLibrary();
 		signInLibraryReader({ chains: true, seasons: true });
-		resolveLibrarianMock.mockReturnValue(new Promise(() => {}));
+		resolveLibraryEditRightMock.mockReturnValue(new Promise(() => {}));
 
 		const container = await renderReady();
 		await expandWork(container, 'work-1');
@@ -861,7 +861,7 @@ describe('#271 — the create is not double-submittable', () => {
 describe('#271 — the local insert is generation-guarded against a mid-flight collective switch', () => {
 	it('a create that resolves AFTER the collective switched inserts NOTHING into the new tree and announces nothing — the switched-to work re-fetches its editions instead of serving a phantom cache', async () => {
 		signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }, { db: 'secondchoir', name: 'Second Choir', personId: 'person-s' }] });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		findMyMemberIdMock.mockResolvedValue(null);
 		resolveCopyNamesMock.mockResolvedValue(new Map());
 		resolveCopyChainsMock.mockResolvedValue(new Map());

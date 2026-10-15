@@ -70,7 +70,7 @@ describe('(#283) environment smoke — the guard primitives hold in THIS environ
 
 describe('(#283) phone guard — letters refuse the save; + and friends survive (name-required idiom)', () => {
 	it("CREATE path: 'tel: 555' refuses the save — its OWN role=alert copy, no write, no lookup re-read, no single-flight arming; sibling typed fields survive", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		expect(loadMemberRecordMock).toHaveBeenCalledTimes(1); // the editor open
 		await fireEvent.input(nameInput(container), { target: { value: 'Berta Real' } });
@@ -97,7 +97,7 @@ describe('(#283) phone guard — letters refuse the save; + and friends survive 
 	});
 
 	it("'õhtul helistada' is refused — Estonian letters are letters (a /[a-z]/i check would pass õäöü)", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(phoneInput(container), { target: { value: 'õhtul helistada' } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -110,7 +110,7 @@ describe('(#283) phone guard — letters refuse the save; + and friends survive 
 	});
 
 	it("'тел 555' is refused — Cyrillic letters are letters too, any alphabet", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(phoneInput(container), { target: { value: 'тел 555' } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -122,7 +122,7 @@ describe('(#283) phone guard — letters refuse the save; + and friends survive 
 	});
 
 	it("'+372 5555 5555' saves UNCHANGED — + survives by construction (foreign travel is the normal case, #282)", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(phoneInput(container), { target: { value: '+372 5555 5555' } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -141,7 +141,7 @@ describe('(#283) phone guard — letters refuse the save; + and friends survive 
 	it.each(['+44 (0)20 7946 0958', '372.5555.5555', '+1-555-0100'])(
 		"'%s' saves verbatim — rejection-of-letters only, never an allowlist",
 		async (phone) => {
-			const { container } = await renderRosterAs('admin');
+			const { container } = await renderRosterAs('editor');
 			await openEditor(container, 'm2');
 			await fireEvent.input(phoneInput(container), { target: { value: phone } });
 			await fireEvent.click(q(container, 'roster-record-save')!);
@@ -153,7 +153,7 @@ describe('(#283) phone guard — letters refuse the save; + and friends survive 
 	);
 
 	it('an EMPTY phone still saves — the field is optional and stays so', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		expect(phoneInput(container).value).toBe('');
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -166,7 +166,7 @@ describe('(#283) phone guard — letters refuse the save; + and friends survive 
 
 describe("(#283) email guard — the browser's OWN constraint validation, weakest-rule fence", () => {
 	it("'not an email' refuses the save — its OWN role=alert copy, no write, no lookup re-read, no single-flight arming", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		expect(loadMemberRecordMock).toHaveBeenCalledTimes(1);
 		await fireEvent.input(emailInput(container), { target: { value: 'not an email' } });
@@ -189,7 +189,7 @@ describe("(#283) email guard — the browser's OWN constraint validation, weakes
 	});
 
 	it("WEAKEST-RULE FENCE: 'a@b' SAVES — a stricter guard that rejects it is a regression, not an improvement", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(emailInput(container), { target: { value: 'a@b' } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -207,7 +207,7 @@ describe("(#283) email guard — the browser's OWN constraint validation, weakes
 	});
 
 	it("'a@b@c' is refused — the browser's rule catches it, no regex of ours involved", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(emailInput(container), { target: { value: 'a@b@c' } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -224,7 +224,7 @@ describe("(#283) email guard — the browser's OWN constraint validation, weakes
 			rosterTwo[0],
 			{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: '', sectionIds: [], dbEntityId: 'db-1' }
 		]));
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		expect(emailInput(container).value).toBe('');
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -235,7 +235,7 @@ describe("(#283) email guard — the browser's OWN constraint validation, weakes
 	});
 
 	it('a normal address saves unchanged — plus-addressing and subdomains included', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(emailInput(container), {
 			target: { value: 'mari.tamm+koor@mail.example.co.uk' }
@@ -250,7 +250,7 @@ describe("(#283) email guard — the browser's OWN constraint validation, weakes
 
 describe('(#285) isikukood checksum guard — THIRD in the refusal slot, strict where the spec is closed', () => {
 	it("CREATE path: a wrong check digit ('50001010011' — stage 1 says 7) refuses the save — its OWN role=alert copy, no write, no lookup re-read, no single-flight arming; sibling typed fields survive", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		expect(loadMemberRecordMock).toHaveBeenCalledTimes(1); // the editor open
 		await fireEvent.input(phoneInput(container), { target: { value: '+372 5559876' } });
@@ -280,7 +280,7 @@ describe('(#285) isikukood checksum guard — THIRD in the refusal slot, strict 
 		['5000101001a', 'a letter'],
 		[' 50001010017', 'a leading space — exact digits, no trimming leniency']
 	])("'%s' (%s) refuses the save — the format arm of the rule", async (typed) => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(idCodeInput(container), { target: { value: typed } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -293,7 +293,7 @@ describe('(#285) isikukood checksum guard — THIRD in the refusal slot, strict 
 	});
 
 	it("a valid stage-1 code ('50001010017', remainder 7) SAVES — full create input, id_code carried", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(idCodeInput(container), { target: { value: '50001010017' } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -311,7 +311,7 @@ describe('(#285) isikukood checksum guard — THIRD in the refusal slot, strict 
 	});
 
 	it("a valid stage-2 code ('10000000098': stage 1 remainder 10, stage 2 = 30 % 11 = 8) SAVES", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(idCodeInput(container), { target: { value: '10000000098' } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -322,7 +322,7 @@ describe('(#285) isikukood checksum guard — THIRD in the refusal slot, strict 
 	});
 
 	it("DOUBLE FALLBACK at the route: '80001010010' (stage 1 = 21 % 11 = 10, stage 2 = 43 % 11 = 10 → check digit 0) SAVES — the branch most likely miscoded, pinned end-to-end", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(idCodeInput(container), { target: { value: '80001010010' } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -333,7 +333,7 @@ describe('(#285) isikukood checksum guard — THIRD in the refusal slot, strict 
 	});
 
 	it("OVER-VALIDATION CANARY: '90002310022' — leading digit 9 (no assigned century/sex), \"31 February\", but checksum-VALID ([9,0,0,0,2,3,1,0,0,2]·[1,2,3,4,5,6,7,8,9,1] = 46; 46 % 11 = 2 = check digit) — MUST SAVE: plausibility checks are outside the commission", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(idCodeInput(container), { target: { value: '90002310022' } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -345,7 +345,7 @@ describe('(#285) isikukood checksum guard — THIRD in the refusal slot, strict 
 	});
 
 	it('an EMPTY isikukood still saves — the field is optional and stays so (the guard skips empty)', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		expect(idCodeInput(container).value).toBe('');
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -374,7 +374,7 @@ describe.each(GATES)('(#283/#285) the $field gate refuses at the save, whatever 
 			state: 'one',
 			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '', id_code: '' }
 		});
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(sibling(container), { target: { value: siblingValue } });
 		await fireEvent.input(gate.input(container), { target: { value: gate.bad } });
@@ -387,7 +387,7 @@ describe.each(GATES)('(#283/#285) the $field gate refuses at the save, whatever 
 	});
 
 	it('the refusal owns the live region: cleared-before-gate ordering — a stale "saved" cannot outlive it', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.click(q(container, 'roster-record-save')!);
 		await waitFor(() =>
@@ -405,7 +405,7 @@ describe.each(GATES)('(#283/#285) the $field gate refuses at the save, whatever 
 	});
 
 	it('after fixing the value, the same save goes through — the refusal is a gate, not a dead end', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openEditor(container, 'm2');
 		await fireEvent.input(gate.input(container), { target: { value: gate.bad } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -428,7 +428,7 @@ it.each([
 ])('PRIVACY: the $field refusal never echoes the typed value', async ({ input, typed }) => {
 	const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 	const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-	const { container } = await renderRosterAs('admin');
+	const { container } = await renderRosterAs('editor');
 	await openEditor(container, 'm2');
 	await fireEvent.input(input(container), { target: { value: typed } });
 	await fireEvent.click(q(container, 'roster-record-save')!);

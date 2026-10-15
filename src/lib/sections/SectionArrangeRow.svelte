@@ -60,6 +60,7 @@
 	const indentApplicable = $derived(ops.canIndent(row.id));
 	const unindentApplicable = $derived(ops.canUnindent(row.id));
 	const damaged = $derived(node?.parentDamaged === true);
+	const mayReorder = $derived(ops.mayReorder(row.id));
 
 	let renameInputEl = $state<HTMLInputElement | null>(null);
 
@@ -125,11 +126,11 @@
 				: 'false'}
 			aria-dropeffect={acceptsDrop ? 'move' : undefined}
 			aria-describedby="section-reorder-instructions"
-			draggable={structuralWritePending || damaged ? 'false' : 'true'}
+			draggable={structuralWritePending || damaged || !mayReorder ? 'false' : 'true'}
 			style="touch-action: pan-y"
 			class="flex shrink-0 items-center gap-2 py-1.5 pr-2 {arrangeIndentClass(
 				row.depth
-			)} focus:outline-none select-none {structuralWritePending || damaged
+			)} focus:outline-none select-none {structuralWritePending || damaged || !mayReorder
 				? 'cursor-default'
 				: 'cursor-grab'}"
 			ondragstart={(event: DragEvent) => drag.handleDragStart(row.id, event)}
@@ -147,118 +148,138 @@
 			onfocus={() => (arrange.rovingHandleId = row.id)}
 			onblur={() => drag.handleHandleBlur(node)}
 		>
-			<span
-				data-testid="arrange-grip-{row.id}"
-				aria-hidden="true"
-				style="touch-action: none"
-				class="flex min-h-11 w-4 shrink-0 flex-col justify-center gap-0.5 rounded-sm py-1 text-ink-2 {structuralWritePending
-					? 'cursor-default'
-					: 'cursor-grab hover:bg-ink-5 hover:text-ink active:bg-ink-5 active:text-ink'}"
-				onpointerdown={(event: PointerEvent) => drag.handlePointerDown(row.id, event)}
-			>
-				<span class="h-px w-full bg-current"></span>
-				<span class="h-px w-full bg-current"></span>
-				<span class="h-px w-full bg-current"></span>
-			</span>
+			{#if mayReorder}
+				<span
+					data-testid="arrange-grip-{row.id}"
+					aria-hidden="true"
+					style="touch-action: none"
+					class="flex min-h-11 w-4 shrink-0 flex-col justify-center gap-0.5 rounded-sm py-1 text-ink-2 {structuralWritePending
+						? 'cursor-default'
+						: 'cursor-grab hover:bg-ink-5 hover:text-ink active:bg-ink-5 active:text-ink'}"
+					onpointerdown={(event: PointerEvent) => drag.handlePointerDown(row.id, event)}
+				>
+					<span class="h-px w-full bg-current"></span>
+					<span class="h-px w-full bg-current"></span>
+					<span class="h-px w-full bg-current"></span>
+				</span>
+			{:else}
+				<span aria-hidden="true" class="w-4 shrink-0"></span>
+			{/if}
 		</div>
 	{/if}
-	<button
-		type="button"
-		data-testid="arrange-rename-{row.id}"
-		title={m.roster_section_rename({ name: row.name })}
-		disabled={arrange.reorderPending ||
-			arrange.removePending ||
-			arrange.renamingSectionId === row.id ||
-			isOffline}
-		class="group flex min-h-11 min-w-0 flex-1 appearance-none items-center gap-1.5 border-0 bg-transparent p-0 text-left text-ink-2 hover:text-ink disabled:cursor-default"
-		onclick={() => ops.startRename(node)}
-	>
-		<span class="sr-only">{m.roster_section_rename_action()}</span>
-		<svg
-			aria-hidden="true"
-			viewBox="0 0 16 16"
-			class="h-3 w-3 shrink-0 fill-current group-hover:text-ink group-disabled:opacity-30"
+	{#if ops.mayRename(row.id)}
+		<button
+			type="button"
+			data-testid="arrange-rename-{row.id}"
+			title={m.roster_section_rename({ name: row.name })}
+			disabled={arrange.reorderPending ||
+				arrange.removePending ||
+				arrange.renamingSectionId === row.id ||
+				isOffline}
+			class="group flex min-h-11 min-w-0 flex-1 appearance-none items-center gap-1.5 border-0 bg-transparent p-0 text-left text-ink-2 hover:text-ink disabled:cursor-default"
+			onclick={() => ops.startRename(node)}
 		>
-			<path
-				d="M11.3 1.3a1 1 0 0 1 1.4 0l2 2a1 1 0 0 1 0 1.4l-8 8-3.7 1 1-3.7 8-8z"
-			/>
-		</svg>
-		{#if arrange.renamingSectionId !== row.id}
+			<span class="sr-only">{m.roster_section_rename_action()}</span>
+			<svg
+				aria-hidden="true"
+				viewBox="0 0 16 16"
+				class="h-3 w-3 shrink-0 fill-current group-hover:text-ink group-disabled:opacity-30"
+			>
+				<path
+					d="M11.3 1.3a1 1 0 0 1 1.4 0l2 2a1 1 0 0 1 0 1.4l-8 8-3.7 1 1-3.7 8-8z"
+				/>
+			</svg>
+			{#if arrange.renamingSectionId !== row.id}
+				<span class="truncate text-sm">{row.name}</span>
+			{/if}
+		</button>
+	{:else}
+		<span class="flex min-h-11 min-w-0 flex-1 items-center text-ink-2">
 			<span class="truncate text-sm">{row.name}</span>
-		{/if}
-	</button>
+		</span>
+	{/if}
 	<span data-testid="arrange-count-{row.id}" class="shrink-0 pl-2 text-sm text-ink"
 		>({row.memberCount})</span
 	>
-	<button
-		type="button"
-		data-testid="arrange-indent-{row.id}"
-		aria-label={m.roster_section_indent({ name: row.name })}
-		title={m.roster_section_indent({ name: row.name })}
-		disabled={structuralWritePending ||
-			arrange.renamingSectionId === row.id ||
-			damaged ||
-			!indentApplicable || isOffline}
-		tabindex="-1"
-		class="flex min-h-11 min-w-11 items-center justify-center rounded text-ink disabled:cursor-default disabled:opacity-60 {indentApplicable
-			? ''
-			: 'invisible'}"
-		onclick={() => void ops.handleIndent(node)}
-	>
-		<svg aria-hidden="true" viewBox="0 0 16 16" class="h-4 w-4 fill-current">
-			<path d="M4 2 L12 8 L4 14 Z" />
-		</svg>
-	</button>
-	<button
-		type="button"
-		data-testid="arrange-unindent-{row.id}"
-		aria-label={m.roster_section_unindent({ name: row.name })}
-		title={m.roster_section_unindent({ name: row.name })}
-		disabled={structuralWritePending ||
-			arrange.renamingSectionId === row.id ||
-			damaged ||
-			!unindentApplicable || isOffline}
-		tabindex="-1"
-		class="flex min-h-11 min-w-11 items-center justify-center rounded text-ink disabled:cursor-default disabled:opacity-60 {unindentApplicable
-			? ''
-			: 'invisible'}"
-		onclick={() => void ops.handleUnindent(node)}
-	>
-		<svg
-			aria-hidden="true"
-			viewBox="0 0 16 16"
-			class="h-4 w-4 fill-none stroke-current"
-			stroke-width="1.5"
-			stroke-linejoin="round"
-		>
-			<path d="M12 2 L4 8 L12 14 Z" />
-		</svg>
-	</button>
-	{#if arrange.pendingRemoveId === row.id}
-		<DeleteConfirmPair
-			confirmTestid="section-remove-confirm-{row.id}"
-			cancelTestid="section-remove-cancel-{row.id}"
-			confirmLabel={m.roster_section_remove_confirm({ name: row.name })}
-			cancelLabel={m.roster_section_remove_cancel({ name: row.name })}
-			confirmText={m.roster_section_remove_confirm_short()}
-			cancelText={m.roster_section_remove_cancel_short()}
-			pending={structuralWritePending}
-			busy={arrange.removePending}
-			{isOffline}
-			class="rounded"
-			onconfirm={() => void ops.handleRemoveSection(row.id)}
-			oncancel={() => void ops.disarmRemove(row.id)}
-		/>
+	{#if indentApplicable && !ops.mayIndent(row.id)}
+		<span aria-hidden="true" class="min-w-11"></span>
 	{:else}
-		<DeleteTrigger
-			data-testid="section-remove-{row.id}"
-			aria-label={m.roster_section_remove({ name: row.name })}
-			title={m.roster_section_remove({ name: row.name })}
+		<button
+			type="button"
+			data-testid="arrange-indent-{row.id}"
+			aria-label={m.roster_section_indent({ name: row.name })}
+			title={m.roster_section_indent({ name: row.name })}
 			disabled={structuralWritePending ||
 				arrange.renamingSectionId === row.id ||
-				!canDelete || isOffline}
-			onclick={() => void ops.armRemove(row.id)}
-		/>
+				damaged ||
+				!indentApplicable || isOffline}
+			tabindex="-1"
+			class="flex min-h-11 min-w-11 items-center justify-center rounded text-ink disabled:cursor-default disabled:opacity-60 {indentApplicable
+				? ''
+				: 'invisible'}"
+			onclick={() => void ops.handleIndent(node)}
+		>
+			<svg aria-hidden="true" viewBox="0 0 16 16" class="h-4 w-4 fill-current">
+				<path d="M4 2 L12 8 L4 14 Z" />
+			</svg>
+		</button>
+	{/if}
+	{#if unindentApplicable && !ops.mayUnindent(row.id)}
+		<span aria-hidden="true" class="min-w-11"></span>
+	{:else}
+		<button
+			type="button"
+			data-testid="arrange-unindent-{row.id}"
+			aria-label={m.roster_section_unindent({ name: row.name })}
+			title={m.roster_section_unindent({ name: row.name })}
+			disabled={structuralWritePending ||
+				arrange.renamingSectionId === row.id ||
+				damaged ||
+				!unindentApplicable || isOffline}
+			tabindex="-1"
+			class="flex min-h-11 min-w-11 items-center justify-center rounded text-ink disabled:cursor-default disabled:opacity-60 {unindentApplicable
+				? ''
+				: 'invisible'}"
+			onclick={() => void ops.handleUnindent(node)}
+		>
+			<svg
+				aria-hidden="true"
+				viewBox="0 0 16 16"
+				class="h-4 w-4 fill-none stroke-current"
+				stroke-width="1.5"
+				stroke-linejoin="round"
+			>
+				<path d="M12 2 L4 8 L12 14 Z" />
+			</svg>
+		</button>
+	{/if}
+	{#if ops.mayRemove(row.id)}
+		{#if arrange.pendingRemoveId === row.id}
+			<DeleteConfirmPair
+				confirmTestid="section-remove-confirm-{row.id}"
+				cancelTestid="section-remove-cancel-{row.id}"
+				confirmLabel={m.roster_section_remove_confirm({ name: row.name })}
+				cancelLabel={m.roster_section_remove_cancel({ name: row.name })}
+				confirmText={m.roster_section_remove_confirm_short()}
+				cancelText={m.roster_section_remove_cancel_short()}
+				pending={structuralWritePending}
+				busy={arrange.removePending}
+				{isOffline}
+				class="rounded"
+				onconfirm={() => void ops.handleRemoveSection(row.id)}
+				oncancel={() => void ops.disarmRemove(row.id)}
+			/>
+		{:else}
+			<DeleteTrigger
+				data-testid="section-remove-{row.id}"
+				aria-label={m.roster_section_remove({ name: row.name })}
+				title={m.roster_section_remove({ name: row.name })}
+				disabled={structuralWritePending ||
+					arrange.renamingSectionId === row.id ||
+					!canDelete || isOffline}
+				onclick={() => void ops.armRemove(row.id)}
+			/>
+		{/if}
 	{/if}
 </div>
 {#if arrange.renameError?.id === row.id}

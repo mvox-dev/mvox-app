@@ -10,11 +10,11 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 vi.mock('$lib/admin/roleManagement', async () =>
 	(await import('$lib/testing/mocks/admin')).roleManagementModule({ errors: true })
 );
-vi.mock('$lib/nav/adminStore', async () =>
-	(await import('$lib/testing/mocks/admin')).adminStoreModule()
+vi.mock('$lib/nav/dbRights', async () =>
+	(await import('$lib/testing/mocks/admin')).dbRightsModule()
 );
-vi.mock('$lib/library/librarianStore', async () =>
-	(await import('$lib/testing/mocks/admin')).librarianStoreModule()
+vi.mock('$lib/library/libraryRights', async () =>
+	(await import('$lib/testing/mocks/admin')).libraryRightsModule()
 );
 vi.mock('$lib/profile/linkedIdentities', async () =>
 	(await import('$lib/testing/mocks/admin')).joinStatesModule()
@@ -45,7 +45,7 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { listAdminsMock, listJoinStatesMock, resolveOwnerTierMock } from '$lib/testing/mocks/admin';
+import { listAdminsMock, listJoinStatesMock, resolveDbRightMock } from '$lib/testing/mocks/admin';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { ROSTER, listing, loadOk, resetAdminMocks, selectSampledb } from '$lib/testing/pages/admin';
 import { cleanupReset, q } from '$lib/testing/pages/dom';
@@ -53,7 +53,7 @@ import { promptOption } from '$lib/testing/pages/seasonPanel';
 import { renderReady } from '$lib/testing/pages/adminRolesRender';
 
 listJoinStatesMock.mockResolvedValue({});
-resolveOwnerTierMock.mockResolvedValue('error');
+resolveDbRightMock.mockResolvedValue('error');
 
 const PICKERS = ['admin-add-admin-select', 'admin-add-librarian-select'];
 

@@ -30,7 +30,7 @@ vi.mock('$app/state', async () =>
 
 import Page from './links/+page.svelte';
 import type { LinkRow } from '$lib/links/linkData';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import {
 	createLinkMock,
@@ -44,20 +44,20 @@ import { q } from '$lib/testing/pages/dom';
 
 function rowsA(): LinkRow[] {
 	return [
-		{ id: 'la-1', name: 'A-Archive', url: 'https://a.example/one', description: null, displayOrder: 1 },
-		{ id: 'la-2', name: 'A-Scores', url: 'a.example/two', description: 'from A', displayOrder: 2 }
+		{ id: 'la-1', name: 'A-Archive', url: 'https://a.example/one', description: null, displayOrder: 1, ownerIds: ['person-p'], editorIds: [] },
+		{ id: 'la-2', name: 'A-Scores', url: 'a.example/two', description: 'from A', displayOrder: 2, ownerIds: ['person-p'], editorIds: [] }
 	];
 }
 
 function rowsB(): LinkRow[] {
 	return [
-		{ id: 'lb-1', name: 'B-Website', url: 'https://b.example', description: null, displayOrder: 1 }
+		{ id: 'lb-1', name: 'B-Website', url: 'https://b.example', description: null, displayOrder: 1, ownerIds: ['person-q'], editorIds: [] }
 	];
 }
 
 beforeEach(() => {
 	setAuthedWithTwoCollectives();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	createLinkMock.mockResolvedValue('l-new');
 	updateLinkMock.mockResolvedValue(undefined);
 	reorderLinksMock.mockResolvedValue(undefined);

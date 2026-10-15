@@ -10,10 +10,7 @@ afterEach(() => {
 	cleanup();
 });
 
-// `children` is a required Snippet prop on NavShell (page content passed via
-// `{@render children?.()}`). Real usage always supplies it (+layout.svelte);
-// tests need a stand-in snippet to satisfy the type and to assert the content
-// area actually renders it.
+// `children` is required on NavShell; a stand-in lets tests assert the content area renders it.
 const testChildren = createRawSnippet(() => ({
 	render: () => '<div data-testid="page-content">Page Content</div>',
 }));
@@ -45,7 +42,7 @@ const testEntries: NavEntry[] = [
 		label: () => 'Invite',
 		route: '/admin/invite',
 		icon: '<svg data-testid="icon-invite"></svg>',
-		visible: (ctx) => ctx.isAdmin,
+		visible: (ctx) => ctx.canEditDb,
 	},
 ];
 
@@ -77,13 +74,13 @@ describe('NavShell', () => {
 		expect(screen.queryByText('Invite')).toBeNull();
 	});
 
-	it('renders admin entry when isAdmin is true', () => {
+	it('renders admin entry when canEditDb is true', () => {
 		render(NavShell, {
 			props: {
 				children: testChildren,
 				entries: testEntries,
 				activeRoute: '/',
-				isAdmin: true,
+				canEditDb: true,
 			},
 		});
 		expect(screen.getByText('Invite')).toBeTruthy();
@@ -237,7 +234,7 @@ describe('NavShell — collective switcher', () => {
 				children: testChildren,
 				entries: entriesWithCollectives,
 				activeRoute: '/',
-				isAdmin: true,
+				canEditDb: true,
 				hasMultipleCollectives: true,
 			},
 		});
@@ -277,7 +274,7 @@ describe('NavShell — prefix route matching', () => {
 				children: testChildren,
 				entries: testEntries,
 				activeRoute: '/admin/invite',
-				isAdmin: true,
+				canEditDb: true,
 			},
 		});
 		const inviteLink = screen.getByText('Invite').closest('a');
@@ -295,7 +292,7 @@ describe('NavShell — prefix route matching', () => {
 				label: () => 'Admin',
 				route: '/admin',
 				icon: '<svg></svg>',
-				visible: (ctx) => ctx.isAdmin,
+				visible: (ctx) => ctx.canEditDb,
 			},
 		];
 		const { container } = render(NavShell, {
@@ -303,7 +300,7 @@ describe('NavShell — prefix route matching', () => {
 				children: testChildren,
 				entries: nested,
 				activeRoute: '/admin/invite',
-				isAdmin: true,
+				canEditDb: true,
 			},
 		});
 		const active = Array.from(container.querySelectorAll('a[aria-current="page"]'));
@@ -319,7 +316,7 @@ describe('NavShell — prefix route matching', () => {
 				label: () => 'Admin',
 				route: '/admin',
 				icon: '<svg></svg>',
-				visible: (ctx) => ctx.isAdmin,
+				visible: (ctx) => ctx.canEditDb,
 			},
 		];
 		const { container } = render(NavShell, {
@@ -327,7 +324,7 @@ describe('NavShell — prefix route matching', () => {
 				children: testChildren,
 				entries: nested,
 				activeRoute: '/admin',
-				isAdmin: true,
+				canEditDb: true,
 			},
 		});
 		const active = Array.from(container.querySelectorAll('a[aria-current="page"]'));
@@ -365,7 +362,7 @@ describe('NavShell — no visible entries', () => {
 				label: () => 'Invite',
 				route: '/admin/invite',
 				icon: '<svg></svg>',
-				visible: (ctx) => ctx.isAdmin,
+				visible: (ctx) => ctx.canEditDb,
 			},
 		];
 		const { container } = render(NavShell, {
@@ -373,7 +370,7 @@ describe('NavShell — no visible entries', () => {
 				children: testChildren,
 				entries: allHidden,
 				activeRoute: '/',
-				isAdmin: false,
+				canEditDb: false,
 			},
 		});
 		expect(container.querySelector('nav')).toBeNull();
@@ -381,15 +378,8 @@ describe('NavShell — no visible entries', () => {
 });
 
 
-// ---------------------------------------------------------------------------
-// #156 — roving tabindex. The nav is the pattern's reference implementation in
-// this app, so its invariants are pinned here rather than read off the source:
-// exactly ONE link carries tabindex="0", arrows move focus (and wrap), Tab is
-// left alone so focus can leave, and — review F2 — the single stop is NEVER
-// parked on a completion-locked link, which would drop the whole nav out of the
-// tab order and strand the user away from Profile, the one link that clears the
-// lock.
-// ---------------------------------------------------------------------------
+// The single tab stop is never parked on a completion-locked link: that would strand the user
+// away from Profile, the one link that clears the lock.
 describe('NavShell — roving tabindex (#156)', () => {
 	function navLinks(container: HTMLElement): HTMLAnchorElement[] {
 		return Array.from(container.querySelectorAll<HTMLAnchorElement>('nav a'));

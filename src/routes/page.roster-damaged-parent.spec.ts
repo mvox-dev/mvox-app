@@ -26,7 +26,7 @@ vi.mock('$app/navigation', async () =>
 
 import Page from './roster/+page.svelte';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { dbEditRight, resetDbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
@@ -52,18 +52,21 @@ function sectionWireEntities(damagedParents: Array<{ reference: string; entity_t
 			_id: 'sec-sop',
 			name: [{ string: 'Soprano' }],
 			display_order: [{ number: 1 }],
+			_owner: [{ reference: 'person-p', inherited: true }], _editor: [{ reference: 'person-p', inherited: true }], _expander: [{ reference: 'person-p', inherited: true }],
 			_parent: [{ reference: DB_ENTITY, entity_type: 'database' }]
 		},
 		{
 			_id: 'sec-tenor',
 			name: [{ string: 'Tenor' }],
 			display_order: [{ number: 2 }],
+			_owner: [{ reference: 'person-p', inherited: true }], _editor: [{ reference: 'person-p', inherited: true }], _expander: [{ reference: 'person-p', inherited: true }],
 			_parent: [{ reference: DB_ENTITY, entity_type: 'database' }]
 		},
 		{
 			_id: 'sec-alto',
 			name: [{ string: 'Alto' }],
 			display_order: [{ number: 3 }],
+			_owner: [{ reference: 'person-p', inherited: true }], _editor: [{ reference: 'person-p', inherited: true }], _expander: [{ reference: 'person-p', inherited: true }],
 			_parent: damagedParents
 		}
 	];
@@ -110,7 +113,7 @@ afterEach(() => {
 	deleteMock.mockReset();
 	reparentMock.mockReset();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 });
 
 async function renderRosterWithDamage(
@@ -123,7 +126,7 @@ async function renderRosterWithDamage(
 
 async function renderRoster(): Promise<HTMLElement> {
 	setAuthedWithOneCollective();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(q(container, 'roster-groups')).not.toBeNull();

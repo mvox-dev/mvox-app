@@ -10,11 +10,11 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 vi.mock('$lib/admin/roleManagement', async () =>
 	(await import('$lib/testing/mocks/admin')).roleManagementModule({ errors: true })
 );
-vi.mock('$lib/nav/adminStore', async () =>
-	(await import('$lib/testing/mocks/admin')).adminStoreModule()
+vi.mock('$lib/nav/dbRights', async () =>
+	(await import('$lib/testing/mocks/admin')).dbRightsModule()
 );
-vi.mock('$lib/library/librarianStore', async () =>
-	(await import('$lib/testing/mocks/admin')).librarianStoreModule()
+vi.mock('$lib/library/libraryRights', async () =>
+	(await import('$lib/testing/mocks/admin')).libraryRightsModule()
 );
 vi.mock('$lib/profile/linkedIdentities', async () =>
 	(await import('$lib/testing/mocks/admin')).joinStatesModule()
@@ -51,11 +51,11 @@ import {
 	listAdminsMock,
 	listJoinStatesMock,
 	listLibrariansMock,
-	resolveAdminMock,
+	resolveDbEditRightMock,
 	resolveCollectiveNameMarkerMock,
 	resolveInviteParentMock,
-	resolveLibrarianMock,
-	resolveOwnerTierMock,
+	resolveLibraryEditRightMock,
+	resolveDbRightMock,
 	resolveParentMock,
 	updateCollectiveNameMock
 } from '$lib/testing/mocks/admin';
@@ -65,7 +65,7 @@ import { cleanupReset } from '$lib/testing/pages/dom';
 
 // Defaults the hoisted handles carried before they moved to the shared mocks.
 listJoinStatesMock.mockResolvedValue({});
-resolveOwnerTierMock.mockResolvedValue('error');
+resolveDbRightMock.mockResolvedValue('error');
 
 // Centring is layout the test DOM cannot measure, so these guards read the centring tokens.
 function centring(el: HTMLElement): string[] {
@@ -73,9 +73,9 @@ function centring(el: HTMLElement): string[] {
 }
 
 function loadOk() {
-	resolveAdminMock.mockResolvedValue('admin');
+	resolveDbEditRightMock.mockResolvedValue('editor');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
-	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 	listAdminsMock.mockResolvedValue({
 		persons: [{ id: 'p-anna', name: 'Anna Arro', role: 'owner' as const, valueIds: ['pv-own-anna'] }],
 		canManage: true

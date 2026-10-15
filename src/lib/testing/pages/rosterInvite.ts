@@ -1,14 +1,14 @@
 // Invite-copy and join-state roster specs: clipboard stub and their one-section tree.
 import { cleanup } from '@testing-library/svelte';
 import { vi } from 'vitest';
-import { resetAdmin } from '$lib/nav/adminStore';
+import { resetDbEditRight } from '$lib/nav/dbRights';
 import type { SectionNode } from '$lib/sections/sectionData';
 import { resetAppState } from '$lib/testing/appReset';
 import { ORG_A } from './rosterFixtures';
 
 export function treeA(): SectionNode[] {
 	return [
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 1, parentId: null, dbEntityId: ORG_A, depth: 0, children: [] }
+		{ id: 'sec-alto', name: 'Alto', displayOrder: 1, parentId: null, dbEntityId: ORG_A, depth: 0, ownerIds: ['person-p'], children: [] }
 	];
 }
 
@@ -31,7 +31,7 @@ export function cleanupRestoreClipboard(): void {
 		Reflect.deleteProperty(navigator, 'clipboard');
 	}
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 }
 
 export function installWriteText(): ReturnType<typeof vi.fn> {

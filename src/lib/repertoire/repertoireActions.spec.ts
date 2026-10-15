@@ -488,7 +488,7 @@ describe('resolveManageRights', () => {
 		expect(state).toBe('editor');
 	});
 
-	it("person in _owner (not _editor) → 'editor' — ownership subsumes editing (librarianStore pattern)", async () => {
+	it("person in _owner (not _editor) → 'editor' — ownership subsumes editing (libraryEditRight pattern)", async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(entityWith({ _owner: ['person-me'] }));
 		expect(await resolveManageRights(cfg, 'event-e', 'person-me', fetchImpl)).toBe('editor');
 	});

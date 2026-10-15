@@ -2,7 +2,7 @@
 import { reportProblem } from '$lib/problems/reportProblem';
 import { getToken } from '$lib/auth/storage';
 import { isAuthExpiredError } from '$lib/entu/request';
-import { resolveOwnerTier, type OwnerTier } from '$lib/nav/adminStore';
+import { resolveDbRight, type DbRight } from '$lib/nav/dbRights';
 import { listJoinStates, type JoinState } from '$lib/profile/linkedIdentities';
 import { InviteCreateError, resolveInviteParentId, SelfLinkMintError } from './inviteData';
 
@@ -13,20 +13,20 @@ export async function loadPersonInviteData(
 	dbEntityIdForTier: string,
 	personIdForTier: string,
 	personIds: string[]
-): Promise<{ ownerTier: OwnerTier; joinStates: Record<string, JoinState>; personListError: boolean }> {
-	let tier: OwnerTier;
+): Promise<{ dbRight: DbRight; joinStates: Record<string, JoinState>; personListError: boolean }> {
+	let tier: DbRight;
 	try {
-		tier = await resolveOwnerTier(cfg, personIdForTier, undefined, dbEntityIdForTier);
+		tier = await resolveDbRight(cfg, personIdForTier, undefined, dbEntityIdForTier);
 	} catch (e) {
 		reportProblem({ area: 'admin/invite', action: 'reading the owner tier', error: e });
 		tier = 'error';
 	}
-	if (tier !== 'owner') return { ownerTier: tier, joinStates: {}, personListError: false };
+	if (tier !== 'owner') return { dbRight: tier, joinStates: {}, personListError: false };
 	try {
-		return { ownerTier: tier, joinStates: await listJoinStates(cfg, personIds), personListError: false };
+		return { dbRight: tier, joinStates: await listJoinStates(cfg, personIds), personListError: false };
 	} catch (e) {
 		reportProblem({ area: 'admin/invite', action: 'loading the join states', error: e });
-		return { ownerTier: tier, joinStates: {}, personListError: true };
+		return { dbRight: tier, joinStates: {}, personListError: true };
 	}
 }
 

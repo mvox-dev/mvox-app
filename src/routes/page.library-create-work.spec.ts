@@ -31,7 +31,7 @@ vi.mock('$lib/roster/rosterData', async () =>
 
 // The new work's `_parent` is resolved live at submit time (`resolveMyLibraryId`), not read
 // off a store the cache-backed librarian resolution filled.
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule()
 );
 
@@ -85,13 +85,13 @@ import {
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
-import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
 import { mockLibrarian } from '$lib/testing/pages/library';
 
 function setAuthedWithOneCollective() {
 	signIn();
-	// Defaults; tests override resolveLibrarianMock per case.
-	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+	// Defaults; tests override resolveLibraryEditRightMock per case.
+	resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 	// The live write-path resolution.
 	resolveMyLibraryIdMock.mockResolvedValue('lib-1');
 	findMyMemberIdMock.mockResolvedValue(null);
@@ -122,7 +122,7 @@ afterEach(() => {
 	resolveBorrowerNamesMock.mockReset();
 	resolveCopyNamesMock.mockReset();
 	resolveCopyChainsMock.mockReset();
-	resolveLibrarianMock.mockReset();
+	resolveLibraryEditRightMock.mockReset();
 	resolveMyLibraryIdMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listAllEditionsMock.mockReset();
@@ -139,7 +139,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('#198 — create-work button on /library (librarian gating, integration)', () => {
-	it('renders [data-testid="create-work-button"] on the actual /library route when resolveLibrarian resolves librarian', async () => {
+	it('renders [data-testid="create-work-button"] on the actual /library route when resolveLibraryEditRight resolves librarian', async () => {
 		mockBaselineLibrary();
 		setAuthedWithOneCollective();
 		mockLibrarian();
@@ -157,7 +157,7 @@ describe('#198 — create-work button on /library (librarian gating, integration
 	it('does NOT render the create-work button for a not-librarian — the browse tree still renders (fail-closed gating on the real route)', async () => {
 		mockBaselineLibrary();
 		setAuthedWithOneCollective();
-		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 
 		const { container } = render(Page);
 
@@ -169,10 +169,10 @@ describe('#198 — create-work button on /library (librarian gating, integration
 		expect(container.querySelector('[data-testid="create-work-button"]')).toBeNull();
 	});
 
-	it('does NOT render the create-work button while resolveLibrarian is still pending (hidden-if-undeterminable)', async () => {
+	it('does NOT render the create-work button while resolveLibraryEditRight is still pending (hidden-if-undeterminable)', async () => {
 		mockBaselineLibrary();
 		setAuthedWithOneCollective();
-		resolveLibrarianMock.mockReturnValue(new Promise(() => {}));
+		resolveLibraryEditRightMock.mockReturnValue(new Promise(() => {}));
 
 		const { container } = render(Page);
 
@@ -263,7 +263,7 @@ describe('#198 — inline create-work form', () => {
 		const [cfgArg, payload] = createWorkMock.mock.calls[0];
 		expect(cfgArg).toEqual({ db: 'sampledb', token: 'jwt-abc' });
 		// Full-shape (no objectContaining): the parent is the LIBRARY entity id
-		// resolveLibrarian returned — 'lib-1' — never the database entity.
+		// resolveLibraryEditRight returned — 'lib-1' — never the database entity.
 		expect(payload).toEqual({
 			name: 'Ave Maria',
 			composer: 'Arvo Pärt',

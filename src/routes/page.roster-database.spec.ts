@@ -38,7 +38,7 @@ vi.mock('$app/navigation', async () =>
 );
 
 import Page from './roster/+page.svelte';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { signIn } from '$lib/testing/session';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
 import { CFG, cleanupClearResetAdmin } from '$lib/testing/pages/roster';
@@ -107,7 +107,7 @@ afterEach(cleanupClearResetAdmin);
 
 async function renderReady(): Promise<HTMLElement> {
 	setAuthedWithOneCollective();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(q(container, 'roster-groups')).not.toBeNull();

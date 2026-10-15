@@ -27,7 +27,7 @@ vi.mock('$app/navigation', async () =>
 
 import Page from './roster/+page.svelte';
 import type { MemberRecordLookup } from '$lib/roster/memberRecord';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import {
@@ -109,7 +109,7 @@ describe('/roster — a record editor settle from before a switch away and back 
 	it.each(ROWS.map((row) => [row.guard, row] as const))('%s', async (_, row) => {
 		vi.spyOn(console, 'error').mockImplementation(() => {});
 		setAuthedWithTwoCollectives();
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		const { container } = render(Page);
 		await waitFor(() => {
 			expect(q(container, 'section-toggle-unassigned')).not.toBeNull();

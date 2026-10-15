@@ -39,6 +39,7 @@ interface PickerProps {
 	sections: SectionNode[];
 	selectedIds: string[];
 	renderIds: string[];
+	expandableIds: Set<string>;
 	busy: boolean;
 	onassign: (sectionId: string) => void;
 	onunassign: (sectionId: string) => void;
@@ -56,6 +57,7 @@ function renderPicker(overrides: Partial<PickerProps> = {}) {
 		// carrying every membership. A case that wants the grouped view's
 		// per-card scope passes `renderIds` explicitly.
 		renderIds: selectedIds,
+		expandableIds: new Set(['sec-sop', 'sec-sop1', 'sec-alto']),
 		busy: false,
 		onassign: vi.fn(),
 		onunassign: vi.fn(),

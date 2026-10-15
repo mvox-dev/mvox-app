@@ -19,7 +19,7 @@ vi.mock('$lib/roster/rosterData', async () =>
 );
 // #434 — the write paths resolve the library id live through `resolveMyLibraryId`,
 // never off the cache-backed librarian resolution, so it is mocked here too.
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule()
 );
 // T6.4/#73 — "my loans" resolves the viewer's own active member the same way

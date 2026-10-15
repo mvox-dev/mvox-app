@@ -25,7 +25,7 @@ vi.mock('$app/state', () => ({ page: pageStub }));
 
 import Page from './+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import {
 	goOffline,
 	goOnline,
@@ -71,13 +71,15 @@ function installWireRouter() {
 								name: [{ string: 'Salvestused' }],
 								url: [{ string: 'https://f.io/GCkGMr5J' }],
 								description: [{ string: 'Crede recordings' }],
-								display_order: [{ number: 1 }]
+								display_order: [{ number: 1 }],
+								_owner: [{ reference: 'person-p', inherited: true }], _editor: [{ reference: 'person-p', inherited: true }]
 							},
 							{
 								_id: 'l-scores',
 								name: [{ string: 'Scores' }],
 								url: [{ string: 'example.com/x' }],
-								display_order: [{ number: 2 }]
+								display_order: [{ number: 2 }],
+								_owner: [{ reference: 'person-p', inherited: true }], _editor: [{ reference: 'person-p', inherited: true }]
 							}
 						]
 					})
@@ -96,7 +98,7 @@ beforeEach(() => {
 	resetTypeIdCache();
 	installWireRouter();
 	signIn();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 });
 
 afterEach(cleanupClearResetAdminOnLine);

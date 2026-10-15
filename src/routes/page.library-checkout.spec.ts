@@ -17,7 +17,7 @@ vi.mock('$lib/roster/rosterData', async () =>
 );
 // #434 — the write paths resolve the library id live through `resolveMyLibraryId`,
 // never off the cache-backed librarian resolution, so it is mocked here too.
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule()
 );
 vi.mock('$lib/rsvp/rsvpData', async () =>
@@ -48,7 +48,7 @@ import {
 	resolveBorrowerNamesMock
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
-import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
 import { signInLibraryReader } from '$lib/testing/pages/library';
 import { useLibraryPage } from '$lib/testing/pages/libraryPage';
 
@@ -81,7 +81,7 @@ describe('#76 — inline checkout on browse tree', () => {
 	}
 
 	function mockLibrarianCheckoutData() {
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter', workId: 'work-1' }
 		]));
@@ -146,7 +146,7 @@ describe('#76 — inline checkout on browse tree', () => {
 	it('the inline dropdown is NOT rendered for a non-librarian — just the availability label', async () => {
 		mockTreeWithOneLending();
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 
 		const { container } = render(Page);
 		await waitFor(() =>
@@ -331,7 +331,7 @@ describe('#74 — bulk checkout + return', () => {
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 
 		const { container } = render(Page);
 
@@ -346,7 +346,7 @@ describe('#74 — bulk checkout + return', () => {
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 
 		const { container } = render(Page);
 
@@ -366,7 +366,7 @@ describe('#74 — bulk checkout + return', () => {
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-1', 'Ada']]));
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Baerenreiter', workId: 'work-1' }
 		]));
@@ -392,7 +392,7 @@ describe('#74 — bulk checkout + return', () => {
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 
 		const { container } = render(Page);
 
@@ -410,7 +410,7 @@ describe('#74 — bulk checkout + return', () => {
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		listAllCopiesMock.mockResolvedValue(toListRead([
 			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1 },
 			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2 }
@@ -433,7 +433,7 @@ describe('#74 — bulk checkout + return', () => {
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		listAllCopiesMock.mockResolvedValue(toListRead([
 			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1 },
 			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2 }
@@ -461,7 +461,7 @@ describe('#74 — bulk checkout + return', () => {
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Bärenreiter', workId: 'work-1' }
 		]));
@@ -496,7 +496,7 @@ describe('#74 — bulk checkout + return', () => {
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Baerenreiter', workId: 'work-1' }
 		]));
@@ -554,7 +554,7 @@ describe('#74 — bulk checkout refinements', () => {
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		// Editions carry workId so the picker can filter by selected work
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'ed-w1a', name: 'Baerenreiter ed.', publisher: 'Baerenreiter', workId: 'work-1' },
@@ -599,7 +599,7 @@ describe('#74 — bulk checkout refinements', () => {
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a', 'Ada']]));
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: 'Urtext', publisher: 'Baerenreiter', workId: 'work-1' }
 		]));
@@ -637,7 +637,7 @@ describe('#74 — bulk checkout refinements', () => {
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a', 'Ada']]));
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: 'Urtext', publisher: 'Baerenreiter', workId: 'work-1' }
 		]));
@@ -680,7 +680,7 @@ describe('#74 — bulk checkout refinements', () => {
 		listLendingsMock.mockResolvedValue(toListRead([])); // no active lendings -> all copies available
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: 'Urtext', publisher: 'Baerenreiter', workId: 'work-1' }
 		]));

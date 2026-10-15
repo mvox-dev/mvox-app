@@ -29,7 +29,7 @@ vi.mock('$app/navigation', async () =>
 import Page from './roster/+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
@@ -60,13 +60,14 @@ function fixtureTree(): SectionNode[] {
 			parentId: null,
 			dbEntityId: ORG,
 			depth: 0,
+			ownerIds: ['person-p'],
 			children: [
-				{ id: 'sec-sop1', name: 'Soprano 1', displayOrder: 1, parentId: 'sec-sop', dbEntityId: null, depth: 1, children: [] },
-				{ id: 'sec-sop2', name: 'Soprano 2', displayOrder: 2, parentId: 'sec-sop', dbEntityId: null, depth: 1, children: [] }
+				{ id: 'sec-sop1', name: 'Soprano 1', displayOrder: 1, parentId: 'sec-sop', dbEntityId: null, depth: 1, ownerIds: ['person-p'], children: [] },
+				{ id: 'sec-sop2', name: 'Soprano 2', displayOrder: 2, parentId: 'sec-sop', dbEntityId: null, depth: 1, ownerIds: ['person-p'], children: [] }
 			]
 		},
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, dbEntityId: ORG, depth: 0, children: [] },
-		{ id: 'sec-tenor', name: 'Tenor', displayOrder: 3, parentId: null, dbEntityId: ORG, depth: 0, children: [] }
+		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, dbEntityId: ORG, depth: 0, ownerIds: ['person-p'], children: [] },
+		{ id: 'sec-tenor', name: 'Tenor', displayOrder: 3, parentId: null, dbEntityId: ORG, depth: 0, ownerIds: ['person-p'], children: [] }
 	];
 }
 
@@ -89,6 +90,7 @@ function fixtureTreeDeep(): SectionNode[] {
 			parentId: null,
 			dbEntityId: ORG,
 			depth: 0,
+			ownerIds: ['person-p'],
 			children: [
 				{
 					id: 'sec-sop1',
@@ -97,13 +99,14 @@ function fixtureTreeDeep(): SectionNode[] {
 					parentId: 'sec-sop',
 					dbEntityId: null,
 					depth: 1,
+					ownerIds: ['person-p'],
 					children: [
-						{ id: 'sec-sop1a', name: 'Soprano 1a', displayOrder: 1, parentId: 'sec-sop1', dbEntityId: null, depth: 2, children: [] }
+						{ id: 'sec-sop1a', name: 'Soprano 1a', displayOrder: 1, parentId: 'sec-sop1', dbEntityId: null, depth: 2, ownerIds: ['person-p'], children: [] }
 					]
 				}
 			]
 		},
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, dbEntityId: ORG, depth: 0, children: [] }
+		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, dbEntityId: ORG, depth: 0, ownerIds: ['person-p'], children: [] }
 	];
 }
 
@@ -189,7 +192,7 @@ afterEach(cleanupResetReparentMocks);
 async function renderInArrangeMode(): Promise<HTMLElement> {
 	landedReparents.length = 0;
 	setAuthedWithOneCollective();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(q(container, 'roster-groups')).not.toBeNull();
@@ -791,11 +794,12 @@ describe('/roster — an unindent with no resolvable organization fails LOUDLY (
 				parentId: null,
 				dbEntityId: null,
 				depth: 0,
+				ownerIds: ['person-p'],
 				children: [
-					{ id: 'sec-sop1', name: 'Soprano 1', displayOrder: 1, parentId: 'sec-sop', dbEntityId: null, depth: 1, children: [] }
+					{ id: 'sec-sop1', name: 'Soprano 1', displayOrder: 1, parentId: 'sec-sop', dbEntityId: null, depth: 1, ownerIds: ['person-p'], children: [] }
 				]
 			},
-			{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, dbEntityId: null, depth: 0, children: [] }
+			{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, dbEntityId: null, depth: 0, ownerIds: ['person-p'], children: [] }
 		];
 	}
 

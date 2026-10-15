@@ -2,6 +2,7 @@
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { byDisplayOrder } from '$lib/collections/displayOrder';
+import { referenceIds } from '$lib/entu/references';
 import type { RosterRow } from '$lib/roster/rosterData';
 
 export interface SectionNode {
@@ -13,6 +14,10 @@ export interface SectionNode {
 	dbEntityId?: string | null;
 	// Set when the section holds other than exactly one _parent; absent (not false) on clean nodes.
 	parentDamaged?: boolean;
+	// Each present only when the read returned it; absent means not loaded, and no control shows.
+	ownerIds?: string[];
+	editorIds?: string[];
+	expanderIds?: string[];
 	depth: number;
 	children: SectionNode[];
 }
@@ -30,6 +35,9 @@ interface RawSection {
 	name?: Array<{ string: string }>;
 	display_order?: Array<{ number: number }>;
 	_parent?: Array<{ reference: string; entity_type?: string }>;
+	_owner?: Array<{ reference?: string }>;
+	_editor?: Array<{ reference?: string }>;
+	_expander?: Array<{ reference?: string }>;
 }
 
 interface MutableNode extends SectionNode {
@@ -43,7 +51,7 @@ export async function listSections(
 	// Sections are a handful per collective, so the db-wide cap is a guard, not a silent prefix.
 	const res = await entuFetch(
 		cfg.db,
-		'entity?_type.string=section&props=name,display_order,_parent&limit=500',
+		'entity?_type.string=section&props=name,display_order,_parent,_owner,_editor,_expander&limit=500',
 		cfg.token,
 		{},
 		fetchImpl
@@ -71,7 +79,10 @@ export async function listSections(
 			dbEntityId,
 			depth: 0,
 			children: [],
-			...(parentDamaged ? { parentDamaged: true } : {})
+			...(parentDamaged ? { parentDamaged: true } : {}),
+			...(r._owner ? { ownerIds: referenceIds(r._owner) } : {}),
+			...(r._editor ? { editorIds: referenceIds(r._editor) } : {}),
+			...(r._expander ? { expanderIds: referenceIds(r._expander) } : {})
 		});
 	}
 

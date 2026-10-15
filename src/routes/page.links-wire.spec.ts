@@ -59,14 +59,16 @@ function installWireRouter() {
 							_id: 'l-scores',
 							name: [{ string: 'Scores' }],
 							url: [{ string: 'example.com/x' }],
-							display_order: [{ number: 2 }]
+							display_order: [{ number: 2 }],
+							_owner: [{ reference: 'person-p', inherited: true }], _editor: [{ reference: 'person-p', inherited: true }]
 						},
 						{
 							_id: 'l-rec',
 							name: [{ string: 'Salvestused' }],
 							url: [{ string: 'https://f.io/GCkGMr5J' }],
 							description: [{ string: 'Crede recordings' }],
-							display_order: [{ number: 1 }]
+							display_order: [{ number: 1 }],
+							_owner: [{ reference: 'person-p', inherited: true }], _editor: [{ reference: 'person-p', inherited: true }]
 						}
 					]
 				})

@@ -57,7 +57,7 @@ vi.mock('$lib/entu-config', async () =>
 const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
 vi.mock('$lib/roster/rosterData', () => ({ listActiveMembers: listActiveMembersMock }));
 
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule({ libraryId: false })
 );
 
@@ -95,7 +95,7 @@ import LibraryPage from './library/+page.svelte';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { signIn } from '$lib/testing/session';
 import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
-import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
 import {
 	listAllCopiesMock,
 	listAllEditionsMock,
@@ -619,7 +619,7 @@ describe('#93 — a11y: library repertoire badges are readable without color', (
 
 	async function renderLibraryWithBadges() {
 		signIn();
-		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 		findMyMemberIdMock.mockResolvedValue(null);
 		resolveCopyNamesMock.mockResolvedValue(new Map());
 		listAllEditionsMock.mockResolvedValue(toListRead([]));

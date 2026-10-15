@@ -20,7 +20,7 @@ export interface ArrangeDragDeps {
 	roster: RosterState;
 	arrange: ArrangeState;
 	ops: ArrangeOps;
-	isAdmin: () => boolean;
+	canEditDb: () => boolean;
 	visibleSections: () => SectionNode[];
 	arrangeRows: () => ArrangeRow[];
 }
@@ -177,7 +177,7 @@ export function createArrangeDrag(deps: ArrangeDragDeps) {
 	}
 
 	function reorderableHandleIds(): string[] {
-		if (!deps.isAdmin()) return [];
+		if (!deps.canEditDb()) return [];
 		const ids: string[] = [];
 		function walk(nodes: SectionNode[]): void {
 			for (const n of nodes) {
@@ -219,7 +219,7 @@ export function createArrangeDrag(deps: ArrangeDragDeps) {
 		if (a.grabbedSectionId !== null && a.grabbedSectionId !== node.id) return;
 
 		if (a.grabbedSectionId === null) {
-			if (structuralWritePending()) return;
+			if (structuralWritePending() || !ops.mayReorder(node.id)) return;
 			a.grabbedSectionId = node.id;
 			grabSiblingIds = ops.visibleSiblingsOf(node.id)?.map((n) => n.id) ?? [node.id];
 			a.rovingHandleId = node.id;

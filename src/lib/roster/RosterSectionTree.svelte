@@ -3,7 +3,7 @@
 	import type { RosterRow } from '$lib/roster/rosterData';
 	import type { SectionGroup, SectionNode } from '$lib/sections/sectionData';
 	import type { Collective } from '$lib/collectives/types';
-	import type { AdminState } from '$lib/nav/adminStore';
+	import type { EditRightState } from '$lib/nav/dbRights';
 	import type { MemberOpsState, RosterState } from '$lib/roster/rosterPageState';
 	import type { MemberOps } from '$lib/roster/rosterMemberOps';
 	import MemberRow from '$lib/roster/MemberRow.svelte';
@@ -13,7 +13,7 @@
 		groupById,
 		unassignedGroup,
 		onToggleSection,
-		admin,
+		editRight,
 		selected,
 		isOffline,
 		roster,
@@ -25,7 +25,7 @@
 		groupById: Map<string, SectionGroup>;
 		unassignedGroup: SectionGroup | null;
 		onToggleSection: (id: string) => void;
-		admin: AdminState;
+		editRight: EditRightState;
 		selected: Collective | null;
 		isOffline: boolean;
 		roster: RosterState;
@@ -40,7 +40,7 @@
 		{row}
 		{showSection}
 		{groupSectionId}
-		{admin}
+		{editRight}
 		{selected}
 		{isOffline}
 		{roster}

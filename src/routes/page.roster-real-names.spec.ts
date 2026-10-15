@@ -17,7 +17,7 @@ vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
 
-import { resetAdmin } from '$lib/nav/adminStore';
+import { resetDbEditRight } from '$lib/nav/dbRights';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { json } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
@@ -172,13 +172,13 @@ afterEach(() => {
 	vi.clearAllMocks();
 	resetTypeIdCache();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 });
 
 describe('#269 /roster end-to-end — toggle ON through the real producer chain', () => {
 	it('NON-ADMIN members see the real names too (the toggle is collective-wide, not an admin-only view)', async () => {
 		stubWire({ sampledb: sampledbFixture(true) });
-		const { container } = await renderRosterAs('not-admin');
+		const { container } = await renderRosterAs('not-editor');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
 		expect(rowNameSpan(container, 'm1').textContent).toBe('Alice Alto');
 	});
@@ -194,7 +194,7 @@ describe('#269 fallback — SILENT AND COMPLETE', () => {
 
 	it('a record-backed row and a fallback row have IDENTICAL class lists and DOM shape — only the text differs; no placeholder, no marker, no alert', async () => {
 		stubWire({ sampledb: sampledbFixture(true) });
-		const { container } = await renderRosterAs('not-admin');
+		const { container } = await renderRosterAs('not-editor');
 		const m1li = q(container, 'roster-row-m1')!;
 		const m2li = q(container, 'roster-row-m2')!;
 
@@ -212,7 +212,7 @@ describe('#269 fallback — SILENT AND COMPLETE', () => {
 		const fx = sampledbFixture(true);
 		fx.records = [{ id: 'rec-q', person: 'person-q', name: '' }];
 		const fetchMock = stubWire({ sampledb: fx });
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Berta Bass');
 		expect(rowNameSpan(container, 'm1').textContent).toBe('Alice Alto');
 		const records = (fetchMock.mock.calls as Array<[unknown]>)
@@ -228,7 +228,7 @@ describe('#269 fallback — SILENT AND COMPLETE', () => {
 			{ id: 'rec-q2', person: 'person-q', name: 'Zed Zither' }
 		];
 		stubWire({ sampledb: fx });
-		const { container } = await renderRosterAs('not-admin');
+		const { container } = await renderRosterAs('not-editor');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Berta Bass');
 		expect(rowNameSpan(container, 'm1').textContent).toBe('Alice Alto');
 		const m1li = q(container, 'roster-row-m1')!;
@@ -242,7 +242,7 @@ describe('#269 fallback — SILENT AND COMPLETE', () => {
 describe('#269 toggle OFF — identical to the toggle-less behavior on this tree', () => {
 	it('toggle key ABSENT (never set) → false: same rendering, same absence of any records fetch', async () => {
 		const fetchMock = stubWire({ sampledb: sampledbFixture('absent') });
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Berta Bass');
 		const all = (fetchMock.mock.calls as Array<[unknown]>).map((c) => String(c[0]));
 		expect(all.filter((u) => u.includes('admin_member_record'))).toEqual([]);
@@ -257,7 +257,7 @@ describe('#269 toggle OFF — identical to the toggle-less behavior on this tree
 describe('#269 sorting — the page orders by what the rows DISPLAY', () => {
 	it('grouped view: rows inside a group come in displayed-name order (Aaron before Alice, though profile order was Alice before Berta)', async () => {
 		stubWire({ sampledb: sampledbFixture(true) });
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		const names = Array.from(
 			container.querySelectorAll('[data-testid="roster-groups"] [data-testid="roster-row-name"]')
 		).map((el) => el.textContent);
@@ -266,7 +266,7 @@ describe('#269 sorting — the page orders by what the rows DISPLAY', () => {
 
 	it('flat view: the alphabetical list re-sorts by the displayed name too', async () => {
 		stubWire({ sampledb: sampledbFixture(true) });
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await fireEvent.click(q(container, 'roster-sort-toggle')!);
 		await waitFor(() => expect(q(container, 'roster-flat-list')).not.toBeNull());
 		const names = Array.from(
@@ -281,7 +281,7 @@ describe('#469 scope — profileName surfaces keep the PROFILE name; the archive
 		const fx = sampledbFixture(true);
 		fx.viewerPersonId = 'person-p';
 		stubWire({ sampledb: fx });
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
 		const add = q(container, 'section-picker-add-m2');
 		expect(add, "the [+] renders on m2's row").not.toBeNull();
@@ -294,7 +294,7 @@ describe('#469 scope — profileName surfaces keep the PROFILE name; the archive
 		const fx = sampledbFixture(true);
 		fx.lookupRecords = []; // deleted since the roster's bulk read → the create path
 		stubWire({ sampledb: fx });
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
 
 		await fireEvent.click(q(container, 'roster-row-card-m2')!);
@@ -304,7 +304,7 @@ describe('#469 scope — profileName surfaces keep the PROFILE name; the archive
 
 	it('the ARCHIVED panel obeys the toggle too (#469, supersedes the v1 profile-only boundary): an archived member with a named record lists under her REAL name', async () => {
 		stubWire({ sampledb: sampledbFixture(true) });
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
 
 		await fireEvent.click(q(container, 'roster-inactive-toggle')!);
@@ -322,7 +322,7 @@ describe('#469 scope — profileName surfaces keep the PROFILE name; the archive
 		fx.bulkRecordsFailFrom = 1;
 		stubWire({ sampledb: fx });
 		const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
 
 		await fireEvent.click(q(container, 'roster-inactive-toggle')!);
@@ -338,7 +338,7 @@ describe('#469 scope — profileName surfaces keep the PROFILE name; the archive
 
 	it('opening the panel spends ONE toggle read and ONE bulk records read for BOTH lists', async () => {
 		const fetchMock = stubWire({ sampledb: sampledbFixture(true) });
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
 
 		const urls = () => (fetchMock.mock.calls as Array<[unknown]>).map((c) => String(c[0]));
@@ -369,7 +369,7 @@ describe('#269 network — the acceptance list checks the wire, not just the scr
 
 	it('ONE bulk records query per roster load, projected person,name EXACTLY — and no load-time URL anywhere projects phone or birthdate (the PO-ruled incidental-exposure fence)', async () => {
 		const fetchMock = stubWire({ sampledb: sampledbFixture(true) });
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
 
 		const records = recordUrls(fetchMock);
@@ -386,18 +386,18 @@ describe('#269 network — the acceptance list checks the wire, not just the scr
 
 	it('members and admins issue the SAME narrowed query — no admin-widened variant', async () => {
 		const adminFetch = stubWire({ sampledb: sampledbFixture(true) });
-		await renderRosterAs('admin');
+		await renderRosterAs('editor');
 		const adminUrls = recordUrls(adminFetch);
 		expect(adminUrls).toHaveLength(1);
 
 		cleanup();
 		vi.unstubAllGlobals();
 		resetAppState();
-		resetAdmin();
+		resetDbEditRight();
 		resetTypeIdCache();
 
 		const memberFetch = stubWire({ sampledb: sampledbFixture(true) });
-		const { container } = await renderRosterAs('not-admin');
+		const { container } = await renderRosterAs('not-editor');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
 		const memberUrls = recordUrls(memberFetch);
 		expect(memberUrls).toHaveLength(1);
@@ -408,14 +408,14 @@ describe('#269 network — the acceptance list checks the wire, not just the scr
 describe('#269 per-load server read', () => {
 	it('the value is read from the server on EVERY load — no client-side persistence: a fresh render after the server flipped the toggle shows the new state (the second-session/collective-wide acceptance)', async () => {
 		stubWire({ sampledb: sampledbFixture(false) });
-		let utils = await renderRosterAs('admin');
+		let utils = await renderRosterAs('editor');
 		expect(rowNameSpan(utils.container, 'm2').textContent).toBe('Berta Bass');
 
 		cleanup();
 		vi.unstubAllGlobals();
 
 		stubWire({ sampledb: sampledbFixture(true) });
-		utils = await renderRosterAs('admin');
+		utils = await renderRosterAs('editor');
 		expect(rowNameSpan(utils.container, 'm2').textContent).toBe('Aaron Aardvark');
 	});
 });

@@ -29,7 +29,7 @@ vi.mock('$app/navigation', async () =>
 
 import Page from './roster/+page.svelte';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore, resetAdmin, type AdminState } from '$lib/nav/adminStore';
+import { dbEditRight, resetDbEditRight, type EditRightState } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
@@ -129,12 +129,12 @@ afterEach(() => {
 	listSectionsMock.mockReset();
 	entuFetchMock.mockReset();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 });
 
-async function renderReady(admin: AdminState = 'admin') {
+async function renderReady(admin: EditRightState = 'editor') {
 	setAuthedWithOneCollective();
-	adminStore.set(admin);
+	dbEditRight.set(admin);
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(container.querySelector('[data-testid="roster-groups"]')).not.toBeNull();
@@ -194,9 +194,9 @@ describe('/roster — section-control owner gate (#468, integration: actual page
 		return row ? row.querySelectorAll('[data-testid^="section-picker-"]').length : 0;
 	}
 
-	it("a row whose ownerIds carry the reader's person id renders section controls INSIDE that row — even with adminStore 'not-admin' (the grant decides, not the role)", async () => {
+	it("a row whose ownerIds carry the reader's person id renders section controls INSIDE that row — even with dbEditRight 'not-editor' (the grant decides, not the role)", async () => {
 		loadRosterMock.mockResolvedValue(toListRead(gateRows()));
-		const container = await renderReady('not-admin');
+		const container = await renderReady('not-editor');
 		const row = q(container, 'roster-row-m-owned');
 		expect(row, 'owned row renders').not.toBeNull();
 		expect(controlsIn(row), 'controls inside the owned row').toBeGreaterThan(0);
@@ -204,16 +204,16 @@ describe('/roster — section-control owner gate (#468, integration: actual page
 		expect(controlsIn(q(container, 'roster-row-m-withheld'))).toBe(0);
 	});
 
-	it("a row WITHOUT the reader in ownerIds renders NO section control even with adminStore 'admin'", async () => {
+	it("a row WITHOUT the reader in ownerIds renders NO section control even with dbEditRight 'editor'", async () => {
 		loadRosterMock.mockResolvedValue(toListRead(gateRows()));
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 		expect(controlsIn(q(container, 'roster-row-m-foreign'))).toBe(0);
 		expect(controlsIn(q(container, 'roster-row-m-owned'))).toBeGreaterThan(0);
 	});
 
 	it('ownerIds: [] (withheld private bucket) → NO control, fail closed', async () => {
 		loadRosterMock.mockResolvedValue(toListRead(gateRows()));
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 		expect(controlsIn(q(container, 'roster-row-m-withheld'))).toBe(0);
 	});
 
@@ -222,7 +222,7 @@ describe('/roster — section-control owner gate (#468, integration: actual page
 		listSectionsMock.mockRejectedValue(new Error('sections boom'));
 		loadRosterMock.mockResolvedValue(toListRead(gateRows()));
 		setAuthedWithOneCollective();
-		adminStore.set('not-admin');
+		dbEditRight.set('not-editor');
 		const { container } = render(Page);
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="roster-flat-list"]')).not.toBeNull();
@@ -245,7 +245,7 @@ describe('/roster — control position (#468): upper right on the card, lifted b
 	}
 
 	it('the wrapper is `absolute top-1 right-1` with NO z- class, and FOLLOWS the roster-row-card activator in tree order inside the same (already-relative) <li>', async () => {
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 		const li = q(container, 'roster-row-m-ada') as HTMLElement;
 		const wrapper = pickerWrapper(container, 'm-ada');
 		const classes = wrapper.className.split(/\s+/);
@@ -266,7 +266,7 @@ describe('/roster — control position (#468): upper right on the card, lifted b
 
 	it('a row WITHOUT the controls still shows the section name in rowInfo (flat view) — nothing else on the card moves', async () => {
 		loadRosterMock.mockResolvedValue(toListRead(gateRows()));
-		const container = await renderReady('admin');
+		const container = await renderReady('editor');
 		await fireEvent.click(q(container, 'roster-sort-toggle') as HTMLElement);
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="roster-flat-list"]')).not.toBeNull();

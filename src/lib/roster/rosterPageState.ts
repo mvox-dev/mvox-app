@@ -2,7 +2,7 @@ import { SvelteSet } from 'svelte/reactivity';
 import type { RosterRow } from '$lib/roster/rosterData';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { JoinState, JoinStateDetail } from '$lib/profile/linkedIdentities';
-import type { OwnerTier } from '$lib/nav/adminStore';
+import type { DbRight } from '$lib/nav/dbRights';
 import type { InviteLinkCopier } from '$lib/invite/copy-invite-link';
 import type { DeactivateBlocker } from '$lib/roster/memberLifecycle';
 import type { MemberRecordLookup } from '$lib/roster/memberRecord';
@@ -22,7 +22,7 @@ export interface RosterState {
 	inactivePartial: boolean;
 	joinStates: Record<string, JoinState>;
 	joinStateDetails: Record<string, JoinStateDetail>;
-	ownerTier: OwnerTier | 'loading';
+	dbRight: DbRight | 'loading';
 	sections: SectionNode[];
 	sectionsError: boolean;
 	view: 'grouped' | 'flat';
@@ -40,7 +40,7 @@ export function createRosterState(): RosterState {
 		inactivePartial: false,
 		joinStates: {},
 		joinStateDetails: {},
-		ownerTier: 'loading',
+		dbRight: 'loading',
 		sections: [],
 		sectionsError: false,
 		view: 'grouped',
@@ -72,7 +72,7 @@ export function clearRosterState(r: RosterState): void {
 	r.sectionsError = false;
 	r.joinStates = {};
 	r.joinStateDetails = {};
-	r.ownerTier = 'loading';
+	r.dbRight = 'loading';
 }
 
 export interface RecordForm {

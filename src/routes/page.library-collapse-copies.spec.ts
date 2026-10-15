@@ -26,7 +26,7 @@ vi.mock('$lib/roster/rosterData', async () =>
 	(await import('$lib/testing/mocks/roster')).activeMembersModule()
 );
 
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule({ libraryId: false })
 );
 
@@ -47,7 +47,7 @@ import {
 	listWorksMock,
 	resolveBorrowerNamesMock
 } from '$lib/testing/mocks/library';
-import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
 import { resetCopyListMocks, signInLibraryReader } from '$lib/testing/pages/library';
 
 type Fixture = {
@@ -140,7 +140,7 @@ describe('/library — member view collapses available copies (#128)', () => {
 
 	it('librarian view: NO collapse — every copy renders individually and no summary line appears', async () => {
 		setFixture({ lent: ['copy-b', 'copy-c'], available: ['copy-a', 'copy-d', 'copy-e'] });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		const container = await renderWithEditionUnfolded();
 
 		await waitFor(() =>
@@ -173,7 +173,7 @@ describe('/library — member view collapses available copies (#128)', () => {
 
 	it('librarian view, ALL copies available: all rows render individually, no summary line', async () => {
 		setFixture({ lent: [], available: ['copy-a', 'copy-b', 'copy-c'] });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		const container = await renderWithEditionUnfolded();
 
 		await waitFor(() =>

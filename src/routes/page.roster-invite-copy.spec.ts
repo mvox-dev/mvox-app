@@ -29,13 +29,13 @@ vi.mock('$lib/invite/copy-invite-link', async (importActual) => {
 vi.mock('$lib/profile/linkedIdentities', async (importOriginal) =>
 	(await import('$lib/testing/mocks/admin')).joinStateDetailsModule(importOriginal)
 );
-vi.mock('$lib/nav/adminStore', async (importOriginal) =>
-	(await import('$lib/testing/mocks/admin')).ownerTierOverRealModule(importOriginal)
+vi.mock('$lib/nav/dbRights', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).dbRightOverRealModule(importOriginal)
 );
 vi.mock('$lib/roster/memberRecord', async (importOriginal) =>
 	(await import('$lib/testing/mocks/roster')).memberRecordModule(importOriginal)
 );
-vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+vi.mock('$lib/library/libraryRights', async (importOriginal) =>
 	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
 );
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
@@ -53,7 +53,7 @@ vi.mock('$app/navigation', async () =>
 
 import Page from './roster/+page.svelte';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import {
@@ -61,7 +61,7 @@ import {
 	listJoinStateDetailsMock,
 	listJoinStatesMock,
 	mintSelfLinkInviteMock,
-	resolveOwnerTierMock,
+	resolveDbRightMock,
 	withdrawInviteMock
 } from '$lib/testing/mocks/admin';
 import {
@@ -103,7 +103,7 @@ beforeEach(() => {
 		'pp-3': { state: 'invited', at: '2026-09-10T12:00:00.000Z' },
 		'pp-4': { state: 'absent' }
 	});
-	resolveOwnerTierMock.mockResolvedValue('owner');
+	resolveDbRightMock.mockResolvedValue('owner');
 	mintSelfLinkInviteMock.mockResolvedValue({ inviteToken: FRESH_TOKEN });
 	withdrawInviteMock.mockResolvedValue(undefined);
 	deactivateMemberMock.mockResolvedValue(undefined);
@@ -131,7 +131,7 @@ function expectNoInviteMaterial(container: HTMLElement): void {
 async function renderRoster() {
 	const utils = render(Page);
 	setAuthed();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	await waitFor(() =>
 		expect(
 			utils.container.querySelector('[data-testid="section-toggle-unassigned"]')

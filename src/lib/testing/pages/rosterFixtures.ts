@@ -20,16 +20,16 @@ export const SIREEN_SOPRANO_II = '69c7f8798489bfcb0e81b207';
 
 export function treeA(): SectionNode[] {
 	return [
-		{ id: 'sec-sop', name: 'Soprano', displayOrder: 1, parentId: null, dbEntityId: ORG_A, depth: 0, children: [] },
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, dbEntityId: ORG_A, depth: 0, children: [] },
-		{ id: 'sec-tenor', name: 'Tenor', displayOrder: 3, parentId: null, dbEntityId: ORG_A, depth: 0, children: [] }
+		{ id: 'sec-sop', name: 'Soprano', displayOrder: 1, parentId: null, dbEntityId: ORG_A, depth: 0, ownerIds: ['person-p'], children: [] },
+		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, dbEntityId: ORG_A, depth: 0, ownerIds: ['person-p'], children: [] },
+		{ id: 'sec-tenor', name: 'Tenor', displayOrder: 3, parentId: null, dbEntityId: ORG_A, depth: 0, ownerIds: ['person-p'], children: [] }
 	];
 }
 
 export function treeB(): SectionNode[] {
 	return [
-		{ id: 'sec-b1', name: 'Bass I', displayOrder: 1, parentId: null, dbEntityId: ORG_B, depth: 0, children: [] },
-		{ id: 'sec-b2', name: 'Bass II', displayOrder: 2, parentId: null, dbEntityId: ORG_B, depth: 0, children: [] }
+		{ id: 'sec-b1', name: 'Bass I', displayOrder: 1, parentId: null, dbEntityId: ORG_B, depth: 0, ownerIds: ['person-q'], children: [] },
+		{ id: 'sec-b2', name: 'Bass II', displayOrder: 2, parentId: null, dbEntityId: ORG_B, depth: 0, ownerIds: ['person-q'], children: [] }
 	];
 }
 
@@ -76,6 +76,7 @@ export function liveShapedTree(): SectionNode[] {
 			parentId: null,
 			dbEntityId: ORG_EFK,
 			depth: 0,
+			ownerIds: ['person-p'],
 			children: []
 		},
 		{
@@ -85,6 +86,7 @@ export function liveShapedTree(): SectionNode[] {
 			parentId: null,
 			dbEntityId: ORG_SIREEN,
 			depth: 0,
+			ownerIds: ['person-p'],
 			children: []
 		},
 		{
@@ -94,6 +96,7 @@ export function liveShapedTree(): SectionNode[] {
 			parentId: null,
 			dbEntityId: ORG_EFK,
 			depth: 0,
+			ownerIds: ['person-p'],
 			children: []
 		}
 	];
@@ -106,6 +109,7 @@ export const altoSection = {
 	parentId: null,
 	dbEntityId: 'db-1',
 	depth: 0,
+	ownerIds: ['person-p'],
 	children: []
 };
 
@@ -121,11 +125,12 @@ export function fixtureTree(): SectionNode[] {
 		displayOrder: 1,
 		parentId: 'sec-sop',
 		depth: 1,
+		ownerIds: ['person-p'],
 		children: []
 	};
 	return [
-		{ id: 'sec-sop', name: 'Soprano', displayOrder: 1, parentId: null, depth: 0, children: [sop1] },
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, depth: 0, children: [] }
+		{ id: 'sec-sop', name: 'Soprano', displayOrder: 1, parentId: null, depth: 0, ownerIds: ['person-p'], children: [sop1] },
+		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, depth: 0, ownerIds: ['person-p'], children: [] }
 	];
 }
 

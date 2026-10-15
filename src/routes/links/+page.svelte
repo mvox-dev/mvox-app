@@ -1,12 +1,13 @@
-<!-- /links: the collective's link list; admins add, edit, reorder and remove links. -->
+<!-- /links: the collective's link list; each write control shows only where Entu allows it. -->
 <script lang="ts">
 	import ListOfStuff from '$lib/components/ListOfStuff.svelte';
 	import { reportProblem } from '$lib/problems/reportProblem';
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
 	import { selectedCollectiveIdentityStore } from '$lib/collectives/store';
-	import { adminStore } from '$lib/nav/adminStore';
+	import { dbEditRight } from '$lib/nav/dbRights';
 	import { listLinks, type LinkRow } from '$lib/links/linkData';
+	import { linkControls, type LinkControls } from '$lib/links/linkRights';
 	import { createLink, updateLink, reorderLinks, deleteLink } from '$lib/links/linkActions';
 	import { normalizeUrl } from '$lib/links/normalizeUrl';
 	import { cfgFor } from '$lib/entu/cfg';
@@ -18,11 +19,14 @@
 	import { writesAvailable } from '$lib/net/online';
 
 	const selected = $derived($selectedCollectiveIdentityStore);
-	const admin = $derived($adminStore);
+	const editRight = $derived($dbEditRight);
 	const isOffline = $derived(!$writesAvailable);
 
 	let status = $state<RouteLoadStatus>('loading');
 	let rows = $state<LinkRow[]>([]);
+	const controls = $derived(linkControls(rows, selected?.personId ?? null));
+	const NO_CONTROLS: LinkControls = { edit: false, remove: false, move: false };
+	const anyRowControl = $derived([...controls.values()].some((c) => c.edit || c.remove || c.move));
 
 	// Plain, not $state: writes read it at tap time and it never drives a render.
 	let currentCfg: { db: string; token: string } | null = null;
@@ -246,7 +250,7 @@
 	<div data-testid="links-page" class="mx-auto flex w-full max-w-md flex-col gap-4">
 	<ListOfStuff title={m.links_title()}>
 		<div class="flex flex-col gap-4">
-			{#if admin === 'admin'}
+			{#if editRight === 'editor'}
 				<!-- Visible, not sr-only, by choice: a saved move otherwise looks identical to one that
 				     failed to persist. Present from first render, so its text change fires aria-live. -->
 				<div
@@ -276,14 +280,14 @@
 				</p>
 			{/if}
 
-			<!-- One reason for every disabled write control; admin-gated, as only admins see them. -->
-			{#if admin === 'admin' && isOffline}
+			<!-- One reason for every disabled write control, to anyone who sees one. -->
+			{#if (editRight === 'editor' || anyRowControl) && isOffline}
 				<p data-testid="links-write-unavailable" class="text-sm text-ink-2">
 					{m.write_unavailable_no_signal()}
 				</p>
 			{/if}
 
-			{#if admin === 'admin'}
+			{#if editRight === 'editor'}
 				<LinksAddForm
 					bind:addName
 					bind:addUrl
@@ -320,7 +324,7 @@
 							{row}
 							index={i}
 							rowCount={rows.length}
-							isAdmin={admin === 'admin'}
+							controls={controls.get(row.id) ?? NO_CONTROLS}
 							{isOffline}
 							{reorderPending}
 							editing={editingId === row.id}

@@ -142,11 +142,11 @@ vi.mock('$lib/profile/linkedIdentities', async (importOriginal) => ({
 vi.mock('$lib/library/libraryData', async () =>
 	(await import('$lib/testing/mocks/library')).libraryReadsModule()
 );
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule()
 );
-vi.mock('$lib/nav/adminStore', async (importOriginal) =>
-	(await import('$lib/testing/mocks/admin')).adminStoreOverRealModule(importOriginal)
+vi.mock('$lib/nav/dbRights', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).dbRightsOverRealModule(importOriginal)
 );
 vi.mock('$lib/admin/roleManagement', async (importOriginal) =>
 	(await import('$lib/testing/mocks/admin')).roleManagementOverRealModule(importOriginal)
@@ -190,7 +190,7 @@ import {
 } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { listAllCopiesMock, listAllEditionsMock, listWorksMock } from '$lib/testing/mocks/library';
-import { resetAdmin } from '$lib/nav/adminStore';
+import { resetDbEditRight } from '$lib/nav/dbRights';
 import { resetGate } from '$lib/profile/completionGate';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { agendaViewStore, readStoredAgendaView } from '$lib/preferences/agendaView';
@@ -318,7 +318,7 @@ afterEach(() => {
 	resetOnLine();
 	resetAppState();
 	resetGate();
-	resetAdmin();
+	resetDbEditRight();
 	resetTypeIdCache();
 	localStorage.clear();
 	agendaViewStore.set(readStoredAgendaView());

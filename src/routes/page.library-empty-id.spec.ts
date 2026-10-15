@@ -25,7 +25,7 @@ vi.mock('$lib/roster/rosterData', async () =>
 	(await import('$lib/testing/mocks/roster')).activeMembersModule()
 );
 
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule({ libraryId: false })
 );
 
@@ -44,7 +44,7 @@ import { signIn } from '$lib/testing/session';
 import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
 import { bulkCheckoutMock, createLendingMock, returnLendingMock } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
-import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
 
 const EMPTY_ID_ENTITY_URL = /\/entity\/(\?|$)/;
 
@@ -75,7 +75,7 @@ function installFetchStub(lendingEntities: unknown[]) {
 
 function setAuthedWithOneCollective() {
 	signIn({ selected: 'sampledb' });
-	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+	resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 	findMyMemberIdMock.mockResolvedValue(null);
 	listActiveMembersMock.mockResolvedValue(toListRead([]));
 }
@@ -92,7 +92,7 @@ afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
 	listActiveMembersMock.mockReset();
-	resolveLibrarianMock.mockReset();
+	resolveLibraryEditRightMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	createLendingMock.mockReset();
 	returnLendingMock.mockReset();

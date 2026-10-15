@@ -14,6 +14,7 @@ import { createRemoveOps } from '$lib/sections/sectionRemoveOps';
 import { createPageCreateOps } from '$lib/sections/sectionCreateOps';
 import { createReorderOps } from '$lib/sections/sectionReorderOps';
 import { createRenameOps } from '$lib/sections/sectionRenameOps';
+import { createArrangeRights } from '$lib/sections/sectionRights';
 
 export interface ArrangeActions {
 	listSections: typeof listSections;
@@ -41,6 +42,8 @@ export interface ArrangeOpsDeps {
 	isOffline: () => boolean;
 	visibleSections: () => SectionNode[];
 	currentDbEntityId: () => string | null;
+	personId: () => string | null;
+	canEditDb: () => boolean;
 }
 
 export type ArrangeOps = ReturnType<typeof createArrangeOps>;
@@ -50,6 +53,7 @@ export function createArrangeOps(deps: ArrangeOpsDeps) {
 		...createRemoveOps(deps),
 		...createPageCreateOps(deps),
 		...createReorderOps(deps),
-		...createRenameOps(deps)
+		...createRenameOps(deps),
+		...createArrangeRights(deps)
 	};
 }

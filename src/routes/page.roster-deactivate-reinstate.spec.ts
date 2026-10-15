@@ -11,7 +11,7 @@ vi.mock('$lib/roster/memberLifecycle', async () =>
 vi.mock('$lib/invite/inviteData', async (importOriginal) =>
 	(await import('$lib/testing/mocks/admin')).inviteWritesModule(importOriginal, { withdraw: false })
 );
-vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+vi.mock('$lib/library/libraryRights', async (importOriginal) =>
 	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
 );
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
@@ -26,7 +26,7 @@ vi.mock('$lib/roster/memberRecord', async (importOriginal) =>
 
 import Page from './roster/+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
@@ -61,7 +61,7 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 		loadInactiveRosterMock.mockResolvedValue(toListRead(inactiveRoster));
 		const utils = render(Page);
 		setAuthedWithOneCollective();
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		await waitFor(() =>
 			expect(utils.container.querySelector('[data-testid="roster-inactive-toggle"]')).not.toBeNull()
 		);
@@ -154,7 +154,7 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 				{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
 			]
 		});
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="roster-inactive-toggle"]')).not.toBeNull()
 		);
@@ -175,7 +175,7 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 
 	it('a deactivate with the panel OPEN refreshes the panel too — she belongs in it now', async () => {
 		loadInactiveRosterMock.mockResolvedValue(toListRead([]));
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
 		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(1));
 		loadInactiveRosterMock.mockResolvedValue(toListRead([
@@ -198,7 +198,7 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 
 	it('a FAILED panel refresh after a deactivate is not reported as a failed deactivate — the write landed', async () => {
 		loadInactiveRosterMock.mockResolvedValue(toListRead([]));
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
 		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(1));
 		loadInactiveRosterMock.mockRejectedValue(new Error('inactive read failed'));
@@ -218,7 +218,7 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 		loadInactiveRosterMock.mockResolvedValue(toListRead(inactiveRoster));
 		const { container } = render(Page);
 		setAuthedWithOneCollective();
-		adminStore.set('not-admin');
+		dbEditRight.set('not-editor');
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="section-toggle-unassigned"]')).not.toBeNull()
 		);

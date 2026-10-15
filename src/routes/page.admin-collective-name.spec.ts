@@ -13,11 +13,11 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 vi.mock('$lib/admin/roleManagement', async () =>
 	(await import('$lib/testing/mocks/admin')).roleManagementModule()
 );
-vi.mock('$lib/nav/adminStore', async () =>
-	(await import('$lib/testing/mocks/admin')).adminStoreModule('admin')
+vi.mock('$lib/nav/dbRights', async () =>
+	(await import('$lib/testing/mocks/admin')).dbRightsModule('dbEditRight')
 );
-vi.mock('$lib/library/librarianStore', async () =>
-	(await import('$lib/testing/mocks/admin')).librarianStoreModule()
+vi.mock('$lib/library/libraryRights', async () =>
+	(await import('$lib/testing/mocks/admin')).libraryRightsModule()
 );
 vi.mock('$lib/collective/databaseEntity', async () =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule()
@@ -50,10 +50,10 @@ import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/modu
 import {
 	listAdminsMock,
 	listLibrariansMock,
-	resolveAdminMock,
+	resolveDbEditRightMock,
 	resolveCollectiveNameMarkerMock,
 	resolveInviteParentMock,
-	resolveLibrarianMock,
+	resolveLibraryEditRightMock,
 	resolveParentMock,
 	updateCollectiveNameMock
 } from '$lib/testing/mocks/admin';
@@ -68,9 +68,9 @@ const ROSTER = [{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email:
 const ANNA = { id: 'p-anna', name: 'Anna Arro', role: 'owner' as const, valueIds: ['pv-own'] };
 
 function loadOk() {
-	resolveAdminMock.mockResolvedValue('admin');
+	resolveDbEditRightMock.mockResolvedValue('editor');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
-	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 	listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
 	listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
 	loadRosterMock.mockResolvedValue(toListRead(ROSTER));
@@ -109,10 +109,10 @@ beforeEach(() => {
 	listAdminsMock.mockReset();
 	listLibrariansMock.mockReset();
 	loadRosterMock.mockReset();
-	resolveAdminMock.mockReset();
+	resolveDbEditRightMock.mockReset();
 	resolveCollectiveNameMarkerMock.mockReset();
 	resolveInviteParentMock.mockReset();
-	resolveLibrarianMock.mockReset();
+	resolveLibraryEditRightMock.mockReset();
 	resolveParentMock.mockReset();
 	updateCollectiveNameMock.mockReset();
 	listSectionsMock.mockReset();

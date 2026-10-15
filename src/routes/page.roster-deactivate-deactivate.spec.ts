@@ -12,7 +12,7 @@ vi.mock('$lib/roster/rosterData', async () =>
 vi.mock('$lib/roster/memberLifecycle', async () =>
 	(await import('$lib/testing/mocks/roster')).memberLifecycleModule({ archived: true })
 );
-vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+vi.mock('$lib/library/libraryRights', async (importOriginal) =>
 	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
 );
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
@@ -25,7 +25,7 @@ vi.mock('$lib/roster/memberRecord', async (importOriginal) =>
 	(await import('$lib/testing/mocks/roster')).memberRecordModule(importOriginal)
 );
 
-import { LibraryLookupError, resolveMyLibraryId } from '$lib/library/librarianStore';
+import { LibraryLookupError, resolveMyLibraryId } from '$lib/library/libraryRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { deferred } from '$lib/testing/entuFetchKit';
 import {
@@ -44,19 +44,19 @@ useRosterDeactivatePage();
 
 describe('(A) deactivate — admin-only, never self (done-when 7)', () => {
 	it('a collective admin sees the deactivate control on ANOTHER member\'s row', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm2'); // #302 drive-path edit: control lives in the opened editor
 		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).not.toBeNull();
 	});
 
 	it("the viewer's OWN row never carries a deactivate control — self-deactivation is impossible at the UI", async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm1');
 		expect(container.querySelector('[data-testid="member-deactivate-m1"]')).toBeNull();
 	});
 
 	it('a NON-admin member sees no deactivate control anywhere', async () => {
-		const { container } = await renderRosterAs('not-admin');
+		const { container } = await renderRosterAs('not-editor');
 		expect(container.querySelector('[data-testid="member-deactivate-m1"]')).toBeNull();
 		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
 	});
@@ -64,7 +64,7 @@ describe('(A) deactivate — admin-only, never self (done-when 7)', () => {
 
 describe('(A) two-step confirm — the page\'s existing destructive idiom, reused', () => {
 	it('arming swaps in confirm + cancel and writes NOTHING', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
@@ -75,7 +75,7 @@ describe('(A) two-step confirm — the page\'s existing destructive idiom, reuse
 	});
 
 	it('cancel disarms — the arm control returns, still nothing written', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
@@ -90,7 +90,7 @@ describe('(A) two-step confirm — the page\'s existing destructive idiom, reuse
 	});
 
 	it('confirm calls deactivateMember for THAT member and refetches the roster (she drops out of the active reads)', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		const loadsBefore = loadRosterMock.mock.calls.length;
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
@@ -109,7 +109,7 @@ describe('(A) two-step confirm — the page\'s existing destructive idiom, reuse
 describe('(A) refusal while a manageable grant is held — names the remedy (Gama binding)', () => {
 	it('an admin-grant blocker REFUSES: no write, and the message carries the collective so it can say where to remove the role — never a bare "cannot deactivate"', async () => {
 		listDeactivateBlockersMock.mockResolvedValue([{ role: 'admin' }]);
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
@@ -130,7 +130,7 @@ describe('(A) refusal while a manageable grant is held — names the remedy (Gam
 
 	it('FAIL-CLOSED: when the rights read itself rejects, deactivate does NOT proceed', async () => {
 		listDeactivateBlockersMock.mockRejectedValue(new Error('rights read failed'));
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
@@ -150,7 +150,7 @@ describe('(A) refusal while a manageable grant is held — names the remedy (Gam
 			{ memberId: 'm1', personId: 'person-p', name: 'Alice Alto', email: 'alice@example.com', sectionIds: [] },
 			{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [] }
 		]));
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
@@ -175,7 +175,7 @@ describe('(A) refusal while a manageable grant is held — names the remedy (Gam
 		vi.mocked(resolveMyLibraryId).mockRejectedValue(
 			new LibraryLookupError('library lookup failed: HTTP 500', 500)
 		);
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
@@ -197,7 +197,7 @@ describe('(A) refusal while a manageable grant is held — names the remedy (Gam
 
 	it('a genuine null library id still proceeds — no library is a FACT, not a failure', async () => {
 		vi.mocked(resolveMyLibraryId).mockResolvedValue(null);
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
@@ -213,7 +213,7 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 	it('while the BLOCKER READ is in flight the pair stays mounted — both halves disabled, confirm aria-busy, labels unchanged', async () => {
 		const gate = deferred<{ role: string }[]>();
 		listDeactivateBlockersMock.mockImplementation(() => gate.promise);
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
@@ -247,7 +247,7 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 	it('while the WRITE is in flight the pair is disabled + confirm aria-busy — a double-tap cannot fire two writes; release → she leaves the roster and the pair disarms', async () => {
 		const gate = deferred();
 		deactivateMemberMock.mockImplementation(() => gate.promise);
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		const loadsBefore = loadRosterMock.mock.calls.length;
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
@@ -291,7 +291,7 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 	it('CANCEL during the held BLOCKER READ is INERT — no disarm, the pair stays mounted; release → the outcome lands honestly', async () => {
 		const gate = deferred<{ role: string }[]>();
 		listDeactivateBlockersMock.mockImplementation(() => gate.promise);
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
@@ -323,7 +323,7 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 	it('CANCEL during the held WRITE is INERT — release → the deactivation LANDS: refetch, row gone, never "stopped"', async () => {
 		const gate = deferred();
 		deactivateMemberMock.mockImplementation(() => gate.promise);
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		const loadsBefore = loadRosterMock.mock.calls.length;
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
@@ -363,7 +363,7 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		]));
 		const gate = deferred();
 		deactivateMemberMock.mockImplementation(() => gate.promise);
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="roster-row-card-m3"]')).not.toBeNull()
 		);
@@ -400,7 +400,7 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 	it('REFUSAL (held read): the pair stays ARMED and re-enabled beside the refusal — explicit cancel disarms AND clears it (done-when 4)', async () => {
 		const gate = deferred<{ role: string }[]>();
 		listDeactivateBlockersMock.mockImplementation(() => gate.promise);
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
@@ -441,7 +441,7 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const gate = deferred();
 		deactivateMemberMock.mockImplementation(() => gate.promise);
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>

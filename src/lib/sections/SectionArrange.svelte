@@ -6,7 +6,7 @@
 	import type { ArrangeOps, ArrangeState } from '$lib/sections/sectionArrangeOps';
 	import { rovingStop, type ArrangeDrag } from '$lib/sections/sectionDrag';
 	import type { RosterState } from '$lib/roster/rosterPageState';
-	import type { AdminState } from '$lib/nav/adminStore';
+	import type { EditRightState } from '$lib/nav/dbRights';
 	import SectionArrangeRow from '$lib/sections/SectionArrangeRow.svelte';
 	import { focusOnMount } from '$lib/a11y/focusable';
 
@@ -17,7 +17,7 @@
 		drag,
 		arrangeRows,
 		visibleSections,
-		admin,
+		editRight,
 		isOffline,
 		isOwnDbEntitySection
 	}: {
@@ -27,7 +27,7 @@
 		drag: ArrangeDrag;
 		arrangeRows: ArrangeRow[];
 		visibleSections: SectionNode[];
-		admin: AdminState;
+		editRight: EditRightState;
 		isOffline: boolean;
 		isOwnDbEntitySection: (id: string) => boolean;
 	} = $props();
@@ -109,7 +109,7 @@
 		{@render dropIndicator()}
 	{/if}
 </div>
-{#if admin === 'admin'}
+{#if editRight === 'editor'}
 	<div class="flex flex-col gap-1.5 border-t border-dashed border-ink-5 pt-3">
 		{#if !arrange.pageCreateOpen}
 			<button

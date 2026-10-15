@@ -31,7 +31,7 @@ vi.mock('$app/navigation', async () =>
 import Page from './roster/+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
@@ -59,7 +59,7 @@ const EFK_TENOR = '69c7f8758489bfcb0e81b113';
 const TAM_BASS = '69c7f88a8489bfcb0e81b5bc';
 
 function node(id: string, name: string, displayOrder: number, dbEntityId: string): SectionNode {
-	return { id, name, displayOrder, parentId: null, dbEntityId, depth: 0, children: [] };
+	return { id, name, displayOrder, parentId: null, dbEntityId, depth: 0, ownerIds: ['person-p'], children: [] };
 }
 
 function gateWalkTree(): SectionNode[] {
@@ -122,7 +122,7 @@ afterEach(cleanupResetCreateSectionMocks);
 
 async function renderReady() {
 	setAuthedWithOneCollective();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(container.querySelector('[data-testid="roster-groups"]')).not.toBeNull();

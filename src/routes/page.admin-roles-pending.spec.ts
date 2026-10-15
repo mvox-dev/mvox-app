@@ -11,11 +11,11 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 vi.mock('$lib/admin/roleManagement', async () =>
 	(await import('$lib/testing/mocks/admin')).roleManagementModule({ errors: true })
 );
-vi.mock('$lib/nav/adminStore', async () =>
-	(await import('$lib/testing/mocks/admin')).adminStoreModule()
+vi.mock('$lib/nav/dbRights', async () =>
+	(await import('$lib/testing/mocks/admin')).dbRightsModule()
 );
-vi.mock('$lib/library/librarianStore', async () =>
-	(await import('$lib/testing/mocks/admin')).librarianStoreModule()
+vi.mock('$lib/library/libraryRights', async () =>
+	(await import('$lib/testing/mocks/admin')).libraryRightsModule()
 );
 vi.mock('$lib/profile/linkedIdentities', async () =>
 	(await import('$lib/testing/mocks/admin')).joinStatesModule()
@@ -51,7 +51,7 @@ import {
 	listJoinStatesMock,
 	removeAdminMock,
 	removeLibrarianMock,
-	resolveOwnerTierMock
+	resolveDbRightMock
 } from '$lib/testing/mocks/admin';
 import { loadOk, selectSampledb } from '$lib/testing/pages/admin';
 import { cleanupClearReset, q } from '$lib/testing/pages/dom';
@@ -59,7 +59,7 @@ import { renderReady } from '$lib/testing/pages/adminRolesRender';
 
 // Defaults the hoisted handles carried before they moved to the shared mocks.
 listJoinStatesMock.mockResolvedValue({});
-resolveOwnerTierMock.mockResolvedValue('error');
+resolveDbRightMock.mockResolvedValue('error');
 
 function adminSelect(container: HTMLElement): HTMLSelectElement {
 	const select = q<HTMLSelectElement>(container, 'admin-add-admin-select');

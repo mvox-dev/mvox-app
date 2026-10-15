@@ -26,21 +26,21 @@ const pageStub = vi.hoisted(() => ({ url: new URL('https://dev.mvox.eu/links') }
 vi.mock('$app/state', () => ({ page: pageStub }));
 
 import Page from './links/+page.svelte';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { listLinksMock } from '$lib/testing/mocks/links';
-import { cleanupClearAdmin, rowEls, rows, setAuthed } from '$lib/testing/pages/links';
+import { cleanupClearAdmin, memberRows, rowEls, setAuthed } from '$lib/testing/pages/links';
 import { q } from '$lib/testing/pages/dom';
 
 beforeEach(() => {
 	setAuthed();
-	listLinksMock.mockResolvedValue(rows());
+	listLinksMock.mockResolvedValue(memberRows());
 });
 
 afterEach(cleanupClearAdmin);
 
 describe('/links — list of stuff', () => {
 	it('puts the links list inside the list body, with no filter or view slot and no button for a member', async () => {
-		adminStore.set('not-admin');
+		dbEditRight.set('not-editor');
 		const { container } = render(Page);
 		await waitFor(() => {
 			expect(rowEls(container).length).toBeGreaterThan(0);

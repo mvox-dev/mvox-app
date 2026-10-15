@@ -33,7 +33,7 @@ vi.mock('$lib/collective/rosterNames', () => ({
 
 import ProfilePage from './profile/+page.svelte';
 import { m } from '$lib/paraglide/messages.js';
-import { adminStore, resetAdmin, type AdminState } from '$lib/nav/adminStore';
+import { dbEditRight, resetDbEditRight, type EditRightState } from '$lib/nav/dbRights';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
 import type { Collective } from '$lib/collectives/types';
@@ -86,7 +86,7 @@ async function renderAdminReady(
 ): Promise<HTMLElement> {
 	wireProfilesPerCollective();
 	h.readRosterNamesMock.mockResolvedValue(setting);
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	signInMember([COLLECTIVE_A]);
 	const { container } = render(ProfilePage);
 	await waitReadyShowing(container, 'Ada');
@@ -105,7 +105,7 @@ afterEach(() => {
 	cleanup();
 	localStorage.clear();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 });
 
 describe('/profile — roster-names control structure (admin view)', () => {
@@ -160,7 +160,7 @@ describe('/profile — roster-names control structure (admin view)', () => {
 		wireProfilesPerCollective();
 		listMyProfilesMock.mockRejectedValue(new Error('boom'));
 		h.readRosterNamesMock.mockResolvedValue({ dbEntityId: 'db-entity-a', showRealNames: false });
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		signInMember([COLLECTIVE_A]);
 		const { container } = render(ProfilePage);
 		await waitFor(() => expect(q(container, '[data-testid="profile-load-error"]')).not.toBeNull());
@@ -169,14 +169,14 @@ describe('/profile — roster-names control structure (admin view)', () => {
 });
 
 describe('/profile — roster-names visibility is admin-only (fail-closed)', () => {
-	for (const state of ['not-admin', 'loading', 'error'] as AdminState[]) {
-		it(`adminStore '${state}' → the control is ABSENT from the DOM (no disabled control, no text); it APPEARS when the store resolves 'admin'`, async () => {
+	for (const state of ['not-editor', 'loading', 'error'] as EditRightState[]) {
+		it(`dbEditRight '${state}' → the control is ABSENT from the DOM (no disabled control, no text); it APPEARS when the store resolves 'editor'`, async () => {
 			wireProfilesPerCollective();
 			h.readRosterNamesMock.mockResolvedValue({
 				dbEntityId: 'db-entity-a',
 				showRealNames: true
 			});
-			adminStore.set(state);
+			dbEditRight.set(state);
 			signInMember([COLLECTIVE_A]);
 			const { container } = render(ProfilePage);
 			await waitReadyShowing(container, 'Ada');
@@ -186,7 +186,7 @@ describe('/profile — roster-names visibility is admin-only (fail-closed)', () 
 			expect(q(container, 'label[for="profile-roster-names"]')).toBeNull();
 			expect(q(container, '#profile-roster-names')).toBeNull();
 
-			adminStore.set('admin');
+			dbEditRight.set('editor');
 			await waitFor(() => expect(rosterSelect(container)).not.toBeNull());
 			expect(rosterHint(container)).not.toBeNull();
 		});
@@ -219,7 +219,7 @@ describe('/profile — roster-names READ (integration: the page route drives the
 				? Promise.resolve({ dbEntityId: 'db-entity-b', showRealNames: false })
 				: staleRead.promise
 		);
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		signInMember([COLLECTIVE_A, COLLECTIVE_B]);
 		const { container } = render(ProfilePage);
 		await waitReadyShowing(container, 'Ada');
@@ -249,7 +249,7 @@ describe('/profile — roster-names READ (integration: the page route drives the
 				? heldB.promise
 				: Promise.resolve({ dbEntityId: 'db-entity-a', showRealNames: true })
 		);
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		signInMember([COLLECTIVE_A, COLLECTIVE_B]);
 		const { container } = render(ProfilePage);
 		await waitReadyShowing(container, 'Ada');
@@ -359,7 +359,7 @@ describe('/profile — roster-names WRITE (server-confirmed, never optimistic)',
 		);
 		const write = deferred<void>();
 		h.updateRosterNamesMock.mockReturnValueOnce(write.promise);
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		signInMember([COLLECTIVE_A, COLLECTIVE_B]);
 		const { container } = render(ProfilePage);
 		await waitReadyShowing(container, 'Ada');
@@ -393,7 +393,7 @@ describe('/profile — roster-names WRITE (server-confirmed, never optimistic)',
 		);
 		const write = deferred<void>();
 		h.updateRosterNamesMock.mockReturnValueOnce(write.promise);
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		signInMember([COLLECTIVE_A, COLLECTIVE_B]);
 		const { container } = render(ProfilePage);
 		await waitReadyShowing(container, 'Ada');
@@ -415,11 +415,11 @@ describe('/profile — roster-names WRITE (server-confirmed, never optimistic)',
 });
 
 describe('/profile — roster-names WRITE precondition (no confirmed entity id)', () => {
-	it('READ STILL IN FLIGHT: the control is rendered (adminStore landed first) but the select is DISABLED — a forced change writes nothing; it becomes usable when the read settles', async () => {
+	it('READ STILL IN FLIGHT: the control is rendered (dbEditRight landed first) but the select is DISABLED — a forced change writes nothing; it becomes usable when the read settles', async () => {
 		wireProfilesPerCollective();
 		const read = deferred<RosterNamesSetting>();
 		h.readRosterNamesMock.mockReturnValueOnce(read.promise);
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		signInMember([COLLECTIVE_A]);
 		const { container } = render(ProfilePage);
 		await waitReadyShowing(container, 'Ada');
@@ -446,7 +446,7 @@ describe('/profile — roster-names WRITE precondition (no confirmed entity id)'
 		try {
 			wireProfilesPerCollective();
 			h.readRosterNamesMock.mockRejectedValue(boom);
-			adminStore.set('admin');
+			dbEditRight.set('editor');
 			signInMember([COLLECTIVE_A]);
 			const { container } = render(ProfilePage);
 			await waitReadyShowing(container, 'Ada');

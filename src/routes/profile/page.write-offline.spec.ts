@@ -79,7 +79,7 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './+page.svelte';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { dbEditRight, resetDbEditRight } from '$lib/nav/dbRights';
 import { resetGate } from '$lib/profile/completionGate';
 import {
 	goOffline,
@@ -116,7 +116,7 @@ beforeEach(async () => {
 	h.updateRosterShowRealNamesMock.mockResolvedValue(undefined);
 	h.listLinkedIdentitiesMock.mockResolvedValue({ identities: [], truncated: false });
 	h.mintSelfLinkInviteMock.mockResolvedValue({ inviteToken: 'tok' });
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	await goOnline();
 });
 
@@ -124,7 +124,7 @@ afterEach(() => {
 	vi.useRealTimers();
 	cleanup();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 	resetGate();
 	resetOnLine();
 });

@@ -1,13 +1,14 @@
-<!-- One saved link: its anchor and admin controls, or its whole-field in-situ edit form. -->
+<!-- One saved link: its anchor and the controls its rights allow, or its in-situ edit form. -->
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
 	import type { LinkRow } from '$lib/links/linkData';
+	import type { LinkControls } from '$lib/links/linkRights';
 
 	interface Props {
 		row: LinkRow;
 		index: number;
 		rowCount: number;
-		isAdmin: boolean;
+		controls: LinkControls;
 		isOffline: boolean;
 		reorderPending: boolean;
 		editing: boolean;
@@ -26,7 +27,7 @@
 		row,
 		index,
 		rowCount,
-		isAdmin,
+		controls,
 		isOffline,
 		reorderPending,
 		editing,
@@ -104,46 +105,52 @@
 				{row.description}
 			</p>
 		{/if}
-		{#if isAdmin}
+		{#if controls.move || controls.edit || controls.remove}
 			<div class="flex gap-2">
-				<button
-					type="button"
-					data-testid="links-move-up"
-					disabled={index === 0 || reorderPending || isOffline}
-					aria-label={m.links_move_up()}
-					onclick={() => onmoveup(index)}
-					class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
-				>
-					↑
-				</button>
-				<button
-					type="button"
-					data-testid="links-move-down"
-					disabled={index === rowCount - 1 || reorderPending || isOffline}
-					aria-label={m.links_move_down()}
-					onclick={() => onmovedown(index)}
-					class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
-				>
-					↓
-				</button>
-				<button
-					type="button"
-					data-testid="links-edit"
-					disabled={isOffline}
-					onclick={() => onedit(row)}
-					class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
-				>
-					{m.links_edit()}
-				</button>
-				<button
-					type="button"
-					data-testid="links-remove"
-					disabled={isOffline}
-					onclick={() => onremove(row.id)}
-					class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
-				>
-					{m.links_remove()}
-				</button>
+				{#if controls.move}
+					<button
+						type="button"
+						data-testid="links-move-up"
+						disabled={index === 0 || reorderPending || isOffline}
+						aria-label={m.links_move_up()}
+						onclick={() => onmoveup(index)}
+						class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
+					>
+						↑
+					</button>
+					<button
+						type="button"
+						data-testid="links-move-down"
+						disabled={index === rowCount - 1 || reorderPending || isOffline}
+						aria-label={m.links_move_down()}
+						onclick={() => onmovedown(index)}
+						class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
+					>
+						↓
+					</button>
+				{/if}
+				{#if controls.edit}
+					<button
+						type="button"
+						data-testid="links-edit"
+						disabled={isOffline}
+						onclick={() => onedit(row)}
+						class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
+					>
+						{m.links_edit()}
+					</button>
+				{/if}
+				{#if controls.remove}
+					<button
+						type="button"
+						data-testid="links-remove"
+						disabled={isOffline}
+						onclick={() => onremove(row.id)}
+						class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
+					>
+						{m.links_remove()}
+					</button>
+				{/if}
 			</div>
 		{/if}
 	{/if}

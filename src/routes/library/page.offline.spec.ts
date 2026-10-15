@@ -515,7 +515,7 @@ describe('#434 slice 4 review round, finding 2 — the borrower sees her OWN loa
 });
 
 describe('#434 slice 4 review round 2, finding 1 — a LIBRARIAN sees her panel offline, not an alert', () => {
-	// The signed-in person owns the collective's library, so the feeds gated behind 'librarian'
+	// The signed-in person owns the collective's library, so the feeds gated behind 'editor'
 	// are exercised; `expectListing`'s no-alert assertion catches an uncached one.
 	function librarianEntu() {
 		return onlineEntu({ librarianPerson: PERSON });

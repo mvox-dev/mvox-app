@@ -2,14 +2,14 @@
 import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import { expect } from 'vitest';
 import Page from '../../../routes/roster/+page.svelte';
-import { adminStore, type AdminState } from '$lib/nav/adminStore';
+import { dbEditRight, type EditRightState } from '$lib/nav/dbRights';
 import { q } from './dom';
 import { setAuthedWithOneCollective, setAuthedWithTwoCollectives } from './roster';
 
-export async function renderRosterAs(admin: 'admin' | 'not-admin') {
+export async function renderRosterAs(admin: 'editor' | 'not-editor') {
 	const utils = render(Page);
 	setAuthedWithOneCollective();
-	adminStore.set(admin);
+	dbEditRight.set(admin);
 	await waitFor(() => expect(q(utils.container, 'section-toggle-unassigned')).not.toBeNull());
 	await fireEvent.click(q(utils.container, 'section-toggle-unassigned')!);
 	await waitFor(() => expect(q(utils.container, 'roster-row-m2')).not.toBeNull());
@@ -18,7 +18,7 @@ export async function renderRosterAs(admin: 'admin' | 'not-admin') {
 
 export async function renderArrangeReady(): Promise<HTMLElement> {
 	setAuthedWithOneCollective();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(q(container, 'roster-groups')).not.toBeNull();
@@ -32,7 +32,7 @@ export async function renderArrangeReady(): Promise<HTMLElement> {
 
 export async function renderGroupsRoster(): Promise<HTMLElement> {
 	setAuthedWithTwoCollectives();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(q(container, 'section-toggle-unassigned')).not.toBeNull();
@@ -46,7 +46,7 @@ export async function renderGroupsRoster(): Promise<HTMLElement> {
 
 export async function renderInArrangeMode(): Promise<HTMLElement> {
 	setAuthedWithTwoCollectives();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(q(container, 'roster-groups')).not.toBeNull();
@@ -58,9 +58,9 @@ export async function renderInArrangeMode(): Promise<HTMLElement> {
 	return container;
 }
 
-export async function renderReady(admin: AdminState = 'admin') {
+export async function renderReady(admin: EditRightState = 'editor') {
 	setAuthedWithOneCollective();
-	adminStore.set(admin);
+	dbEditRight.set(admin);
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(container.querySelector('[data-testid="roster-groups"]')).not.toBeNull();

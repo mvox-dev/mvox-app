@@ -42,7 +42,7 @@ function expectTightlyMarked(root: Element, needle: string, where: string) {
 }
 
 describe('#388 — the collapsed row\'s name and email and the sr-only edit label\'s name carry the capture marker', () => {
-	it.each(['admin', 'not-admin'] as const)('%s: roster-row-name and roster-row-email each render their value inside a tight marker', async (role) => {
+	it.each(['editor', 'not-editor'] as const)('%s: roster-row-name and roster-row-email each render their value inside a tight marker', async (role) => {
 		const { container } = await renderRosterAs(role);
 		for (const [memberId, name, email] of [
 			['m1', 'Alice Alto', 'alice@example.com'],
@@ -59,7 +59,7 @@ describe('#388 — the collapsed row\'s name and email and the sr-only edit labe
 	});
 
 	it('admin: the card activator\'s sr-only label keeps its static copy OUTSIDE the marker and the member\'s name INSIDE it', async () => {
-		const { container } = await renderRosterAs('admin');
+		const { container } = await renderRosterAs('editor');
 		const card = q(container, 'roster-row-card-m2')!;
 		expect(card).not.toBeNull();
 		const label = card.querySelector('.sr-only');

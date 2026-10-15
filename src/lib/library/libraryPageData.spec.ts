@@ -22,7 +22,7 @@ import {
 	loadLibraryEditions,
 	loadLibraryCopies,
 	refreshLibraryLendings,
-	loadLibrarianState,
+	loadLibraryEditRight,
 	loadLibrarianPickers,
 	resolveWriteLibraryId
 } from './libraryPageData';
@@ -257,8 +257,8 @@ describe('#434 slice 4 review round 2, finding 1 — the librarian panel feeds a
 	});
 
 	it('the librarian STATE and its pickers restore together — the panel never resolves to a half-load', async () => {
-		expect(await loadLibrarianState(CFG, PERSON, online(LENT))).toEqual({
-			state: 'librarian',
+		expect(await loadLibraryEditRight(CFG, PERSON, online(LENT))).toEqual({
+			state: 'editor',
 			libraryId: LIBRARY
 		});
 		await loadLibrarianPickers(CFG, online(LENT));
@@ -266,8 +266,8 @@ describe('#434 slice 4 review round 2, finding 1 — the librarian panel feeds a
 
 		resetServedFromCache();
 		const stub = offline();
-		expect(await loadLibrarianState(CFG, PERSON, stub)).toEqual({
-			state: 'librarian',
+		expect(await loadLibraryEditRight(CFG, PERSON, stub)).toEqual({
+			state: 'editor',
 			libraryId: LIBRARY
 		});
 		await expect(loadLibrarianPickers(CFG, stub)).resolves.toBeDefined();
@@ -282,18 +282,18 @@ describe('#434 slice 4 review round 2, finding 2 — the WRITE parent is never c
 	});
 
 	it('resolveWriteLibraryId REJECTS offline even though the panel restores the same id', async () => {
-		expect(await loadLibrarianState(CFG, PERSON, online(LENT))).toEqual({
-			state: 'librarian',
+		expect(await loadLibraryEditRight(CFG, PERSON, online(LENT))).toEqual({
+			state: 'editor',
 			libraryId: LIBRARY
 		});
 		await flushReadCache();
 
-		expect((await loadLibrarianState(CFG, PERSON, offline())).libraryId).toBe(LIBRARY);
+		expect((await loadLibraryEditRight(CFG, PERSON, offline())).libraryId).toBe(LIBRARY);
 		await expect(resolveWriteLibraryId(CFG, offline())).rejects.toThrow('Failed to fetch');
 	});
 
 	it('it leaves servedFromCache alone — a write-path read never age-stamps the screen', async () => {
-		await loadLibrarianState(CFG, PERSON, online(LENT));
+		await loadLibraryEditRight(CFG, PERSON, online(LENT));
 		await flushReadCache();
 
 		resetServedFromCache();

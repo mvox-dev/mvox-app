@@ -4,7 +4,7 @@
 	import { reportProblem } from '$lib/problems/reportProblem';
 	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
-	import { adminStore } from '$lib/nav/adminStore';
+	import { dbEditRight } from '$lib/nav/dbRights';
 	import { readRosterNamesSetting } from '$lib/collective/rosterNames';
 	import type * as RosterNames from '$lib/collective/rosterNames';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
@@ -24,7 +24,7 @@
 	let rosterBusy = $state(false);
 	let rosterStatus = $state('');
 	let rosterError = $state<string | null>(null);
-	const admin = $derived($adminStore);
+	const editRight = $derived($dbEditRight);
 
 	// Bound so reset() can force the DOM back even when the reset lands the same boolean:
 	// Svelte's `value={…}` effect only re-runs on a signal change.
@@ -95,7 +95,7 @@
 
 <!-- App chrome, not gated on route-load status. Non-admins get no DOM; an admin gets a
 	disabled select until the setting's entity id is confirmed, since nothing can be saved. -->
-{#if admin === 'admin'}
+{#if editRight === 'editor'}
 	<div class="flex flex-col items-start gap-1">
 		<label for="profile-roster-names" class="text-sm text-ink-2">
 			{m.profile_roster_names_label()}

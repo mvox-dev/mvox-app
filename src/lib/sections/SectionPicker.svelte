@@ -13,6 +13,8 @@
 		// Kept apart from selectedIds: what this card draws vs what she holds. One list for both
 		// offered her other held section as free, and choosing it posted a duplicate `_parent`.
 		renderIds: string[];
+		// Sections Entu lets her be put in or taken out of (`_expander` or better on the section).
+		expandableIds: Set<string>;
 		busy: boolean;
 		onassign: (sectionId: string) => void;
 		onunassign: (sectionId: string) => void;
@@ -25,6 +27,7 @@
 		sections,
 		selectedIds,
 		renderIds,
+		expandableIds,
 		busy,
 		onassign,
 		onunassign,
@@ -34,6 +37,7 @@
 	let blankOpen = $state(false);
 
 	const flatSections = $derived(flattenSections(sections));
+	const offered = $derived(flatSections.filter((node) => expandableIds.has(node.id)));
 
 	// `<option>` can't be styled portably, so depth is an NBSP indent in the label text.
 	function optionLabel(node: SectionNode): string {
@@ -42,10 +46,10 @@
 
 	// A held select keeps its own section; exclusion reads the whole membership, not the card.
 	function heldOptions(thisId: string): SectionNode[] {
-		return flatSections.filter((node) => node.id === thisId || !selectedIds.includes(node.id));
+		return offered.filter((node) => node.id === thisId || !selectedIds.includes(node.id));
 	}
 
-	const blankOptions = $derived(flatSections.filter((node) => !selectedIds.includes(node.id)));
+	const blankOptions = $derived(offered.filter((node) => !selectedIds.includes(node.id)));
 
 	// Also closes the blank picker when the membership grows from elsewhere, e.g. another card.
 	let prevSelectedCount = -1;
@@ -75,7 +79,7 @@
 </script>
 
 <div class="flex flex-col items-end gap-1" aria-busy={busy}>
-	{#each renderIds as sectionId (sectionId)}
+	{#each renderIds.filter((id) => expandableIds.has(id)) as sectionId (sectionId)}
 		{@const node = flatSections.find((n) => n.id === sectionId)}
 		<select
 			data-testid="section-picker-select-{memberId}-{sectionId}"
@@ -118,7 +122,7 @@
 				<option value={opt.id}>{optionLabel(opt)}</option>
 			{/each}
 		</select>
-	{:else}
+	{:else if offered.length > 0 || flatSections.length === 0}
 		<button
 			type="button"
 			data-testid="section-picker-add-{memberId}"

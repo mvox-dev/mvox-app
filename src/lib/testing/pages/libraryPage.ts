@@ -19,7 +19,7 @@ import {
 	returnLendingMock
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
-import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
 
 export function useLibraryPage(): void {
 	afterEach(() => {
@@ -31,7 +31,7 @@ export function useLibraryPage(): void {
 		resolveBorrowerNamesMock.mockReset();
 		resolveCopyNamesMock.mockReset();
 		resolveCopyChainsMock.mockReset();
-		resolveLibrarianMock.mockReset();
+		resolveLibraryEditRightMock.mockReset();
 		resolveMyLibraryIdMock.mockReset();
 		findMyMemberIdMock.mockReset();
 		listAllEditionsMock.mockReset();

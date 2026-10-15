@@ -2,8 +2,8 @@
 import { cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { expect, vi } from 'vitest';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { resolveMyLibraryId } from '$lib/library/librarianStore';
-import { resetAdmin } from '$lib/nav/adminStore';
+import { resolveMyLibraryId } from '$lib/library/libraryRights';
+import { resetDbEditRight } from '$lib/nav/dbRights';
 import { resetAppState } from '$lib/testing/appReset';
 import { testCfg } from '$lib/testing/entuFetchKit';
 import { toListRead } from '$lib/testing/listReadFixtures';
@@ -139,7 +139,7 @@ export function cleanupResetCreateSectionMocks(): void {
 	deleteMock.mockReset();
 	resolveDatabaseEntityIdMock.mockReset();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 }
 
 export function cleanupUnstubResetRoster(): void {
@@ -147,7 +147,7 @@ export function cleanupUnstubResetRoster(): void {
 	vi.unstubAllGlobals();
 	loadRosterMock.mockReset();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 }
 
 export function cleanupResetArrangeMocks(): void {
@@ -160,7 +160,7 @@ export function cleanupResetArrangeMocks(): void {
 	reorderMock.mockReset();
 	deleteMock.mockReset();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 }
 
 export function cleanupResetReparentMocks(): void {
@@ -174,7 +174,7 @@ export function cleanupResetReparentMocks(): void {
 	deleteMock.mockReset();
 	reparentMock.mockReset();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 }
 
 export function cleanupResetRenameMocks(): void {
@@ -189,14 +189,14 @@ export function cleanupResetRenameMocks(): void {
 	reparentMock.mockReset();
 	renameMock.mockReset();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 }
 
 export function cleanupClearResetAdmin(): void {
 	cleanup();
 	vi.clearAllMocks();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 }
 
 export function seedCreateSectionMocks(): void {

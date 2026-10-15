@@ -27,7 +27,7 @@ const pageStub = vi.hoisted(() => ({ url: new URL('https://dev.mvox.eu/links') }
 vi.mock('$app/state', () => ({ page: pageStub }));
 
 import Page from './links/+page.svelte';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import {
 	createLinkMock,
 	deleteLinkMock,
@@ -35,7 +35,7 @@ import {
 	reorderLinksMock,
 	updateLinkMock
 } from '$lib/testing/mocks/links';
-import { cleanupClearAdmin, rowEls, rowNames, rows, setAuthed } from '$lib/testing/pages/links';
+import { cleanupClearAdmin, memberRows, rowEls, rowNames, rows, setAuthed } from '$lib/testing/pages/links';
 import { q, qa } from '$lib/testing/pages/dom';
 import { CFG } from '$lib/testing/pages/roster';
 
@@ -50,8 +50,9 @@ beforeEach(() => {
 
 afterEach(cleanupClearAdmin);
 
-async function renderReady(tier: 'admin' | 'not-admin') {
-	adminStore.set(tier);
+async function renderReady(tier: 'editor' | 'not-editor') {
+	if (tier === 'not-editor') listLinksMock.mockResolvedValue(memberRows());
+	dbEditRight.set(tier);
 	const utils = render(Page);
 	await waitFor(() => {
 		expect(rowEls(utils.container).length).toBeGreaterThan(0);
@@ -61,13 +62,13 @@ async function renderReady(tier: 'admin' | 'not-admin') {
 
 describe('#256 — the list members read: stable order, real anchors, urls verbatim', () => {
 	it('renders every link as a row inside links-list, in the order the data module returns (the stable display_order order)', async () => {
-		const { container } = await renderReady('not-admin');
+		const { container } = await renderReady('not-editor');
 		expect(q(container, 'links-list')).not.toBeNull();
 		expect(rowNames(container)).toEqual(['Salvestused', 'Scores', 'Website']);
 	});
 
 	it('each row carries a REAL anchor: href is the stored string VERBATIM (a schemeless url stays schemeless — no https:// prepended), target=_blank, rel has noopener AND noreferrer', async () => {
-		const { container } = await renderReady('not-admin');
+		const { container } = await renderReady('not-editor');
 		const anchors = rowEls(container).map((r) =>
 			r.querySelector<HTMLAnchorElement>('[data-testid="links-row-url"]')
 		);
@@ -86,7 +87,7 @@ describe('#256 — the list members read: stable order, real anchors, urls verba
 	});
 
 	it('a link with NO description renders NO description node at all — not an empty element (#256 done-when 3)', async () => {
-		const { container } = await renderReady('not-admin');
+		const { container } = await renderReady('not-editor');
 		const [rec, scores, site] = rowEls(container);
 		expect(
 			rec.querySelector('[data-testid="links-row-description"]')?.textContent?.trim()
@@ -99,7 +100,7 @@ describe('#256 — the list members read: stable order, real anchors, urls verba
 
 	it('an empty collection renders the links-empty state; a failed load renders links-load-error', async () => {
 		listLinksMock.mockResolvedValue([]);
-		adminStore.set('not-admin');
+		dbEditRight.set('not-editor');
 		const empty = render(Page);
 		await waitFor(() => {
 			expect(q(empty.container, 'links-empty')).not.toBeNull();
@@ -118,7 +119,7 @@ describe('#256 — the list members read: stable order, real anchors, urls verba
 
 describe('#256 — members cannot mutate: admin controls ABSENT from the DOM, not disabled', () => {
 	it('member tier: no add form, no per-row edit/remove/move controls, and links-list contains NO button element at all', async () => {
-		const { container } = await renderReady('not-admin');
+		const { container } = await renderReady('not-editor');
 		for (const testid of [
 			'links-add-form',
 			'links-add-name',
@@ -135,8 +136,9 @@ describe('#256 — members cannot mutate: admin controls ABSENT from the DOM, no
 		expect(q(container, 'links-list')?.querySelectorAll('button').length).toBe(0);
 	});
 
-	it("adminStore 'loading' fails CLOSED — no admin control renders before the tier is known", async () => {
-		adminStore.set('loading');
+	it("dbEditRight 'loading' fails CLOSED — no admin control renders before the tier is known", async () => {
+		listLinksMock.mockResolvedValue(memberRows());
+		dbEditRight.set('loading');
 		const { container } = render(Page);
 		await waitFor(() => {
 			expect(rowEls(container).length).toBeGreaterThan(0);
@@ -146,7 +148,7 @@ describe('#256 — members cannot mutate: admin controls ABSENT from the DOM, no
 	});
 
 	it('admin tier: the add form and per-row edit/remove/move controls are present — every one a native button/input', async () => {
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		expect(q(container, 'links-add-form')).not.toBeNull();
 		expect(q(container, 'links-add-name')?.tagName).toBe('INPUT');
 		expect(q(container, 'links-add-url')?.tagName).toBe('INPUT');
@@ -164,7 +166,7 @@ describe('#256 — members cannot mutate: admin controls ABSENT from the DOM, no
 
 describe('#374/#375 — add: url normalised at payload-build time, silently', () => {
 	it('a schemeless url goes to createLink with https:// prepended (#374), displayOrder = max existing + 1, then refreshes — and the form renders NO hint about the change', async () => {
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		const formTextBefore = q(container, 'links-add-form')!.textContent;
 		await fireEvent.input(q(container, 'links-add-name')!, { target: { value: 'Uus link' } });
 		await fireEvent.input(q(container, 'links-add-url')!, {
@@ -198,7 +200,7 @@ describe('#374/#375 — add: url normalised at payload-build time, silently', ()
 					resolveCreate = res;
 				})
 		);
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		await fireEvent.input(q(container, 'links-add-name')!, { target: { value: 'Salvestused' } });
 		await fireEvent.input(q(container, 'links-add-url')!, {
 			target: { value: 'https://dev.mvox.eu/salvestused?x=1#y' }
@@ -224,7 +226,7 @@ describe('#374/#375 — add: url normalised at payload-build time, silently', ()
 	});
 
 	it('a typed description rides along verbatim', async () => {
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		await fireEvent.input(q(container, 'links-add-name')!, { target: { value: 'A' } });
 		await fireEvent.input(q(container, 'links-add-url')!, { target: { value: 'https://a.ee' } });
 		await fireEvent.input(q(container, 'links-add-description')!, {
@@ -243,7 +245,7 @@ describe('#374/#375 — add: url normalised at payload-build time, silently', ()
 	});
 
 	it('empty url → NO create call; empty name → NO create call (non-empty stays the ONLY validation, run on what was TYPED, before the normaliser)', async () => {
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		await fireEvent.input(q(container, 'links-add-name')!, { target: { value: 'A' } });
 		await fireEvent.click(q(container, 'links-add-submit')!);
 		await fireEvent.input(q(container, 'links-add-name')!, { target: { value: '   ' } });
@@ -255,7 +257,7 @@ describe('#374/#375 — add: url normalised at payload-build time, silently', ()
 
 describe('#374/#375 — edit: whole-field, prefilled, url normalised at payload-build time', () => {
 	it('opens the row prefilled, submits updateLink with the full field set — the typed schemeless url goes with https:// prepended (#374), an emptied description goes as null', async () => {
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		const scoresRow = rowEls(container)[1];
 		await fireEvent.click(scoresRow.querySelector('[data-testid="links-edit"]')!);
 
@@ -289,7 +291,7 @@ describe('#374/#375 — edit: whole-field, prefilled, url normalised at payload-
 					resolveUpdate = res;
 				})
 		);
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		const scoresRow = rowEls(container)[1];
 		await fireEvent.click(scoresRow.querySelector('[data-testid="links-edit"]')!);
 		await fireEvent.input(q(container, 'links-edit-url')!, {
@@ -321,10 +323,12 @@ describe('#374/#375 — edit: whole-field, prefilled, url normalised at payload-
 				name: 'Salvestused',
 				url: '/salvestused?x=1#y',
 				description: null,
-				displayOrder: 1
+				displayOrder: 1,
+				ownerIds: ['person-p'],
+				editorIds: []
 			}
 		]);
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		await fireEvent.click(rowEls(container)[0].querySelector('[data-testid="links-edit"]')!);
 		const urlInput = q(container, 'links-edit-url') as HTMLInputElement;
 		expect(urlInput.value).toBe('/salvestused?x=1#y');
@@ -345,7 +349,7 @@ describe('#374/#375 — edit: whole-field, prefilled, url normalised at payload-
 	});
 
 	it('emptying the url blocks the save — no update call', async () => {
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		await fireEvent.click(rowEls(container)[0].querySelector('[data-testid="links-edit"]')!);
 		await fireEvent.input(q(container, 'links-edit-url')!, { target: { value: '   ' } });
 		await fireEvent.click(q(container, 'links-edit-save')!);
@@ -355,7 +359,7 @@ describe('#374/#375 — edit: whole-field, prefilled, url normalised at payload-
 
 describe('#256 — remove', () => {
 	it('the row control calls deleteLink with THAT row id and refreshes the list', async () => {
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		const listCallsBefore = listLinksMock.mock.calls.length;
 		await fireEvent.click(rowEls(container)[0].querySelector('[data-testid="links-remove"]')!);
 		await waitFor(() => {
@@ -371,7 +375,7 @@ describe('#256 — remove', () => {
 
 describe('#256 — reorder: native move up / move down per row, persisted via reorderLinks', () => {
 	it('move-down on the middle row calls reorderLinks with the FULL new id order', async () => {
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		await fireEvent.click(rowEls(container)[1].querySelector('[data-testid="links-move-down"]')!);
 		await waitFor(() => {
 			expect(reorderLinksMock).toHaveBeenCalledTimes(1);
@@ -381,7 +385,7 @@ describe('#256 — reorder: native move up / move down per row, persisted via re
 	});
 
 	it('move-up on the middle row calls reorderLinks with the swap toward the front', async () => {
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		await fireEvent.click(rowEls(container)[1].querySelector('[data-testid="links-move-up"]')!);
 		await waitFor(() => {
 			expect(reorderLinksMock).toHaveBeenCalledTimes(1);
@@ -390,7 +394,7 @@ describe('#256 — reorder: native move up / move down per row, persisted via re
 	});
 
 	it('boundary controls are disabled: move-up on the FIRST row and move-down on the LAST row fire NO write', async () => {
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		const first = rowEls(container)[0].querySelector<HTMLButtonElement>(
 			'[data-testid="links-move-up"]'
 		)!;
@@ -405,7 +409,7 @@ describe('#256 — reorder: native move up / move down per row, persisted via re
 	});
 
 	it('once the reorder settles the rows render in the new order', async () => {
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		const reordered = [rows()[1], rows()[0], rows()[2]].map((r, i) => ({
 			...r,
 			displayOrder: i + 1
@@ -426,7 +430,7 @@ describe('#335 — Links page controls are VISIBLE: every input and button carri
 	}
 
 	it("the add form's three inputs and its submit button carry a border class", async () => {
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		for (const testid of ['links-add-name', 'links-add-url', 'links-add-description']) {
 			expectBorder(container, testid);
 		}
@@ -434,7 +438,7 @@ describe('#335 — Links page controls are VISIBLE: every input and button carri
 	});
 
 	it('every per-row button — move-up, move-down, edit, remove — carries a border class', async () => {
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		for (const testid of ['links-move-up', 'links-move-down', 'links-edit', 'links-remove']) {
 			for (const el of qa(container, testid)) {
 				expect(el.getAttribute('class') ?? '', `${testid} class`).toContain('border');
@@ -444,7 +448,7 @@ describe('#335 — Links page controls are VISIBLE: every input and button carri
 	});
 
 	it("the in-situ edit form's three inputs and its save/cancel buttons carry a border class", async () => {
-		const { container } = await renderReady('admin');
+		const { container } = await renderReady('editor');
 		await fireEvent.click(rowEls(container)[0].querySelector('[data-testid="links-edit"]')!);
 		for (const testid of [
 			'links-edit-name',
@@ -460,7 +464,7 @@ describe('#335 — Links page controls are VISIBLE: every input and button carri
 	it('the load-error retry button carries a border class', async () => {
 		listLinksMock.mockRejectedValue(new Error('boom'));
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-		adminStore.set('admin');
+		dbEditRight.set('editor');
 		const { container } = render(Page);
 		await waitFor(() => {
 			expect(q(container, 'links-retry-load')).not.toBeNull();

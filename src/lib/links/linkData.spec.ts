@@ -12,6 +12,8 @@ interface RawLink {
 	url?: Array<{ string?: string }>;
 	description?: Array<{ string?: string }>;
 	display_order?: Array<{ number?: number }>;
+	_owner?: Array<{ reference?: string }>;
+	_editor?: Array<{ reference?: string }>;
 }
 
 function makeFetchMock(entities: RawLink[]) {
@@ -141,6 +143,25 @@ describe('listLinks — collective-root scoped read (#256)', () => {
 			return Promise.resolve(json({ error: 'nope' }, 500));
 		});
 		await expect(listLinks(cfg, fetchImpl)).rejects.toThrow(/500/);
+	});
+});
+
+describe('listLinks — each link carries its own rights (#914)', () => {
+	it('requests _owner,_editor and maps them off .reference, so a row control can check the link it writes', async () => {
+		const fetchImpl = makeFetchMock([
+			{
+				_id: 'l-1',
+				name: [{ string: 'A' }],
+				url: [{ string: 'a' }],
+				_owner: [{ reference: 'p-own' }],
+				_editor: [{ reference: 'p-ed' }, { reference: 'p-ed2' }]
+			}
+		]);
+		const [row] = await listLinks(cfg, fetchImpl);
+		const urls = (fetchImpl.mock.calls as Array<[string]>).map(([u]) => String(u));
+		expect(urls.find((u) => u.includes('_type.string=link'))).toMatch(/props=[^&]*_owner,_editor/);
+		expect(row.ownerIds).toEqual(['p-own']);
+		expect(row.editorIds).toEqual(['p-ed', 'p-ed2']);
 	});
 });
 

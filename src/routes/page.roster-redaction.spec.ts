@@ -20,7 +20,7 @@ vi.mock('$lib/roster/memberRecord', async (importOriginal) =>
 vi.mock('$lib/profile/profileData', async (importOriginal) =>
 	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
 );
-vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+vi.mock('$lib/library/libraryRights', async (importOriginal) =>
 	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
 );
 vi.mock('$lib/invite/inviteData', async (importOriginal) =>
@@ -41,7 +41,7 @@ vi.mock('$app/navigation', async () =>
 
 import Page from './roster/+page.svelte';
 import { REDACT_ATTR, REDACT_TOGGLE_ATTR } from '$lib/redact/redact';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { dbEditRight, resetDbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
@@ -119,13 +119,13 @@ afterEach(() => {
 	document.documentElement.removeAttribute(REDACT_TOGGLE_ATTR);
 	vi.clearAllMocks();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 });
 
 async function renderRosterAsAdmin() {
 	const utils = render(Page);
 	setAuthedWithOneCollective();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	await waitFor(() => expect(q(utils.container, 'section-toggle-unassigned')).not.toBeNull());
 	await fireEvent.click(q(utils.container, 'section-toggle-unassigned')!);
 	await waitFor(() => expect(q(utils.container, 'roster-row-m2')).not.toBeNull());

@@ -19,7 +19,7 @@ vi.mock('$lib/roster/rosterData', async () =>
 );
 // #434 — the write paths resolve the library id live through `resolveMyLibraryId`,
 // never off the cache-backed librarian resolution, so it is mocked here too.
-vi.mock('$lib/library/librarianStore', async () =>
+vi.mock('$lib/library/libraryRights', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule()
 );
 // T6.4/#73 — "my loans" resolves the viewer's own active member the same way
@@ -47,7 +47,7 @@ import {
 	returnLendingMock
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
-import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
 import { signInLibraryReader } from '$lib/testing/pages/library';
 import { useLibraryPage } from '$lib/testing/pages/libraryPage';
 
@@ -169,7 +169,7 @@ describe('#73 — librarian return', () => {
 		listEditionsMock.mockResolvedValue(toListRead([{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter' }]));
 		listCopiesMock.mockResolvedValue(toListRead([{ id: 'copy-2', name: 'Copy #2', copyNumber: 2 }]));
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 
 		const { container } = render(Page);
 
@@ -192,7 +192,7 @@ describe('#73 — librarian return', () => {
 		listEditionsMock.mockResolvedValue(toListRead([{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter' }]));
 		listCopiesMock.mockResolvedValue(toListRead([{ id: 'copy-2', name: 'Copy #2', copyNumber: 2 }]));
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 
 		const { container } = render(Page);
 
@@ -221,7 +221,7 @@ describe('#73 — librarian return', () => {
 		listEditionsMock.mockResolvedValue(toListRead([{ id: 'edition-1', name: '40-part original', publisher: 'Baerenreiter' }]));
 		listCopiesMock.mockResolvedValue(toListRead([{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' }]));
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: '40-part original', publisher: 'Baerenreiter', workId: 'work-1' }
 		]));

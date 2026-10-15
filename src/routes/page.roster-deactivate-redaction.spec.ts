@@ -8,7 +8,7 @@ vi.mock('$lib/roster/rosterData', async () =>
 vi.mock('$lib/roster/memberLifecycle', async () =>
 	(await import('$lib/testing/mocks/roster')).memberLifecycleModule({ archived: true })
 );
-vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+vi.mock('$lib/library/libraryRights', async (importOriginal) =>
 	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
 );
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
@@ -54,7 +54,7 @@ describe('#388 — capture redaction: inactive row name marked; no unexplained r
 
 	async function renderWithInactiveOpen() {
 		loadInactiveRosterMock.mockResolvedValue(toListRead(inactiveGone));
-		const utils = await renderRosterAs('admin');
+		const utils = await renderRosterAs('editor');
 		await waitFor(() =>
 			expect(utils.container.querySelector('[data-testid="roster-inactive-toggle"]')).not.toBeNull()
 		);

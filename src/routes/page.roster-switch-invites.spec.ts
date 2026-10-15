@@ -18,13 +18,13 @@ vi.mock('$lib/invite/inviteData', async (importOriginal) =>
 vi.mock('$lib/profile/linkedIdentities', async (importOriginal) =>
 	(await import('$lib/testing/mocks/admin')).joinStateDetailsModule(importOriginal)
 );
-vi.mock('$lib/nav/adminStore', async (importOriginal) =>
-	(await import('$lib/testing/mocks/admin')).ownerTierOverRealModule(importOriginal)
+vi.mock('$lib/nav/dbRights', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).dbRightOverRealModule(importOriginal)
 );
 vi.mock('$lib/roster/memberRecord', async (importOriginal) =>
 	(await import('$lib/testing/mocks/roster')).memberRecordModule(importOriginal)
 );
-vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+vi.mock('$lib/library/libraryRights', async (importOriginal) =>
 	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
 );
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
@@ -41,13 +41,13 @@ vi.mock('$app/navigation', async () =>
 );
 
 import Page from './roster/+page.svelte';
-import { adminStore } from '$lib/nav/adminStore';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import {
 	listJoinStateDetailsMock,
 	mintSelfLinkInviteMock,
-	resolveOwnerTierMock,
+	resolveDbRightMock,
 	withdrawInviteMock
 } from '$lib/testing/mocks/admin';
 import { loadMemberRecordMock, loadRosterMock } from '$lib/testing/mocks/roster';
@@ -76,7 +76,7 @@ beforeEach(() => {
 	listJoinStateDetailsMock.mockImplementation((_cfg: unknown, personIds: string[]) =>
 		Promise.resolve(Object.fromEntries(personIds.map((id) => [id, { state: 'absent' }])))
 	);
-	resolveOwnerTierMock.mockResolvedValue('owner');
+	resolveDbRightMock.mockResolvedValue('owner');
 	mintSelfLinkInviteMock.mockResolvedValue({ inviteToken: 'tok-a' });
 	withdrawInviteMock.mockResolvedValue(undefined);
 	loadMemberRecordMock.mockResolvedValue({ state: 'none' });
@@ -89,7 +89,7 @@ afterEach(() => {
 
 async function renderOnA(): Promise<HTMLElement> {
 	setAuthedWithTwoCollectives();
-	adminStore.set('admin');
+	dbEditRight.set('editor');
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(q(container, 'section-toggle-unassigned')).not.toBeNull();

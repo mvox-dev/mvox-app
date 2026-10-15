@@ -10,7 +10,7 @@
 		activeRoute,
 		completionLocked = false,
 		anonymous = false,
-		isAdmin = false,
+		canEditDb = false,
 		// No NAV_ENTRIES entry reads this now; it stays as NavContext's second visibility
 		// axis so a future entry can gate on it without re-threading the shell.
 		hasMultipleCollectives = false,
@@ -23,7 +23,7 @@
 		activeRoute: string;
 		completionLocked?: boolean;
 		anonymous?: boolean;
-		isAdmin?: boolean;
+		canEditDb?: boolean;
 		hasMultipleCollectives?: boolean;
 		toolbar?: Snippet;
 		toolbarLabel?: string;
@@ -31,7 +31,7 @@
 		children: Snippet;
 	} = $props();
 
-	const ctx: NavContext = $derived({ isAdmin, hasMultipleCollectives });
+	const ctx: NavContext = $derived({ canEditDb, hasMultipleCollectives });
 	const visibleEntries = $derived(entries.filter((e) => e.visible(ctx)));
 
 	// Completion-lock disables every entry but Profile. Out of the markup because the roving

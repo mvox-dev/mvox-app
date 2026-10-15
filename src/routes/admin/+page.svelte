@@ -12,8 +12,8 @@
 		updateCollectiveName,
 		type CollectiveNameMarker
 	} from '$lib/collectives/collectiveName';
-	import { resolveAdmin } from '$lib/nav/adminStore';
-	import { resolveLibrarian } from '$lib/library/librarianStore';
+	import { resolveDbEditRight } from '$lib/nav/dbRights';
+	import { resolveLibraryEditRight } from '$lib/library/libraryRights';
 	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
 	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
 	import { resolveNamesFromRoster } from '$lib/admin/rosterNames';
@@ -154,9 +154,9 @@
 			if (!isCurrent()) return false;
 			gatedDbEntityId = resolved;
 			if (!gatedDbEntityId) throw new Error('admin roles: no database entity visible');
-			const adminState = await resolveAdmin(c, target.personId, undefined, gatedDbEntityId);
+			const adminState = await resolveDbEditRight(c, target.personId, undefined, gatedDbEntityId);
 			if (adminState === 'error') throw new Error('admin roles: admin resolution failed');
-			return adminState !== 'not-admin';
+			return adminState !== 'not-editor';
 		},
 		async load({ cfg: c, selected: target, g, isCurrent }) {
 			const resolvedDbEntityId = gatedDbEntityId!;
@@ -164,12 +164,12 @@
 			loadSections(c, isCurrent);
 			loadMembers(c, isCurrent);
 			const [libResult, resolvedNameMarker] = await Promise.all([
-				resolveLibrarian(c, target.personId, undefined, resolvedDbEntityId),
+				resolveLibraryEditRight(c, target.personId, undefined, resolvedDbEntityId),
 				// A failed marker read is a load-error, never "no name".
 				resolveCollectiveNameMarker(c)
 			]);
 			if (!isCurrent()) return;
-			// resolveLibrarian turns a failed read into libraryId null, the same as "no library".
+			// resolveLibraryEditRight turns a failed read into libraryId null, the same as "no library".
 			if (libResult.state === 'error') throw new Error('admin roles: librarian resolution failed');
 			dbEntityId = resolvedDbEntityId;
 			libraryId = libResult.libraryId;

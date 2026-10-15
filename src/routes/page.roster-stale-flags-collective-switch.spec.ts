@@ -23,7 +23,7 @@ vi.mock('$lib/roster/memberLifecycle', async () =>
 vi.mock('$lib/invite/inviteData', async (importOriginal) =>
 	(await import('$lib/testing/mocks/admin')).inviteWritesModule(importOriginal, { withdraw: false })
 );
-vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+vi.mock('$lib/library/libraryRights', async (importOriginal) =>
 	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
 );
 vi.mock('$lib/collectives/discover', async () =>
@@ -40,8 +40,8 @@ vi.mock('$lib/roster/memberRecord', async (importOriginal) =>
 );
 
 import type { RosterRow } from '$lib/roster/rosterData';
-import { resolveMyLibraryId, resolveLibrarian } from '$lib/library/librarianStore';
-import { resetAdmin } from '$lib/nav/adminStore';
+import { resolveMyLibraryId, resolveLibraryEditRight } from '$lib/library/libraryRights';
+import { resetDbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
@@ -122,7 +122,7 @@ beforeEach(() => {
 	listInactiveMembersMock.mockResolvedValue(toListRead([]));
 	listDeactivateBlockersMock.mockResolvedValue([]);
 	vi.mocked(resolveMyLibraryId).mockResolvedValue('lib-1');
-	vi.mocked(resolveLibrarian).mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+	vi.mocked(resolveLibraryEditRight).mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 	loadMemberRecordMock.mockResolvedValue({ state: 'none' });
 });
 
@@ -130,7 +130,7 @@ afterEach(() => {
 	cleanup();
 	vi.resetAllMocks();
 	resetAppState();
-	resetAdmin();
+	resetDbEditRight();
 });
 
 function reorderStatusText(container: HTMLElement): string {
