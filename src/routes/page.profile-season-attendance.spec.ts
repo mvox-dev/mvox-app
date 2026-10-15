@@ -44,6 +44,7 @@ vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
 
 import Page from './profile/+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
+import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { resetAppState } from '$lib/testing/appReset';
 import { deferred } from '$lib/testing/entuFetchKit';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
@@ -96,6 +97,7 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	resetAppState();
+	resetGate();
 });
 
 describe('#920 — the season attendance card sits right below the /profile title', () => {
@@ -106,6 +108,16 @@ describe('#920 — the season attendance card sits right below the /profile titl
 		expect(h1.nextElementSibling?.getAttribute('data-testid')).toBe('season-summary');
 		expect(rate(container)).toBe('[attendance_season_rate {"attended":1,"total":2}]');
 		expect(listEventsMock).toHaveBeenCalledWith(expect.objectContaining({ db: 'sampledb' }), 's1');
+	});
+
+	it('a member whose profile has no name yet sees no card, until the completion check passes', async () => {
+		wireMemberSeason();
+		const { container } = renderProfile(Page, 'incomplete');
+		await waitFor(() => expect(listMyAttendanceMock).toHaveBeenCalled());
+		await flushMicrotasks();
+		expect(q(container, SUMMARY)).toBeNull();
+		completionGateStore.set('complete');
+		await waitFor(() => expect(q(container, SUMMARY)).not.toBeNull());
 	});
 
 	it('a person with no member record sees no card', async () => {
@@ -253,6 +265,7 @@ describe('#920 — the card follows the selected collective', () => {
 	it("switching shows the new collective's rate", async () => {
 		wirePerCollective();
 		signIn({ collectives: [COLLECTIVE_A, COLLECTIVE_B], selected: 'sampledb' });
+		completionGateStore.set('complete');
 		const { container } = render(Page);
 		await waitFor(() => expect(rate(container)).toContain('"attended":1'));
 		selectedCollectiveDbStore.set('bravura');
@@ -263,6 +276,7 @@ describe('#920 — the card follows the selected collective', () => {
 		const held = deferred<void>();
 		wirePerCollective(held.promise);
 		signIn({ collectives: [COLLECTIVE_A, COLLECTIVE_B], selected: 'sampledb' });
+		completionGateStore.set('complete');
 		const { container } = render(Page);
 		await waitFor(() => expect(listMyAttendanceMock).toHaveBeenCalledTimes(1));
 		selectedCollectiveDbStore.set('bravura');

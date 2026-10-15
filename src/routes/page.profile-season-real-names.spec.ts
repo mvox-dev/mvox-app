@@ -32,6 +32,7 @@ import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { realNamesWire, REAL_NAMES } from '$lib/testing/realNamesFence';
 import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
 import { resetAppState } from '$lib/testing/appReset';
+import { resetGate } from '$lib/profile/completionGate';
 import { listAttendanceMock } from '$lib/testing/mocks/events';
 import { EXPAND, renderWithSummary, wireMemberSeason } from '$lib/testing/pages/profileSeason';
 
@@ -49,6 +50,7 @@ afterEach(() => {
 	vi.clearAllMocks();
 	resetTypeIdCache();
 	resetAppState();
+	resetGate();
 });
 
 describe('#361 — season-rate table: both row branches mark the member name', () => {

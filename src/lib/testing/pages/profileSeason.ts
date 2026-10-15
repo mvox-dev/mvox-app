@@ -9,6 +9,7 @@ import { listEventsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
 import { agendaItem } from '$lib/testing/pages/agendaSummary';
 import { signIn } from '$lib/testing/session';
+import { completionGateStore, type GateState } from '$lib/profile/completionGate';
 
 export const SUMMARY = '[data-testid="season-summary"]';
 export const EXPAND = '[data-testid="season-summary-expand"]';
@@ -43,8 +44,9 @@ export function wireMemberSeason(opts: Parameters<typeof season>[0] = {}): void 
 	);
 }
 
-export function renderProfile(Page: Component) {
+export function renderProfile(Page: Component, gate: GateState = 'complete') {
 	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }] });
+	completionGateStore.set(gate);
 	return render(Page);
 }
 

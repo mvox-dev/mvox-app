@@ -2,6 +2,7 @@
 <script lang="ts">
 	import { reportProblem } from '$lib/problems/reportProblem';
 	import SeasonSummary from '$lib/components/attendance/SeasonSummary.svelte';
+	import { completionGateStore } from '$lib/profile/completionGate';
 	import type { MemberAttendanceRate } from '$lib/attendance/attendanceSummary';
 	import {
 		loadSeasonAttendance,
@@ -74,7 +75,8 @@
 	}
 </script>
 
-{#if card}
+<!-- As on the agenda: a member sees it once the profile-completion check passes. -->
+{#if card && $completionGateStore === 'complete'}
 	<SeasonSummary
 		myRate={card.myRate}
 		canExpand={card.canExpand}
