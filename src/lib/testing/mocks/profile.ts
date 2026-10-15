@@ -65,4 +65,9 @@ export function noLinkedIdentitiesModule() {
 	return { listLinkedIdentities: vi.fn().mockResolvedValue({ identities: [] }) };
 }
 
+// The season attendance card's reads, out of a spec that counts the admin section's own.
+export function noSeasonAttendanceModule() {
+	return { loadSeasonAttendance: vi.fn().mockResolvedValue(null), loadSeasonMemberRates: vi.fn() };
+}
+
 // (*MVOX:Josquin*)

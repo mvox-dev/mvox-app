@@ -11,6 +11,7 @@ export const getSeriesDefaultsMock = vi.fn();
 export const listRepertoireItemsMock = vi.fn();
 export const entuFetchMock = vi.fn();
 export const listSeasonsMock = vi.fn();
+export const listEventsMock = vi.fn();
 export const deleteEventMock = vi.fn();
 export const deleteEventSeriesMock = vi.fn();
 export const countSeriesOccurrencesMock = vi.fn();
@@ -66,6 +67,11 @@ export async function repertoireOverRealModule() {
 export async function entuSeasonsModule() {
 	const actual = await vi.importActual<object>('$lib/seasons/entuSeasons');
 	return { ...actual, listSeasons: listSeasonsMock };
+}
+
+export async function seasonReadsModule() {
+	const actual = await vi.importActual<object>('$lib/seasons/entuSeasons');
+	return { ...actual, listSeasonsOf: listSeasonsMock, listEvents: listEventsMock };
 }
 
 // (*MVOX:Josquin*)

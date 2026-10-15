@@ -12,11 +12,16 @@ export function isPastDetail(d: EventDetail): boolean {
 	return start !== null && start.getTime() < Date.now();
 }
 
+/** The end clock time, or null when there is no duration; past midnight carries no day mark. */
+export function endTime(start: Date, minutes: number, mode: TimeFormat): string | null {
+	if (!(minutes > 0)) return null;
+	return formatTime(tallinnHHMM(new Date(start.getTime() + minutes * 60_000)), mode);
+}
+
 export function timeRange(start: Date, minutes: number, mode: TimeFormat): string {
 	const startStr = formatTime(tallinnHHMM(start), mode);
-	if (minutes <= 0) return startStr;
-	const endStr = formatTime(tallinnHHMM(new Date(start.getTime() + minutes * 60_000)), mode);
-	return `${startStr}–${endStr}`;
+	const endStr = endTime(start, minutes, mode);
+	return endStr === null ? startStr : `${startStr}–${endStr}`;
 }
 
 export function scheduleRowTime(iso: string, mode: TimeFormat): string {

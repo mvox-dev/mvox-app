@@ -49,11 +49,9 @@ export function attendanceQueueHandlers(
 			ag.attendanceFailedByEvent = withFailedMark(byEvent, eventId, memberId, false);
 		},
 		onReconcile(eventId, memberId, entry) {
-			ag.seasonRatesLoaded = false;
 			if (memberId === ag.memberId) setMyAttendance(ag, eventId, entry);
 		},
 		onRevert(eventId, memberId, before) {
-			ag.seasonRatesLoaded = false;
 			const byEvent = ag.attendanceFailedByEvent;
 			ag.attendanceFailedByEvent = withFailedMark(byEvent, eventId, memberId, true);
 			if (memberId === ag.memberId) setMyAttendance(ag, eventId, before);

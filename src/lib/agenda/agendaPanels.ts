@@ -1,6 +1,5 @@
 import { untrack } from 'svelte';
 import { cfgFor } from '$lib/entu/cfg';
-import { deriveAllMemberRates } from '$lib/attendance/attendanceSummary';
 import { focusAfterRender } from '$lib/a11y/focusable';
 import type { AgendaItem } from '$lib/agenda/types';
 import { createAttendancePanelLoad, failedMarksFor } from '$lib/attendance/attendancePanelLoad';
@@ -19,8 +18,6 @@ export function isPanelReadStale(
 
 export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps: AgendaLoadDeps) {
 	const {
-		listAttendance,
-		loadActiveAndArchivedRosters,
 		listRepertoireItems,
 		listWorks,
 		listAllEditions,
@@ -72,48 +69,6 @@ export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps:
 				)
 			);
 		}
-	}
-
-	function handleExpandSeasonSummary() {
-		const selected = deps.selected();
-		if (!selected) return;
-		if (ag.seasonSummaryExpanded) {
-			ag.seasonSummaryExpanded = false;
-			return;
-		}
-		ag.seasonSummaryExpanded = true;
-		if (ag.seasonRatesLoaded) return;
-		const cfg = cfgFor(selected.db);
-		const events = ag.recentItems;
-		const thisRequestSnapshot = seq.requestId;
-		ag.seasonRatesLoading = true;
-		ag.seasonRatesError = false;
-		Promise.all([
-			loadActiveAndArchivedRosters(cfg),
-			Promise.all(events.map((event) => listAttendance(cfg, event.id)))
-		])
-			.then(([rosters, perEventRecords]) => {
-				if (thisRequestSnapshot !== seq.requestId) return;
-				const rosterRead = rosters.active;
-				const inactiveRead = rosters.inactive;
-				ag.seasonRatesPartial = rosterRead.truncated || inactiveRead.truncated;
-				ag.seasonMemberRates = deriveAllMemberRates(
-					perEventRecords.flat(),
-					rosterRead.items,
-					events.length,
-					inactiveRead.items
-				);
-				ag.seasonRatesLoaded = true;
-				ag.seasonRatesLoading = false;
-			})
-			.catch((e) => {
-				if (thisRequestSnapshot !== seq.requestId) return;
-				reportProblem({ area: 'agenda', action: 'loading the season attendance rates', error: e });
-				ag.seasonRatesLoading = false;
-				ag.seasonRatesError = true;
-				ag.seasonMemberRates = [];
-				ag.seasonRatesPartial = false;
-			});
 	}
 
 	function loadPanelRepertoire(cfg: EntuCfg, seasonId: string): void {
@@ -180,7 +135,6 @@ export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps:
 	return {
 		openAttendancePanel,
 		closeAttendancePanel,
-		handleExpandSeasonSummary,
 		loadPanelRepertoire
 	};
 }

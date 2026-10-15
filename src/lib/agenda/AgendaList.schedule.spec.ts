@@ -104,7 +104,7 @@ describe('#262 — upcoming rows: the compact times line', () => {
 		}
 	});
 
-	it("the line wears the row's secondary text style (the row-duration treatment: text-[10px] text-ink-2)", () => {
+	it("the line wears the row's secondary text style (the row-end treatment: text-[10px] text-ink-2)", () => {
 		const { container } = render(AgendaList, {
 			items: [R1],
 			scheduleItemsByEventId: { r1: R1_SCHEDULE }

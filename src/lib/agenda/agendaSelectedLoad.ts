@@ -14,7 +14,6 @@ type SelectedLoadParts = Pick<
 	| 'resetManagement'
 	| 'deriveSeasonCreateRights'
 	| 'loadDatabaseEntityRights'
-	| 'upgradeRepertoireManagement'
 	| 'loadWorksAndManagement'
 	| 'loadScheduleItems'
 > & { closeAttendancePanel: () => void };
@@ -43,7 +42,6 @@ export function createSelectedLoad(
 		resetManagement,
 		deriveSeasonCreateRights,
 		loadDatabaseEntityRights,
-		upgradeRepertoireManagement,
 		loadWorksAndManagement,
 		loadScheduleItems,
 		closeAttendancePanel
@@ -64,12 +62,6 @@ export function createSelectedLoad(
 		resetManagement();
 	}
 
-	function resetWorksIdle() {
-		resetWorks();
-		ag.libraryPickersLoading = false;
-		ag.worksRowsLoading = false;
-	}
-
 	function resetRosterCaches() {
 		ag.rosterCache = null;
 		ag.rosterRows = [];
@@ -84,12 +76,6 @@ export function createSelectedLoad(
 		ag.attendanceFailedByEvent = new Map();
 		ag.myAttendance = [];
 		ag.attendancePartial = false;
-		ag.seasonSummaryExpanded = false;
-		ag.seasonMemberRates = [];
-		ag.seasonRatesLoaded = false;
-		ag.seasonRatesLoading = false;
-		ag.seasonRatesError = false;
-		ag.seasonRatesPartial = false;
 		ag.seasons = [];
 		closeSeasonCreateForm();
 		deps.closeEventCreateForm();
@@ -109,7 +95,7 @@ export function createSelectedLoad(
 			ag.recentItems = [];
 			ag.attendanceEventIds = new Set();
 			ag.agendaTypeFilter = 'all';
-			resetWorksIdle();
+			resetWorks();
 			closeAttendancePanel();
 			resetRosterCaches();
 			resetSeasonManage();
@@ -239,10 +225,7 @@ export function createSelectedLoad(
 								ag.manageableSeasonRights = 'editor';
 							}
 							ag.seasonCreateRights = 'editor';
-							if (currentRightsInvisible && ag.seasonManageRights !== 'editor') {
-								ag.seasonManageRights = 'editor';
-								upgradeRepertoireManagement(worksCfg, eventIds, seasonId, thisRequest);
-							}
+							if (currentRightsInvisible) ag.seasonManageRights = 'editor';
 						});
 					}
 					ag.attendanceEventIds = new Set(
@@ -261,7 +244,7 @@ export function createSelectedLoad(
 				}
 				ag.recentItems = [];
 				ag.attendanceEventIds = new Set();
-				resetWorksIdle();
+				resetWorks();
 				resetSeasonManage();
 				ag.seasons = [];
 			});

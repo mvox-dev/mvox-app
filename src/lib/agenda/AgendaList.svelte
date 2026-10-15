@@ -10,6 +10,7 @@
 		longDayFormatter,
 		tallinnDayKey
 	} from '$lib/preferences/timeFormat';
+	import { endTime } from '$lib/events/eventTime';
 	import { rowLinkLabel, rsvpAnswerText } from '$lib/agenda/agendaRowParts';
 	import AgendaEmpty from '$lib/agenda/AgendaEmpty.svelte';
 	import EventTypeBadge from '$lib/agenda/EventTypeBadge.svelte';
@@ -17,8 +18,6 @@
 	import type { RsvpByEventId, RsvpStatus } from '$lib/rsvp/rsvpData';
 	import RsvpControl from '$lib/components/agenda/RsvpControl.svelte';
 	import RsvpNonMemberHint from '$lib/components/agenda/RsvpNonMemberHint.svelte';
-	import RepertoireElement from '$lib/agenda/RepertoireElement.svelte';
-	import type { WorkRow, WorksManage } from '$lib/repertoire/types';
 	import AttendanceSurface from '$lib/components/attendance/AttendanceSurface.svelte';
 	import type { AttendancePanel } from '$lib/attendance/types';
 	import AttendanceBadge, { type BadgeStatus } from '$lib/components/attendance/AttendanceBadge.svelte';
@@ -40,12 +39,6 @@
 		ontakeattendance?: (item: AgendaItem) => void;
 		attendancePanel?: AttendancePanel;
 		myAttendanceByEventId?: Record<string, BadgeStatus>;
-		seasonSummary?: Snippet;
-		worksByEventId?: Record<string, WorkRow[]>;
-		onpdfclick?: (fileId: string) => void;
-		heldFileIds?: ReadonlySet<string> | null;
-		partLinkDb?: string;
-		worksManage?: WorksManage;
 		emptyState?: Snippet;
 		recentEmptyState?: Snippet;
 		scheduleItemsByEventId?: Record<string, ScheduleItem[]>;
@@ -66,12 +59,6 @@
 		ontakeattendance,
 		attendancePanel,
 		myAttendanceByEventId = {},
-		seasonSummary,
-		worksByEventId = {},
-		onpdfclick,
-		heldFileIds = null,
-		partLinkDb,
-		worksManage,
 		emptyState,
 		recentEmptyState,
 		scheduleItemsByEventId = {},
@@ -95,32 +82,16 @@
 			.join(' · ');
 	}
 
-	function worksContext(eventId: string): 'repertoire' | 'programme' {
-		return worksByEventId[eventId]?.some((r) => r.kind === 'program') ? 'programme' : 'repertoire';
-	}
-	const NO_KEYS: ReadonlySet<string> = new Set<string>();
-	const NO_OPTIONS: never[] = [];
-	const NO_OPTIONS_BY_ID: Record<string, never[]> = {};
-
-	function eventRightsFor(eventId: string) {
-		return worksManage?.eventRightsByEventId[eventId] ?? 'not-editor';
-	}
-	function showWorks(eventId: string): boolean {
-		if (worksByEventId[eventId]?.length) return true;
-		if (!worksManage) return false;
-		return worksManage.seasonRights === 'editor' || eventRightsFor(eventId) === 'editor';
-	}
-
 	function badgeStatus(eventId: string): BadgeStatus {
 		return myAttendanceByEventId[eventId] ?? 'not-recorded';
 	}
 
 	const headerFmt = $derived(longDayFormatter());
 
-	const groups = $derived.by(() => {
+	function groupByDay(list: AgendaItem[], fmt: Intl.DateTimeFormat) {
 		const seen = new Map<string, AgendaItem[]>();
 		const order: string[] = [];
-		for (const item of items) {
+		for (const item of list) {
 			const d = new Date(item.startDatetime);
 			const key = tallinnDayKey(d);
 			if (!seen.has(key)) {
@@ -131,10 +102,18 @@
 		}
 		return order.map((key) => ({
 			key,
-			header: headerFmt.format(new Date(key + 'T12:00:00')), // noon avoids DST edge on the key date
+			header: fmt.format(new Date(key + 'T12:00:00')), // noon avoids DST edge on the key date
 			rows: seen.get(key)!
 		}));
-	});
+	}
+
+	const groups = $derived(groupByDay(items, headerFmt));
+	const recentGroups = $derived(
+		groupByDay(showAllRecent ? recentItems : recentItems.slice(0, 1), headerFmt)
+	);
+
+	const DATE_HEADER =
+		'flex items-baseline gap-2 pt-6 pb-2 text-base font-semibold tracking-wide text-ink uppercase';
 
 	const now = new Date();
 	const todayKey = tallinnDayKey(now);
@@ -171,34 +150,15 @@
 	}
 </script>
 
-{#snippet worksElement(item: AgendaItem)}
-	{#if showWorks(item.id)}
-		<RepertoireElement
-			rows={worksByEventId[item.id] ?? NO_OPTIONS}
-			{onpdfclick}
-			{heldFileIds}
-			{partLinkDb}
-			context={worksContext(item.id)}
-			seasonRights={worksManage?.seasonRights ?? 'not-editor'}
-			eventRights={eventRightsFor(item.id)}
-			pickableWorksList={worksManage?.pickableWorksList ?? NO_OPTIONS}
-			pickableWorksVisible={worksManage?.pickableWorksVisible}
-			pickableWorksPartial={worksManage?.pickableWorksPartial ?? false}
-			pickableEditions={worksManage?.pickableEditionsByEventId[item.id] ?? NO_OPTIONS}
-			pickableEditionsVisible={worksManage?.pickableEditionsVisibleByEventId[item.id]}
-			pickableEditionsPartial={worksManage?.pickableEditionsPartial ?? false}
-			editionOptionsByRowId={worksManage?.editionOptionsByRowId ?? NO_OPTIONS_BY_ID}
-			editionsResolvedWorkIds={worksManage?.editionsResolvedWorkIds ?? NO_KEYS}
-			pendingKeys={worksManage?.pendingKeys ?? NO_KEYS}
-			onaddwork={(workId) => worksManage?.onaddwork(workId)}
-			onstatuschange={(itemId, status) => worksManage?.onstatuschange(itemId, status)}
-			onpinedition={(itemId, editionId) => worksManage?.onpinedition(itemId, editionId)}
-			onremoveitem={(itemId) => worksManage?.onremoveitem(item.id, itemId)}
-			onmoveitem={(itemId, direction) => worksManage?.onmoveitem(item.id, itemId, direction)}
-			onaddprogramitem={(editionId, ordinal) =>
-				worksManage?.onaddprogramitem(item.id, editionId, ordinal)}
-		/>
-	{/if}
+{#snippet timeColumn(item: AgendaItem)}
+	{@const start = new Date(item.startDatetime)}
+	{@const end = endTime(start, item.durationMinutes, $timeFormatStore)}
+	<a href="/event/{item.id}" aria-hidden="true" tabindex="-1" class="flex flex-col font-mono">
+		<span data-testid="row-time" class="text-sm text-ink">{formatTime(tallinnHHMM(start), $timeFormatStore)}</span>
+		{#if end !== null}
+			<span data-testid="row-end" class="text-[10px] text-ink-2">–{end}</span>
+		{/if}
+	</a>
 {/snippet}
 
 {#snippet scheduleLine(item: AgendaItem)}
@@ -224,7 +184,6 @@
 	{#if item.location}
 		<span data-testid={locationTestid} class="truncate text-xs text-ink-2">{item.location}</span>
 	{/if}
-	{@render worksElement(item)}
 	{@render scheduleLine(item)}
 {/snippet}
 
@@ -236,89 +195,85 @@
 		>
 			{m.agenda_recent()}
 		</h2>
-		{#if seasonSummary && membership === 'member'}
-			{@render seasonSummary()}
-		{/if}
 		{#if recentItems.length === 0 && recentEmptyState}
 			{@render recentEmptyState()}
 		{/if}
-		{#each showAllRecent ? recentItems : recentItems.slice(0, 1) as item (item.id)}
-			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<!-- svelte-ignore a11y_click_events_have_key_events -->
-			<div
-				data-testid="agenda-recent-row-{item.id}"
-				class="grid grid-cols-[60px_1fr] gap-3 border-b border-dashed border-ink-5 py-2 last:border-b-0"
-				class:bg-highlight={item.id === justCreatedEventId}
-				onclick={(event) => openEventOnCardTap(event, item.id)}
-			>
-				<AgendaCreatedMark show={item.id === justCreatedEventId} />
-				<a href="/event/{item.id}" aria-hidden="true" tabindex="-1" class="flex flex-col font-mono">
-					<span data-testid="recent-row-date" class="text-[10px] text-ink-2">{tallinnDayKey(new Date(item.startDatetime))}</span>
-					<span class="text-sm text-ink">{formatTime(tallinnHHMM(new Date(item.startDatetime)), $timeFormatStore)}</span>
-					<span class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
-				</a>
-				<div class="flex min-w-0 flex-col gap-1">
-					<div class="flex items-start justify-between gap-2">
-						<div class="flex min-w-0 flex-col gap-1">{@render rowBody(item)}</div>
-						{#if conductorEventIds.has(item.id) && ontakeattendance && !(attendancePanel && attendancePanel.item.id === item.id)}
-							<TakeAttendanceButton eventName={item.name} onclick={() => ontakeattendance?.(item)} />
-						{/if}
-					</div>
-					{#if membership === 'member'}
-						{@const answer = rsvpAnswerText(rsvpByEventId[item.id]?.status)}
-						<div class="flex items-center gap-1">
-							<AttendanceBadge status={badgeStatus(item.id)} testid="attendance-badge-{item.id}" />
-							{#if answer}
-								<span
-									data-testid="attendance-answer-{item.id}"
-									class="font-mono text-[9px] tracking-wide text-ink-2">({answer})</span
-								>
+		{#each recentGroups as group (group.key)}
+			<div data-testid="agenda-date-header" class={DATE_HEADER}><span>{group.header}</span></div>
+			{#each group.rows as item (item.id)}
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<div
+					data-testid="agenda-recent-row-{item.id}"
+					class="grid grid-cols-[60px_1fr] gap-3 border-b border-dashed border-ink-5 py-2 last:border-b-0"
+					class:bg-highlight={item.id === justCreatedEventId}
+					onclick={(event) => openEventOnCardTap(event, item.id)}
+				>
+					<AgendaCreatedMark show={item.id === justCreatedEventId} />
+					{@render timeColumn(item)}
+					<div class="flex min-w-0 flex-col gap-1">
+						<div class="flex items-start justify-between gap-2">
+							<div class="flex min-w-0 flex-col gap-1">{@render rowBody(item)}</div>
+							{#if conductorEventIds.has(item.id) && ontakeattendance && !(attendancePanel && attendancePanel.item.id === item.id)}
+								<TakeAttendanceButton eventName={item.name} onclick={() => ontakeattendance?.(item)} />
 							{/if}
 						</div>
-					{/if}
-					{#if attendancePanel && attendancePanel.item.id === item.id}
-						<div data-card-controls>
-							<AttendanceSurface
-								item={attendancePanel.item}
-								members={attendancePanel.members}
-								attendanceByMemberId={attendancePanel.attendanceByMemberId}
-								rsvpByMemberId={attendancePanel.rsvpByMemberId}
-								loading={attendancePanel.loading}
-								error={attendancePanel.error}
-								pendingMemberIds={attendancePanel.pendingMemberIds}
-								failedMemberIds={attendancePanel.failedMemberIds}
-								savedMemberIds={attendancePanel.savedMemberIds}
-								membersPartial={attendancePanel.membersPartial}
-								ontoggle={attendancePanel.ontoggle}
-								onclose={attendancePanel.onclose}
-							/>
-						</div>
-					{/if}
-					{#if !showAllRecent && recentItems.length > 1}
-						<button
-							type="button"
-							data-testid="agenda-recent-show-more"
-							class="self-end rounded-md border border-ink px-2 py-1 font-mono text-[9px] tracking-wide text-ink hover:bg-ink hover:text-paper"
-							onclick={async (event) => {
-								const section = (event.currentTarget as HTMLElement).closest(
-									'[data-testid="agenda-recent"]'
-								);
-								const firstRevealedId = recentItems[1]?.id;
-								showAllRecent = true;
-								await tick();
-								if (!section || firstRevealedId === undefined) return;
-								section
-									.querySelector<HTMLElement>(
-										`[data-testid="agenda-recent-row-${firstRevealedId}"] a[aria-label]`
-									)
-									?.focus();
-							}}
-						>
-							{m.agenda_recent_show_more()}
-						</button>
-					{/if}
+						{#if membership === 'member'}
+							{@const answer = rsvpAnswerText(rsvpByEventId[item.id]?.status)}
+							<div class="flex items-center gap-1">
+								<AttendanceBadge status={badgeStatus(item.id)} testid="attendance-badge-{item.id}" />
+								{#if answer}
+									<span
+										data-testid="attendance-answer-{item.id}"
+										class="font-mono text-[9px] tracking-wide text-ink-2">({answer})</span
+									>
+								{/if}
+							</div>
+						{/if}
+						{#if attendancePanel && attendancePanel.item.id === item.id}
+							<div data-card-controls>
+								<AttendanceSurface
+									item={attendancePanel.item}
+									members={attendancePanel.members}
+									attendanceByMemberId={attendancePanel.attendanceByMemberId}
+									rsvpByMemberId={attendancePanel.rsvpByMemberId}
+									loading={attendancePanel.loading}
+									error={attendancePanel.error}
+									pendingMemberIds={attendancePanel.pendingMemberIds}
+									failedMemberIds={attendancePanel.failedMemberIds}
+									savedMemberIds={attendancePanel.savedMemberIds}
+									membersPartial={attendancePanel.membersPartial}
+									ontoggle={attendancePanel.ontoggle}
+									onclose={attendancePanel.onclose}
+								/>
+							</div>
+						{/if}
+						{#if !showAllRecent && recentItems.length > 1}
+							<button
+								type="button"
+								data-testid="agenda-recent-show-more"
+								class="self-end rounded-md border border-ink px-2 py-1 font-mono text-[9px] tracking-wide text-ink hover:bg-ink hover:text-paper"
+								onclick={async (event) => {
+									const section = (event.currentTarget as HTMLElement).closest(
+										'[data-testid="agenda-recent"]'
+									);
+									const firstRevealedId = recentItems[1]?.id;
+									showAllRecent = true;
+									await tick();
+									if (!section || firstRevealedId === undefined) return;
+									section
+										.querySelector<HTMLElement>(
+											`[data-testid="agenda-recent-row-${firstRevealedId}"] a[aria-label]`
+										)
+										?.focus();
+								}}
+							>
+								{m.agenda_recent_show_more()}
+							</button>
+						{/if}
+					</div>
 				</div>
-			</div>
+			{/each}
 		{/each}
 	</section>
 {/if}
@@ -351,7 +306,7 @@
 			<section data-testid="agenda-day-group" class="flex flex-col">
 				<div
 					data-testid="agenda-date-header"
-					class="flex items-baseline gap-2 pt-6 pb-2 text-base font-semibold tracking-wide text-ink uppercase"
+					class={DATE_HEADER}
 					class:bg-highlight={group.relative === 'today'}
 				>
 					{#if group.relative === 'today'}
@@ -371,10 +326,7 @@
 						onclick={(event) => openEventOnCardTap(event, item.id)}
 					>
 						<AgendaCreatedMark show={item.id === justCreatedEventId} />
-						<a href="/event/{item.id}" aria-hidden="true" tabindex="-1" class="flex flex-col font-mono">
-							<span data-testid="row-time" class="text-sm text-ink">{formatTime(tallinnHHMM(new Date(item.startDatetime)), $timeFormatStore)}</span>
-							<span data-testid="row-duration" class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
-						</a>
+						{@render timeColumn(item)}
 						<div class="flex min-w-0 flex-col gap-1">
 							{@render rowBody(item, 'row-location')}
 							{#if membership === 'non-member'}

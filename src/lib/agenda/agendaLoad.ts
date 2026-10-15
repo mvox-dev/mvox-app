@@ -1,13 +1,12 @@
 // Agenda data load: the page owns the state object and every write; reads from modules that
 // also write reach this file through `deps`, so the write-gate fence still sees them in the page.
-import type { MemberAttendanceRate } from '$lib/attendance/attendanceSummary';
 import type { CollectiveIdentity } from '$lib/collectives/store';
 import type { RosterRow } from '$lib/roster/rosterData';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { AgendaItem } from '$lib/agenda/types';
 import type { AttendanceStatus, MyAttendance } from '$lib/attendance/attendanceData';
 import type { AttendanceEntry } from '$lib/attendance/attendanceChangeQueue';
-import type { ManageRightsState, PickerOption, WorkRow } from '$lib/repertoire/types';
+import type { ManageRightsState, WorkRow } from '$lib/repertoire/types';
 import type { RepertoireItem } from '$lib/repertoire/repertoireData';
 import type { RsvpByEventId } from '$lib/rsvp/rsvpData';
 import type { ScheduleItem } from '$lib/schedule/scheduleData';
@@ -16,7 +15,6 @@ import type { Copy, Edition, Work } from '$lib/library/libraryData';
 import type { CANONICAL_EVENT_TYPES } from '$lib/events/eventTypeLabels';
 import type * as AttendanceData from '$lib/attendance/attendanceData';
 import type * as LibraryData from '$lib/library/libraryData';
-import type * as MemberLifecycle from '$lib/roster/memberLifecycle';
 import type * as RepertoireActions from '$lib/repertoire/repertoireActions';
 import type * as ManageRights from '$lib/repertoire/manageRights';
 import type * as RepertoireData from '$lib/repertoire/repertoireData';
@@ -25,7 +23,6 @@ import type * as ScheduleData from '$lib/schedule/scheduleData';
 import type { CollectiveState } from '$lib/collectives/types';
 import { createAgendaPanels } from '$lib/agenda/agendaPanels';
 import { createAgendaRosterCache } from '$lib/agenda/agendaRosterCache';
-import { createAgendaRowStore } from '$lib/agenda/agendaRowStore';
 import { createSelectedLoad } from '$lib/agenda/agendaSelectedLoad';
 import { createAgendaWorksLoad } from '$lib/agenda/agendaWorksLoad';
 
@@ -61,18 +58,6 @@ export function createAgendaLoadState() {
 		seasonCreateRights: 'not-editor' as ManageRightsState,
 		eventManageRights: {} as Record<string, ManageRightsState>,
 		seasons: [] as Season[],
-		seasonRepertoire: [] as RepertoireItem[],
-		libraryWorks: [] as Work[],
-		libraryEditions: [] as Edition[],
-		libraryWorksPartial: false,
-		libraryEditionsPartial: false,
-		scopedEditionsByWorkId: {} as Record<string, PickerOption[]>,
-		libraryPickersLoading: false,
-		libraryPickersLoadSucceeded: false,
-		worksRowsLoading: false,
-		managePendingKeys: new Set() as Set<string>,
-		manageError: false,
-		manageStatus: '',
 		panelRepertoire: [] as RepertoireItem[],
 		panelWorks: [] as Work[],
 		panelEditions: [] as Edition[],
@@ -82,12 +67,6 @@ export function createAgendaLoadState() {
 		panelRepertoireLoading: false,
 		panelRepertoireItemsOk: false,
 		panelWorksSourcesOk: false,
-		seasonSummaryExpanded: false,
-		seasonMemberRates: [] as MemberAttendanceRate[],
-		seasonRatesLoaded: false,
-		seasonRatesLoading: false,
-		seasonRatesError: false,
-		seasonRatesPartial: false,
 		attendanceItem: null as AgendaItem | null,
 		attendanceLoading: false,
 		attendanceError: false,
@@ -114,7 +93,6 @@ export type AgendaLoadState = ReturnType<typeof createAgendaLoadState>;
 
 export function createLoadCounters() {
 	return {
-		scopedEditionWorkIdsRequested: new Set<string>(),
 		panelRepertoireSeasonId: null as string | null,
 		requestId: 0,
 		pressureSweepRanAtOpen: false,
@@ -152,7 +130,6 @@ export interface AgendaLoadDeps {
 	listAllCopies: typeof LibraryData.listAllCopies;
 	listRepertoireItems: typeof RepertoireData.listRepertoireItems;
 	listScheduleItemsByEventId: typeof ScheduleData.listScheduleItemsByEventId;
-	loadActiveAndArchivedRosters: typeof MemberLifecycle.loadActiveAndArchivedRosters;
 	canMarkAttendance: typeof RepertoireActions.canMarkAttendance;
 	manageRightsFrom: typeof RepertoireActions.manageRightsFrom;
 	manageRightsOrNone: typeof ManageRights.manageRightsOrNone;
@@ -171,7 +148,6 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 		...roster,
 		loadForSelected,
 		...works,
-		rowStore: createAgendaRowStore(ag),
 		...panels
 	};
 }

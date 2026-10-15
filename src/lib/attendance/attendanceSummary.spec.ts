@@ -347,157 +347,18 @@ describe('+page — attendance badges on Recent rows (#85 TA.4)', () => {
 	});
 });
 
-describe('+page — season summary (#85 TA.4)', () => {
-	it('is ALWAYS visible at the top of the Recent section — zero attendance data shows "Attended 0 of N", never hides the block', async () => {
-		setMemberFixture();
-		listMyAttendanceMock.mockResolvedValue(toListRead([])); // no records at all
-
-		const { container } = render(Page);
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="season-summary"]')).not.toBeNull();
-		});
-
-		const summary = container.querySelector('[data-testid="season-summary"]')!;
-		expect(container.querySelector('[data-testid="agenda-recent"]')!.contains(summary)).toBe(true);
-		const firstRow = container.querySelector('[data-testid="agenda-recent-row-past-1"]')!;
-		expect(
-			// eslint-disable-next-line no-bitwise
-			summary.compareDocumentPosition(firstRow) & Node.DOCUMENT_POSITION_FOLLOWING
-		).toBeTruthy();
-		expect(summary.textContent).toContain('Attended 0 of 4 events');
-	});
-
-	it("a member sees her OWN rate — late counts as attended: 'Attended 2 of 4 events'", async () => {
-		setMemberFixture();
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="my-season-rate"]')).not.toBeNull();
-		});
-		expect(container.querySelector('[data-testid="my-season-rate"]')!.textContent).toContain(
-			'Attended 2 of 4 events'
-		);
-	});
-});
-
-describe('+page — conductor full-roster rates in the expanded summary (#85 TA.4)', () => {
-	it('a conductor can expand the season summary into per-member rates for the WHOLE roster', async () => {
+describe('+page — #920: the season attendance card left the agenda', () => {
+	it('a member with past events and a season grant sees no card and no "All members" here', async () => {
 		setConductorFixture();
 		const { container } = render(Page);
-
 		await waitFor(() => {
-			expect(container.querySelector('[data-testid="season-summary-expand"]')).not.toBeNull();
+			expect(container.querySelector('[data-testid="agenda-recent-row-past-1"]')).not.toBeNull();
 		});
-		await fireEvent.click(container.querySelector('[data-testid="season-summary-expand"]')!);
-
 		await waitFor(() => {
-			expect(container.querySelector('[data-testid="member-rate-m1"]')).not.toBeNull();
+			expect(container.querySelector('[data-testid="attendance-badge-past-1"]')).not.toBeNull();
 		});
-		const m1 = container.querySelector('[data-testid="member-rate-m1"]')!;
-		expect(m1.textContent).toContain('Alice Alto');
-		expect(m1.textContent).toContain('2 of 2');
-		const m2 = container.querySelector('[data-testid="member-rate-m2"]')!;
-		expect(m2).not.toBeNull();
-		expect(m2.textContent).toContain('Berta Bass');
-		expect(m2.textContent).toContain('0 of 2');
-	});
-
-	it('a NON-conductor has no expand affordance and no per-member rows — the roster view is unreachable', async () => {
-		setMemberFixture(); // person-p holds no conductor seat
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="season-summary"]')).not.toBeNull();
-		});
+		expect(container.querySelector('[data-testid="season-summary"]')).toBeNull();
 		expect(container.querySelector('[data-testid="season-summary-expand"]')).toBeNull();
-		expect(container.querySelector('[data-testid="member-rate-m1"]')).toBeNull();
-	});
-});
-
-describe('+page — F1 fix: cross-season records must not inflate season rate', () => {
-	it('records from a PREVIOUS season do not inflate the current season rate', async () => {
-		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({
-			upcoming: [],
-			recent: [
-				agendaItem('current-1', '2027-06-10T16:00:00.000Z'),
-				agendaItem('current-2', '2027-06-03T16:00:00.000Z')
-			],
-			seasonId: 's2',
-			seasonConductors: [], seasonOwners: [], seasonEditors: [], seasons: []
-		}));
-		findMyMemberIdMock.mockResolvedValue('m-me');
-		listMyAttendanceMock.mockResolvedValue(toListRead([
-			{ attendanceId: 'a1', eventId: 'current-1', status: 'present' },
-			{ attendanceId: 'a2', eventId: 'current-2', status: 'late' },
-			{ attendanceId: 'a3', eventId: 'old-1', status: 'present' },
-			{ attendanceId: 'a4', eventId: 'old-2', status: 'present' },
-			{ attendanceId: 'a5', eventId: 'old-3', status: 'late' }
-		]));
-		setAuthedWithOneCollective('person-p');
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="my-season-rate"]')).not.toBeNull();
-		});
-		expect(container.querySelector('[data-testid="my-season-rate"]')!.textContent).toContain(
-			'Attended 2 of 2 events'
-		);
-	});
-});
-
-describe('+page — season rate denominator covers ALL event types (#194/#202 review F1)', () => {
-	it('a mixed-type season counts every past event, and the sentence is event-neutral', async () => {
-		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({
-			upcoming: [],
-			recent: [
-				{ ...agendaItem('past-r1', '2026-06-10T16:00:00.000Z'), eventType: 'rehearsal' },
-				{ ...agendaItem('past-r2', '2026-06-03T16:00:00.000Z'), eventType: 'proov' },
-				{ ...agendaItem('past-c1', '2026-05-27T16:00:00.000Z'), eventType: 'concert' },
-				{ ...agendaItem('past-m1', '2026-05-20T16:00:00.000Z'), eventType: 'meeting' }
-			],
-			seasonId: 's1',
-			seasonConductors: [], seasonOwners: [], seasonEditors: [], seasons: []
-		}));
-		findMyMemberIdMock.mockResolvedValue('m-me');
-		listMyAttendanceMock.mockResolvedValue(toListRead([
-			{ attendanceId: 'a1', eventId: 'past-r1', status: 'present' },
-			{ attendanceId: 'a2', eventId: 'past-r2', status: 'late' },
-			{ attendanceId: 'a3', eventId: 'past-c1', status: 'present' },
-			{ attendanceId: 'a4', eventId: 'past-m1', status: 'absent' }
-		]));
-		setAuthedWithOneCollective('person-p');
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="my-season-rate"]')).not.toBeNull();
-		});
-		const rate = container.querySelector('[data-testid="my-season-rate"]')!;
-		expect(rate.textContent).toContain('Attended 3 of 4 events');
-		expect(rate.textContent).not.toContain('rehearsals');
-	});
-});
-
-describe('+page — F2 fix: season roster rates error state', () => {
-	it('a failed roster-rate load renders an error marker, not an empty member list', async () => {
-		setConductorFixture();
-		loadRosterMock.mockRejectedValue(new Error('network'));
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="season-summary-expand"]')).not.toBeNull();
-		});
-		await fireEvent.click(container.querySelector('[data-testid="season-summary-expand"]')!);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="season-rates-error"]')).not.toBeNull();
-		});
-		expect(container.querySelector('[data-testid="season-rates-error"]')!.textContent).toContain(
-			"Couldn't load member rates."
-		);
-		expect(container.querySelector('[data-testid="member-rate-m1"]')).toBeNull();
 	});
 });
 

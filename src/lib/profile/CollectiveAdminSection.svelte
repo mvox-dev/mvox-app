@@ -43,7 +43,7 @@
 
 	let { generation, activeContext, onSessionExpired }: Props = $props();
 
-	type Request = { cfg: EntuCfg; personId: string; g: number };
+	type Request = { cfg: EntuCfg; personId: string; g: number; dbEntityId?: Promise<string | null> };
 
 	const editRight = $derived($dbEditRight);
 	const selected = $derived($selectedCollectiveStore);
@@ -98,8 +98,13 @@
 	}
 
 	// The reads wait for the edit right: a member, or a right still loading, fetches nothing.
-	export function load(c: EntuCfg, personId: string, g: number): void {
-		request = { cfg: c, personId, g };
+	export function load(
+		c: EntuCfg,
+		personId: string,
+		g: number,
+		dbEntityId?: Promise<string | null>
+	): void {
+		request = { cfg: c, personId, g, dbEntityId };
 	}
 
 	$effect(() => {
@@ -188,7 +193,7 @@
 		cfg = r.cfg;
 		viewerId = r.personId;
 		try {
-			const resolvedDbEntityId = await resolveDatabaseEntityId(r.cfg);
+			const resolvedDbEntityId = await (r.dbEntityId ?? resolveDatabaseEntityId(r.cfg));
 			if (!isCurrent()) return;
 			if (!resolvedDbEntityId) throw new Error('admin roles: no database entity visible');
 			void rosterNames?.load(r.cfg, r.g, resolvedDbEntityId);
@@ -252,7 +257,7 @@
 					type="button"
 					data-testid="admin-roles-retry-load"
 					class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
-					onclick={() => request && void run(request)}
+					onclick={() => request && void run({ ...request, dbEntityId: undefined })}
 				>
 					{m.admin_roles_retry_load()}
 				</button>

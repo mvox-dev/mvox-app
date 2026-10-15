@@ -1,20 +1,14 @@
 <script lang="ts">
 	import type { ComponentProps } from 'svelte';
-	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import AgendaList from '$lib/agenda/AgendaList.svelte';
 	import AgendaMonthView from '$lib/agenda/AgendaMonthView.svelte';
 	import AgendaTypeFilter from '$lib/agenda/AgendaTypeFilter.svelte';
 	import AgendaViewToggle from '$lib/agenda/AgendaViewToggle.svelte';
 	import ListOfStuff from '$lib/components/ListOfStuff.svelte';
-	import SeasonSummary from '$lib/components/attendance/SeasonSummary.svelte';
 	import { agendaViewStore } from '$lib/preferences/agendaView';
 	import { completionGateStore } from '$lib/profile/completionGate';
-	import {
-		attendancePanelOf,
-		myAttendanceByEventIdOf,
-		mySeasonRateOf
-	} from '$lib/agenda/agendaWorksManage';
+	import { attendancePanelOf, myAttendanceByEventIdOf } from '$lib/agenda/agendaAttendanceView';
 	import type { AgendaLoadState } from '$lib/agenda/agendaLoad';
 	import type { AgendaPageView } from '$lib/agenda/agendaPageView.svelte';
 
@@ -26,10 +20,8 @@
 		selected,
 		pendingEventIds,
 		justCreatedEventId,
-		onpdfclick,
 		onrsvpchange,
 		ontakeattendance,
-		onexpandseasonsummary,
 		onattendancetoggle,
 		onattendanceclose
 	}: {
@@ -38,17 +30,14 @@
 		selected: { db: string };
 		pendingEventIds: Set<string>;
 		justCreatedEventId: string | null;
-		onpdfclick: ListProps['onpdfclick'];
 		onrsvpchange: ListProps['onrsvpchange'];
 		ontakeattendance: ListProps['ontakeattendance'];
-		onexpandseasonsummary: () => void;
 		onattendancetoggle: Parameters<typeof attendancePanelOf>[1];
 		onattendanceclose: Parameters<typeof attendancePanelOf>[2];
 	} = $props();
 
 	const attendancePanel = $derived(attendancePanelOf(ag, onattendancetoggle, onattendanceclose));
 	const myAttendanceByEventId = $derived(myAttendanceByEventIdOf(ag.myAttendance));
-	const mySeasonRate = $derived(mySeasonRateOf(ag));
 
 	const gatedMembership = $derived(
 		ag.membership === 'member' && $completionGateStore !== 'complete' ? 'loading' : ag.membership
@@ -101,10 +90,6 @@
 		recentItems={view.filteredRecentItems}
 		conductorEventIds={ag.attendanceEventIds}
 		{myAttendanceByEventId}
-		worksByEventId={ag.worksByEventId}
-		worksManage={view.worksManage}
-		heldFileIds={ag.heldFileIds}
-		partLinkDb={selected.db}
 		scheduleItemsByEventId={ag.scheduleByEventId}
 		{attendancePanel}
 		{justCreatedEventId}
@@ -112,23 +97,9 @@
 		recentEmptyState={ag.agendaTypeFilter !== 'all' && ag.recentItems.length > 0
 			? agendaRecentFilterEmptyState
 			: undefined}
-		{onpdfclick}
 		{onrsvpchange}
 		{ontakeattendance}
-	>
-		{#snippet seasonSummary()}
-			<SeasonSummary
-				myRate={mySeasonRate}
-				canExpand={ag.seasonManageRights === 'editor'}
-				expanded={ag.seasonSummaryExpanded}
-				memberRates={ag.seasonMemberRates}
-				membersPartial={ag.seasonRatesPartial}
-				loading={ag.seasonRatesLoading}
-				error={ag.seasonRatesError}
-				onexpand={onexpandseasonsummary}
-			/>
-		{/snippet}
-	</AgendaList>
+	/>
 	{/key}
 {:else}
 	<AgendaMonthView
@@ -139,11 +110,3 @@
 	/>
 {/if}
 </ListOfStuff>
-{#if ag.manageError}
-	<FormError data-testid="repertoire-manage-error" class="pt-2">
-		{m.repertoire_manage_error()}
-	</FormError>
-{/if}
-<div data-testid="repertoire-manage-status" role="status" aria-live="polite" class="sr-only">
-	{ag.manageStatus}
-</div>

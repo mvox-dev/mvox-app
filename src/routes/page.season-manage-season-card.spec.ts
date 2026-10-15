@@ -122,7 +122,7 @@ describe('season card #277 — one entry per manageable season, not a picker', (
 
 		expect(q(container, 'season-manage-panel')).toBeNull();
 		expect(listEventSeriesForSeasonMock).not.toHaveBeenCalled();
-		expect(listRepertoireItemsMock).toHaveBeenCalledWith(CFG, SEASON_ID);
+		expect(listRepertoireItemsMock).not.toHaveBeenCalled();
 	});
 
 	it('ONE manageable season: EXACTLY one entry — today’s #261 face, no new control, no picker (criterion 5)', async () => {

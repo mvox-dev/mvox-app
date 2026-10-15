@@ -178,30 +178,34 @@ const ROWS: Record<string, Row> = {
 		},
 		open: async (container, calls) => ({ ...(await openAttendancePanel(container, calls)), from: 0 })
 	},
-	'/ season summary': {
-		route: '/',
-		Page: AgendaPage,
+	'/profile season summary': {
+		route: '/profile',
+		Page: ProfilePage,
 		members: ['m1', 'm2', 'm9'],
 		arrange: () => {
-			loadFullAgendaMock.mockResolvedValue(
-				fullAgendaResult({
-					seasons: [],
-					upcoming: [],
-					recent: [
-						agendaItem('past-1', '2026-06-10T16:00:00.000Z'),
-						agendaItem('past-2', '2026-06-03T16:00:00.000Z')
-					],
-					seasonId: 's1',
-					seasonConductors: [],
-					seasonOwners: ['person-p'],
-					seasonEditors: []
-				})
-			);
 			findMyMemberIdMock.mockResolvedValue('m1');
 			listAttendanceMock.mockResolvedValue([
 				{ attendanceId: 'a1', memberId: 'm1', status: 'present' },
 				{ attendanceId: 'a2', memberId: 'm9', status: 'present' }
 			]);
+		},
+		extra: (url) => {
+			if (url.includes('_type.string=season')) {
+				return {
+					entities: [
+						{ _id: 's1', start_date: [{ date: '2026-01-01' }], _owner: [{ reference: 'person-p' }] }
+					]
+				};
+			}
+			if (url.includes('_type.string=event&')) {
+				return {
+					entities: [
+						{ _id: 'past-1', start_datetime: [{ datetime: '2026-06-10T16:00:00.000Z' }] },
+						{ _id: 'past-2', start_datetime: [{ datetime: '2026-06-03T16:00:00.000Z' }] }
+					]
+				};
+			}
+			return undefined;
 		},
 		open: async (container, calls) => {
 			await fireEvent.click(await until(container, 'season-summary-expand'));

@@ -105,13 +105,6 @@ describe('AgendaList — row content', () => {
 		expect(timeEl?.textContent?.trim()).toBe('12:00');
 	});
 
-	it('row contains duration via agenda_duration_min', () => {
-		const { container } = render(AgendaList, { items: itemSameDay });
-		const row = container.querySelector('[data-testid="agenda-row-r1"]');
-		const durationEl = row?.querySelector('[data-testid="row-duration"]');
-		expect(durationEl?.textContent).toContain('90 min');
-	});
-
 	it('row contains the rehearsal name', () => {
 		const { container } = render(AgendaList, { items: itemSameDay });
 		const row = container.querySelector('[data-testid="agenda-row-r1"]');
@@ -411,57 +404,6 @@ describe('AgendaList — per-event write-failure indicator (failedEventIds)', ()
 	});
 });
 
-describe('AgendaList — Works line per row (#90 TR.2)', () => {
-	const worksByEventId = {
-		r1: [
-			{
-				id: 'ri-1',
-				kind: 'repertoire' as const,
-				workId: 'work-1',
-				editionId: 'ed-1',
-				workName: 'Spem in alium',
-				composer: 'Thomas Tallis',
-				status: 'active' as const,
-				editionName: '40-part original',
-				ordinal: null,
-				fileId: '',
-				fileName: '',
-				externalLinks: [],
-				canBorrow: false,
-				notes: ''
-			}
-		]
-	};
-
-	it("renders the Works line inside the row whose event id has works — and the line names that row's works", () => {
-		const { container } = render(AgendaList, { items: itemSameDay, worksByEventId });
-		const row = container.querySelector('[data-testid="agenda-row-r1"]');
-		const line = row?.querySelector('[data-testid="works-line"]');
-		expect(line).not.toBeNull();
-		expect(line?.textContent).toContain('Spem in alium');
-	});
-
-	it('renders NO Works line for a row without works — the element is per-event, absent when empty', () => {
-		const { container } = render(AgendaList, { items: itemSameDay, worksByEventId });
-		const row2 = container.querySelector('[data-testid="agenda-row-r2"]');
-		expect(row2?.querySelector('[data-testid="works-line"]')).toBeNull();
-	});
-
-	it('renders NO Works line anywhere when worksByEventId is not provided at all', () => {
-		const { container } = render(AgendaList, { items: itemSameDay });
-		expect(container.querySelector('[data-testid="works-line"]')).toBeNull();
-	});
-
-	it('forwards onpdfclick down to the row\'s works element (the page signs the url at click time)', async () => {
-		const onpdfclick = vi.fn();
-		const works = { r1: [{ ...worksByEventId.r1[0], fileId: 'file-1' }] };
-		const { container } = render(AgendaList, { items: itemSameDay, worksByEventId: works, onpdfclick });
-		await fireEvent.click(container.querySelector('[data-testid="works-line"]')!);
-		await fireEvent.click(container.querySelector('[data-testid="work-link-pdf"]')!);
-		expect(onpdfclick).toHaveBeenCalledWith('file-1');
-	});
-});
-
 describe('AgendaList — event detail links (#101 TE.1)', () => {
 
 	it('upcoming row carries a link to /event/{id}', () => {
@@ -535,42 +477,111 @@ describe('AgendaList — event detail links (#101 TE.1)', () => {
 	});
 });
 
-describe('#207 rule 7 — ISO dates on tabular rows, narrative headers preserved', () => {
-	it('recent-row date cell renders the Tallinn ISO calendar day, while the day-group header for the same date keeps weekday + month name', () => {
-		const upcoming = [item('r1', '2026-06-15T09:00:00.000Z')];
-		const recent = [item('p1', '2026-06-15T16:00:00.000Z')];
-		const { container } = render(AgendaList, { items: upcoming, recentItems: recent });
+describe('#919 — cards show start and end time, no duration', () => {
+	const end = (c: HTMLElement, row: string) =>
+		c.querySelector(`[data-testid="${row}"] [data-testid="row-end"]`)?.textContent?.trim();
 
-		const cell = container.querySelector(
-			'[data-testid="agenda-recent-row-p1"] [data-testid="recent-row-date"]'
-		);
-		expect(cell).not.toBeNull();
-		expect(cell?.textContent?.trim()).toBe('2026-06-15');
-
-		const header = container.querySelector('[data-testid="agenda-date-header"]');
-		const headerText = header?.textContent ?? '';
-		expect(headerText).toMatch(/Monday/i);
-		expect(headerText).toMatch(/June/i);
-		expect(headerText).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+	it('upcoming and past cards: the end line is start + duration, and no duration shows', () => {
+		const recent = [item('p1', '2026-06-14T16:00:00.000Z', { durationMinutes: 150 })];
+		const { container } = render(AgendaList, { items: itemSameDay, recentItems: recent });
+		expect(end(container, 'agenda-row-r1')).toBe('–13:30');
+		expect(end(container, 'agenda-recent-row-p1')).toBe('–21:30');
+		expect(container.querySelector('[data-testid="row-duration"]')).toBeNull();
+		expect(container.textContent).not.toMatch(/\d+ min/);
 	});
 
-	it('DST edges: recent rows near the Tallinn transitions render the Tallinn ISO calendar day, not the UTC one', async () => {
+	it("12-hour mode: the end follows the person's format", async () => {
+		const { timeFormatStore } = await import('$lib/preferences/timeFormat');
+		timeFormatStore.set('ampm');
+		try {
+			const { container } = render(AgendaList, { items: itemSameDay });
+			expect(end(container, 'agenda-row-r1')).toBe('–1:30 PM');
+		} finally {
+			timeFormatStore.set('24h');
+		}
+	});
+
+	it('duration 0: the start time stands alone, no end line', () => {
+		const items = [item('r1', '2026-06-15T09:00:00.000Z', { durationMinutes: 0 })];
+		const { container } = render(AgendaList, { items });
+		const row = container.querySelector('[data-testid="agenda-row-r1"]')!;
+		expect(row.querySelector('[data-testid="row-time"]')?.textContent?.trim()).toBe('12:00');
+		expect(row.querySelector('[data-testid="row-end"]')).toBeNull();
+	});
+
+	it('crossing midnight: the end reads the clock time, with no next-day mark', () => {
+		const items = [item('r1', '2026-06-15T20:30:00.000Z', { durationMinutes: 60 })];
+		const { container } = render(AgendaList, { items });
+		expect(end(container, 'agenda-row-r1')).toBe('–00:30');
+	});
+});
+
+describe('#918 — past events sit under day headers, not beside a date', () => {
+	const recentHeaders = (c: HTMLElement) =>
+		[...c.querySelectorAll('[data-testid="agenda-recent"] [data-testid="agenda-date-header"]')].map(
+			(h) => h.textContent?.trim()
+		);
+	async function showAll(c: HTMLElement) {
+		await fireEvent.click(c.querySelector('[data-testid="agenda-recent-show-more"]')!);
+	}
+
+	it("a past card's left column holds its time, and no date", () => {
+		const recent = [item('p1', '2026-06-15T16:00:00.000Z')];
+		const { container } = render(AgendaList, { items: [], recentItems: recent });
+		const row = container.querySelector('[data-testid="agenda-recent-row-p1"]')!;
+		const column = row.querySelector('a[aria-hidden="true"]')!;
+		expect(column.querySelector('[data-testid="row-time"]')?.textContent?.trim()).toBe('19:00');
+		expect(column.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+		expect(column.textContent).not.toMatch(/June|15\./);
+		expect(row.querySelector('[data-testid="recent-row-date"]')).toBeNull();
+	});
+
+	it('one narrative header per Tallinn day, newest day first, each over its own cards', async () => {
 		const recent = [
-			item('spring', '2026-03-28T23:30:00.000Z'),
-			item('fall', '2026-10-24T22:30:00.000Z')
+			item('p1', '2026-06-15T16:00:00.000Z'),
+			item('p2', '2026-06-15T09:00:00.000Z'),
+			item('p3', '2026-06-10T16:00:00.000Z')
+		];
+		const { container } = render(AgendaList, { items: [], recentItems: recent });
+		await showAll(container);
+		expect(recentHeaders(container)).toEqual(['Monday, June 15', 'Wednesday, June 10']);
+		const order = [
+			...container.querySelectorAll(
+				'[data-testid="agenda-recent"] [data-testid="agenda-date-header"], [data-testid^="agenda-recent-row-"]'
+			)
+		].map((el) => el.getAttribute('data-testid'));
+		expect(order).toEqual([
+			'agenda-date-header',
+			'agenda-recent-row-p1',
+			'agenda-recent-row-p2',
+			'agenda-date-header',
+			'agenda-recent-row-p3'
+		]);
+	});
+
+	it('DST edges: the header names the Tallinn calendar day, not the UTC one', async () => {
+		const recent = [
+			item('fall', '2026-10-24T22:30:00.000Z'),
+			item('spring', '2026-03-28T23:30:00.000Z')
 		];
 		const { container } = render(AgendaList, { items: itemSameDay, recentItems: recent });
+		await showAll(container);
+		expect(recentHeaders(container)).toEqual(['Sunday, October 25', 'Sunday, March 29']);
+	});
 
-		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
-		expect(showMore, '#471 show-more button').not.toBeNull();
-		await fireEvent.click(showMore!);
-
-		const dateOf = (id: string) =>
-			container
-				.querySelector(`[data-testid="agenda-recent-row-${id}"] [data-testid="recent-row-date"]`)
-				?.textContent?.trim();
-		expect(dateOf('spring')).toBe('2026-03-29');
-		expect(dateOf('fall')).toBe('2026-10-25');
+	it('Recent carries no today/tomorrow pill and no gap-week marker', async () => {
+		const now = Date.now();
+		const recent = [
+			item('today', new Date(now - 60_000).toISOString()),
+			item('old', new Date(now - 60 * 24 * 3600_000).toISOString())
+		];
+		const { container } = render(AgendaList, { items: [], recentItems: recent });
+		await showAll(container);
+		const section = container.querySelector('[data-testid="agenda-recent"]')!;
+		expect(section.querySelectorAll('[data-testid="agenda-date-header"]').length).toBe(2);
+		expect(section.querySelector('[data-testid^="agenda-relative-"]')).toBeNull();
+		expect(section.querySelector('[data-testid="agenda-gap-marker"]')).toBeNull();
+		expect(section.querySelector('.bg-highlight')).toBeNull();
 	});
 });
 
@@ -603,19 +614,17 @@ describe('#251 — date-group headers render in the app language', () => {
 		});
 	});
 
-	it("app language 'et': grouping keys stay ISO — same-day items share one header and the recent-row date cell still reads '2026-06-15'", () => {
+	it("app language 'et': grouping keys stay ISO — same-day items share one header, past and upcoming alike", () => {
 		setAppLocale('et');
 		const recent = [item('p1', '2026-06-15T16:00:00.000Z')];
 		const { container } = render(AgendaList, { items: itemSameDay, recentItems: recent });
 
-		const headers = container.querySelectorAll('[data-testid="agenda-date-header"]');
-		expect(headers.length).toBe(1);
-		expect(
-			container
-				.querySelector('[data-testid="agenda-recent-row-p1"] [data-testid="recent-row-date"]')
-				?.textContent?.trim()
-		).toBe('2026-06-15');
-		expect(headers[0]?.textContent ?? '').not.toMatch(/\d{4}-\d{2}-\d{2}/);
+		const headers = (section: string) =>
+			container.querySelectorAll(`[data-testid="${section}"] [data-testid="agenda-date-header"]`);
+		expect(headers('agenda-list').length).toBe(1);
+		expect(headers('agenda-recent').length).toBe(1);
+		expect(headers('agenda-recent')[0]?.textContent?.trim()).toBe('esmaspäev, 15. juuni');
+		expect(headers('agenda-list')[0]?.textContent ?? '').not.toMatch(/\d{4}-\d{2}-\d{2}/);
 	});
 
 	it("app language 'et': formatter output is natural-case ('esmaspäev…') beneath #250's untouched CSS uppercase", () => {
@@ -630,7 +639,7 @@ describe('#251 — date-group headers render in the app language', () => {
 });
 
 describe('#220 — AM/PM preference on agenda times', () => {
-	it("'ampm': upcoming row-time renders '12:00 PM' and a 09:30 recent row renders '9:30 AM' — dates untouched (rule 7)", async () => {
+	it("'ampm': upcoming row-time renders '12:00 PM' and a 09:30 recent row renders '9:30 AM' — day headers untouched", async () => {
 		const { timeFormatStore } = await import('$lib/preferences/timeFormat');
 		timeFormatStore.set('ampm');
 		try {
@@ -651,11 +660,9 @@ describe('#220 — AM/PM preference on agenda times', () => {
 			expect(spanTexts).toContain('9:30 AM');
 			expect(spanTexts).not.toContain('09:30');
 
-			expect(
-				recentRow!.querySelector('[data-testid="recent-row-date"]')?.textContent?.trim()
-			).toBe('2026-06-15');
 			const headerText =
-				container.querySelector('[data-testid="agenda-date-header"]')?.textContent ?? '';
+				container.querySelector('[data-testid="agenda-recent"] [data-testid="agenda-date-header"]')
+					?.textContent ?? '';
 			expect(headerText).toMatch(/Monday/i);
 			expect(headerText).toMatch(/June/i);
 			expect(headerText).not.toMatch(/\b(AM|PM)\b/);
@@ -776,41 +783,6 @@ describe('#466 whole card opens the event', () => {
 		await fireEvent.click(row.querySelector('[data-testid="attendance-panel"]')!);
 		await fireEvent.click(row.querySelector('[data-testid="attendance-collapse-btn"]')!);
 		expect(onclose).toHaveBeenCalledTimes(1);
-		expect(gotoMock).not.toHaveBeenCalled();
-	});
-
-	it('(b) recent: the works-line toggle and the PDF button keep working and never navigate', async () => {
-		const onpdfclick = vi.fn();
-		const worksByEventId = {
-			p9: [
-				{
-					id: 'ri-1',
-					kind: 'repertoire' as const,
-					workId: 'work-1',
-					editionId: 'ed-1',
-					workName: 'Spem in alium',
-					composer: 'Thomas Tallis',
-					status: 'active' as const,
-					editionName: '40-part original',
-					ordinal: null,
-					fileId: 'file-1',
-					fileName: '',
-					externalLinks: [],
-					canBorrow: false,
-					notes: ''
-				}
-			]
-		};
-		const { container } = render(AgendaList, {
-			items: itemSameDay,
-			recentItems: [recentP9],
-			worksByEventId,
-			onpdfclick
-		});
-		const row = container.querySelector('[data-testid="agenda-recent-row-p9"]')!;
-		await fireEvent.click(row.querySelector('[data-testid="works-line"]')!);
-		await fireEvent.click(row.querySelector('[data-testid="work-link-pdf"]')!);
-		expect(onpdfclick).toHaveBeenCalledWith('file-1');
 		expect(gotoMock).not.toHaveBeenCalled();
 	});
 

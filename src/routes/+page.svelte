@@ -90,10 +90,8 @@
 		getSections,
 		loadForSelected,
 		refreshWorksAfterWrite,
-		rowStore,
 		openAttendancePanel,
 		closeAttendancePanel,
-		handleExpandSeasonSummary,
 		loadPanelRepertoire
 	} = createAgendaLoader(ag, seq, {
 		selected: () => selected,
@@ -119,22 +117,18 @@
 
 	const {
 		repertoireQueue,
-		rowHandlers,
-		manageCfg,
 		handlePanelAddWork,
 		handlePanelStatusChange,
 		handlePanelRemoveItem
 	} = createAgendaRepertoireQueues(ag, seq, panel, {
 		selected: () => selected,
 		isOffline: () => isOffline,
-		seasonManageOpen: () => seasonManageOpen,
 		switchGeneration: () => seasonManageSwitchGeneration,
 		refreshWorksAfterWrite,
-		rows: rowStore,
 		...agendaRepertoireSeams()
 	});
 
-	const view = createAgendaPageView(ag, seq, panel, { rowHandlers, manageCfg });
+	const view = createAgendaPageView(ag, panel);
 
 	let seasonManageOpen = $state(false);
 	let seasonManageSwitchGeneration = 0;
@@ -358,10 +352,8 @@
 							{selected}
 							{pendingEventIds}
 							{justCreatedEventId}
-							onpdfclick={handlePdfClick}
 							onrsvpchange={handleRsvpChange}
 							ontakeattendance={openAttendancePanel}
-							onexpandseasonsummary={handleExpandSeasonSummary}
 							onattendancetoggle={handleAttendanceToggle}
 							onattendanceclose={closeAttendancePanel}
 						/>

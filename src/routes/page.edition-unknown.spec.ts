@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-// The agenda's work-edition picker says unknown after a partial read.
+// The agenda's rsvp read and the edition-state wording; the picker states live on /event.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { messagePatterns } from '$lib/testing/messageFile.js';
-import { render, cleanup, fireEvent } from '@testing-library/svelte';
+import { render } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
@@ -35,29 +35,11 @@ vi.mock('$lib/attendance/attendanceData', async () =>
 import Page from './+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { listMyRsvpsMock, loadFullAgendaMock } from '$lib/testing/moduleHandles';
-import { pickerOptions, workRowOf } from '$lib/testing/pages/eventEdition';
-import {
-	REPERTOIRE_ITEMS,
-	cleanupUnstubResetAgendaRsvps,
-	future
-} from '$lib/testing/pages/agendaWorks';
+import { cleanupUnstubResetAgendaRsvps, future } from '$lib/testing/pages/agendaWorks';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 import { LOCALES, readMessages as localeMessages } from '$lib/testing/pages/profile';
 
-const SCOPED_WORK_2_EDITIONS = [
-	{
-		_id: 'ed-9',
-		name: [{ string: 'Peters, 1904' }],
-		_parent: [{ reference: 'work-2', entity_type: 'work' }]
-	}
-];
-
-function installWorld(
-	options: {
-		editionCount?: number;
-		scoped?: 'editions' | 'none' | 'fail' | 'partial-empty' | 'partial-some';
-	} = {}
-) {
+function installWorld() {
 	loadFullAgendaMock.mockResolvedValue(
 		fullAgendaResult({
 			seasons: [],
@@ -80,66 +62,14 @@ function installWorld(
 			seasonEditors: ['person-p']
 		})
 	);
-
-	const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-		const url = String(input);
-		const method = init?.method ?? 'GET';
-		if (method === 'DELETE') return json({ deleted: true });
-		if (method === 'POST') return json({ _id: 'new-1' });
-		if (url.includes('?props=status')) return json({ entity: { status: [{ _id: 'val-status' }] } });
-		if (url.includes('?props=edition')) return json({ entity: { edition: [] } });
-		if (url.includes('_type.string=entity')) return json({ entities: [{ _id: 'type-1' }] });
-		if (url.includes('_type.string=work')) {
-			return json({
-				entities: [
-					{ _id: 'work-1', name: [{ string: 'Spem in alium' }] },
-					{ _id: 'work-2', name: [{ string: 'Old warhorse' }] }
-				]
-			});
-		}
-		if (url.includes('_type.string=edition') && url.includes('_parent.reference=work-2')) {
-			if (options.scoped === 'fail') return json({ error: 'boom' }, 500);
-			if (options.scoped === 'partial-empty') return json({ count: 900, entities: [] });
-			if (options.scoped === 'partial-some')
-				return json({ count: 900, entities: SCOPED_WORK_2_EDITIONS });
-			return json({ entities: options.scoped === 'none' ? [] : SCOPED_WORK_2_EDITIONS });
-		}
-		if (url.includes('_type.string=edition')) {
-			return json({
-				...(options.editionCount === undefined ? {} : { count: options.editionCount }),
-				entities: [
-					{
-						_id: 'ed-1',
-						name: [{ string: '40-part original' }],
-						_parent: [{ reference: 'work-1', entity_type: 'work' }]
-					},
-					{
-						_id: 'ed-2',
-						name: [{ string: 'Bärenreiter urtext' }],
-						_parent: [{ reference: 'work-1', entity_type: 'work' }]
-					}
-				]
-			});
-		}
-		if (url.includes('_type.string=copy')) return json({ entities: [] });
-		if (url.includes('_type.string=program_item')) return json({ entities: [] });
-		if (url.includes('_type.string=repertoire_item')) return json({ entities: REPERTOIRE_ITEMS });
-		return json({ entities: [] });
-	});
-
-	vi.stubGlobal('fetch', fetchMock);
-	return fetchMock;
+	vi.stubGlobal('fetch', vi.fn(async () => json({ entities: [] })));
 }
 
-async function renderExpandedAsEditor() {
+async function renderAgenda() {
 	setAuthedWithOneCollective();
 	const rendered = render(Page);
 	await vi.waitFor(() => {
-		expect(rendered.container.querySelector('[data-testid="works-line"]')).not.toBeNull();
-	});
-	await fireEvent.click(rendered.container.querySelector('[data-testid="works-line"]')!);
-	await vi.waitFor(() => {
-		expect(rendered.container.querySelector('[data-testid="work-manage-row"]')).not.toBeNull();
+		expect(rendered.container.querySelector('[data-testid="agenda-row-ev-1"]')).not.toBeNull();
 	});
 	return rendered;
 }
@@ -151,183 +81,10 @@ beforeEach(() => {
 
 afterEach(cleanupUnstubResetAgendaRsvps);
 
-describe('#329 agenda — a zero-match row under a TRUNCATED edition read says UNKNOWN', () => {
-	it('the unknown state stands while the scoped read has not answered — never the known-absent wording', async () => {
-		const fetchMock = installWorld({ editionCount: 4000, scoped: 'fail' });
-		const { container } = await renderExpandedAsEditor();
-		await vi.waitFor(() => {
-			expect(
-				fetchMock.mock.calls.some((c) => String(c[0]).includes('_parent.reference=work-2'))
-			).toBe(true);
-		});
-		const li = workRowOf(container, 'Old warhorse');
-		expect(
-			li.querySelector('[data-testid="work-edition-unknown"]')!.textContent
-		).toContain('[repertoire_edition_unknown]');
-		expect(li.querySelector('[data-testid="work-no-edition"]')).toBeNull();
-		expect(li.textContent).not.toContain('[repertoire_no_edition]');
-		const picker = li.querySelector('[data-testid="work-edition-picker"]');
-		expect(picker, 'work-edition-picker on the unknown row').not.toBeNull();
-		expect((picker as HTMLElement).tagName).toBe('SELECT');
-		expect((picker as HTMLSelectElement).disabled).toBe(false);
-	});
-
-	it('reads that ONE work scoped and turns unknown into a fact — the picker names its editions', async () => {
-		const fetchMock = installWorld({ editionCount: 4000 });
-		const { container } = await renderExpandedAsEditor();
-		await vi.waitFor(() => {
-			expect(pickerOptions(workRowOf(container, 'Old warhorse')).length).toBe(2);
-		});
-		const scoped = fetchMock.mock.calls
-			.map((c) => String(c[0]))
-			.filter((u) => u.includes('_parent.reference=work-2'));
-		expect(scoped.length).toBe(1);
-		expect(scoped[0]).toContain('_type.string=edition');
-
-		const li = workRowOf(container, 'Old warhorse');
-		expect(pickerOptions(li)).toEqual([
-			{ value: '', label: '[repertoire_pin_edition_label]', disabled: false },
-			{ value: 'ed-9', label: 'Peters, 1904', disabled: false }
-		]);
-		expect(li.querySelector('[data-testid="work-edition-unknown"]')).toBeNull();
-		expect(li.querySelector('[data-testid="work-no-edition"]')).toBeNull();
-	});
-
-	it('a scoped read that comes back EMPTY and COMPLETE is a known absence — that read has a reachable cap', async () => {
-		const fetchMock = installWorld({ editionCount: 4000, scoped: 'none' });
-		const { container } = await renderExpandedAsEditor();
-		await vi.waitFor(() => {
-			expect(
-				workRowOf(container, 'Old warhorse').querySelector('[data-testid="work-no-edition"]')
-			).not.toBeNull();
-		});
-		const li = workRowOf(container, 'Old warhorse');
-		expect(li.querySelector('[data-testid="work-edition-unknown"]')).toBeNull();
-		expect(li.querySelector('[data-testid="work-edition-picker"]')).toBeNull();
-		expect(
-			fetchMock.mock.calls.some((c) => String(c[0]).includes('_parent.reference=work-2'))
-		).toBe(true);
-	});
-
-	it('a MATCHED row is untouched by the truncation — full option shape, no unknown wording (truncation poisons negatives, never positives)', async () => {
-		installWorld({ editionCount: 4000 });
-		const { container } = await renderExpandedAsEditor();
-		await vi.waitFor(() => {
-			expect(
-				workRowOf(container, 'Spem in alium').querySelector(
-					'[data-testid="work-edition-picker"]'
-				)
-			).not.toBeNull();
-		});
-		const li = workRowOf(container, 'Spem in alium');
-		expect(pickerOptions(li)).toEqual([
-			{ value: '', label: '[repertoire_pin_edition_label]', disabled: false },
-			{ value: 'ed-1', label: '40-part original', disabled: false },
-			{ value: 'ed-2', label: 'Bärenreiter urtext', disabled: false }
-		]);
-		expect(li.querySelector('[data-testid="work-edition-unknown"]')).toBeNull();
-		expect(li.querySelector('[data-testid="work-no-edition"]')).toBeNull();
-	});
-
-	it('a MATCHED row renders byte-identically under truncated and complete reads', async () => {
-		installWorld({ editionCount: 4000 });
-		const truncatedRender = await renderExpandedAsEditor();
-		await vi.waitFor(() => {
-			expect(
-				workRowOf(truncatedRender.container, 'Spem in alium').querySelector(
-					'[data-testid="work-edition-picker"]'
-				)
-			).not.toBeNull();
-		});
-		const truncatedHtml = workRowOf(truncatedRender.container, 'Spem in alium').outerHTML;
-		cleanup();
-		vi.unstubAllGlobals();
-
-		installWorld({});
-		const completeRender = await renderExpandedAsEditor();
-		await vi.waitFor(() => {
-			expect(
-				workRowOf(completeRender.container, 'Spem in alium').querySelector(
-					'[data-testid="work-edition-picker"]'
-				)
-			).not.toBeNull();
-		});
-		const completeHtml = workRowOf(completeRender.container, 'Spem in alium').outerHTML;
-
-		expect(truncatedHtml).toBe(completeHtml);
-	});
-});
-
-async function settleScopedRead(fetchMock: ReturnType<typeof installWorld>, urlFragment: string) {
-	await vi.waitFor(() => {
-		expect(fetchMock.mock.calls.some((c) => String(c[0]).includes(urlFragment))).toBe(true);
-	});
-	for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-describe("#329 review — the scoped read's OWN truncation is not a fact either", () => {
-	it('a scoped read that comes back PARTIAL is not a known absence — unknown stands', async () => {
-		const fetchMock = installWorld({ editionCount: 4000, scoped: 'partial-empty' });
-		const { container } = await renderExpandedAsEditor();
-		await settleScopedRead(fetchMock, '_parent.reference=work-2');
-
-		const li = workRowOf(container, 'Old warhorse');
-		expect(li.querySelector('[data-testid="work-edition-unknown"]')!.textContent).toContain(
-			'[repertoire_edition_unknown]'
-		);
-		expect(li.querySelector('[data-testid="work-no-edition"]')).toBeNull();
-		expect(li.textContent).not.toContain('[repertoire_no_edition]');
-		const picker = li.querySelector('[data-testid="work-edition-picker"]');
-		expect(picker, 'work-edition-picker on the unknown row').not.toBeNull();
-		expect((picker as HTMLSelectElement).disabled).toBe(false);
-	});
-
-	it('a PARTIAL scoped read never marks the work resolved — a short page is not that work’s edition list', async () => {
-		const fetchMock = installWorld({ editionCount: 4000, scoped: 'partial-some' });
-		const { container } = await renderExpandedAsEditor();
-		await settleScopedRead(fetchMock, '_parent.reference=work-2');
-
-		const li = workRowOf(container, 'Old warhorse');
-		expect(li.querySelector('[data-testid="work-edition-unknown"]')).not.toBeNull();
-		expect(li.querySelector('[data-testid="work-no-edition"]')).toBeNull();
-		expect(pickerOptions(li)).toEqual([
-			{ value: '', label: '[repertoire_pin_edition_label]', disabled: false }
-		]);
-		expect(
-			fetchMock.mock.calls
-				.map((c) => String(c[0]))
-				.filter((u) => u.includes('_parent.reference=work-2')).length
-		).toBe(1);
-	});
-});
-
-describe('#329 agenda — known-absent under a COMPLETE read is byte-identical to today', () => {
-	it("zero editions for the work, read complete → today's wording, no unknown state, no picker", async () => {
-		const fetchMock = installWorld({}); // no count on the wire = complete
-		const { container } = await renderExpandedAsEditor();
-		await vi.waitFor(() => {
-			expect(
-				workRowOf(container, 'Spem in alium').querySelector(
-					'[data-testid="work-edition-picker"]'
-				)
-			).not.toBeNull();
-		});
-		const li = workRowOf(container, 'Old warhorse');
-		const noEdition = li.querySelector('[data-testid="work-no-edition"]');
-		expect(noEdition, 'work-no-edition').not.toBeNull();
-		expect(noEdition!.textContent).toContain('[repertoire_no_edition]');
-		expect(li.querySelector('[data-testid="work-edition-unknown"]')).toBeNull();
-		expect(li.querySelector('[data-testid="work-edition-picker"]')).toBeNull();
-		expect(
-			fetchMock.mock.calls.some((c) => String(c[0]).includes('_parent.reference=work-2'))
-		).toBe(false);
-	});
-});
-
 describe('#329 — the lifetime listMyRsvps read keeps its OTHER consumer', () => {
 	it('the agenda still seeds its rows from listMyRsvps — this issue moves only the EVENT PAGE off it', async () => {
-		installWorld({});
-		await renderExpandedAsEditor();
+		installWorld();
+		await renderAgenda();
 		expect(listMyRsvpsMock).toHaveBeenCalled();
 		expect(listMyRsvpsMock.mock.calls.some((c) => c[1] === 'person-p')).toBe(true);
 	});

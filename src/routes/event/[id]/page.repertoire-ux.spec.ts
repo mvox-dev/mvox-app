@@ -1,17 +1,13 @@
 // @vitest-environment happy-dom
-// The repertoire element's UX contracts on the real agenda page.
-import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, fireEvent } from '@testing-library/svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// The repertoire element's UX contracts on the real event page.
+import { describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bracket')
 );
 
-vi.mock('$lib/agenda/agendaData', async () =>
-	(await import('$lib/testing/moduleHandles')).agendaDataModule()
-);
+vi.mock('$app/state', async () => (await import('$lib/testing/mocks/events')).appStateModule());
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -21,43 +17,15 @@ vi.mock('$lib/entu-config', async () =>
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
-vi.mock('$lib/rsvp/rsvpData', async () =>
-	(await import('$lib/testing/moduleStubs')).rsvpDataModule()
-);
-vi.mock('$lib/roster/rosterData', async () =>
-	(await import('$lib/testing/mocks/roster')).rosterModule()
-);
-vi.mock('$lib/attendance/attendanceData', async () =>
-	(await import('$lib/testing/moduleStubs')).attendanceModule({ lists: 'bare' })
-);
 
-import Page from './+page.svelte';
-import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
-import { REPERTOIRE_ITEMS, cleanupUnstubResetAgenda, future } from '$lib/testing/pages/agendaWorks';
-import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
+import { REPERTOIRE_ITEMS } from '$lib/testing/pages/agendaWorks';
+import {
+	eventPageWire,
+	renderEventWorks,
+	useRepertoireWiringPage
+} from '$lib/testing/pages/repertoireWiring';
 
 function installWorld() {
-	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
-		upcoming: [
-			{
-				id: 'ev-1',
-				name: 'Rehearsal',
-				startDatetime: future,
-				durationMinutes: 90,
-				location: '',
-				conductors: [],
-				owners: [],
-				editors: ['person-p']
-			}
-		],
-		recent: [],
-		seasonId: 'season-1',
-		seasonConductors: [],
-		seasonOwners: [],
-		seasonEditors: ['person-p']
-	}));
-
 	const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
 		const url = String(input);
 		const method = init?.method ?? 'GET';
@@ -86,7 +54,7 @@ function installWorld() {
 		if (url.includes('_type.string=copy')) return json({ entities: [] });
 		if (url.includes('_type.string=program_item')) return json({ entities: [] });
 		if (url.includes('_type.string=repertoire_item')) return json({ entities: REPERTOIRE_ITEMS });
-		return json({ error: `unrouted: ${url}` }, 404);
+		return eventPageWire(url, { seasonEditor: true, eventEditor: true });
 	});
 
 	vi.stubGlobal('fetch', fetchMock);
@@ -95,25 +63,13 @@ function installWorld() {
 
 async function renderExpandedAsEditor() {
 	installWorld();
-	setAuthedWithOneCollective();
-	const rendered = render(Page);
-	await vi.waitFor(() => {
-		expect(rendered.container.querySelector('[data-testid="works-line"]')).not.toBeNull();
-	});
-	await fireEvent.click(rendered.container.querySelector('[data-testid="works-line"]')!);
-	await vi.waitFor(() => {
-		expect(rendered.container.querySelector('[data-testid="work-manage-row"]')).not.toBeNull();
-	});
+	const rendered = await renderEventWorks('work-manage-row');
 	return rendered;
 }
 
-beforeEach(() => {
-	resetTypeIdCache();
-});
+useRepertoireWiringPage();
 
-afterEach(cleanupUnstubResetAgenda);
-
-describe('+page — repertoire UX corrections on the real agenda route (#111)', () => {
+describe('/event/[id] — repertoire UX corrections on the real event page (#111)', () => {
 	it('the expanded works list holds each work as one item of a single list (finding 2)', async () => {
 		const { container } = await renderExpandedAsEditor();
 		const list = container.querySelector(

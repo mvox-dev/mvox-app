@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -89,9 +88,7 @@ import Page from './+page.svelte';
 import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import type { Season } from '$lib/seasons/types';
-import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
-import { openFileBytes } from '$lib/files/openFileBytes';
 import { resetAppState } from '$lib/testing/appReset';
 import { gotoMock } from '$lib/testing/routeMocks';
 import {
@@ -105,9 +102,7 @@ import { listRepertoireItemsMock } from '$lib/testing/mocks/seasons';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 import { isoDate } from '$lib/testing/pages/seasonPanel';
 import { q } from '$lib/testing/pages/seasonRepertoire';
-import { recent, setAuthedWithTwoCollectives, upcoming } from '$lib/testing/pages/agendaWorks';
 import { pdfData } from '$lib/testing/pages/event';
-import { workRow } from '$lib/testing/pages/eventFixtures';
 
 let fakeByteStore: FakeByteStore;
 
@@ -134,24 +129,6 @@ function stubByteFetch() {
 	});
 }
 
-function mockBaselineAgenda() {
-	loadFullAgendaMock.mockResolvedValue(
-		fullAgendaResult({
-			seasons: [],
-			upcoming,
-			recent,
-			seasonId: 'season-1',
-			seasonConductors: [],
-			seasonOwners: [],
-			seasonEditors: []
-		})
-	);
-	loadWorksByEventIdMock.mockResolvedValue({
-		'ev-1': [workRow('ri-1', 'Spem in alium', 'file-held'), workRow('ri-3', 'O nata lux', '')],
-		'ev-0': [workRow('ri-2', 'If ye love me', 'file-absent')]
-	});
-}
-
 function editorSeason(): Season {
 	return {
 		id: 'season-1',
@@ -162,27 +139,6 @@ function editorSeason(): Season {
 		owners: [],
 		editors: ['person-p']
 	};
-}
-
-async function renderAgendaReady(): Promise<HTMLElement> {
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'agenda-row-ev-1')).not.toBeNull();
-	});
-	return container as HTMLElement;
-}
-
-async function expandWorks(container: HTMLElement, rowTestid: string): Promise<HTMLElement> {
-	const row = q(container, rowTestid);
-	if (!row) throw new Error(`${rowTestid} not in the DOM`);
-	await waitFor(() => {
-		expect(q(row, 'works-line')).not.toBeNull();
-	});
-	await fireEvent.click(q(row, 'works-line')!);
-	await waitFor(() => {
-		expect(row.querySelector('[data-testid="work-row"]')).not.toBeNull();
-	});
-	return row;
 }
 
 beforeEach(() => {
@@ -214,235 +170,7 @@ afterEach(() => {
 	resetAppState();
 });
 
-describe('#367 — home agenda part rows carry the presence badge (integration)', () => {
-	it('held → on-device, unheld → needs-network, no file → NO badge — across an UPCOMING and a RECENT row in the SAME render, each badge INSIDE its own agenda row', async () => {
-		mockBaselineAgenda();
-		setAuthedWithOneCollective();
-		fakeByteStore.seed(IDENTITY, 'file-held', pdfData());
-		installPresence();
-
-		const container = await renderAgendaReady();
-		const upcomingRow = await expandWorks(container, 'agenda-row-ev-1');
-		const recentRow = await expandWorks(container, 'agenda-recent-row-ev-0');
-
-		await waitFor(() => {
-			expect(q(container, 'file-presence-file-held')).not.toBeNull();
-			expect(q(container, 'file-presence-file-absent')).not.toBeNull();
-		});
-		const held = q(container, 'file-presence-file-held')!;
-		const absent = q(container, 'file-presence-file-absent')!;
-		expect(held.textContent).toContain('[file_presence_on_device]');
-		expect(held.textContent).not.toContain('[file_presence_needs_network]');
-		expect(absent.textContent).toContain('[file_presence_needs_network]');
-		expect(absent.textContent).not.toContain('[file_presence_on_device]');
-		expect(upcomingRow.contains(held)).toBe(true);
-		expect(recentRow.contains(absent)).toBe(true);
-		expect(container.querySelectorAll('[data-testid^="file-presence-"]').length).toBe(2);
-	});
-
-	it('THE trap (#351 invariant): ONE heldFileIds query per agenda load feeds BOTH row templates — never a per-row get(), and rendering more rows adds no query', async () => {
-		mockBaselineAgenda();
-		setAuthedWithOneCollective();
-		fakeByteStore.seed(IDENTITY, 'file-held', pdfData());
-		const presenceSpy = installPresence();
-		const getSpy = vi.spyOn(fakeByteStore, 'get');
-
-		const container = await renderAgendaReady();
-		await expandWorks(container, 'agenda-row-ev-1');
-		await waitFor(() => {
-			expect(q(container, 'file-presence-file-held')).not.toBeNull();
-		});
-		await expandWorks(container, 'agenda-recent-row-ev-0');
-		await waitFor(() => {
-			expect(q(container, 'file-presence-file-absent')).not.toBeNull();
-		});
-
-		expect(presenceSpy.mock.calls).toEqual([
-			['sampledb', 'person-p'],
-			['sampledb', 'person-p']
-		]);
-		expect(getSpy).not.toHaveBeenCalled();
-	});
-
-	it('while the store has NOT answered, NEITHER badge renders — no default-then-correct; the answer landing paints both, from the answer alone', async () => {
-		mockBaselineAgenda();
-		setAuthedWithOneCollective();
-		const pending = deferred<string[]>();
-		installPresence(() => pending.promise);
-
-		const container = await renderAgendaReady();
-		const upcomingRow = await expandWorks(container, 'agenda-row-ev-1');
-
-		expect(container.querySelectorAll('[data-testid^="file-presence-"]').length).toBe(0);
-		expect(upcomingRow.textContent).not.toContain('[file_presence_needs_network]');
-		expect(upcomingRow.textContent).not.toContain('[file_presence_on_device]');
-
-		pending.resolve(['file-held']);
-		await waitFor(() => {
-			expect(q(container, 'file-presence-file-held')!.textContent).toContain(
-				'[file_presence_on_device]'
-			);
-		});
-	});
-});
-
-describe('#367 — back from the part viewer, the badges show what its store write left', () => {
-	function mockOneRecentEventWithTwoParts() {
-		loadFullAgendaMock.mockResolvedValue(
-			fullAgendaResult({
-				seasons: [],
-				upcoming,
-				recent,
-				seasonId: 'season-1',
-				seasonConductors: [],
-				seasonOwners: [],
-				seasonEditors: []
-			})
-		);
-		loadWorksByEventIdMock.mockResolvedValue({
-			'ev-1': [workRow('ri-3', 'O nata lux', '')],
-			'ev-0': [
-				workRow('ri-1', 'Spem in alium', 'file-held'),
-				workRow('ri-2', 'If ye love me', 'file-absent')
-			]
-		});
-	}
-
-	async function openAbsentPartInViewer(container: HTMLElement): Promise<string> {
-		const recentRow = await expandWorks(container, 'agenda-recent-row-ev-0');
-		await waitFor(() => {
-			expect(q(container, 'file-presence-file-held')!.textContent).toContain(
-				'[file_presence_on_device]'
-			);
-		});
-		const absentRow = q(recentRow, 'file-presence-file-absent')!.closest(
-			'[data-testid="work-row"]'
-		)!;
-		await fireEvent.click(absentRow.querySelector('[data-testid="work-link-pdf"]')!);
-		expect(gotoMock.mock.calls.map((c) => c[0])).toEqual(['/part/file-absent?db=sampledb']);
-		const opened = await openFileBytes(
-			{ db: 'sampledb', token: 'jwt-abc' },
-			IDENTITY,
-			'file-absent',
-			fakeByteStore
-		);
-		cleanup();
-		return opened.url;
-	}
-
-	it('the viewer stores an unheld part and its put EVICTS a held one: back on the agenda the evicted row stops claiming on-device (network-stored path)', async () => {
-		mockOneRecentEventWithTwoParts();
-		setAuthedWithOneCollective();
-		fakeByteStore.seed(IDENTITY, 'file-held', pdfData());
-		const presenceSpy = installPresence();
-		signFileUrlMock.mockResolvedValue('https://s3.example/signed-agenda?X-Amz-Expires=60');
-		const realPut = fakeByteStore.put.bind(fakeByteStore);
-		vi.spyOn(fakeByteStore, 'put').mockImplementation(async (identity, fileId, data) => {
-			await realPut(identity, fileId, data);
-			await fakeByteStore.evict(IDENTITY, 'file-held');
-		});
-		const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
-
-		await openAbsentPartInViewer(await renderAgendaReady());
-		expect(openSpy).not.toHaveBeenCalled();
-
-		const container = await renderAgendaReady();
-		await expandWorks(container, 'agenda-recent-row-ev-0');
-		await waitFor(() => {
-			expect(q(container, 'file-presence-file-absent')!.textContent).toContain(
-				'[file_presence_on_device]'
-			);
-			expect(q(container, 'file-presence-file-held')!.textContent).toContain(
-				'[file_presence_needs_network]'
-			);
-		});
-		expect(presenceSpy.mock.calls).toEqual([
-			['sampledb', 'person-p'],
-			['sampledb', 'person-p']
-		]);
-	});
-
-	it('the viewer’s put EVICTS a held row and then REJECTS: back on the agenda neither row claims on-device (network-uncached path)', async () => {
-		mockOneRecentEventWithTwoParts();
-		setAuthedWithOneCollective();
-		fakeByteStore.seed(IDENTITY, 'file-held', pdfData());
-		const presenceSpy = installPresence();
-		signFileUrlMock.mockResolvedValue('https://s3.example/signed-agenda?X-Amz-Expires=60');
-		vi.spyOn(fakeByteStore, 'put').mockImplementation(async () => {
-			await fakeByteStore.evict(IDENTITY, 'file-held');
-			throw new Error('idb: transaction aborted');
-		});
-		const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
-
-		const delivered = await openAbsentPartInViewer(await renderAgendaReady());
-		expect(delivered).not.toBe('');
-		expect(openSpy).not.toHaveBeenCalled();
-
-		const container = await renderAgendaReady();
-		await expandWorks(container, 'agenda-recent-row-ev-0');
-		await waitFor(() => {
-			expect(q(container, 'file-presence-file-absent')!.textContent).toContain(
-				'[file_presence_needs_network]'
-			);
-			expect(q(container, 'file-presence-file-held')!.textContent).toContain(
-				'[file_presence_needs_network]'
-			);
-		});
-		expect(presenceSpy.mock.calls).toEqual([
-			['sampledb', 'person-p'],
-			['sampledb', 'person-p']
-		]);
-	});
-});
-
-describe('#367 — the query keys on the SELECTED collective (per-load clear + partition)', () => {
-	it('a collective switch clears the previous answer (NEITHER badge while the new partition is pending) and re-queries under the NEW (db, personId) — the same file answers differently per partition', async () => {
-		mockBaselineAgenda();
-		setAuthedWithTwoCollectives();
-		fakeByteStore.seed(IDENTITY, 'file-held', pdfData());
-		const credePending = deferred<string[]>();
-		const presenceSpy = installPresence(async (db, personId) => {
-			if (db === 'crede') return credePending.promise;
-			return fakeByteStore.heldFor(db, personId);
-		});
-
-		const container = await renderAgendaReady();
-		await expandWorks(container, 'agenda-row-ev-1');
-		await waitFor(() => {
-			expect(q(container, 'file-presence-file-held')!.textContent).toContain(
-				'[file_presence_on_device]'
-			);
-		});
-
-		selectedCollectiveDbStore.set('crede');
-		await waitFor(() => {
-			expect(q(container, 'agenda-row-ev-1')).not.toBeNull();
-			expect(container.querySelectorAll('[data-testid^="file-presence-"]').length).toBe(0);
-		});
-		await expandWorks(container, 'agenda-row-ev-1');
-
-		expect(container.querySelectorAll('[data-testid^="file-presence-"]').length).toBe(0);
-
-		credePending.resolve([]);
-		await waitFor(() => {
-			expect(q(container, 'file-presence-file-held')!.textContent).toContain(
-				'[file_presence_needs_network]'
-			);
-			expect(q(container, 'file-presence-file-held')!.textContent).not.toContain(
-				'[file_presence_on_device]'
-			);
-		});
-
-		expect(presenceSpy.mock.calls).toEqual([
-			['sampledb', 'person-p'],
-			['sampledb', 'person-p'],
-			['crede', 'person-c'],
-			['crede', 'person-c']
-		]);
-	});
-});
-
-describe('#367 — the season-manage repertoire panel is the SECOND render site', () => {
+describe('#367 — the season-manage repertoire panel carries the presence badge', () => {
 	it('panel part rows carry the badge from the SAME per-load answer — held → on-device, unheld → needs-network, and opening the panel adds NO query', async () => {
 		const season = editorSeason();
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [season] }));
