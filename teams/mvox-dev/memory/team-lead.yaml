@@ -5,13 +5,13 @@
 
 current:
   - label: WIP
-    record: "Queue: #926 (own branch, brief next), then one branch #920 #921 #918 #919; research done"
+    record: "Queue empty after PR #933; offered Gama a cleanup (season-rights upgrade for unseen reads)"
     ref: scratchpad/findings-session.md
   - label: WIP
-    record: "GATE 3: 4 of 5 events done (Bentham wrote bentham.yaml on #916); a non-memkit lesson still open"
+    record: "GATE 3 events all ran (lesson memory-notes-ride-feature-prs, 2026-10-15); rule GATE 3 next"
     ref: teams/mvox-dev/memory-adoption/05-debt.md
   - label: WIP
-    record: "Report filed as memory-kit #38; comment there when GATE 3 events land"
+    record: "Comment the last proving events on memory-kit #38 via Passepartout"
     ref: teams/mvox-dev/memory-adoption/06-report.md
   - label: DECISION
     record: "Adopt memory-kit fully for team memory and the lead's auto-memory; work autonomously"
