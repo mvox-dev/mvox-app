@@ -121,6 +121,24 @@ A major means data shape changed. The kit ships `migrations/<version>/` for exac
   kit-update 0.2.0): `claude plugin marketplace update memory-kit`, then update each plugin or
   reinstall, then `/reload-plugins`.
 
+- **0.1.0-alpha.14 -> 0.1.0-alpha.15:** no data step. Pull, lint, then update the plugins: plugin
+  versions moved (watch 0.3.1, obligations-pane 0.5.0, kit-update 0.3.0), and a pull alone never
+  updates one: `claude plugin marketplace update memory-kit`, `claude plugin update <p>@memory-kit`
+  for each installed one, then `/reload-plugins`. kit-update.py now prints these steps (#23).
+  - Obligations take `owed_to` (#29). Expect a new note per row without it, `no owed_to`, and a
+    count; it never fails the gate. Nothing to change at the pull. From then on, write `owed_to`
+    on new rows and on old ones as they are next touched; a row nobody but its actor is owed is
+    a to-do, which belongs in the home's own work queue (moving one out is the human's call).
+    Update the obligations pane with the release before any row carries `owed_to`: an older
+    pane refuses the whole file on the unknown key.
+  - New, optional: the commitments tier (#30). Nothing changes until the home creates
+    `memory/commitments.yaml`; whether to use it is the human's call (see the GATE above). A
+    scratchpad the home already named `commitments.yaml` (`current`/`staging`, no
+    `commitments` key) is still linted as a scratchpad.
+  - The lint banner now names the kit's VERSION (#26); alpha.14's said alpha.13. Nothing to do.
+  - A session whose start folder has no `memory-kit.conf` now gets one kit-update notice saying so
+    (#31). If the home is elsewhere, add a one-line pointer conf there: `kit_home: <path>`.
+
 ## Always
 
 - The home's config for the kit lives outside the subtree; a pull must never clobber it.

@@ -2,7 +2,7 @@
 // as hooks/kit-home.ts is; lint/run-fixtures.sh fails when the copies differ (kit #18).
 import { describe, expect, test } from 'claude-code/testing'
 
-import { isAbsolute, normalizePath, resolveKitHome } from '../hooks/kit-home'
+import { isAbsolute, noConfNotice, normalizePath, resolveKitHome } from '../hooks/kit-home'
 
 /** An in-memory file system: path -> text. */
 const reader = (files: Record<string, string>) => async (path: string) => files[normalizePath(path)]
@@ -50,6 +50,10 @@ describe('kit_home: memory-kit.conf names the kit home (kit #18)', () => {
     expect(await resolveKitHome('/u/start', reader({ '/u/start/memory-kit.conf': 'kit_home: ~/desk\n' }))).toMatchObject({
       problem: expect.stringContaining('absolute or relative'),
     })
+  })
+
+  test('a folder with no memory-kit.conf: the notice, worded as lint/kit_home.py words it (kit #31)', () => {
+    expect(noConfNotice('/u/start/')).toBe('/u/start has no memory-kit.conf, so it is not a kit home; if the home is elsewhere, put kit_home: <path> in a memory-kit.conf here')
   })
 
   test("the pointer conf's other keys are reported as ignored", async () => {

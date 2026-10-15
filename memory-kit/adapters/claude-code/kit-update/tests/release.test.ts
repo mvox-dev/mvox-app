@@ -131,6 +131,20 @@ describe('data steps: auto or manual', () => {
     expect(stepCheck(md, '0.1.0-alpha.12', '0.1.0-alpha.13', RELEASES)).toEqual({ manual: true, reason: 'a data step in 0.1.0-alpha.12 -> 0.1.0-alpha.13' })
     expect(stepCheck('- **0.1.0-alpha.12 -> 0.1.0-alpha.13:**  No data step.\n', '0.1.0-alpha.12', '0.1.0-alpha.13', RELEASES)).toEqual({ manual: false })
   })
+
+  test("the alpha.15 hop as UPGRADE.md writes it, sub-bullets and all, is auto", () => {
+    // Verbatim from the kit's UPGRADE.md (tools/kit-update-test.py reads the file itself).
+    const md = [
+      '- **0.1.0-alpha.13 -> 0.1.0-alpha.14:** no data step. Pull, lint, `/reload-plugins`, then `/watch` once:',
+      '  it now names which session drains each home (one drain per home).',
+      '',
+      '- **0.1.0-alpha.14 -> 0.1.0-alpha.15:** no data step. Pull, lint, `/reload-plugins`.',
+      '  - Obligations take `owed_to` (#29). Expect a new note per row without it, `no owed_to`, and a',
+      '',
+    ].join('\n')
+    expect(stepCheck(md, '0.1.0-alpha.14', '0.1.0-alpha.15', [...RELEASES, 'v0.1.0-alpha.15'])).toEqual({ manual: false })
+    expect(stepCheck(md, '0.1.0-alpha.13', '0.1.0-alpha.15', [...RELEASES, 'v0.1.0-alpha.15'])).toEqual({ manual: false })
+  })
 })
 
 describe('the prompt', () => {

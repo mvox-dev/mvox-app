@@ -1,8 +1,8 @@
 // Pure logic of the obligations pane: no `$`, no I/O. Everything here is unit-tested.
 //
 // Shape of the data: memory-kit/types/memory-obligations.ts (obligations: [{obligation, actor,
-// since, check, expires, ref}]). URL tier: memory-kit/types/memory-urls.ts (memory/urls/<name>,
-// one URL on line 1).
+// owed_to, since, check, expires, ref}]). URL tier: memory-kit/types/memory-urls.ts
+// (memory/urls/<name>, one URL on line 1).
 
 import type { AgentLoad, ObligationRow, PaneAgent } from '../types'
 
@@ -15,7 +15,7 @@ export type ParseResult =
   | { kind: 'ok'; items: ObligationRow[] }
   | { kind: 'error'; line: number; message: string }
 
-const KEYS = ['obligation', 'actor', 'since', 'check', 'expires', 'ref'] as const
+const KEYS = ['obligation', 'actor', 'owed_to', 'since', 'check', 'expires', 'ref'] as const
 type Key = (typeof KEYS)[number]
 const REQUIRED: readonly Key[] = ['obligation', 'actor', 'expires']
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -218,6 +218,7 @@ function parseOrThrow(text: string): ObligationRow[] {
     items.push({
       obligation: current.obligation ?? '',
       actor: current.actor ?? '',
+      owed_to: current.owed_to ?? '',
       since: current.since ?? '',
       check: current.check ?? '',
       expires: current.expires ?? '',

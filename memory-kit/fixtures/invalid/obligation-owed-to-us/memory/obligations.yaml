@@ -1,0 +1,8 @@
+obligations:
+  - obligation: "Owed to us: nobody named is waiting."
+    actor: "Passepartout"
+    owed_to: "us"
+    since: "2026-10-15"
+    check: "ask"
+    expires: "2099-01-01"
+    ref: "#29"

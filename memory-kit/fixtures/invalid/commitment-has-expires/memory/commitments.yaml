@@ -1,0 +1,8 @@
+commitments:
+  - trigger: "An email from the board arrives."
+    obligation: "Answer it. A commitment never expires; a ruling retires it."
+    actor: "Passepartout"
+    owed_to: "the board"
+    within: "3 days"
+    expires: "2099-01-01"
+    ref: "#30"

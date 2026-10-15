@@ -52,6 +52,7 @@ import { SAFE_DUMP_ASCII, SAFE_DUMP_ITEMS, SAFE_DUMP_UNICODE } from './fixtures/
 const row = (expires: string, extra: Partial<ObligationRow> = {}): ObligationRow => ({
   obligation: `due ${expires}`,
   actor: 'Mihkel',
+  owed_to: '',
   since: '2026-10-01',
   check: '',
   expires,
@@ -89,8 +90,26 @@ describe('parsing', () => {
     )
     expect(parsed).toEqual({
       kind: 'ok',
-      items: [{ obligation: 'Say "hi"', actor: "O'Brien", since: '2026-10-01', check: '', expires: '2026-10-20', ref: '#2', line: 2 }],
+      items: [{ obligation: 'Say "hi"', actor: "O'Brien", owed_to: '', since: '2026-10-01', check: '', expires: '2026-10-20', ref: '#2', line: 2 }],
     })
+  })
+
+  test('owed_to is read and carried; a row without one reads as blank (kit #29)', () => {
+    const parsed = parseObligations(
+      [
+        'obligations:',
+        '  - obligation: answer the email',
+        '    actor: Passepartout',
+        '    owed_to: the board',
+        '    expires: 2026-10-15',
+        '  - obligation: from before owed_to',
+        '    actor: Mihkel',
+        '    expires: 2026-10-16',
+      ].join('\n'),
+    )
+    expect(parsed.kind).toBe('ok')
+    if (parsed.kind !== 'ok') return
+    expect(parsed.items.map(i => i.owed_to)).toEqual(['the board', ''])
   })
 
   test('empty list and comment-only file are empty, not errors', () => {
@@ -130,7 +149,7 @@ describe('parsing', () => {
       expect(parsed.kind).toBe('ok')
       if (parsed.kind !== 'ok') return
       expect(parsed.items.map(({ line, ...rest }) => rest)).toEqual(SAFE_DUMP_ITEMS)
-      expect(parsed.items.map(i => i.line)).toEqual([2, 9, 15, 23])
+      expect(parsed.items.map(i => i.line)).toEqual([2, 10, 17, 26])
     }
   })
 

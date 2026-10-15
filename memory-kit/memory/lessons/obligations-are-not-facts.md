@@ -26,13 +26,15 @@ Every one of those was **true when written**. None was a fact.
 
 ## What to do
 
-Put it in `obligations.yaml` with an `actor`, a `check` and an `expires`. The `check` is the
+Put it in `obligations.yaml` with an `actor`, an `owed_to`, a `check` and an `expires`. The `check` is the
 field that earns the tier: a command, a page or a person that answers "has this been done?"
 
 On expiry: run the check, then re-state, resolve, or hand it to a human.
 
 ## What not to do
 
+- Do not write a to-do here. If nobody but the actor would notice it lapse, `owed_to` has no one
+  to name: it belongs in the home's own work queue (kit #29).
 - Do not make it a scratchpad row. `current` is regenerated every session and capped; an
   obligation waiting three weeks either vanishes at a regeneration or squats a row that
   judgment needed.

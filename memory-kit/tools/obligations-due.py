@@ -8,6 +8,7 @@
            directory.
     days   the window after today. Default: 7.
 
+Prints each row as `expires  actor -> owed_to: obligation` (no arrow on a row without owed_to).
 Prints the expired rows first (check them, then re-state, resolve or hand them to the human --
 never renew one silently), then the rows that expire in the window, then a count of the rest.
 Read-only. Exit 0 with output, 2 when there is no memory directory or the file cannot be read.
@@ -76,7 +77,8 @@ def main(argv):
             return None
 
     def show(r):
-        print(f"- {r.get('expires')}  {r.get('actor')}: {r.get('obligation')}")
+        owed = f" -> {r['owed_to']}" if r.get("owed_to") else ""
+        print(f"- {r.get('expires')}  {r.get('actor')}{owed}: {r.get('obligation')}")
         if r.get("check"):
             print(f"    check: {r['check']}")
 
