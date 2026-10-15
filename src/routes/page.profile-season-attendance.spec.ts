@@ -113,8 +113,8 @@ describe('#920 — the season attendance card sits right below the /profile titl
 		findMyMemberIdMock.mockResolvedValue(null);
 		const { container } = renderProfile(Page);
 		await waitFor(() => expect(findMyMemberIdMock).toHaveBeenCalled());
-		await waitFor(() => expect(listSeasonsMock).toHaveBeenCalled());
 		await flushMicrotasks();
+		expect(listSeasonsMock).not.toHaveBeenCalled();
 		expect(q(container, SUMMARY)).toBeNull();
 	});
 

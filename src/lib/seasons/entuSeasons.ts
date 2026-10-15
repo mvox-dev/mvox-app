@@ -54,7 +54,16 @@ export async function listSeasons(
 	const { resolveDatabaseEntityId } = await import('$lib/collective/databaseEntity');
 	const dbEntityId = await resolveDatabaseEntityId(cfg, fetchImpl, opts);
 	if (!dbEntityId) return [];
+	return listSeasonsOf(cfg, dbEntityId, fetchImpl, opts);
+}
 
+// For a caller that already holds the database entity id.
+export async function listSeasonsOf(
+	cfg: EntuCfg,
+	dbEntityId: string,
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
+): Promise<Season[]> {
 	const res = await entuFetch(
 		cfg.db,
 		// `_owner,_editor` ride along (#91 F1): the repertoire management controls

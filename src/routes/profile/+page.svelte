@@ -4,6 +4,7 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken, getUser } from '$lib/auth/storage';
 	import { cfgFor } from '$lib/entu/cfg';
+	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
 	import { selectedCollectiveStore, selectedCollectiveIdentityStore } from '$lib/collectives/store';
 	import {
 		listMyProfiles,
@@ -97,10 +98,11 @@
 		reset: resetState,
 		async load({ cfg, selected: current, g, isCurrent }) {
 			const personId = current.personId;
-			// Fired apart from the fields read: the admin section must load even when
-			// listMyProfiles rejects.
-			collectiveAdmin?.load(cfg, personId, g);
-			void seasonAttendance?.load(cfg, personId, g);
+			// Fired apart from the fields read: the sections must load even when listMyProfiles
+			// rejects. They share the page's one database entity lookup.
+			const dbEntityId = resolveDatabaseEntityId(cfg);
+			collectiveAdmin?.load(cfg, personId, g, dbEntityId);
+			void seasonAttendance?.load(cfg, personId, g, dbEntityId);
 			const profiles = await listMyProfiles(cfg, personId);
 			if (!isCurrent()) return;
 			pf.loadedProfiles = profiles;

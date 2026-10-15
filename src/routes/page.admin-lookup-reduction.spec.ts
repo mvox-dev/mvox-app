@@ -45,10 +45,6 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-vi.mock('$lib/profile/seasonAttendance', async () =>
-	(await import('$lib/testing/mocks/profile')).noSeasonAttendanceModule()
-);
-
 import Page from './profile/+page.svelte';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
@@ -86,6 +82,16 @@ beforeEach(() => {
 		}
 		if (path.startsWith(`entity/${DB_ENTITY}?props=roster_show_real_names`)) {
 			return Promise.resolve(json({ entity: { _id: DB_ENTITY } }));
+		}
+		if (path.includes('_type.string=member&')) {
+			return Promise.resolve(json({ entities: [{ _id: 'm-viewer' }] }));
+		}
+		if (path.includes('_type.string=season&')) {
+			const season = { _id: 's1', start_date: [{ date: '2026-01-01' }] };
+			return Promise.resolve(json({ entities: [season] }));
+		}
+		if (path.includes('_type.string=event&')) {
+			return Promise.resolve(json({ entities: [] }));
 		}
 		if (path.includes('_type.string=library')) {
 			// Factual "no library in this collective": refreshRole('librarian') is skipped.
@@ -154,6 +160,10 @@ describe('/profile admin section — one database-entity resolution per load (#1
 		expect(paths.filter((p) => p.includes('_type.string=library'))).toHaveLength(1);
 		expect(paths.filter((p) => p.includes('props=entu_user'))).toHaveLength(1);
 		expect(paths.filter((p) => p.includes('props=roster_show_real_names'))).toHaveLength(1);
-		expect(paths).toHaveLength(4);
+		// The season attendance card's own reads (#920): member record, seasons, events.
+		expect(paths.filter((p) => p.includes('_type.string=member&'))).toHaveLength(1);
+		expect(paths.filter((p) => p.includes(`_type.string=season&_parent.reference=${DB_ENTITY}`))).toHaveLength(1);
+		expect(paths.filter((p) => p.includes('_type.string=event&_parent.reference=s1'))).toHaveLength(1);
+		expect(paths).toHaveLength(7);
 	});
 });

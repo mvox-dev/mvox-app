@@ -71,7 +71,7 @@ export async function entuSeasonsModule() {
 
 export async function seasonReadsModule() {
 	const actual = await vi.importActual<object>('$lib/seasons/entuSeasons');
-	return { ...actual, listSeasons: listSeasonsMock, listEvents: listEventsMock };
+	return { ...actual, listSeasonsOf: listSeasonsMock, listEvents: listEventsMock };
 }
 
 // (*MVOX:Josquin*)

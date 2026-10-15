@@ -32,9 +32,14 @@
 		ratesPartial = false;
 	}
 
-	export async function load(c: EntuCfg, personId: string, g: number): Promise<void> {
+	export async function load(
+		c: EntuCfg,
+		personId: string,
+		g: number,
+		dbEntityId: Promise<string | null>
+	): Promise<void> {
 		try {
-			const read = await loadSeasonAttendance(c, personId);
+			const read = await loadSeasonAttendance(c, personId, dbEntityId);
 			if (g !== generation()) return;
 			cfg = c;
 			card = read;
