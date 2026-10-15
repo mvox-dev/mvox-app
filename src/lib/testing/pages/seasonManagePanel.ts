@@ -70,7 +70,14 @@ export async function openPanelForSeason(container: HTMLElement, seasonName: str
 export function twoSeasonResult(opts: { aEditor?: boolean; bEditor?: boolean } = {}) {
 	const { aEditor = true, bEditor = true } = opts;
 	return fullAgendaResult({
-		seasons: [currentSeason(aEditor), { ...upcomingSeason(), editors: bEditor ? ['person-p'] : [] }]
+		seasons: [
+			currentSeason(aEditor),
+			{
+				...upcomingSeason(),
+				owners: bEditor ? ['person-p'] : [],
+				editors: bEditor ? ['person-p'] : []
+			}
+		]
 	});
 }
 

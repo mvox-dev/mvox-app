@@ -92,7 +92,7 @@ function currentSeason(): Season {
 		startDate: isoDate(-30),
 		endDate: isoDate(60),
 		conductors: ['cond-1'],
-		owners: [],
+		owners: [VIEWER],
 		editors: [VIEWER]
 	};
 }

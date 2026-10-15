@@ -31,6 +31,7 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 		ag.manageableSeasonId = null;
 		ag.manageableSeasonRights = 'not-editor';
 		ag.manageableSeasonRightsById = {};
+		ag.ownedSeasonIds = new Set();
 		ag.seasonCreateRights = 'not-editor';
 		ag.eventManageRights = {};
 		ag.seasonRepertoire = [];

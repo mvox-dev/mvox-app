@@ -43,7 +43,8 @@ const NOT_A_PERSONS_NAME: Reasons = {
 		'opt.label': 'an edition option, or a status word'
 	},
 	'src/lib/agenda/SeasonCardHeader.svelte': {
-		seasonManageDeleteName: 'the season being deleted'
+		seasonManageDeleteName: 'the season being deleted',
+		rowName: 'a season row'
 	},
 	'src/lib/agenda/SeasonManageFields.svelte': { label: 'a date field label message' },
 	'src/lib/agenda/SeasonManageSeries.svelte': { 'series.name': 'an event series' },

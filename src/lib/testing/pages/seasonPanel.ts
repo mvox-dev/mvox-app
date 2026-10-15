@@ -59,7 +59,8 @@ export function currentSeason(viewerIsEditor: boolean): Season {
 		startDate: isoDate(-30),
 		endDate: isoDate(60),
 		conductors: [],
-		owners: [],
+		// #917 — the season delete is the _owner's; the fixture viewer holds both.
+		owners: viewerIsEditor ? ['person-p'] : [],
 		editors: viewerIsEditor ? ['person-p'] : []
 	};
 }

@@ -142,6 +142,7 @@
 	bind:manageableSeasonId
 	bind:manageableSeasonRights
 	manageableSeasonRightsById={ag.manageableSeasonRightsById}
+	ownedSeasonIds={ag.ownedSeasonIds}
 	bind:seasonManageOpen
 	bind:seasonManagePanelEl
 	bind:seriesCreateOpen

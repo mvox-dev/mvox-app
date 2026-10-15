@@ -199,7 +199,7 @@ describe('#917 — deleting a closed season from its row', () => {
 		expect(deleteSeasonMock).toHaveBeenCalledTimes(1);
 		expect(deleteSeasonMock.mock.calls[0][0]).toEqual(CFG);
 		expect(deleteSeasonMock.mock.calls[0][1]).toBe(NEXT_ID);
-		onProgress!(1, 3);
+		onProgress!(1, 3, 'events');
 		await waitFor(() => {
 			expect(q(container, 'season-manage-delete-progress')?.textContent?.trim()).toBe(
 				'season_manage_delete_progress {"current":1,"total":3}'

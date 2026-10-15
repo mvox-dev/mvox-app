@@ -131,7 +131,7 @@ function upcomingSeason(): Season {
 function agendaResult(
 	opts: { editor?: boolean; owner?: boolean; withUpcomingSeason?: boolean } = {}
 ) {
-	const { editor = true, owner = false, withUpcomingSeason = false } = opts;
+	const { editor = true, owner = editor, withUpcomingSeason = false } = opts;
 	const season = { ...currentSeason(editor), owners: owner ? ['person-p'] : [] };
 	return fullAgendaResult({
 		seasonId: season.id,
