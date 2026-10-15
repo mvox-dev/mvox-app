@@ -151,7 +151,8 @@
 
 {#each manageableSeasonEntries as ms (ms.id)}
 	{#if !seasonManageOpen || ms.id !== manageableSeasonId}
-		{@const rowBusy = seriesRunUnfinished && ms.id !== manageableSeasonId}
+		{@const rowBusy =
+			(seriesRunUnfinished && ms.id !== manageableSeasonId) || sm.seasonManageDeletePendingId !== null}
 		<div class="flex flex-wrap items-center gap-2">
 			<h2 class="flex min-w-0 flex-1">
 				<button
@@ -243,7 +244,7 @@
 					data-testid="season-manage-delete-season"
 					aria-label={m.season_manage_season_delete({ name: seasonManageDeleteName })}
 					class="ml-auto"
-					disabled={isOffline}
+					disabled={isOffline || sm.seasonManageDeletePendingId !== null}
 					onclick={() => {
 						if (manageableSeasonId !== null)
 							void armSeasonDelete(manageableSeasonId, 'season-manage-delete-season-confirm');

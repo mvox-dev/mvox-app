@@ -196,7 +196,7 @@
 
 	function openSeasonManagePanelFor(seasonId: string): void {
 		if (seasonId !== manageableSeasonId) {
-			if (seriesRunUnfinished) return;
+			if (seriesRunUnfinished || sm.seasonManageDeletePendingId !== null) return;
 			resetSeasonManage();
 			seriesCreateOpen = false;
 			manageableSeasonId = seasonId;
