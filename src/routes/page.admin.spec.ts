@@ -193,7 +193,7 @@ describe('/profile admin section — access gate (#916)', () => {
 		const { container } = await renderReady();
 		const el = section(container, 'profile-collective-admin');
 		expect(el.id).toBe('collective');
-		expect(el.querySelector('h2')?.textContent).toBe('Admin');
+		expect(el.querySelector('h2')?.textContent).toBe('Collective');
 		const main = container.querySelector('main > div')!;
 		expect(main.lastElementChild).toBe(el);
 	});

@@ -9,7 +9,6 @@ vi.mock('$lib/paraglide/messages', async () =>
 		nav_roster: () => 'Roster',
 		nav_profile: () => 'Profile',
 		nav_library: () => 'Library',
-		nav_admin: () => 'Admin',
 		nav_links: () => 'Lingikogu'
 	})
 );

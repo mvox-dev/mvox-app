@@ -227,7 +227,7 @@
 		aria-labelledby="profile-collective-admin-title"
 		class="flex flex-col gap-6 border-t border-paper-3 pt-6"
 	>
-		<h2 id="profile-collective-admin-title" class="font-display text-xl">{m.nav_admin()}</h2>
+		<h2 id="profile-collective-admin-title" class="font-display text-xl">{m.profile_collective_heading()}</h2>
 
 		<RosterNamesToggle
 			bind:this={rosterNames}

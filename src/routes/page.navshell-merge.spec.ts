@@ -9,7 +9,6 @@ const nav = vi.hoisted(() => ({
 	nav_profile: () => 'Profile',
 	nav_library: () => 'Library',
 	nav_invite: () => 'Invite',
-	nav_admin: () => 'Admin',
 	nav_links: () => 'Links'
 }));
 vi.mock('$lib/paraglide/messages', async (importOriginal) =>
