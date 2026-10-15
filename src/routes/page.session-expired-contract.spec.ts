@@ -35,13 +35,16 @@ import { get } from 'svelte/store';
 import { authStore } from '$lib/auth/session';
 import { install401Recovery } from '$lib/auth/install-401-recovery';
 import { resetGate } from '$lib/profile/completionGate';
+import { dbEditRight, resetDbEditRight } from '$lib/nav/dbRights';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { cleanupUnstubResetAuth, q } from '$lib/testing/pages/dom';
 import { gotoMock } from '$lib/testing/routeMocks';
 import { pagesReaching } from '$lib/testing/pageReach';
 import { signIn } from '$lib/testing/session';
 
-const PAGES: Record<string, { Page: Component; loadError: string; retry: string }> = {
+type Row = { Page: Component; loadError: string; retry: string; route?: string; arrange?: () => void };
+
+const PAGES: Record<string, Row> = {
 	'/': { Page: AgendaPage, loadError: 'agenda-error', retry: 'agenda-retry' },
 	'/admin/invite': {
 		Page: InvitePage,
@@ -52,14 +55,23 @@ const PAGES: Record<string, { Page: Component; loadError: string; retry: string 
 	'/library': { Page: LibraryPage, loadError: 'library-load-error', retry: 'library-retry-load' },
 	'/links': { Page: LinksPage, loadError: 'links-load-error', retry: 'links-retry-load' },
 	'/profile': { Page: ProfilePage, loadError: 'profile-load-error', retry: 'profile-retry-load' },
+	'/profile collective section': {
+		Page: ProfilePage,
+		route: '/profile',
+		arrange: () => dbEditRight.set('editor'),
+		loadError: 'admin-roles-load-error',
+		retry: 'admin-roles-retry-load'
+	},
 	'/roster': { Page: RosterPage, loadError: 'roster-load-error', retry: 'roster-retry-load' }
 };
 
-function renderWithStatus(route: string, status: number) {
+function renderWithStatus(name: string, status: number) {
+	const row = PAGES[name];
 	vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status })));
-	pageStub.url = new URL(`http://localhost${route.replace('[id]', 'ev1')}`);
+	pageStub.url = new URL(`http://localhost${(row.route ?? name).replace('[id]', 'ev1')}`);
 	signIn();
-	return render(PAGES[route].Page);
+	row.arrange?.();
+	return render(row.Page);
 }
 
 beforeEach(() => {
@@ -72,11 +84,13 @@ afterEach(() => {
 	cleanupUnstubResetAuth();
 	vi.restoreAllMocks();
 	resetGate();
+	resetDbEditRight();
 });
 
 describe('every page that renders the session-expired notice', () => {
 	it('is every page in the table', () => {
-		expect(Object.keys(PAGES).sort()).toEqual(
+		const routes = new Set(Object.entries(PAGES).map(([name, row]) => row.route ?? name));
+		expect([...routes].sort()).toEqual(
 			pagesReaching('src/lib/components/auth/SessionExpiredNotice.svelte')
 		);
 	});
@@ -85,6 +99,7 @@ describe('every page that renders the session-expired notice', () => {
 		const { container } = renderWithStatus(route, 401);
 
 		await waitFor(() => expect(q(container, 'session-expired')).not.toBeNull());
+		expect(container.querySelectorAll('[data-testid="session-expired"]')).toHaveLength(1);
 		expect(q(container, 'session-expired-signin')?.getAttribute('href') ?? '').toContain('/auth/login');
 		expect(q(container, PAGES[route].loadError)).toBeNull();
 		expect(q(container, PAGES[route].retry)).toBeNull();

@@ -56,6 +56,7 @@ vi.mock('$lib/profile/applyProfileSave', () => ({
 vi.mock('$lib/collective/rosterNames', async (importActual) => ({
 	...(await importActual<typeof import('$lib/collective/rosterNames')>()),
 	readRosterNamesSetting: h.readRosterNamesSettingMock,
+	readRosterNamesSettingOf: h.readRosterNamesSettingMock,
 	updateRosterShowRealNames: h.updateRosterShowRealNamesMock
 }));
 vi.mock('$lib/profile/linkedIdentities', async (importActual) => ({

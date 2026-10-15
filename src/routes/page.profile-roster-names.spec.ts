@@ -26,8 +26,12 @@ vi.mock('$lib/profile/profileData', async (importOriginal) =>
 vi.mock('$lib/profile/linkedIdentities', async () =>
 	(await import('$lib/testing/mocks/profile')).noLinkedIdentitiesModule()
 );
+vi.mock('$lib/collective/databaseEntity', async () =>
+	(await import('$lib/testing/moduleHandles')).entityIdModule()
+);
 vi.mock('$lib/collective/rosterNames', () => ({
 	readRosterNamesSetting: h.readRosterNamesMock,
+	readRosterNamesSettingOf: h.readRosterNamesMock,
 	updateRosterShowRealNames: h.updateRosterNamesMock
 }));
 
@@ -39,6 +43,7 @@ import { resetAppState } from '$lib/testing/appReset';
 import type { Collective } from '$lib/collectives/types';
 import { signIn } from '$lib/testing/session';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
+import { resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
 	COLLECTIVE_A,
 	COLLECTIVE_B,
@@ -95,6 +100,7 @@ async function renderAdminReady(
 }
 
 beforeEach(() => {
+	resolveDatabaseEntityIdMock.mockResolvedValue('db-entity-a');
 	localStorage.clear();
 	listMyProfilesMock.mockReset();
 	h.readRosterNamesMock.mockReset();
@@ -194,10 +200,11 @@ describe('/profile — roster-names visibility is admin-only (fail-closed)', () 
 });
 
 describe('/profile — roster-names READ (integration: the page route drives the seam)', () => {
-	it('on load, reads the setting through readRosterNamesSetting for the selected collective', async () => {
+	it('on load, reads the setting for the selected collective, on the section database entity id', async () => {
 		const container = await renderAdminReady();
 		expect(h.readRosterNamesMock).toHaveBeenCalled();
 		expect(h.readRosterNamesMock.mock.calls[0][0]).toMatchObject({ db: 'sampledb' });
+		expect(h.readRosterNamesMock.mock.calls[0][1]).toBe('db-entity-a');
 		expect(rosterSelect(container)!.value).toBe('profile');
 	});
 

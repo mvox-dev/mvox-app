@@ -307,6 +307,9 @@
 			bind:this={collectiveAdmin}
 			generation={() => routeLoad.generation}
 			{activeContext}
+			onSessionExpired={() => {
+				status = 'session-expired';
+			}}
 		/>
 	</div>
 </main>

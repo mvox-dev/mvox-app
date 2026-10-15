@@ -132,11 +132,10 @@ async function renderReady(): Promise<HTMLElement> {
 }
 
 describe('/profile admin section — one database-entity resolution per load (#173)', () => {
-	// The real-names toggle moved into the section (#916) and resolves the id for its own read.
-	it('reaches ready with resolveDatabaseEntityId called once for the section, once for the toggle', async () => {
+	it('reaches ready with resolveDatabaseEntityId called exactly ONCE', async () => {
 		await renderReady();
 
-		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledTimes(2);
+		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledTimes(1);
 	});
 
 	it('same data, fewer fetches — the id still reaches listAdmins and the rights/library reads still happen', async () => {

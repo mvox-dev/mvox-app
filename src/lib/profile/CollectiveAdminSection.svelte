@@ -1,11 +1,10 @@
 <!-- The collective's admin section at the end of /profile (#916): name, rights, invites. -->
 <script lang="ts">
-	import { tick, untrack } from 'svelte';
+	import { untrack } from 'svelte';
 	import { reportProblem } from '$lib/problems/reportProblem';
 	import { isAuthExpiredError } from '$lib/entu/auth-expired';
 	import { m } from '$lib/paraglide/messages.js';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
-	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import type { RouteLoadStatus } from '$lib/loading/routeLoad';
 	import {
 		resolveCollectiveNameMarker,
@@ -39,9 +38,10 @@
 	interface Props {
 		generation: () => number;
 		activeContext: () => { cfg: EntuCfg; personId: string } | null;
+		onSessionExpired: () => void;
 	}
 
-	let { generation, activeContext }: Props = $props();
+	let { generation, activeContext, onSessionExpired }: Props = $props();
 
 	type Request = { cfg: EntuCfg; personId: string; g: number };
 
@@ -115,6 +115,12 @@
 		if (window.location.hash === '#collective') sectionEl.scrollIntoView({ block: 'start' });
 	});
 
+	// The page shows the one notice; the section only steps aside.
+	function expireSession(): void {
+		status = 'session-expired';
+		onSessionExpired();
+	}
+
 	function currentFor(r: Request, mine: number): () => boolean {
 		return () => mine === seq && r.g === generation();
 	}
@@ -164,7 +170,7 @@
 			.catch((e) => {
 				if (!isCurrent()) return;
 				if (isAuthExpiredError(e)) {
-					status = 'session-expired';
+					expireSession();
 					return;
 				}
 				reportProblem({ area: 'admin', action: 'loading members', error: e });
@@ -182,12 +188,10 @@
 		cfg = r.cfg;
 		viewerId = r.personId;
 		try {
-			// The toggle mounts with the section, in the same flush as this run starts.
-			await tick();
-			void rosterNames?.load(r.cfg, r.g);
 			const resolvedDbEntityId = await resolveDatabaseEntityId(r.cfg);
 			if (!isCurrent()) return;
 			if (!resolvedDbEntityId) throw new Error('admin roles: no database entity visible');
+			void rosterNames?.load(r.cfg, r.g, resolvedDbEntityId);
 			// Read alongside the blocking reads, never as one: a failure costs only the order.
 			loadSections(r.cfg, isCurrent);
 			loadMembers(r.cfg, isCurrent);
@@ -210,7 +214,7 @@
 		} catch (e) {
 			if (!isCurrent()) return;
 			if (isAuthExpiredError(e)) {
-				status = 'session-expired';
+				expireSession();
 				return;
 			}
 			reportProblem({ area: 'admin roles', action: 'load', error: e });
@@ -240,7 +244,7 @@
 		{#if status === 'loading'}
 			<p class="text-sm" aria-busy="true">…</p>
 		{:else if status === 'session-expired'}
-			<SessionExpiredNotice />
+			<!-- The page's notice covers it. -->
 		{:else if status === 'load-error'}
 			<div data-testid="admin-roles-load-error" class="flex flex-col gap-2" role="alert">
 				<p class="text-sm text-red-700">{m.admin_roles_load_error()}</p>
