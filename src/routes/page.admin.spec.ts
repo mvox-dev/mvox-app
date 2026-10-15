@@ -4,6 +4,9 @@ import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/pages/adminCopy')).adminMessages()
 );
@@ -45,9 +48,11 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-import Page from './admin/+page.svelte';
+import Page from './profile/+page.svelte';
 import type { RolePerson } from '$lib/admin/roleManagement';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
+import { dbEditRight } from '$lib/nav/dbRights';
+import { listMyProfilesMock } from '$lib/testing/mocks/session';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
@@ -111,58 +116,86 @@ beforeEach(resetAdminMocks);
 
 afterEach(cleanupReset);
 
-describe('/admin — access gate', () => {
-	it('without an available collective shows the no-collective state and issues ZERO data calls', async () => {
+describe('/profile admin section — access gate (#916)', () => {
+	it('without an available collective there is no section and ZERO role calls', async () => {
+		dbEditRight.set('editor');
 		const { container } = render(Page);
 		await waitFor(() => {
-			expect(q(container, 'admin-roles-no-collective')).not.toBeNull();
+			expect(q(container, 'profile-no-collective')).not.toBeNull();
 		});
-		expect(resolveDbEditRightMock).not.toHaveBeenCalled();
+		expect(q(container, 'profile-collective-admin')).toBeNull();
 		expect(listAdminsMock).not.toHaveBeenCalled();
 		expect(listLibrariansMock).not.toHaveBeenCalled();
 	});
 
-	it("resolveDbEditRight → 'not-editor': the no-access block, and NO role data is fetched (the lists are rights-bearing reads)", async () => {
+	it.each(['not-editor', 'error'] as const)(
+		"edit right '%s': no section, and NO role data is fetched (the lists are rights-bearing reads)",
+		async (right) => {
+			selectSampledb();
+			loadOk();
+			dbEditRight.set(right);
+
+			const { container } = render(Page);
+			await waitFor(() => expect(listMyProfilesMock).toHaveBeenCalled());
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			expect(q(container, 'profile-collective-admin')).toBeNull();
+			expect(q(container, 'admin-roles-admins')).toBeNull();
+			expect(listAdminsMock).not.toHaveBeenCalled();
+			expect(listLibrariansMock).not.toHaveBeenCalled();
+		}
+	);
+
+	it('while the edit right loads there is no section; once it says editor the section loads', async () => {
 		selectSampledb();
 		loadOk();
-		resolveDbEditRightMock.mockResolvedValue('not-editor');
+		dbEditRight.set('loading');
 
 		const { container } = render(Page);
-		await waitFor(() => {
-			expect(q(container, 'admin-roles-no-access')).not.toBeNull();
-		});
-		expect(container.textContent).toContain('administrator rights');
-		expect(q(container, 'admin-roles-admins')).toBeNull();
-		expect(q(container, 'admin-roles-librarians')).toBeNull();
+		await waitFor(() => expect(listMyProfilesMock).toHaveBeenCalled());
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(q(container, 'profile-collective-admin')).toBeNull();
 		expect(listAdminsMock).not.toHaveBeenCalled();
-		expect(listLibrariansMock).not.toHaveBeenCalled();
 
-		expect(resolveDbEditRightMock).toHaveBeenCalledWith(
+		dbEditRight.set('editor');
+		await waitFor(() => {
+			expect(q(section(container, 'profile-collective-admin'), 'admin-roles-admins')).not.toBeNull();
+		});
+		expect(listAdminsMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG),
+			'org-1',
 			'admin-p',
 			undefined,
-			'org-1'
+			expect.anything()
 		);
 	});
 
-	it("resolveDbEditRight → 'error': the load-error state with retry — a network failure is NEVER rendered as not-admin", async () => {
+	it('a failed read shows the load-error state with retry; the retry loads the lists', async () => {
 		selectSampledb();
 		loadOk();
-		resolveDbEditRightMock.mockResolvedValueOnce('error');
+		resolveLibraryEditRightMock.mockResolvedValueOnce({ state: 'error', libraryId: null });
 
 		const { container } = render(Page);
 		await waitFor(() => {
 			expect(q(container, 'admin-roles-load-error')).not.toBeNull();
 		});
-		expect(q(container, 'admin-roles-no-access')).toBeNull();
 
-		resolveDbEditRightMock.mockResolvedValue('editor');
 		const retry = q<HTMLButtonElement>(container, 'admin-roles-retry-load');
 		expect(retry).not.toBeNull();
 		await fireEvent.click(retry!);
 		await waitFor(() => {
 			expect(q(container, 'admin-roles-admins')).not.toBeNull();
 		});
+	});
+
+	it('sits at the end of /profile under an h2, with id="collective"', async () => {
+		selectSampledb();
+		loadOk();
+		const { container } = await renderReady();
+		const el = section(container, 'profile-collective-admin');
+		expect(el.id).toBe('collective');
+		expect(el.querySelector('h2')?.textContent).toBe('Admin');
+		const main = container.querySelector('main > div')!;
+		expect(main.lastElementChild).toBe(el);
 	});
 });
 
@@ -886,6 +919,7 @@ describe('/admin — a library OWNER row', () => {
 describe('/admin — a collective switch that lands mid-load', () => {
 	it('a slow EARLIER load never clobbers the newer collective: rows, the org acted on, and canManage all come from the collective now selected', async () => {
 		signIn({ token: 'jwt-admin', collectives: [{ db: 'alpha', name: 'Alpha', personId: 'p-alpha' }, { db: 'beta', name: 'Beta', personId: 'p-beta' }] });
+		dbEditRight.set('editor');
 
 		let releaseAlpha!: () => void;
 		const alphaGate = new Promise<void>((resolve) => {

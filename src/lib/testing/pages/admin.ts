@@ -21,6 +21,8 @@ import {
 	updateCollectiveNameMock
 } from '$lib/testing/mocks/admin';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { listMyProfilesMock } from '$lib/testing/mocks/session';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { signIn } from '$lib/testing/session';
 
 export const CFG = testCfg('sampledb', 'jwt-admin');
@@ -64,7 +66,10 @@ export function selectSampledb(): void {
 	});
 }
 
+// The section renders on the layout's edit right; the page reads the profiles alongside.
 export function loadOk(): void {
+	dbEditRight.set('editor');
+	listMyProfilesMock.mockResolvedValue([]);
 	resolveDbEditRightMock.mockResolvedValue('editor');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
@@ -105,6 +110,7 @@ export function resetAdminMocks(): void {
 	]) {
 		mock.mockReset();
 	}
+	dbEditRight.set('loading');
 }
 
 export function resetInviteMocks(): void {

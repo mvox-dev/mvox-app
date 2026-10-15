@@ -137,17 +137,17 @@ describe('/profile — roster-names control structure (admin view)', () => {
 		).toBeTruthy();
 	});
 
-	it('sits AFTER the time-format control, as a SIBLING block in the same app-chrome column', async () => {
+	it('sits inside the collective admin section at the end of the page, not at the top (#916)', async () => {
 		const container = await renderAdminReady();
-		const timeFormat = timeFormatSelect(container)!;
 		const roster = rosterSelect(container)!;
-		expect(timeFormat, 'the time-format control must be untouched').not.toBeNull();
+		const section = q(container, '[data-testid="profile-collective-admin"]');
+		expect(section, 'the admin section must render for a db editor').not.toBeNull();
+		expect(section!.contains(roster)).toBe(true);
+		const timeFormat = timeFormatSelect(container)!;
+		expect(timeFormat.closest('[data-testid="profile-collective-admin"]')).toBeNull();
 		expect(
-			timeFormat.compareDocumentPosition(roster) & Node.DOCUMENT_POSITION_FOLLOWING,
-			'the roster-names control must come after the time-format control'
+			timeFormat.compareDocumentPosition(section!) & Node.DOCUMENT_POSITION_FOLLOWING
 		).toBeTruthy();
-		expect(roster.closest('div')!.parentElement).toBe(timeFormat.closest('div')!.parentElement);
-		expect(q(container, '[data-testid="profile-time-format-hint"]')).not.toBeNull();
 	});
 
 	it('page invariants hold: exactly one <main>, exactly one <h1>', async () => {

@@ -4,7 +4,6 @@ import type { Component } from 'svelte';
 import { readFileSync } from 'node:fs';
 import { expect, vi } from 'vitest';
 import AgendaPage from '../../../routes/+page.svelte';
-import AdminPage from '../../../routes/admin/+page.svelte';
 import InvitePage from '../../../routes/admin/invite/+page.svelte';
 import EventPage from '../../../routes/event/[id]/+page.svelte';
 import LibraryPage from '../../../routes/library/+page.svelte';
@@ -212,12 +211,6 @@ export const WRITE_PAGES: Record<string, WritePage> = {
 				expect(going?.disabled).toBe(false);
 			})
 	},
-	'/admin': {
-		path: '/admin',
-		Page: AdminPage,
-		arrange: arrangeAdmin,
-		ready: (c) => waitFor(() => must(c, 'admin-add-admin-select'))
-	},
 	'/admin/invite': {
 		path: '/admin/invite',
 		Page: InvitePage,
@@ -271,11 +264,17 @@ export const WRITE_PAGES: Record<string, WritePage> = {
 	'/profile': {
 		path: '/profile',
 		Page: ProfilePage,
+		// A db editor, so the collective's admin section (#916) is swept with the fields.
 		arrange: () => {
-			signIn({ token: 'jwt-member' });
+			arrangeAdmin();
+			dbEditRight.set('editor');
 			listMyProfilesMock.mockResolvedValue([{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }]);
 		},
-		ready: (c) => waitFor(() => must(c, 'profile-name-edit'))
+		ready: (c) =>
+			waitFor(() => {
+				must(c, 'profile-name-edit');
+				must(c, 'admin-add-admin-select');
+			})
 	},
 	'/roster': {
 		path: '/roster',

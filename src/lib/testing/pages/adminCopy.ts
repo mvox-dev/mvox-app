@@ -1,5 +1,5 @@
 // English copy for the admin page specs; a spec passes only the keys it words differently.
-import { copyWith, englishMessages, type Copy } from '../messageMocks';
+import { copyWith, echoMessages, type Copy } from '../messageMocks';
 
 export const ADMIN_COPY = {
 	admin_roles_title: () => 'Role management',
@@ -60,7 +60,8 @@ export const ADMIN_COPY = {
 } satisfies Copy;
 
 export function adminMessages(overrides: Partial<typeof ADMIN_COPY> = {}) {
-	return englishMessages(copyWith(ADMIN_COPY, overrides));
+	// Echoes every other key: the section renders inside the whole profile page (#916).
+	return echoMessages('bare', copyWith(ADMIN_COPY, overrides));
 }
 
 // (*MVOX:Josquin*)

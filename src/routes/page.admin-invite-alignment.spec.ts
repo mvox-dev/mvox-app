@@ -3,6 +3,9 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 import { render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/pages/adminCopy')).adminMessages()
 );
@@ -44,7 +47,7 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-import AdminPage from './admin/+page.svelte';
+import AdminPage from './profile/+page.svelte';
 import InvitePage from './admin/invite/+page.svelte';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
@@ -62,6 +65,7 @@ import {
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { resetAdminMocks, selectSampledb } from '$lib/testing/pages/admin';
 import { cleanupReset } from '$lib/testing/pages/dom';
+import { dbEditRight } from '$lib/nav/dbRights';
 
 // Defaults the hoisted handles carried before they moved to the shared mocks.
 listJoinStatesMock.mockResolvedValue({});
@@ -74,6 +78,7 @@ function centring(el: HTMLElement): string[] {
 
 function loadOk() {
 	resolveDbEditRightMock.mockResolvedValue('editor');
+	dbEditRight.set('editor');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 	listAdminsMock.mockResolvedValue({
@@ -95,7 +100,7 @@ function loadOk() {
 	resolveInviteParentMock.mockResolvedValue('org-1');
 }
 
-function inviteSurfaceRoot(scope: ParentNode, headingLevel: 'h1' | 'h2'): HTMLElement {
+function inviteSurfaceRoot(scope: ParentNode, headingLevel: 'h1' | 'h3'): HTMLElement {
 	const headings = Array.from(scope.querySelectorAll(headingLevel)).filter(
 		(el) => el.textContent?.trim() === 'Invite a new member'
 	);
@@ -125,7 +130,7 @@ describe('#235 — embedded InviteSurface on /admin (integration: real route pag
 
 	it('layout guard (happy-dom cannot measure centring): the embedded surface is not centred', async () => {
 		const { section } = await renderAdminReady();
-		expect(centring(inviteSurfaceRoot(section, 'h2'))).toEqual([]);
+		expect(centring(inviteSurfaceRoot(section, 'h3'))).toEqual([]);
 	});
 
 	it('layout guard (happy-dom cannot measure centring): it aligns like the role sections beside it', async () => {

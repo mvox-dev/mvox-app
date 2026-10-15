@@ -188,7 +188,7 @@
 </div>
 
 <section data-testid="admin-roles-admins" class="flex flex-col gap-3">
-	<h2 class="font-display text-lg">{m.admin_roles_admins_title()}</h2>
+	<h3 class="font-display text-lg">{m.admin_roles_admins_title()}</h3>
 	<ul class="flex flex-col gap-1">
 		{#each admins as person (person.id)}
 			<li
@@ -245,7 +245,7 @@
 </section>
 
 <section data-testid="admin-roles-librarians" class="flex flex-col gap-3">
-	<h2 class="font-display text-lg">{m.admin_roles_librarians_title()}</h2>
+	<h3 class="font-display text-lg">{m.admin_roles_librarians_title()}</h3>
 	{#if libraryId === null}
 		<p data-testid="admin-roles-no-library" class="text-sm">{m.admin_roles_no_library()}</p>
 	{:else}

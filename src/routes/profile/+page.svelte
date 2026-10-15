@@ -1,9 +1,10 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { reportProblem } from '$lib/problems/reportProblem';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken, getUser } from '$lib/auth/storage';
 	import { cfgFor } from '$lib/entu/cfg';
-	import { selectedCollectiveStore } from '$lib/collectives/store';
+	import { selectedCollectiveStore, selectedCollectiveIdentityStore } from '$lib/collectives/store';
 	import {
 		listMyProfiles,
 		profilesByLevel,
@@ -27,22 +28,23 @@
 	import { writesAvailable } from '$lib/net/online';
 	import { mintSelfLinkInvite, SelfLinkMintError } from '$lib/invite/inviteData';
 	import { listAllEditions } from '$lib/library/libraryData';
-	import { updateRosterShowRealNames } from '$lib/collective/rosterNames';
 	import ProfileChrome from '$lib/profile/ProfileChrome.svelte';
-	import RosterNamesToggle from '$lib/profile/RosterNamesToggle.svelte';
 	import LinkedAccountsSection from '$lib/profile/LinkedAccountsSection.svelte';
 	import ProfileStorageSection from '$lib/profile/ProfileStorageSection.svelte';
+	import CollectiveAdminSection from '$lib/profile/CollectiveAdminSection.svelte';
 
 	const LEVELS: readonly Level[] = ['public', 'domain', 'private'];
 
 	const selected = $derived($selectedCollectiveStore);
+	// Keyed on identity: a rename republishes the collective, and a reload would clobber it.
+	const identity = $derived($selectedCollectiveIdentityStore);
 
 	let status = $state<RouteLoadStatus>('loading');
 
 	const pf = $state(createProfileFieldState());
 
 	// The sections own their state; resetState() and the load body reach them here.
-	let rosterNames = $state<RosterNamesToggle>();
+	let collectiveAdmin = $state<CollectiveAdminSection>();
 	let linkedAccounts = $state<LinkedAccountsSection>();
 	let storageSection = $state<ProfileStorageSection>();
 
@@ -77,7 +79,7 @@
 	function resetState() {
 		Object.assign(pf, createProfileFieldState());
 		linkedAccounts?.reset();
-		rosterNames?.reset();
+		collectiveAdmin?.reset();
 		storageSection?.reset();
 		ops.reset();
 	}
@@ -92,9 +94,9 @@
 		reset: resetState,
 		async load({ cfg, selected: current, g, isCurrent }) {
 			const personId = current.personId;
-			// Fired apart from the fields read: the roster-names control is app chrome and
-			// must load even when listMyProfiles rejects.
-			void rosterNames?.load(cfg, g);
+			// Fired apart from the fields read: the admin section must load even when
+			// listMyProfiles rejects.
+			collectiveAdmin?.load(cfg, personId, g);
 			const profiles = await listMyProfiles(cfg, personId);
 			if (!isCurrent()) return;
 			pf.loadedProfiles = profiles;
@@ -183,8 +185,8 @@
 	}
 
 	$effect(() => {
-		void selected;
-		void loadForSelected();
+		void identity;
+		untrack(() => void loadForSelected());
 	});
 </script>
 
@@ -193,14 +195,6 @@
 		<h1 class="font-display text-2xl">{m.profile_title()}</h1>
 
 		<ProfileChrome />
-
-		<RosterNamesToggle
-			bind:this={rosterNames}
-			{isOffline}
-			generation={() => routeLoad.generation}
-			{activeContext}
-			updateRosterShowRealNames={(...a) => updateRosterShowRealNames(...a)}
-		/>
 
 		<!-- #257 — above the `status` gate: a live region announces only changes, and inside
 			the ready branch the reload would remount it with its text already in it. -->
@@ -307,6 +301,12 @@
 			generation={() => routeLoad.generation}
 			{activeContext}
 			listAllEditions={(...a) => listAllEditions(...a)}
+		/>
+
+		<CollectiveAdminSection
+			bind:this={collectiveAdmin}
+			generation={() => routeLoad.generation}
+			{activeContext}
 		/>
 	</div>
 </main>

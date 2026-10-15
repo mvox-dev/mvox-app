@@ -3,6 +3,9 @@
 import { waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/pages/adminCopy')).adminMessages()
 );
@@ -99,7 +102,9 @@ describe('/admin — the member pickers say when the roster is loading or unavai
 		expect(q(container, 'librarian-entry-p-cilla')).not.toBeNull();
 		expect(q(container, 'admin-remove-p-bela')).not.toBeNull();
 		expect(q(container, 'admin-invite-section')).not.toBeNull();
-		expect(consoleSpy.mock.calls).toEqual([['admin: loading members failed', boom]]);
+		// The rest of /profile reports its own reads; the section's members failure is one call.
+		const admin = consoleSpy.mock.calls.filter((c) => String(c[0]).startsWith('admin'));
+		expect(admin).toEqual([['admin: loading members failed', boom]]);
 		consoleSpy.mockRestore();
 	});
 

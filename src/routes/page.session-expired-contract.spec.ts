@@ -25,7 +25,6 @@ vi.mock('$app/navigation', async () =>
 );
 
 import AgendaPage from './+page.svelte';
-import AdminPage from './admin/+page.svelte';
 import InvitePage from './admin/invite/+page.svelte';
 import EventPage from './event/[id]/+page.svelte';
 import LibraryPage from './library/+page.svelte';
@@ -44,7 +43,6 @@ import { signIn } from '$lib/testing/session';
 
 const PAGES: Record<string, { Page: Component; loadError: string; retry: string }> = {
 	'/': { Page: AgendaPage, loadError: 'agenda-error', retry: 'agenda-retry' },
-	'/admin': { Page: AdminPage, loadError: 'admin-roles-load-error', retry: 'admin-roles-retry-load' },
 	'/admin/invite': {
 		Page: InvitePage,
 		loadError: 'invite-admin-load-error',

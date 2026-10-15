@@ -37,6 +37,9 @@ const h = vi.hoisted(() => {
 		removeLibrarianMock: vi.fn(),
 	};
 });
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
 vi.mock('$lib/admin/roleManagement', () => ({
 	RoleLockoutError: h.RoleLockoutError,
 	RoleGrantMissingError: h.RoleGrantMissingError,
@@ -84,6 +87,7 @@ import NavShell from '$lib/components/nav/NavShell.svelte';
 import { NAV_ENTRIES } from '$lib/nav/entries';
 import { buildInviteUrl } from '$lib/invite/invite-links';
 import AdminPage from './admin/+page.svelte';
+import ProfilePage from './profile/+page.svelte';
 import AdminInvitePage from './admin/invite/+page.svelte';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
@@ -100,6 +104,8 @@ import {
 } from '$lib/testing/mocks/admin';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { ANNA } from '$lib/testing/pages/admin';
+import { dbEditRight } from '$lib/nav/dbRights';
+import { listMyProfilesMock } from '$lib/testing/mocks/session';
 
 const testChildren = createRawSnippet(() => ({
 	render: () => '<div data-testid="page-content">Page Content</div>'
@@ -136,6 +142,8 @@ function selectSampledb() {
 
 function loadOk() {
 	resolveDbEditRightMock.mockResolvedValue('editor');
+	dbEditRight.set('editor');
+	listMyProfilesMock.mockResolvedValue([]);
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 	h.listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
@@ -219,11 +227,11 @@ describe('#916 — NavShell × real NAV_ENTRIES', () => {
 	});
 });
 
-describe('#140 — /admin carries BOTH role management AND invite functionality', () => {
+describe('#140 — the admin section carries BOTH role management AND invite functionality (on /profile, #916)', () => {
 	async function renderMergedReady() {
 		selectSampledb();
 		loadOk();
-		const rendered = render(AdminPage);
+		const rendered = render(ProfilePage);
 		await waitFor(() => {
 			expect(q(rendered.container, 'admin-roles-admins')).not.toBeNull();
 			expect(q(rendered.container, 'admin-roles-librarians')).not.toBeNull();
@@ -238,12 +246,13 @@ describe('#140 — /admin carries BOTH role management AND invite functionality'
 		expect(q(inviteSection, 'invite-admin-submit')).not.toBeNull();
 	});
 
-	it('the embedded invite heading sits UNDER the page h1 — a section h2, not a second page title (review F2)', async () => {
+	it('the embedded invite heading sits UNDER the section h2 — an h3, not a second page title (review F2, #916)', async () => {
 		const { container } = await renderMergedReady();
 		expect(container.querySelectorAll('h1')).toHaveLength(1);
 		const inviteSection = q<HTMLElement>(container, 'admin-invite-section')!;
 		expect(inviteSection.querySelector('h1')).toBeNull();
-		expect(inviteSection.querySelector('h2')).not.toBeNull();
+		expect(inviteSection.querySelector('h2')).toBeNull();
+		expect(inviteSection.querySelector('h3')).not.toBeNull();
 	});
 
 	it('the embedded invite surface is LIVE: submitting mints an invite via createInvite and surfaces the copy-only result panel', async () => {
@@ -269,15 +278,16 @@ describe('#140 — /admin carries BOTH role management AND invite functionality'
 		expect(container.textContent).not.toContain('tok-123');
 	});
 
-	it('non-admin (no-access): NO invite functionality renders on /admin either', async () => {
+	it('non-admin: NO invite functionality renders on /profile either', async () => {
 		selectSampledb();
 		loadOk();
-		resolveDbEditRightMock.mockResolvedValue('not-editor');
+		dbEditRight.set('not-editor');
 
-		const { container } = render(AdminPage);
+		const { container } = render(ProfilePage);
 		await waitFor(() => {
-			expect(q(container, 'admin-roles-no-access')).not.toBeNull();
+			expect(q(container, 'profile-name-edit')).not.toBeNull();
 		});
+		expect(q(container, 'profile-collective-admin')).toBeNull();
 		expect(q(container, 'admin-invite-section')).toBeNull();
 		expect(q(container, 'invite-admin-submit')).toBeNull();
 		expect(createInviteMock).not.toHaveBeenCalled();
@@ -302,7 +312,7 @@ describe('#140 — embedded invite surface with MULTIPLE collectives', () => {
 		resolveDatabaseEntityIdMock.mockImplementation((cfg: { db: string }) =>
 			Promise.resolve(cfg.db === 'ramkoor' ? 'org-ram' : 'org-poly')
 		);
-		const rendered = render(AdminPage);
+		const rendered = render(ProfilePage);
 		await waitFor(() => {
 			expect(q(rendered.container, 'admin-invite-section')).not.toBeNull();
 		});
@@ -348,6 +358,44 @@ describe('#140 — embedded invite surface with MULTIPLE collectives', () => {
 		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledWith(
 			expect.objectContaining({ db: 'ramkoor' })
 		);
+	});
+});
+
+describe('#916 — /admin lands on the admin section of /profile', () => {
+	it('/admin replaces itself with /profile#collective', async () => {
+		render(AdminPage);
+		await waitFor(() => {
+			expect(goto).toHaveBeenCalledWith('/profile#collective', { replaceState: true });
+		});
+	});
+
+	it('/profile#collective scrolls the section into view once it has rendered', async () => {
+		const scrolled: Element[] = [];
+		const spy = vi
+			.spyOn(Element.prototype, 'scrollIntoView')
+			.mockImplementation(function (this: Element) {
+				scrolled.push(this);
+			});
+		history.replaceState({}, '', '/profile#collective');
+		selectSampledb();
+		loadOk();
+		const { container } = render(ProfilePage);
+		await waitFor(() => expect(q(container, 'admin-roles-admins')).not.toBeNull());
+		await waitFor(() => expect(scrolled).toEqual([q(container, 'profile-collective-admin')]));
+		history.replaceState({}, '', '/');
+		spy.mockRestore();
+	});
+
+	it('/profile without the fragment does not scroll', async () => {
+		const spy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
+		history.replaceState({}, '', '/profile');
+		selectSampledb();
+		loadOk();
+		const { container } = render(ProfilePage);
+		await waitFor(() => expect(q(container, 'admin-roles-admins')).not.toBeNull());
+		expect(spy).not.toHaveBeenCalled();
+		history.replaceState({}, '', '/');
+		spy.mockRestore();
 	});
 });
 

@@ -119,8 +119,8 @@ const ROWS: Record<string, Row> = {
 		write: (c) =>
 			fireEvent.click(c.querySelector('[data-testid="agenda-row-e1"] [data-testid="rsvp-btn-going"]')!)
 	},
-	'/admin roles': {
-		page: '/admin',
+	'/profile admin roles': {
+		page: '/profile',
 		write: (c) => fireEvent.change(must(c, 'admin-add-admin-select'), { target: { value: 'p-bela' } })
 	},
 	'/admin/invite create': {

@@ -3,6 +3,9 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bare')
 );
@@ -47,7 +50,7 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-import Page from './admin/+page.svelte';
+import Page from './profile/+page.svelte';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
 	createInviteMock,
@@ -66,6 +69,7 @@ import { entuFetchMock } from '$lib/testing/mocks/seasons';
 import { DB_ENTITY, selectSampledb } from '$lib/testing/pages/admin';
 import { cleanupClearReset, q } from '$lib/testing/pages/dom';
 import { ANNA } from '$lib/testing/pages/adminRoleFixtures';
+import { dbEditRight } from '$lib/nav/dbRights';
 
 // Defaults the hoisted handles carried before they moved to the shared mocks.
 resolveDbRightMock.mockResolvedValue('error');
@@ -75,6 +79,7 @@ const ROSTER = [{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email:
 
 beforeEach(() => {
 	resolveDbEditRightMock.mockResolvedValue('editor');
+	dbEditRight.set('editor');
 	resolveDatabaseEntityIdMock.mockResolvedValue(DB_ENTITY);
 	entuFetchMock.mockRejectedValue(
 		new Error(
@@ -117,7 +122,10 @@ describe('/admin — the role lists are keyed to the DATABASE entity (#161)', ()
 		expect(listAdminsMock).toHaveBeenCalled();
 		expect(listAdminsMock.mock.calls[0][1]).toBe(DB_ENTITY);
 
-		expect(entuFetchMock).not.toHaveBeenCalled();
+		// The one wire read left is the real-names toggle's, on the database entity (#916).
+		expect(entuFetchMock.mock.calls.map((c) => c[1])).toEqual([
+			`entity/${DB_ENTITY}?props=roster_show_real_names`
+		]);
 	});
 });
 

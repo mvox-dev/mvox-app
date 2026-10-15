@@ -1,7 +1,7 @@
-// Admin page render that waits for both role lists; imports the page.
+// Profile page render, waiting for both of the admin section's role lists (#916).
 import { render, waitFor } from '@testing-library/svelte';
 import { expect } from 'vitest';
-import Page from '../../../routes/admin/+page.svelte';
+import Page from '../../../routes/profile/+page.svelte';
 import { q } from './dom';
 
 export async function renderReady() {
