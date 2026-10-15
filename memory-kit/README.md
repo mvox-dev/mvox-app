@@ -35,7 +35,10 @@ The world still files natural language under "prose" and code under "engineering
 
 Where the kit is, and what each step waits for. Dates are targets; gates are not negotiable.
 
-- **0.1.0-alpha.N (now).** Five homes run the kit; upgrades need no data step since alpha.2.
+- **0.1.0-alpha.N (now).** Six homes run the kit; upgrades need no data step since alpha.2.
+  alpha.15 shipped obligations' `owed_to` and the commitments tier ahead of 0.2, both additive:
+  a row without `owed_to` is counted, not failed, and a home opts into commitments by creating
+  the file.
 - **0.1.0** -- drops "alpha" when:
   - at least one home has passed ADOPTION GATE 3 (deletions) on the kit (household: 17.10), and
   - the adopting homes have filed their experience reports (household due 27.10).
@@ -130,8 +133,8 @@ are looking for.
 
 ## Tooling (ruled 2026-09-21)
 
-Parsing and schema generation: **python3 + PyYAML**. Line-shaped checks (row and char caps):
-**awk**. Nothing else -- no `yq` (not present by default, and two different programs share the
+Parsing and schema generation: **python3 + PyYAML**, Python 3.9 or newer (macOS's system python3
+is 3.9; kit #34). Line-shaped checks (row and char caps): **awk**. Nothing else -- no `yq` (not present by default, and two different programs share the
 name), no node (nvm installs sit outside the systemd/cron PATH, and the lint must run from cron).
 
 The lint fails closed with a one-line install hint when PyYAML is missing; it never silently
@@ -167,18 +170,18 @@ commit, tokens approximated at 4 chars each -- regenerate with `tools/weigh.py`.
 
 | read | what | ~tokens |
 |------|------|--------|
-| **every session** | shipped rules (8 rows) | **680** |
-| when the subject comes up | shipped facts about the kit (7) | 450 |
-| when a ref points there | url files (5) | 100 |
-| when a shape is in question | types, the canon (12 files) | 2 370 |
-| at the moment of use | lesson index + bodies (4) | 1 520 |
-| once, at adoption | ADOPTION, UPGRADE, README, GOVERNANCE | 4 930 |
+| **every session** | shipped rules (8 rows) | **704** |
+| when the subject comes up | shipped facts about the kit (7) | 447 |
+| when a ref points there | url files (4) | 45 |
+| when a shape is in question | types, the canon (13 files) | 3 141 |
+| at the moment of use | lesson index + bodies (5 lessons) | 2 242 |
+| once, at adoption | ADOPTION, UPGRADE, README, GOVERNANCE | 9 337 |
 
 **The per-session figure is the only one paid unconditionally.** Everything else is read when
 a question actually arises, which is the entire reason the tiers are split by read-time rather
 than by importance.
 
-### Is 680 tokens a lot?
+### Is 704 tokens a lot?
 
 No. On a 1M-token context that is 0.07%, and it is paid once per session rather than
 accumulating. The figure is published because a convention that cannot state its own cost is
@@ -245,12 +248,14 @@ ADOPTION.md        prompt: bring an existing home onto the kit, once
 UPGRADE.md         prompt: after every pull
 types/             TypeScript interfaces -- the canon: shape, constants and rationale
 caps.yaml          GENERATED from types/caps.ts; the flat extract the lint reads
-tools/             extract-caps.py, lesson-index.py, obligations-due.py, kit-update.py (+ kit-update-test.py), weigh.py
+tools/             extract-caps.py, lesson-index.py, obligations-due.py, kit-update.py (+ kit-update-test.py), weigh.py,
+                   write-paths-test.py
 memory/            the kit's own memory, shipped with it: kit facts, the 8 core rules, lessons, urls
 fixtures/          valid/ and invalid/ samples per tier -- the contract
 lint/              reference lint (python3 + PyYAML), --gate | --report; run-fixtures.sh
 skeleton/          the empty home a fresh consumer starts from (secrets README included)
-adapters/          harness-bound tools: adapters/claude-code/ obligations-pane, watch (+ spool/spool-poll.py), kit-update
+adapters/          harness-bound tools: adapters/claude-code/ obligations-pane, watch (+ spool/spool-poll.py), kit-update;
+                   its README.md says what a user-scope install does outside a kit home
 GOVERNANCE.md
 VERSION            pinned by consumers
 CHANGELOG.md

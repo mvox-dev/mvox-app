@@ -139,6 +139,25 @@ A major means data shape changed. The kit ships `migrations/<version>/` for exac
   - A session whose start folder has no `memory-kit.conf` now gets one kit-update notice saying so
     (#31). If the home is elsewhere, add a one-line pointer conf there: `kit_home: <path>`.
 
+- **0.1.0-alpha.15 -> 0.1.0-alpha.16:** no data step. Pull, lint, then update the plugins as for alpha.15
+  (watch 0.4.0, obligations-pane 0.5.1, kit-update 0.3.1; alpha.15's kit-update.py prints the steps), then
+  `/reload-plugins`.
+  - A home on Python 3.9 (macOS's system python3) can run `tools/lesson-index.py` again (#34).
+    Nothing to do; if it skipped regenerating its index because of the crash, run it now.
+  - `tools/kit-update.py` now runs the plugin updates itself after a pull that changed a plugin,
+    when `claude` is on PATH (#37): `claude plugin marketplace update memory-kit` and `claude
+    plugin update <p>@memory-kit` for each changed one installed, then it says to
+    `/reload-plugins`. It changes the harness's plugin state, user-level for a user-scope install.
+    The run that pulls alpha.16 is still alpha.15's script, which prints the steps; the new
+    behaviour starts with the next update.
+  - New: `memory-kit/adapters/claude-code/README.md`, "Install scope" (#35). A home whose plugins
+    are installed at user scope can read there what they do in other folders, and move them to
+    project scope if it wants; that choice is the human's.
+  - The spool poller (#39): nothing changes until a home adds the new options. A Windows home that
+    runs it gets `CREATE_NO_WINDOW` at the pull; restart the poller (kill the pid in
+    `.<stem>.lock`, then start a session) to pick it up. `--remind`, `--json` and `--status` are
+    opt-in. Read the watch README's "Ack only what you read, by id" either way.
+
 ## Always
 
 - The home's config for the kit lives outside the subtree; a pull must never clobber it.

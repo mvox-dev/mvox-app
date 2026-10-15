@@ -21,16 +21,25 @@ What it does, and what it never does:
   - git subtree pull --squash of the target tag, then the lint gate over the home;
   - on a lint failure, undoes the pull (back to the commit it started from) and says why;
   - commits locally and NEVER pushes: each home's own push rule applies;
-  - when a plugin changed, names the steps that update it: the marketplace update, a plugin
-    update per changed plugin, then /reload-plugins (a pull alone never updates one, #23).
+  - when the pull changed the plugins (memory-kit/adapters/) and `claude` is on PATH, RUNS
+    `claude plugin marketplace update memory-kit`, then `claude plugin update <p>@memory-kit`
+    for each changed plugin that `claude plugin list` (run in the home) shows installed, then
+    says to /reload-plugins (#37). This reaches past the home's repo into the harness's plugin
+    state: for a user-scope install, every session on the machine. It never installs,
+    uninstalls, enables or configures a plugin, and never adds a marketplace;
+  - without `claude` on PATH, or when it cannot list the installed plugins, it prints those steps
+    for you to run (a pull alone never updates a plugin, #23). A failed plugin step is said,
+    with the rest to run by hand; the kit update stands.
 
-Exit: 0 updated or nothing to do, 1 refused or failed (and anything changed undone), 2 bad usage
+Exit: 0 updated (a failed plugin step is said, and does not change it) or nothing to do, 1 refused or failed (and anything changed undone), 2 bad usage
 (an unknown option, more than one home) or setup, 3 the undo itself failed: the tree may be partly pulled (the message says how to recover).
 Kit #15. The kit-update plugin prompts a session to run this when a release appears.
 """
 import os
 import pathlib
+import json
 import re
+import shutil
 import subprocess
 import sys
 
@@ -47,6 +56,9 @@ EXIT_ROLLBACK_FAILED = 3
 # home's subtree merge while still ending a stalled transfer; a timeout is a failure (ultrareview
 # alpha.13, finding 5).
 NETWORK_TIMEOUT = 300
+# The bound on each `claude plugin` call (kit #37). The marketplace is a Directory source inside the
+# home, so an update is a local copy; a call still running at 120 s is stuck, and fails.
+CLAUDE_TIMEOUT = 120
 TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta|rc)\.(\d+))?$")
 PRE_RANK = {"alpha": 0, "beta": 1, "rc": 2, None: 3}
 
@@ -139,19 +151,81 @@ def named(paths):
     return ", ".join(paths[:5]) + more
 
 
-def plugin_steps(changed):
+def changed_plugins(changed):
+    """The plugin folders a pull changed, by name (the marketplace's own .claude-plugin/ is none)."""
+    return sorted({p.split("/")[3] for p in changed
+                   if p.startswith("memory-kit/adapters/claude-code/") and p.count("/") >= 4
+                   and not p.split("/")[3].startswith(".")})
+
+
+def plugin_steps(changed, why="a pull never updates an installed plugin"):
     """What to run when the pull changed files under memory-kit/adapters. A pull never updates an
     installed plugin: the harness keeps its own copy from the install, so /reload-plugins alone
     reloads the old one (#23, po-team's pane stayed at 0.1.0)."""
-    names = sorted({p.split("/")[3] for p in changed
-                    if p.startswith("memory-kit/adapters/claude-code/") and p.count("/") >= 4
-                    and not p.split("/")[3].startswith(".")})
+    names = changed_plugins(changed)
     lines = [f"plugins changed: {', '.join(names)}" if names else "the plugin marketplace changed",
-             "a pull never updates an installed plugin; run, in order (each plugin this home has installed):",
+             f"{why}; run, in order (each plugin this home has installed):",
              "  claude plugin marketplace update memory-kit"]
     lines += [f"  claude plugin update {n}@memory-kit" for n in names]
     lines.append("  then /reload-plugins in every session of this home")
     return lines
+
+
+def claude(exe, home, *args):
+    """One `claude` call in the home (so a project-scope install counts), bounded. (ok, stdout, why)."""
+    try:
+        r = subprocess.run([exe, *args], capture_output=True, text=True, encoding="utf-8",
+                           cwd=str(home), timeout=CLAUDE_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return False, "", f"timed out after {CLAUDE_TIMEOUT} s"
+    except OSError as e:
+        return False, "", str(e)
+    if r.returncode != 0:
+        last = (r.stderr or r.stdout or "").strip().splitlines()
+        return False, r.stdout, f"exit {r.returncode}: {last[-1] if last else 'no output'}"
+    return True, r.stdout, ""
+
+
+def update_plugins(home, changed):
+    """Kit #37: after a pull that changed the plugins, run their updates when claude is on PATH, else
+    print them (#23). Says each step; returns nothing: the kit update stands either way."""
+    exe = shutil.which("claude")
+    if exe is None:
+        for line in plugin_steps(changed, "a pull never updates an installed plugin, and claude is not on PATH"):
+            say(line)
+        return
+    ok, out, why = claude(exe, home, "plugin", "list", "--json")
+    try:
+        ids = {p.get("id") for p in json.loads(out)} if ok else set()
+    except (ValueError, TypeError, AttributeError):
+        ok, why = False, "its output is not a JSON list of plugins"
+    if not ok:
+        for line in plugin_steps(changed, f"cannot list the installed plugins (claude plugin list --json: {why})"):
+            say(line)
+        return
+    installed = sorted(i.split("@")[0] for i in ids if isinstance(i, str) and i.endswith("@memory-kit"))
+    if not installed:
+        say("no memory-kit plugin is installed for this home; nothing to update")
+        return
+    names = changed_plugins(changed)
+    steps = [["plugin", "marketplace", "update", "memory-kit"]]
+    steps += [["plugin", "update", f"{n}@memory-kit"] for n in names if n in installed]
+    for i, step in enumerate(steps):
+        ok, _, why = claude(exe, home, *step)
+        if ok:
+            say(f"ran: claude {' '.join(step)}")
+        elif i == 0:
+            say(f"FAILED: claude {' '.join(step)} ({why}); the kit update itself is committed. Run by hand, in order:")
+            for rest in steps:
+                say(f"  claude {' '.join(rest)}")
+            say("  then /reload-plugins in every session of this home")
+            return
+        else:
+            say(f"FAILED: claude {' '.join(step)} ({why}); run it by hand")
+    skipped = [n for n in names if n not in installed]
+    if skipped:
+        say(f"not installed here, so not updated: {', '.join(skipped)}")
+    say("now /reload-plugins in every session of this home")
 
 
 def lint_passes(home):
@@ -274,8 +348,7 @@ def main(argv):
     plugins = git(home, "diff", "--name-only", start, "HEAD", "--", "memory-kit/adapters").stdout.split()
     say(f"updated {current} -> {target[1:]} ({channel}); lint gate passes; committed locally, not pushed")
     if plugins:
-        for line in plugin_steps(plugins):
-            say(line)
+        update_plugins(home, plugins)
     return 0
 
 

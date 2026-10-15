@@ -9,12 +9,15 @@ v0.1.0-alpha.13, findings 1, 4 and 5.
 """
 import importlib.util
 import io
+import json
+import os
 import pathlib
 import subprocess
 import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
+from unittest import mock
 
 # Loading kit-update.py must leave nothing behind in tools/ (no __pycache__).
 sys.dont_write_bytecode = True
@@ -39,8 +42,13 @@ UPGRADE = """## Per version
 class FakeHost:
     """subprocess.run for the tool: git and the lint answered from a table, every call recorded."""
 
-    def __init__(self, tags, upgrade=UPGRADE, pull="ok", reset_rc=0, fetch="ok", status="", diff=""):
+    def __init__(self, tags, upgrade=UPGRADE, pull="ok", reset_rc=0, fetch="ok", status="", diff="",
+                 installed=(), claude_rc=None, claude_real=False):
         self.tags, self.upgrade, self.pull, self.reset_rc, self.fetch = tags, upgrade, pull, reset_rc, fetch
+        # `claude` (kit #37): the plugins `claude plugin list --json` shows as installed, an exit
+        # code per subcommand ("list", "marketplace", "update <plugin>", default 0), and whether
+        # a claude call runs for real (the fake `claude` a test put on PATH).
+        self.installed, self.claude_rc, self.claude_real = list(installed), dict(claude_rc or {}), claude_real
         # `git status --porcelain` as the home would answer it with every untracked file shown;
         # the fake applies the flags and the pathspec the tool passes.
         self.status = status
@@ -51,6 +59,8 @@ class FakeHost:
         self.calls.append((list(argv), kw))
         done = lambda rc=0, out="", err="": subprocess.CompletedProcess(argv, rc, out, err)
         words = [a for a in argv if not a.startswith("-") and a != "git"]
+        if pathlib.Path(argv[0]).name == "claude":
+            return self.claude(argv, kw, done)
         if "ls-remote" in argv:
             return done(out="".join(f"abc\trefs/tags/{t}\n" for t in self.tags))
         if argv[0] == "bash":
@@ -82,23 +92,68 @@ class FakeHost:
             return done(out=self.diff)
         raise AssertionError(f"unexpected command: {argv}")
 
+    def claude(self, argv, kw, done):
+        if self.claude_real:
+            return REAL_RUN(argv, **kw)
+        sub = argv[2] if argv[2] != "update" else f"update {argv[3]}"
+        rc = self.claude_rc.get(sub, 0)
+        if sub == "list":
+            listing = [{"id": f"{p}@memory-kit", "version": "0.1.0", "scope": "user"} for p in self.installed]
+            listing.append({"id": "context7@claude-plugins-official", "version": "1", "scope": "user"})
+            return done(rc=rc, out=json.dumps(listing) if rc == 0 else "", err="" if rc == 0 else "list failed")
+        if sub == "marketplace" and rc == "hang":
+            raise subprocess.TimeoutExpired(argv, kw.get("timeout"))
+        return done(rc=rc, out="ok\n" if rc == 0 else "", err="" if rc == 0 else f"{sub} failed")
+
+    def claude_calls(self):
+        return [argv for argv, kw in self.calls if pathlib.Path(argv[0]).name == "claude"]
+
     def timeout_of(self, cmd):
         return [kw.get("timeout") for argv, kw in self.calls if argv[:2] == ["git", "-C"] and argv[3] == cmd]
 
 
-def run_tool(host, current="0.1.0-alpha.13", channel="latest"):
+REAL_RUN = subprocess.run
+# A fake `claude` for PATH (kit #37): the tests never run the real one. It records its arguments
+# and working folder, one line per call, in claude-calls.txt beside it. Shell builtins only: PATH
+# holds nothing but its own folder.
+FAKE_CLAUDE = """#!/bin/sh
+printf '%s|%s\\n' "$(pwd)" "$*" >> '{log}'
+case "$*" in
+  "plugin list --json") echo '[{"id": "watch@memory-kit", "version": "0.3.1", "scope": "project"}]' ;;
+  *) echo ok ;;
+esac
+"""
+
+
+def bin_dir(root, claude):
+    """A folder for PATH: with the fake `claude` in it, or empty (claude not on PATH)."""
+    d = pathlib.Path(root) / "bin"
+    d.mkdir()
+    if claude:
+        (d / "claude").write_text(FAKE_CLAUDE.replace("{log}", str(d / "claude-calls.txt")), encoding="utf-8")
+        (d / "claude").chmod(0o755)
+    return d
+
+
+def run_tool(host, current="0.1.0-alpha.13", channel="latest", claude=False, home_out=None):
+    """The tool over a fresh home, `host` standing for subprocess.run, PATH holding only a test
+    folder: with the fake `claude` (claude=True) or without one, never the real one."""
     with tempfile.TemporaryDirectory() as d:
-        home = pathlib.Path(d)
-        (home / "memory-kit").mkdir()
+        home = pathlib.Path(d) / "home"
+        (home / "memory-kit").mkdir(parents=True)
         (home / "memory-kit" / "VERSION").write_text(current + "\n", encoding="utf-8")
         (home / "memory-kit.conf").write_text(f"update: {channel}\n", encoding="utf-8")
+        path = bin_dir(d, claude)
         real, ku.subprocess.run = ku.subprocess.run, host
         out = io.StringIO()
         try:
-            with redirect_stdout(out):
+            with redirect_stdout(out), mock.patch.dict(os.environ, {"PATH": str(path)}):
                 code = ku.main(["kit-update.py", str(home)])
         finally:
             ku.subprocess.run = real
+        if home_out is not None:
+            home_out.update(home=home, calls=(path / "claude-calls.txt").read_text(encoding="utf-8")
+                            if (path / "claude-calls.txt").exists() else "")
         return code, out.getvalue()
 
 
@@ -375,6 +430,129 @@ class PluginSteps(unittest.TestCase):
         self.assertNotIn("plugin", out)
 
 
+class RunsPluginSteps(unittest.TestCase):
+    """Kit #37 (po-team): the marketplace is a Directory source inside the subtree, and Claude Code
+    never re-copies from it unasked, so after a pull the plugins stayed old. With claude on PATH
+    the tool runs the marketplace update and a plugin update per changed plugin the home has
+    installed; without it, it prints them as #23 did."""
+
+    TAGS = ["v0.1.0-alpha.13", "v0.1.0-alpha.14"]
+    DIFF = ("memory-kit/adapters/claude-code/watch/hooks/watch.ts\n"
+            "memory-kit/adapters/claude-code/obligations-pane/README.md\n"
+            "memory-kit/adapters/claude-code/kit-update/hooks/register.ts\n")
+
+    def test_claude_on_path_runs_the_marketplace_update_then_each_installed_changed_plugin(self):
+        host = FakeHost(tags=self.TAGS, diff=self.DIFF, installed=["watch", "obligations-pane"])
+        seen = {}
+        code, out = run_tool(host, claude=True, home_out=seen)
+        self.assertEqual(code, 0, out)
+        calls = host.claude_calls()
+        self.assertEqual([c[1:] for c in calls], [
+            ["plugin", "list", "--json"],
+            ["plugin", "marketplace", "update", "memory-kit"],
+            ["plugin", "update", "obligations-pane@memory-kit"],
+            ["plugin", "update", "watch@memory-kit"],
+        ])
+        # The claude found on PATH, never another; run in the home, so a project-scope install counts.
+        self.assertTrue(all(c[0].endswith("/bin/claude") and pathlib.Path(c[0]).parent.name == "bin" for c in calls))
+        cwds = {kw.get("cwd") for argv, kw in host.calls if pathlib.Path(argv[0]).name == "claude"}
+        self.assertEqual(cwds, {str(seen["home"])})
+        self.assertTrue(all(kw.get("timeout") == ku.CLAUDE_TIMEOUT for argv, kw in host.calls if pathlib.Path(argv[0]).name == "claude"))
+        self.assertIn("kit-update: ran: claude plugin marketplace update memory-kit", out)
+        self.assertIn("kit-update: ran: claude plugin update obligations-pane@memory-kit", out)
+        self.assertIn("kit-update: ran: claude plugin update watch@memory-kit", out)
+        self.assertIn("kit-update: not installed here, so not updated: kit-update", out)
+        self.assertTrue(out.rstrip().endswith("kit-update: now /reload-plugins in every session of this home"), out)
+
+    def test_claude_not_on_path_prints_the_steps_as_before(self):
+        host = FakeHost(tags=self.TAGS, diff=self.DIFF, installed=["watch"])
+        code, out = run_tool(host, claude=False)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(host.claude_calls(), [])
+        self.assertIn("kit-update: a pull never updates an installed plugin, and claude is not on PATH; run, in order (each plugin this home has installed):", out)
+        self.assertIn("kit-update:   claude plugin marketplace update memory-kit", out)
+        self.assertIn("kit-update:   claude plugin update watch@memory-kit", out)
+        self.assertIn("kit-update:   then /reload-plugins in every session of this home", out)
+
+    def test_no_memory_kit_plugin_installed_runs_nothing_more(self):
+        host = FakeHost(tags=self.TAGS, diff=self.DIFF, installed=[])
+        code, out = run_tool(host, claude=True)
+        self.assertEqual(code, 0, out)
+        self.assertEqual([c[1:] for c in host.claude_calls()], [["plugin", "list", "--json"]])
+        self.assertIn("no memory-kit plugin is installed for this home; nothing to update", out)
+        self.assertNotIn("/reload-plugins", out)
+
+    def test_the_marketplace_alone_changed_runs_only_the_marketplace_update(self):
+        host = FakeHost(tags=self.TAGS, diff="memory-kit/adapters/claude-code/.claude-plugin/marketplace.json\n", installed=["watch"])
+        code, out = run_tool(host, claude=True)
+        self.assertEqual(code, 0, out)
+        self.assertEqual([c[1:] for c in host.claude_calls()],
+                         [["plugin", "list", "--json"], ["plugin", "marketplace", "update", "memory-kit"]])
+        self.assertIn("now /reload-plugins", out)
+
+    def test_a_list_that_fails_falls_back_to_printing_the_steps(self):
+        host = FakeHost(tags=self.TAGS, diff=self.DIFF, installed=["watch"], claude_rc={"list": 1})
+        code, out = run_tool(host, claude=True)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(host.claude_calls()), 1)
+        self.assertIn("cannot list the installed plugins (claude plugin list --json: exit 1: list failed); run, in order", out)
+        self.assertIn("kit-update:   claude plugin update watch@memory-kit", out)
+
+    def test_a_failed_marketplace_update_runs_no_plugin_update_and_prints_the_rest(self):
+        for rc, why in ((1, "exit 1: marketplace failed"), ("hang", f"timed out after {ku.CLAUDE_TIMEOUT} s")):
+            with self.subTest(rc=rc):
+                host = FakeHost(tags=self.TAGS, diff=self.DIFF, installed=["watch"], claude_rc={"marketplace": rc})
+                code, out = run_tool(host, claude=True)
+                self.assertEqual(code, 0, out)  # the kit update stands; the plugin step is said
+                self.assertEqual(len(host.claude_calls()), 2)
+                self.assertIn(f"FAILED: claude plugin marketplace update memory-kit ({why})", out)
+                self.assertIn("kit-update:   claude plugin update watch@memory-kit", out)
+                self.assertIn("the kit update itself is committed", out)
+
+    def test_a_failed_plugin_update_is_named_and_the_others_still_run(self):
+        host = FakeHost(tags=self.TAGS, diff=self.DIFF, installed=["watch", "obligations-pane"],
+                        claude_rc={"update obligations-pane@memory-kit": 1})
+        code, out = run_tool(host, claude=True)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(host.claude_calls()), 4)
+        self.assertIn("FAILED: claude plugin update obligations-pane@memory-kit (exit 1: update obligations-pane@memory-kit failed)", out)
+        self.assertIn("ran: claude plugin update watch@memory-kit", out)
+
+    def test_no_adapter_change_runs_no_claude(self):
+        host = FakeHost(tags=self.TAGS, installed=["watch"])
+        code, out = run_tool(host, claude=True)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(host.claude_calls(), [])
+
+    def test_a_dry_run_runs_no_claude(self):
+        host = FakeHost(tags=self.TAGS, diff=self.DIFF, installed=["watch"])
+        with tempfile.TemporaryDirectory() as d:
+            home = pathlib.Path(d) / "home"
+            tree(home, {"memory-kit/VERSION": "0.1.0-alpha.13\n", "memory-kit.conf": "update: latest\n"})
+            real, ku.subprocess.run = ku.subprocess.run, host
+            try:
+                with redirect_stdout(io.StringIO()), mock.patch.dict(os.environ, {"PATH": str(bin_dir(d, True))}):
+                    self.assertEqual(ku.main(["kit-update.py", str(home), "--dry-run"]), 0)
+            finally:
+                ku.subprocess.run = real
+        self.assertEqual(host.claude_calls(), [])
+
+    @unittest.skipIf(os.name == "nt", "the fake claude is a sh script")
+    def test_end_to_end_the_fake_claude_on_path_is_what_runs_in_the_home(self):
+        # The claude calls go to a real process here: the fake on PATH, which records each call.
+        host = FakeHost(tags=self.TAGS, diff="memory-kit/adapters/claude-code/watch/hooks/watch.ts\n", claude_real=True)
+        seen = {}
+        code, out = run_tool(host, claude=True, home_out=seen)
+        self.assertEqual(code, 0, out)
+        home = os.path.realpath(seen["home"])
+        self.assertEqual(seen["calls"].splitlines(), [
+            f"{home}|plugin list --json",
+            f"{home}|plugin marketplace update memory-kit",
+            f"{home}|plugin update watch@memory-kit",
+        ])
+        self.assertIn("ran: claude plugin update watch@memory-kit", out)
+
+
 class Flags(unittest.TestCase):
     """Kit #32: --help ran a real update, because every unknown -- flag was dropped silently."""
 
@@ -415,8 +593,8 @@ class TheShippedUpgradeMd(unittest.TestCase):
         # The real file, not a copy: a heading the tool cannot parse makes every home's update a
         # manual one.
         text = (HERE.parent / "UPGRADE.md").read_text(encoding="utf-8")
-        self.assertIsNone(ku.data_steps_ok(text, ["0.1.0-alpha.14", "0.1.0-alpha.15"]))
-        self.assertIsNone(ku.data_steps_ok(text, ["0.1.0-alpha.12", "0.1.0-alpha.13", "0.1.0-alpha.14", "0.1.0-alpha.15"]))
+        self.assertIsNone(ku.data_steps_ok(text, ["0.1.0-alpha.15", "0.1.0-alpha.16"]))
+        self.assertIsNone(ku.data_steps_ok(text, ["0.1.0-alpha.12", "0.1.0-alpha.13", "0.1.0-alpha.14", "0.1.0-alpha.15", "0.1.0-alpha.16"]))
 
 
 class ObligationsDueShowsWhoIsOwed(unittest.TestCase):

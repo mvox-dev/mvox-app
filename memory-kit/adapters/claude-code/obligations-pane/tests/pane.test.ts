@@ -770,3 +770,42 @@ describe('upstream release check (kit #7)', () => {
     expect(world.requests).toEqual([])
   })
 })
+
+describe('a folder that is not a kit home (kit #35: a user-scope install loads the pane in every session)', () => {
+  // No memory-kit.conf, no memory, no memory-kit/VERSION: a session started anywhere else.
+  const OTHER = { ...SESSION, cwd: '/home/u/src/other-repo' }
+
+  test('silent: the pane does not open, no request upstream, no log line; only /obligations is registered', async ($, on) => {
+    const world = worldOf(on, {})
+    world.cwd = OTHER.cwd
+    world.answer = () => tagsAnswer('v0.1.0-alpha.99')
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(OTHER)
+    await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
+    await clock.advance(7 * HOUR)
+    expect(world.opened).toEqual([])
+    expect(world.requests).toEqual([])
+    expect(world.logs).toEqual([])
+    expect(world.commands).toEqual(['obligations'])
+  })
+
+  test('/obligations there opens the pane, which says it found no file', async ($, on) => {
+    const world = worldOf(on, {})
+    world.cwd = OTHER.cwd
+    mock.clock(on, { now: NOW })
+    await $.session.start(OTHER)
+    await $.command.run({ command: 'obligations', args: '', origin: { kind: 'composer' } } as never)
+    expect(world.opened).toEqual(['obligations'])
+    const ui = await mountPane($)
+    expect(await textOf(ui)).toContain('no obligations file here (/home/u/src/other-repo/memory/obligations.yaml)')
+    await ui.unmount()
+  })
+
+  test('a user-scope memoryDir is not silent: every session reads that home and opens the pane', { options: { memoryDir: '/srv/home/memory' } }, async ($, on) => {
+    const world = worldOf(on, { '/srv/home/memory/obligations.yaml': WORKSHOP_YAML })
+    world.cwd = OTHER.cwd
+    mock.clock(on, { now: NOW })
+    await $.session.start(OTHER)
+    expect(world.opened).toEqual(['obligations'])
+  })
+})

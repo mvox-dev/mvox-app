@@ -74,6 +74,14 @@ else
   pass=$((pass+1))
 fi
 
+# The tools' file writes run for real (kit #34): write_text's newline= is Python 3.10+, and the
+# fixtures passed 35/0 on macOS's system 3.9 while lesson-index.py and extract-caps.py crashed there.
+if out=$(python3 "$KIT/tools/write-paths-test.py" 2>&1); then
+  pass=$((pass+1))
+else
+  fail=$((fail+1)); echo "WRITES FAIL      tools/write-paths-test.py:"; printf '%s\n' "$out" | tail -n 15 | sed 's/^/    /'
+fi
+
 # The three plugins each carry a copy of the kit_home rules and their test (kit #18): a plugin
 # loads only its own folder. The copies must stay identical, or the plugins disagree on the home.
 AD="$KIT/adapters/claude-code"

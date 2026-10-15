@@ -1,9 +1,97 @@
 # Changelog
 
+## v0.1.0-alpha.16 -- 2026-10-15 -- Python 3.9, plugin updates run, install scope, poller survey
+
+Plugin versions this release: watch 0.4.0, obligations-pane 0.5.1, kit-update 0.3.1.
+
+- **Python 3.9: the tools write without `Path.write_text(newline=)`** (#34, mac-sysops). That
+  keyword is Python 3.10+, so on macOS's system Python 3.9.6 `tools/lesson-index.py` crashed at
+  both its writes (the index, and front matter under `--from-index`): a 3.9 home could not
+  regenerate its lesson index. `tools/extract-caps.py` crashed the same way (release side).
+  - Both now write through `open(..., encoding="utf-8", newline="\n")`: UTF-8 and LF on every
+    platform, as before.
+  - `tools/write-paths-test.py` runs each write for real into a temporary folder (UTF-8, LF, the
+    index then `--check`s current), and scans the kit's Python for `write_text(...newline=`, which
+    a newer python3 would accept. `lint/run-fixtures.sh` runs it, so a 3.9 home's fixture run now
+    catches this; before, it passed 35/0 there while the tools crashed.
+  - **Correction to alpha.15:** its note listed macOS with Python 3.9.6 as a tested platform on the
+    strength of the 35/35 fixtures. That held for the lint only.
+  - Checked on CPython 3.9.24 (fetched by uv, on Linux; not macOS): the failing tests first, then
+    the fixture run, `write-paths-test.py`, `kit-update-test.py` and `spool-poll-test.py`, all
+    passing. README's tooling line now says Python 3.9 or newer.
+- **kit-update.py runs the plugin updates itself** (#37, po-team, Mihkel's proposal). po-team's
+  marketplace is a Directory source inside the subtree, and Claude Code never re-copies from it
+  unasked, so after the alpha.15 pull its plugins were still old; the tool printed the steps
+  (#23) and a person had to run them.
+  - After a pull that changed `memory-kit/adapters/`, with `claude` on PATH, the tool runs, in the
+    home: `claude plugin list --json`, then `claude plugin marketplace update memory-kit`, then
+    `claude plugin update <p>@memory-kit` for each changed plugin the list shows installed. It
+    says each step (`ran: ...`), names changed plugins not installed, and ends with
+    `now /reload-plugins in every session of this home`. No memory-kit plugin installed: it says
+    so and runs nothing more.
+  - **This widens its reach** from the home's repo to the harness's plugin state, user-level for a
+    user-scope install; the docstring's "what it does, and what it never does" says so. It never
+    installs, uninstalls, enables or configures a plugin, never adds a marketplace, and passes no
+    `-y`.
+  - `claude` not on PATH, or a list it cannot read: the steps are printed as in alpha.15 (#23). A
+    failed marketplace update stops there and prints the rest; a failed plugin update is named
+    and the others still run. Either way the kit update stands, exit 0 (#32's codes unchanged).
+    Each call is bounded at 120 s.
+  - Tests (`tools/kit-update-test.py`, 10 more) never run the real `claude`: PATH holds only a test
+    folder, with or without a fake `claude`; one test runs that fake for real and checks its
+    calls and their working folder.
+- **Install scope, documented** (#35, the household after mac-sysops). A plugin installs at user
+  scope by default, so it loads in every session on the machine. `adapters/claude-code/README.md`
+  (new) has an "Install scope" section, and each plugin README's Install points at it:
+  - **Outside a kit home** (no `memory-kit.conf` in the start folder), tested first: kit-update
+    gives one notice per session (#31); the pane and the watch are silent. The pane does not
+    open, asks nothing upstream and logs nothing; the watch delivers, writes, claims and runs
+    nothing, and says nothing, also with `retireOnIdle` on (one debug line). Both still register
+    their slash command and read the start folder's conf on their timers. User-scope options
+    (`memoryDir`, `home`) end that silence. Tests: 3 in the watch, 3 in the pane; the behaviour
+    held already, no code changed.
+  - **Project scope** as the alternative, from the folder the home's sessions start in (with a
+    `kit_home` pointer, that is the start folder, not the home). Not run here: the kit's tests do
+    not install.
+  - **The trap seen 14.10:** `claude plugin marketplace add --scope local` also rewrote the
+    user-level marketplace entry. Said in the section; not filed with the harness.
+  - The pane README said a subtree pull updates the installed plugin; #23 showed it does not.
+    Corrected.
+
+- **The spool poller: Windows without a console flash, a heartbeat, a reminder, JSON input** (#39,
+  Pepys's survey of five seats' Lelle pollers). `adapters/claude-code/watch/spool/spool-poll.py`:
+  - **Windows: `CREATE_NO_WINDOW`** for the poller `--keep-alive` starts (with
+    `CREATE_NEW_PROCESS_GROUP`, and breakaway from the hook's job where allowed) and for each
+    peek. It was `DETACHED_PROCESS`, which flashed a console every poll on the desk and
+    framework-research. Tested by the flags passed, with a mock: this box is Linux. The desk
+    will check that the poller outlives the session on Windows.
+  - **Liveness heartbeat.** Each successful run writes `.<stem>.alive` beside the spool (UTC time,
+    pid, interval, timeout); stale is older than two intervals and a timeout. New `--status`
+    (needs only `--spool`): the lock's pid, the last successful poll and its age, stale or not;
+    exit 0 running and fresh, 1 otherwise. `--keep-alive` prints one line when the running
+    poller is stale, and dates the outage when it starts one.
+  - **`--remind N`** (minutes, off by default): one `waiting: id=... age=... -- <line>` per id still
+    in the peek N minutes after the poller first saw it. The age runs from the hub's deposit
+    stamp (`--deposited`, a template, default `{deposited}`; ISO 8601), else from first sight.
+  - **`--json`** in place of `--match`: the output's first JSON value, a list of objects with `id`,
+    one item each; `--line` reads fields by index (`{entry[summary]}`), a missing one empty. A
+    list it cannot read is a failed run (a `health:` line), never a quiet zero.
+  - **The README states the ack rule**: ack by id only what you read; plain `recv` acks everything
+    waiting. `recv --ack <ids>` belongs to evr-mail's owner.
+  - Tests: `spool-poll-test.py` 16 -> 37, one of them a live detached poller's heartbeat and
+    `--status`.
+
+- **README**: the context-weight table regenerated with `tools/weigh.py` (its figures were stale: 680
+  tokens per session, now 704; types 13 files, 5 lessons, 4 url files). The roadmap says six homes,
+  and that alpha.15 shipped `owed_to` and the commitments tier ahead of 0.2, both additive. The
+  layout names `write-paths-test.py` and the adapters README.
+
 ## v0.1.0-alpha.15 -- 2026-10-15 -- who is owed, standing commitments, kit-update fixes
 
 Plugin versions this release: watch 0.3.1, obligations-pane 0.5.0, kit-update 0.3.0.
 Tested platforms add macOS with the system Python 3.9.6 (mac-sysops: 35/35 fixtures at alpha.14).
+*Corrected in alpha.16 (#34):* that held for the lint only. The fixtures do not run the tools' writes,
+and `tools/lesson-index.py` and `tools/extract-caps.py` crash on 3.9.
 
 - **Obligations name who is owed: `owed_to`** (#29, po-team; ruled by the household). An
   obligation has a counterparty who is waiting and would notice if it lapsed; that is why it rots
