@@ -5,6 +5,7 @@
 	import { type ComponentProps } from 'svelte';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
+	import { isSeasonDeletePending } from '$lib/agenda/seasonManageDelete';
 	import type RepertoireElement from '$lib/agenda/RepertoireElement.svelte';
 	import SeasonCardHeader from '$lib/agenda/SeasonCardHeader.svelte';
 	import SeasonManageDialog from '$lib/agenda/SeasonManageDialog.svelte';
@@ -196,7 +197,7 @@
 
 	function openSeasonManagePanelFor(seasonId: string): void {
 		if (seasonId !== manageableSeasonId) {
-			if (seriesRunUnfinished) return;
+			if (seriesRunUnfinished || isSeasonDeletePending(sm.seasonManageDeletePendingId)) return;
 			resetSeasonManage();
 			seriesCreateOpen = false;
 			manageableSeasonId = seasonId;

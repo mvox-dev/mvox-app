@@ -11,7 +11,9 @@
 	import type { Season } from '$lib/seasons/types';
 	import type * as SeasonManage from '$lib/seasons/seasonManage';
 	import {
+		isSeasonDeletePending,
 		runSeasonManageDelete,
+		seasonDeleteRowId,
 		seasonManageDeleteErrorText,
 		type SeasonManageDeleteSlot
 	} from '$lib/agenda/seasonManageDelete';
@@ -64,7 +66,6 @@
 	}: Props = $props();
 
 	// One delete slot for the card: arming a row disarms any other.
-	const seasonDeleteRowId = (seasonId: string): string => `__season__:${seasonId}`;
 	const openRowId = $derived(
 		manageableSeasonId === null ? null : seasonDeleteRowId(manageableSeasonId)
 	);
@@ -151,7 +152,9 @@
 
 {#each manageableSeasonEntries as ms (ms.id)}
 	{#if !seasonManageOpen || ms.id !== manageableSeasonId}
-		{@const rowBusy = seriesRunUnfinished && ms.id !== manageableSeasonId}
+		{@const rowBusy =
+			(seriesRunUnfinished && ms.id !== manageableSeasonId) ||
+			isSeasonDeletePending(sm.seasonManageDeletePendingId)}
 		<div class="flex flex-wrap items-center gap-2">
 			<h2 class="flex min-w-0 flex-1">
 				<button
@@ -243,7 +246,7 @@
 					data-testid="season-manage-delete-season"
 					aria-label={m.season_manage_season_delete({ name: seasonManageDeleteName })}
 					class="ml-auto"
-					disabled={isOffline}
+					disabled={isOffline || isSeasonDeletePending(sm.seasonManageDeletePendingId)}
 					onclick={() => {
 						if (manageableSeasonId !== null)
 							void armSeasonDelete(manageableSeasonId, 'season-manage-delete-season-confirm');

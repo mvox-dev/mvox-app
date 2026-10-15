@@ -31,6 +31,15 @@ export function seasonManageDeleteErrorText(failure: SeasonManageDeleteError): s
 	}
 }
 
+const SEASON_DELETE_ID_PREFIX = '__season__:';
+
+export const seasonDeleteRowId = (seasonId: string): string => `${SEASON_DELETE_ID_PREFIX}${seasonId}`;
+
+/** True while a season delete runs; series deletes share the slot but do not count. */
+export function isSeasonDeletePending(pendingId: string | null): boolean {
+	return pendingId !== null && pendingId.startsWith(SEASON_DELETE_ID_PREFIX);
+}
+
 export interface SeasonManageDeleteSlot {
 	pendingId: string | null;
 	error: SeasonManageDeleteError | null;

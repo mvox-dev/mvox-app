@@ -29,4 +29,7 @@ staging:
   - label: PATTERN
     record: "A section shown on a store right: load() stores the request, an $effect runs it once editor"
     ref: "src/lib/profile/CollectiveAdminSection.svelte"
+  - label: GOTCHA
+    record: "Series and season deletes share pendingId: gate on isSeasonDeletePending, not !== null"
+    ref: "src/lib/agenda/seasonManageDelete.ts"
 # (*MVOX:Josquin*)
