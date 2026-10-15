@@ -26,8 +26,12 @@ vi.mock('$lib/profile/profileData', async (importOriginal) =>
 vi.mock('$lib/profile/linkedIdentities', async () =>
 	(await import('$lib/testing/mocks/profile')).noLinkedIdentitiesModule()
 );
+vi.mock('$lib/collective/databaseEntity', async () =>
+	(await import('$lib/testing/moduleHandles')).entityIdModule()
+);
 vi.mock('$lib/collective/rosterNames', () => ({
 	readRosterNamesSetting: h.readRosterNamesMock,
+	readRosterNamesSettingOf: h.readRosterNamesMock,
 	updateRosterShowRealNames: h.updateRosterNamesMock
 }));
 
@@ -39,6 +43,7 @@ import { resetAppState } from '$lib/testing/appReset';
 import type { Collective } from '$lib/collectives/types';
 import { signIn } from '$lib/testing/session';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
+import { resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
 	COLLECTIVE_A,
 	COLLECTIVE_B,
@@ -95,6 +100,7 @@ async function renderAdminReady(
 }
 
 beforeEach(() => {
+	resolveDatabaseEntityIdMock.mockResolvedValue('db-entity-a');
 	localStorage.clear();
 	listMyProfilesMock.mockReset();
 	h.readRosterNamesMock.mockReset();
@@ -137,17 +143,17 @@ describe('/profile — roster-names control structure (admin view)', () => {
 		).toBeTruthy();
 	});
 
-	it('sits AFTER the time-format control, as a SIBLING block in the same app-chrome column', async () => {
+	it('sits inside the collective admin section at the end of the page, not at the top (#916)', async () => {
 		const container = await renderAdminReady();
-		const timeFormat = timeFormatSelect(container)!;
 		const roster = rosterSelect(container)!;
-		expect(timeFormat, 'the time-format control must be untouched').not.toBeNull();
+		const section = q(container, '[data-testid="profile-collective-admin"]');
+		expect(section, 'the admin section must render for a db editor').not.toBeNull();
+		expect(section!.contains(roster)).toBe(true);
+		const timeFormat = timeFormatSelect(container)!;
+		expect(timeFormat.closest('[data-testid="profile-collective-admin"]')).toBeNull();
 		expect(
-			timeFormat.compareDocumentPosition(roster) & Node.DOCUMENT_POSITION_FOLLOWING,
-			'the roster-names control must come after the time-format control'
+			timeFormat.compareDocumentPosition(section!) & Node.DOCUMENT_POSITION_FOLLOWING
 		).toBeTruthy();
-		expect(roster.closest('div')!.parentElement).toBe(timeFormat.closest('div')!.parentElement);
-		expect(q(container, '[data-testid="profile-time-format-hint"]')).not.toBeNull();
 	});
 
 	it('page invariants hold: exactly one <main>, exactly one <h1>', async () => {
@@ -194,10 +200,11 @@ describe('/profile — roster-names visibility is admin-only (fail-closed)', () 
 });
 
 describe('/profile — roster-names READ (integration: the page route drives the seam)', () => {
-	it('on load, reads the setting through readRosterNamesSetting for the selected collective', async () => {
+	it('on load, reads the setting for the selected collective, on the section database entity id', async () => {
 		const container = await renderAdminReady();
 		expect(h.readRosterNamesMock).toHaveBeenCalled();
 		expect(h.readRosterNamesMock.mock.calls[0][0]).toMatchObject({ db: 'sampledb' });
+		expect(h.readRosterNamesMock.mock.calls[0][1]).toBe('db-entity-a');
 		expect(rosterSelect(container)!.value).toBe('profile');
 	});
 

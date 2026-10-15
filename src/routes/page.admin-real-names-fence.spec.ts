@@ -49,7 +49,7 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-import Page from './admin/+page.svelte';
+import Page from './profile/+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import {
 	realNamesWire,
@@ -69,9 +69,11 @@ import {
 	updateCollectiveNameMock
 } from '$lib/testing/mocks/admin';
 import { selectSampledb } from '$lib/testing/pages/admin';
+import { dbEditRight } from '$lib/nav/dbRights';
 
 beforeEach(() => {
 	resolveDbEditRightMock.mockResolvedValue('editor');
+	dbEditRight.set('editor');
 	resolveDbRightMock.mockResolvedValue('owner');
 	resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 	h.listAdminsMock.mockResolvedValue({ persons: [], canManage: true });

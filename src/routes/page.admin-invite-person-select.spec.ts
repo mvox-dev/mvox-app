@@ -3,6 +3,9 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/pages/adminCopy')).adminMessages()
 );
@@ -71,7 +74,7 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-import Page from './admin/+page.svelte';
+import Page from './profile/+page.svelte';
 import { expectWholeTextMarkedOnce } from '$lib/testing/nameMarker';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
@@ -90,6 +93,7 @@ import {
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { ANNA, ROSTER, jwt, selectSampledb } from '$lib/testing/pages/admin';
 import { cleanupReset, q } from '$lib/testing/pages/dom';
+import { dbEditRight } from '$lib/nav/dbRights';
 
 const MINTED_TOKEN = jwt({ db: 'sampledb', entityId: 'p-cilla', iat: 1, exp: 4_102_444_800 });
 
@@ -102,6 +106,7 @@ const JOIN_STATES = {
 
 function loadOk() {
 	resolveDbEditRightMock.mockResolvedValue('editor');
+	dbEditRight.set('editor');
 	resolveDbRightMock.mockResolvedValue('owner');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });

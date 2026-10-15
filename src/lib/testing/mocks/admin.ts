@@ -1,7 +1,10 @@
 // Admin, librarian, join-state and collective-name mocks shared across specs.
+import { writable } from 'svelte/store';
 import { vi } from 'vitest';
+import type { EditRightState } from '$lib/nav/dbRights';
 
 export const resolveDbEditRightMock = vi.fn();
+export const dbEditRightStore = writable<EditRightState>('loading');
 export const resolveDbRightMock = vi.fn();
 export const resolveLibraryEditRightMock = vi.fn();
 export const listJoinStatesMock = vi.fn();
@@ -51,8 +54,9 @@ export class RoleGrantMissingError extends Error {
 
 // 'dbEditRight': only resolveDbEditRight; 'both': resolveDbRight too.
 export function dbRightsModule(wired: 'dbEditRight' | 'both' = 'both') {
-	if (wired === 'dbEditRight') return { resolveDbEditRight: resolveDbEditRightMock };
-	return { resolveDbEditRight: resolveDbEditRightMock, resolveDbRight: resolveDbRightMock };
+	const base = { dbEditRight: dbEditRightStore, resolveDbEditRight: resolveDbEditRightMock };
+	if (wired === 'dbEditRight') return base;
+	return { ...base, resolveDbRight: resolveDbRightMock };
 }
 
 export function libraryRightsModule() {

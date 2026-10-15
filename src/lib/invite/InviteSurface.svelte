@@ -32,7 +32,7 @@
 		presetDb?: string;
 		presetDbEntityId?: string;
 		presetDbName?: string;
-		heading?: 'h1' | 'h2';
+		heading?: 'h1' | 'h3';
 		layout?: 'standalone' | 'embedded';
 		viewerPersonId?: string;
 		roster?: InvitablePerson[];

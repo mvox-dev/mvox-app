@@ -2,6 +2,9 @@
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
@@ -66,6 +69,7 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './+page.svelte';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import {
 	goOffline,
@@ -100,6 +104,7 @@ const CILLA = { id: 'p-cilla', name: 'Cilla Cane', role: 'editor' as const, valu
 
 function loadOk() {
 	resolveDbEditRightMock.mockResolvedValue('editor');
+	dbEditRight.set('editor');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 	h.listAdminsMock.mockResolvedValue({ persons: [ANNA, BELA], canManage: true });
@@ -243,7 +248,8 @@ describe('/admin — writes while offline (#434 slice 6 review F1)', () => {
 		listSectionsMock.mockClear();
 		resolveDatabaseEntityIdMock.mockClear();
 
-		const touched = await exerciseEveryEnabledControl(container);
+		// The section's controls; the profile's own are swept in page.write-offline.spec.ts.
+		const touched = await exerciseEveryEnabledControl(q<HTMLElement>(container, 'profile-collective-admin')!);
 
 		expect(touched).toEqual([]);
 		noWriteSeamCalled();

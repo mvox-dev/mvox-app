@@ -4,6 +4,9 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
@@ -58,6 +61,7 @@ import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { BELA, CFG, selectSampledb } from '$lib/testing/pages/admin';
 import { cleanupReset, q } from '$lib/testing/pages/dom';
 import { renderReady } from '$lib/testing/pages/adminRender';
+import { dbEditRight } from '$lib/nav/dbRights';
 
 const SELF_HINT_KEY = '[admin_roles_remove_self_hint]';
 
@@ -82,6 +86,7 @@ const ROSTER = [
 
 function loadOk() {
 	resolveDbEditRightMock.mockResolvedValue('editor');
+	dbEditRight.set('editor');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 	listAdminsMock.mockResolvedValue({ persons: [DB_ROOT, SELF_OWNER], canManage: true });

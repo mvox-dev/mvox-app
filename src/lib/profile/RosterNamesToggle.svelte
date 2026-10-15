@@ -5,7 +5,7 @@
 	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { dbEditRight } from '$lib/nav/dbRights';
-	import { readRosterNamesSetting } from '$lib/collective/rosterNames';
+	import { readRosterNamesSettingOf } from '$lib/collective/rosterNames';
 	import type * as RosterNames from '$lib/collective/rosterNames';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
@@ -39,11 +39,11 @@
 		rosterError = null;
 	}
 
-	// Fired apart from the profile-fields read, so a fields load-error cannot take this
-	// control down. A failed read leaves the default standing.
-	export async function load(cfg: EntuCfg, g: number): Promise<void> {
+	// Takes the section's database entity id, so the load resolves it once. A failed read
+	// leaves the default standing.
+	export async function load(cfg: EntuCfg, g: number, dbEntityId: string): Promise<void> {
 		try {
-			const setting = await readRosterNamesSetting(cfg);
+			const setting = await readRosterNamesSettingOf(cfg, dbEntityId);
 			if (g !== generation()) return;
 			rosterDbEntityId = setting.dbEntityId;
 			rosterShowRealNames = setting.showRealNames;

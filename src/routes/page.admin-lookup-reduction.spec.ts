@@ -4,6 +4,9 @@ import { render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bare')
 );
@@ -42,7 +45,7 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-import Page from './admin/+page.svelte';
+import Page from './profile/+page.svelte';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
@@ -55,6 +58,7 @@ import {
 } from '$lib/testing/mocks/admin';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
+import { dbEditRight } from '$lib/nav/dbRights';
 import { DB_ENTITY } from '$lib/testing/pages/admin';
 import { cleanupClearReset, q } from '$lib/testing/pages/dom';
 import { ANNA } from '$lib/testing/pages/adminRoleFixtures';
@@ -65,6 +69,7 @@ const ROSTER = [{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email:
 
 function selectSampledb() {
 	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: VIEWER }] });
+	dbEditRight.set('editor');
 }
 
 beforeEach(() => {
@@ -74,6 +79,9 @@ beforeEach(() => {
 			return Promise.resolve(
 				json({ entity: { _id: DB_ENTITY, _owner: [{ reference: VIEWER }], _editor: [] } })
 			);
+		}
+		if (path.startsWith(`entity/${DB_ENTITY}?props=roster_show_real_names`)) {
+			return Promise.resolve(json({ entity: { _id: DB_ENTITY } }));
 		}
 		if (path.includes('_type.string=library')) {
 			// Factual "no library in this collective": refreshRole('librarian') is skipped.
@@ -123,7 +131,7 @@ async function renderReady(): Promise<HTMLElement> {
 	return container;
 }
 
-describe('/admin — one database-entity resolution per load (#173)', () => {
+describe('/profile admin section — one database-entity resolution per load (#173)', () => {
 	it('reaches ready with resolveDatabaseEntityId called exactly ONCE', async () => {
 		await renderReady();
 
@@ -137,9 +145,11 @@ describe('/admin — one database-entity resolution per load (#173)', () => {
 		expect(listAdminsMock.mock.calls[0][1]).toBe(DB_ENTITY);
 
 		const paths = fetchedPaths();
-		expect(paths.filter((p) => p.startsWith(`entity/${DB_ENTITY}?props=_owner`))).toHaveLength(2);
+		// The db edit right is the layout's read now (#916): one _owner read, the library's.
+		expect(paths.filter((p) => p.startsWith(`entity/${DB_ENTITY}?props=_owner`))).toHaveLength(1);
 		expect(paths.filter((p) => p.includes('_type.string=library'))).toHaveLength(1);
 		expect(paths.filter((p) => p.includes('props=entu_user'))).toHaveLength(1);
+		expect(paths.filter((p) => p.includes('props=roster_show_real_names'))).toHaveLength(1);
 		expect(paths).toHaveLength(4);
 	});
 });

@@ -81,7 +81,7 @@ vi.mock('$lib/library/libraryData', async (importOriginal) => {
 });
 
 import AgendaPage from './+page.svelte';
-import AdminPage from './admin/+page.svelte';
+import ProfilePage from './profile/+page.svelte';
 import EventPage from './event/[id]/+page.svelte';
 import LibraryPage from './library/+page.svelte';
 import RosterPage from './roster/+page.svelte';
@@ -134,6 +134,8 @@ type Row = {
 	members: Member[];
 	arrange: () => void;
 	extra?: (url: string) => unknown;
+	/** The page's own real-names control reads the setting too. */
+	controlReads?: number;
 	/** Brings the names on screen; returns where they show and how many requests came before. */
 	open: (container: HTMLElement, calls: () => number) => Promise<{ region: HTMLElement; from: number }>;
 };
@@ -141,9 +143,7 @@ type Row = {
 // The real-name producer's callers; a page that reaches one names members.
 const PRODUCER = /import\s*\{[^}]*\b(loadRoster|resolveRealNameByPerson|applyRealNames)\b[^}]*\}\s*from\s*['"](\$lib\/roster\/rosterData|\.\/rosterData)['"]/;
 
-const NAMES_NO_MEMBER: Record<string, string> = {
-	'/profile': 'imports libraryData for its edition list only; it names no other member'
-};
+const NAMES_NO_MEMBER: Record<string, string> = {};
 
 const until = async (container: HTMLElement, testid: string) => {
 	await waitFor(() => expect(q(container, testid)).not.toBeNull());
@@ -211,12 +211,14 @@ const ROWS: Record<string, Row> = {
 			return { region: await until(container, 'season-summary-members'), from };
 		}
 	},
-	'/admin pickers': {
-		route: '/admin',
-		Page: AdminPage,
+	'/profile admin pickers': {
+		route: '/profile',
+		Page: ProfilePage,
 		members: ['m1', 'm2'],
+		controlReads: 1,
 		arrange: () => {
 			resolveDbEditRightMock.mockResolvedValue('editor');
+			dbEditRight.set('editor');
 			resolveDbRightMock.mockResolvedValue('owner');
 			listAdminsMock.mockResolvedValue({ persons: [], canManage: true });
 			listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
@@ -229,7 +231,8 @@ const ROWS: Record<string, Row> = {
 				expect(select?.querySelectorAll('option').length).toBeGreaterThan(1);
 			});
 			await until(container, 'invite-person-select');
-			return { region: container, from: 0 };
+			// The viewer's own profile fields above the section name the viewer, by design.
+			return { region: await until(container, 'profile-collective-admin'), from: 0 };
 		}
 	},
 	'/roster rows': {
@@ -369,7 +372,7 @@ describe('real names, on every page that names members', () => {
 		const { region, from } = await row.open(container, () => wire.mock.calls.length);
 		await waitFor(() => expect(region.textContent).toContain(REAL_NAMES[row.members[0]]));
 
-		expect(reads(urls(from), 'roster_show_real_names')).toBe(1);
+		expect(reads(urls(from), 'roster_show_real_names')).toBe(1 + (row.controlReads ?? 0));
 		expect(reads(urls(from), 'admin_member_record')).toBe(1);
 	});
 
@@ -383,7 +386,7 @@ describe('real names, on every page that names members', () => {
 		});
 		for (const member of row.members) expect(container.textContent).not.toContain(REAL_NAMES[member]);
 		expect(reads(urls(from), 'admin_member_record')).toBe(0);
-		expect(reads(urls(from), 'roster_show_real_names')).toBe(1);
+		expect(reads(urls(from), 'roster_show_real_names')).toBe(1 + (row.controlReads ?? 0));
 	});
 });
 

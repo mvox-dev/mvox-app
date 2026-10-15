@@ -4,6 +4,9 @@ import { cleanup, render, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
@@ -31,7 +34,8 @@ vi.mock('$lib/admin/roleManagement', () => ({
 	addLibrarian: vi.fn(),
 	removeLibrarian: vi.fn()
 }));
-vi.mock('$lib/nav/dbRights', () => ({
+vi.mock('$lib/nav/dbRights', async () => ({
+	dbEditRight: (await import('$lib/testing/mocks/admin')).dbEditRightStore,
 	resolveDbEditRight: h.resolveDbEditRight,
 	resolveDbRight: h.resolveDbRight
 }));
@@ -64,12 +68,13 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-import Page from './admin/+page.svelte';
+import Page from './profile/+page.svelte';
 import { collectiveState, selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import { authExpiredError, selectSampledb } from '$lib/testing/pages/admin';
+import { dbEditRight } from '$lib/nav/dbRights';
 
 function setCollective(name: string) {
 	collectiveState.set({
@@ -82,6 +87,7 @@ function setCollective(name: string) {
 function loadOk() {
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	h.resolveDbEditRight.mockResolvedValue('editor');
+	dbEditRight.set('editor');
 	h.resolveDbRight.mockResolvedValue('error');
 	h.resolveLibraryEditRight.mockResolvedValue({ state: 'editor', libraryId: null });
 	h.loadRoster.mockResolvedValue(toListRead([]));
@@ -125,15 +131,12 @@ describe('/admin — session expired', () => {
 	});
 });
 
-describe('/admin — a collective switch during the gate', () => {
+describe('/profile admin section — a collective switch mid-load', () => {
 	it("the first load's late entity answer never reaches the second load", async () => {
 		let releaseFirst!: (id: string) => void;
-		resolveDatabaseEntityIdMock
-			.mockImplementationOnce(() => new Promise((res) => (releaseFirst = res)))
-			.mockResolvedValueOnce('org-2');
-		let releaseAdmin!: (state: string) => void;
-		h.resolveDbEditRight.mockImplementation((_c, _p, _f, id) =>
-			id === 'org-2' ? new Promise((res) => (releaseAdmin = res)) : Promise.resolve('editor')
+		const first = new Promise<string>((res) => (releaseFirst = res));
+		resolveDatabaseEntityIdMock.mockImplementation((c: { db: string }) =>
+			c.db === 'sampledb' ? first : Promise.resolve('org-2')
 		);
 		selectSampledb();
 		collectiveState.set({
@@ -145,13 +148,14 @@ describe('/admin — a collective switch during the gate', () => {
 			erroredDbs: []
 		});
 		const { container } = render(Page);
-		await tick();
+		await vi.waitFor(() => expect(resolveDatabaseEntityIdMock).toHaveBeenCalled());
 
 		selectedCollectiveDbStore.set('bravura');
-		await vi.waitFor(() => expect(h.resolveDbEditRight).toHaveBeenCalledTimes(1));
+		await vi.waitFor(() =>
+			expect(resolveDatabaseEntityIdMock).toHaveBeenCalledWith(expect.objectContaining({ db: 'bravura' }))
+		);
 		releaseFirst('org-1');
 		await tick();
-		releaseAdmin('editor');
 
 		await waitFor(() => {
 			expect(q(container, 'admin-roles-admins')).not.toBeNull();
@@ -161,21 +165,22 @@ describe('/admin — a collective switch during the gate', () => {
 	});
 });
 
-describe('/admin — a collective rename', () => {
-	it('relabels without reloading: the gate and the reads run once', async () => {
+describe('/profile admin section — a collective rename', () => {
+	it('relabels without reloading: the reads run once', async () => {
 		selectSampledb();
 		const { container } = render(Page);
 		await waitFor(() => {
 			expect(q(container, 'admin-roles-admins')).not.toBeNull();
 		});
+		const resolves = resolveDatabaseEntityIdMock.mock.calls.length;
 
 		setCollective('Uus Koorinimi');
 		await tick();
 		await tick();
 
-		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledTimes(1);
-		expect(h.resolveDbEditRight).toHaveBeenCalledTimes(1);
+		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledTimes(resolves);
 		expect(h.loadRoster).toHaveBeenCalledTimes(1);
+		expect(h.listAdmins).toHaveBeenCalledTimes(1);
 		expect(q(container, 'admin-roles-admins')).not.toBeNull();
 	});
 });

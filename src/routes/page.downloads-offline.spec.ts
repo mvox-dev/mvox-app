@@ -298,8 +298,8 @@ describe('#353 — structural fences: the page is built for offline, not around 
 		expect(source).not.toContain('hydrateAuth(');
 	});
 
-	it('NAV_ENTRIES stays at 6 with no /downloads entry — the door is the agenda\'s offline branch', () => {
-		expect(NAV_ENTRIES.map((e) => e.key)).toHaveLength(6);
+	it('NAV_ENTRIES stays at 5 with no /downloads entry — the door is the agenda\'s offline branch', () => {
+		expect(NAV_ENTRIES.map((e) => e.key)).toHaveLength(5);
 		expect(NAV_ENTRIES.find((e) => e.route === '/downloads')).toBeUndefined();
 	});
 

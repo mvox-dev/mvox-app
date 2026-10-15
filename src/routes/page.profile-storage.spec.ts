@@ -36,6 +36,9 @@ vi.mock('$lib/collective/rosterNames', () => ({
 	readRosterNamesSetting: vi
 		.fn()
 		.mockResolvedValue({ dbEntityId: 'db-entity-x', showRealNames: false }),
+	readRosterNamesSettingOf: vi
+		.fn()
+		.mockResolvedValue({ dbEntityId: 'db-entity-x', showRealNames: false }),
 	updateRosterShowRealNames: vi.fn()
 }));
 // The fileId→filename join source (online path — see the header note).

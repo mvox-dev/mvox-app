@@ -9,7 +9,6 @@ vi.mock('$lib/paraglide/messages', async () =>
 		nav_roster: () => 'Roster',
 		nav_profile: () => 'Profile',
 		nav_library: () => 'Library',
-		nav_admin: () => 'Admin',
 		nav_links: () => 'Lingikogu'
 	})
 );
@@ -17,11 +16,11 @@ vi.mock('$lib/paraglide/messages', async () =>
 import { NAV_ENTRIES } from './entries';
 
 describe('#256 — NAV_ENTRIES carries the links entry', () => {
-	it('has exactly 6 entries (#338 removed collectives) and the 6th is links → /links', () => {
-		expect(NAV_ENTRIES.map((e) => e.key)).toHaveLength(6);
-		const sixth = NAV_ENTRIES[5];
-		expect(sixth.key).toBe('links');
-		expect(sixth.route).toBe('/links');
+	it('has exactly 5 entries (#338 removed collectives, #916 admin) and the 5th is links → /links', () => {
+		expect(NAV_ENTRIES.map((e) => e.key)).toHaveLength(5);
+		const fifth = NAV_ENTRIES[4];
+		expect(fifth.key).toBe('links');
+		expect(fifth.route).toBe('/links');
 	});
 
 	it('carries NO collectives entry — the route died with #338 (the picker lives in the agenda header)', () => {
@@ -32,8 +31,8 @@ describe('#256 — NAV_ENTRIES carries the links entry', () => {
 	it('links is visible to plain members — read access is everyone; the admin gate lives on the page controls, not the nav', () => {
 		const links = NAV_ENTRIES.find((e) => e.key === 'links');
 		expect(links).toBeDefined();
-		expect(links!.visible({ canEditDb: false, hasMultipleCollectives: false })).toBe(true);
-		expect(links!.visible({ canEditDb: true, hasMultipleCollectives: true })).toBe(true);
+		expect(links!.visible({ hasMultipleCollectives: false })).toBe(true);
+		expect(links!.visible({ hasMultipleCollectives: true })).toBe(true);
 	});
 
 	it('label resolves through m.nav_links() and the entry carries an inline svg icon', () => {

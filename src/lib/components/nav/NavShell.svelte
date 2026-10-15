@@ -10,7 +10,6 @@
 		activeRoute,
 		completionLocked = false,
 		anonymous = false,
-		canEditDb = false,
 		// No NAV_ENTRIES entry reads this now; it stays as NavContext's second visibility
 		// axis so a future entry can gate on it without re-threading the shell.
 		hasMultipleCollectives = false,
@@ -23,7 +22,6 @@
 		activeRoute: string;
 		completionLocked?: boolean;
 		anonymous?: boolean;
-		canEditDb?: boolean;
 		hasMultipleCollectives?: boolean;
 		toolbar?: Snippet;
 		toolbarLabel?: string;
@@ -31,7 +29,7 @@
 		children: Snippet;
 	} = $props();
 
-	const ctx: NavContext = $derived({ canEditDb, hasMultipleCollectives });
+	const ctx: NavContext = $derived({ hasMultipleCollectives });
 	const visibleEntries = $derived(entries.filter((e) => e.visible(ctx)));
 
 	// Completion-lock disables every entry but Profile. Out of the markup because the roving
@@ -42,18 +40,22 @@
 	}
 	const enabledEntries = $derived(visibleEntries.filter((e) => !isDisabled(e)));
 
-	// Route matching is segment-aware and longest-wins: '/admin' and '/admin/invite' share a
-	// prefix, so a per-entry `startsWith` would mark both current on /admin/invite.
-	function matchesRoute(route: string): boolean {
-		if (route === '/') return activeRoute === '/';
-		return activeRoute === route || activeRoute.startsWith(route + '/');
+	// Route matching is segment-aware and longest-wins: '/roster' must not match
+	// '/rosters-archive', and a deeper route beats its parent when two entries share a prefix.
+	function matchLength(route: string): number {
+		if (route === '/') return activeRoute === '/' ? 1 : 0;
+		return activeRoute === route || activeRoute.startsWith(route + '/') ? route.length : 0;
 	}
 
 	const activeKey = $derived.by(() => {
 		let best: NavEntry | null = null;
+		let bestLength = 0;
 		for (const entry of visibleEntries) {
-			if (!matchesRoute(entry.route)) continue;
-			if (!best || entry.route.length > best.route.length) best = entry;
+			const length = Math.max(...[entry.route, ...(entry.alsoActiveOn ?? [])].map(matchLength));
+			if (length > bestLength) {
+				best = entry;
+				bestLength = length;
+			}
 		}
 		return best?.key ?? null;
 	});
@@ -192,10 +194,11 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		padding: 0.375rem 0.75rem;
+		min-width: 0;
+		padding: 0.375rem 0.5rem;
 		border-radius: 0.5rem;
 		font-family: var(--font-sans);
-		font-size: 0.625rem;
+		font-size: 0.75rem;
 		line-height: 1.2;
 		color: var(--color-ink-3);
 		text-decoration: none;
@@ -227,8 +230,8 @@
 
 	.nav-icon {
 		display: flex;
-		width: 1.25rem;
-		height: 1.25rem;
+		width: 1.5rem;
+		height: 1.5rem;
 	}
 
 	.nav-icon :global(svg) {
@@ -277,7 +280,7 @@
 			padding: 0.625rem 0.5rem;
 			border-radius: 0.5rem 0 0 0.5rem;
 			margin-left: 0.25rem;
-			font-size: 0.5625rem;
+			font-size: 0.6875rem;
 			gap: 0.1875rem;
 		}
 
@@ -297,7 +300,7 @@
 
 		.nav-label {
 			max-width: 3.5rem;
-			font-size: 0.5rem;
+			font-size: 0.6875rem;
 		}
 	}
 

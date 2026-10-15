@@ -6,6 +6,9 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '$lib/testing/entuFetchKit';
 
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
@@ -44,7 +47,7 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-import Page from './admin/+page.svelte';
+import Page from './profile/+page.svelte';
 import { selectedCollectiveStore } from '$lib/collectives/store';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
@@ -61,6 +64,7 @@ import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { CFG, selectSampledb } from '$lib/testing/pages/admin';
 import { cleanupReset, q } from '$lib/testing/pages/dom';
 import { renderReady } from '$lib/testing/pages/adminRender';
+import { dbEditRight } from '$lib/nav/dbRights';
 
 const MARKER = { markerId: 'marker-1', name: 'Koor Sampledb' };
 
@@ -69,6 +73,7 @@ const ANNA = { id: 'p-anna', name: 'Anna Arro', role: 'owner' as const, valueIds
 
 function loadOk() {
 	resolveDbEditRightMock.mockResolvedValue('editor');
+	dbEditRight.set('editor');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 	listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });

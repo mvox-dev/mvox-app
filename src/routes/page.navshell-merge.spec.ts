@@ -9,7 +9,6 @@ const nav = vi.hoisted(() => ({
 	nav_profile: () => 'Profile',
 	nav_library: () => 'Library',
 	nav_invite: () => 'Invite',
-	nav_admin: () => 'Admin',
 	nav_links: () => 'Links'
 }));
 vi.mock('$lib/paraglide/messages', async (importOriginal) =>
@@ -37,6 +36,9 @@ const h = vi.hoisted(() => {
 		removeLibrarianMock: vi.fn(),
 	};
 });
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
 vi.mock('$lib/admin/roleManagement', () => ({
 	RoleLockoutError: h.RoleLockoutError,
 	RoleGrantMissingError: h.RoleGrantMissingError,
@@ -84,6 +86,7 @@ import NavShell from '$lib/components/nav/NavShell.svelte';
 import { NAV_ENTRIES } from '$lib/nav/entries';
 import { buildInviteUrl } from '$lib/invite/invite-links';
 import AdminPage from './admin/+page.svelte';
+import ProfilePage from './profile/+page.svelte';
 import AdminInvitePage from './admin/invite/+page.svelte';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
@@ -100,6 +103,8 @@ import {
 } from '$lib/testing/mocks/admin';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { ANNA } from '$lib/testing/pages/admin';
+import { dbEditRight } from '$lib/nav/dbRights';
+import { listMyProfilesMock } from '$lib/testing/mocks/session';
 
 const testChildren = createRawSnippet(() => ({
 	render: () => '<div data-testid="page-content">Page Content</div>'
@@ -111,7 +116,6 @@ function q<T extends HTMLElement>(root: ParentNode, testid: string): T | null {
 
 function renderShell(opts: {
 	activeRoute?: string;
-	canEditDb?: boolean;
 	hasMultipleCollectives?: boolean;
 }) {
 	return render(NavShell, {
@@ -119,7 +123,6 @@ function renderShell(opts: {
 			children: testChildren,
 			entries: NAV_ENTRIES,
 			activeRoute: opts.activeRoute ?? '/',
-			canEditDb: opts.canEditDb ?? false,
 			hasMultipleCollectives: opts.hasMultipleCollectives ?? false
 		}
 	});
@@ -138,6 +141,8 @@ function selectSampledb() {
 
 function loadOk() {
 	resolveDbEditRightMock.mockResolvedValue('editor');
+	dbEditRight.set('editor');
+	listMyProfilesMock.mockResolvedValue([]);
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 	h.listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
@@ -182,44 +187,19 @@ afterEach(() => {
 	resetAppState();
 });
 
-describe('#140 — NAV_ENTRIES after the merge', () => {
-	it('carries exactly 6 entries — the separate invite entry is gone; links joined (#256); collectives left with its page (#338)', () => {
-		expect(NAV_ENTRIES.map((e) => e.key)).toHaveLength(6);
-		expect(NAV_ENTRIES.find((e) => e.key === 'invite')).toBeUndefined();
-		expect(NAV_ENTRIES.find((e) => e.route === '/admin/invite')).toBeUndefined();
-	});
-
-	it('keeps a single admin-only entry routing to /admin (visible ⇔ ctx.canEditDb)', () => {
-		const adminEntries = NAV_ENTRIES.filter((e) => e.route.startsWith('/admin'));
-		expect(adminEntries).toHaveLength(1);
-		const admin = adminEntries[0];
-		expect(admin.route).toBe('/admin');
-		expect(admin.visible({ canEditDb: true, hasMultipleCollectives: false })).toBe(true);
-		expect(admin.visible({ canEditDb: false, hasMultipleCollectives: false })).toBe(false);
-		expect(admin.visible({ canEditDb: false, hasMultipleCollectives: true })).toBe(false);
+describe('#916 — NAV_ENTRIES: five tabs, Admin lives under Profile', () => {
+	it('carries exactly 5 entries in order, none routing under /admin (#916; invite #140, links #256, collectives #338)', () => {
+		expect(NAV_ENTRIES.map((e) => e.key)).toEqual(['agenda', 'roster', 'profile', 'library', 'links']);
+		expect(NAV_ENTRIES.find((e) => e.route.startsWith('/admin'))).toBeUndefined();
 	});
 });
 
-describe('#140 — NavShell × real NAV_ENTRIES', () => {
-	it('renders exactly 6 top-level nav entries for a full-context admin (#256 added links; #338 removed collectives)', () => {
-		const { container } = renderShell({ canEditDb: true, hasMultipleCollectives: true });
-		expect(navAnchors(container)).toHaveLength(6);
-	});
-
-	it('renders an Admin entry for admins — and NO separate Invite entry', () => {
-		const { container, getByText, queryByText } = renderShell({ canEditDb: true });
-		const adminLink = getByText('Admin').closest('a');
-		expect(adminLink?.getAttribute('href')).toBe('/admin');
-		expect(queryByText('Invite')).toBeNull();
-		expect(
-			navAnchors(container).filter((a) => a.getAttribute('href') === '/admin/invite')
-		).toHaveLength(0);
-	});
-
-	it('hides the Admin entry from non-admins — 5 member entries (#256: links is member-visible, members READ the collection), no admin affordance', () => {
-		const { container, queryByText } = renderShell({ canEditDb: false });
-		expect(queryByText('Admin')).toBeNull();
-		expect(queryByText('Invite')).toBeNull();
+describe('#916 — NavShell × real NAV_ENTRIES', () => {
+	it.each([
+		['an admin with several collectives', true],
+		['a member with one collective', false]
+	])('renders the same 5 top-level entries for %s', (_who, hasMultipleCollectives) => {
+		const { container, queryByText } = renderShell({ hasMultipleCollectives });
 		expect(navAnchors(container).map((a) => a.getAttribute('href'))).toEqual([
 			'/',
 			'/roster',
@@ -227,33 +207,30 @@ describe('#140 — NavShell × real NAV_ENTRIES', () => {
 			'/library',
 			'/links'
 		]);
+		expect(queryByText('Admin')).toBeNull();
+		expect(queryByText('Invite')).toBeNull();
 	});
 
-	it('highlights the Admin tab on /admin — the single aria-current entry', () => {
-		const { container, getByText } = renderShell({ activeRoute: '/admin', canEditDb: true });
-		const adminLink = getByText('Admin').closest('a');
-		expect(adminLink?.getAttribute('aria-current')).toBe('page');
-		expect(container.querySelectorAll('a[aria-current="page"]')).toHaveLength(1);
-	});
+	it.each(['/profile', '/admin', '/admin/invite'])(
+		'highlights the Profile tab on %s — the single aria-current entry',
+		(activeRoute) => {
+			const { container } = renderShell({ activeRoute });
+			const active = Array.from(container.querySelectorAll('a[aria-current="page"]'));
+			expect(active.map((a) => a.getAttribute('href'))).toEqual(['/profile']);
+		}
+	);
 
-	it('highlights the Admin tab on /admin/invite too (prefix match — the merged tab owns the whole /admin subtree)', () => {
-		const { container, getByText } = renderShell({
-			activeRoute: '/admin/invite',
-			canEditDb: true
-		});
-		const adminLink = getByText('Admin').closest('a');
-		expect(adminLink?.getAttribute('aria-current')).toBe('page');
-		const active = Array.from(container.querySelectorAll('a[aria-current="page"]'));
-		expect(active.map((a) => a.getAttribute('href'))).toEqual(['/admin']);
-		expect(container.querySelectorAll('.nav-entry--active')).toHaveLength(1);
+	it('does not highlight Profile on a sibling route sharing a string prefix', () => {
+		const { container } = renderShell({ activeRoute: '/administrivia' });
+		expect(container.querySelectorAll('a[aria-current="page"]')).toHaveLength(0);
 	});
 });
 
-describe('#140 — /admin carries BOTH role management AND invite functionality', () => {
+describe('#140 — the admin section carries BOTH role management AND invite functionality (on /profile, #916)', () => {
 	async function renderMergedReady() {
 		selectSampledb();
 		loadOk();
-		const rendered = render(AdminPage);
+		const rendered = render(ProfilePage);
 		await waitFor(() => {
 			expect(q(rendered.container, 'admin-roles-admins')).not.toBeNull();
 			expect(q(rendered.container, 'admin-roles-librarians')).not.toBeNull();
@@ -268,12 +245,13 @@ describe('#140 — /admin carries BOTH role management AND invite functionality'
 		expect(q(inviteSection, 'invite-admin-submit')).not.toBeNull();
 	});
 
-	it('the embedded invite heading sits UNDER the page h1 — a section h2, not a second page title (review F2)', async () => {
+	it('the embedded invite heading sits UNDER the section h2 — an h3, not a second page title (review F2, #916)', async () => {
 		const { container } = await renderMergedReady();
 		expect(container.querySelectorAll('h1')).toHaveLength(1);
 		const inviteSection = q<HTMLElement>(container, 'admin-invite-section')!;
 		expect(inviteSection.querySelector('h1')).toBeNull();
-		expect(inviteSection.querySelector('h2')).not.toBeNull();
+		expect(inviteSection.querySelector('h2')).toBeNull();
+		expect(inviteSection.querySelector('h3')).not.toBeNull();
 	});
 
 	it('the embedded invite surface is LIVE: submitting mints an invite via createInvite and surfaces the copy-only result panel', async () => {
@@ -299,15 +277,16 @@ describe('#140 — /admin carries BOTH role management AND invite functionality'
 		expect(container.textContent).not.toContain('tok-123');
 	});
 
-	it('non-admin (no-access): NO invite functionality renders on /admin either', async () => {
+	it('non-admin: NO invite functionality renders on /profile either', async () => {
 		selectSampledb();
 		loadOk();
-		resolveDbEditRightMock.mockResolvedValue('not-editor');
+		dbEditRight.set('not-editor');
 
-		const { container } = render(AdminPage);
+		const { container } = render(ProfilePage);
 		await waitFor(() => {
-			expect(q(container, 'admin-roles-no-access')).not.toBeNull();
+			expect(q(container, 'profile-name-edit')).not.toBeNull();
 		});
+		expect(q(container, 'profile-collective-admin')).toBeNull();
 		expect(q(container, 'admin-invite-section')).toBeNull();
 		expect(q(container, 'invite-admin-submit')).toBeNull();
 		expect(createInviteMock).not.toHaveBeenCalled();
@@ -332,7 +311,7 @@ describe('#140 — embedded invite surface with MULTIPLE collectives', () => {
 		resolveDatabaseEntityIdMock.mockImplementation((cfg: { db: string }) =>
 			Promise.resolve(cfg.db === 'ramkoor' ? 'org-ram' : 'org-poly')
 		);
-		const rendered = render(AdminPage);
+		const rendered = render(ProfilePage);
 		await waitFor(() => {
 			expect(q(rendered.container, 'admin-invite-section')).not.toBeNull();
 		});
@@ -378,6 +357,44 @@ describe('#140 — embedded invite surface with MULTIPLE collectives', () => {
 		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledWith(
 			expect.objectContaining({ db: 'ramkoor' })
 		);
+	});
+});
+
+describe('#916 — /admin lands on the admin section of /profile', () => {
+	it('/admin replaces itself with /profile#collective', async () => {
+		render(AdminPage);
+		await waitFor(() => {
+			expect(goto).toHaveBeenCalledWith('/profile#collective', { replaceState: true });
+		});
+	});
+
+	it('/profile#collective scrolls the section into view once it has rendered', async () => {
+		const scrolled: Element[] = [];
+		const spy = vi
+			.spyOn(Element.prototype, 'scrollIntoView')
+			.mockImplementation(function (this: Element) {
+				scrolled.push(this);
+			});
+		history.replaceState({}, '', '/profile#collective');
+		selectSampledb();
+		loadOk();
+		const { container } = render(ProfilePage);
+		await waitFor(() => expect(q(container, 'admin-roles-admins')).not.toBeNull());
+		await waitFor(() => expect(scrolled).toEqual([q(container, 'profile-collective-admin')]));
+		history.replaceState({}, '', '/');
+		spy.mockRestore();
+	});
+
+	it('/profile without the fragment does not scroll', async () => {
+		const spy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
+		history.replaceState({}, '', '/profile');
+		selectSampledb();
+		loadOk();
+		const { container } = render(ProfilePage);
+		await waitFor(() => expect(q(container, 'admin-roles-admins')).not.toBeNull());
+		expect(spy).not.toHaveBeenCalled();
+		history.replaceState({}, '', '/');
+		spy.mockRestore();
 	});
 });
 

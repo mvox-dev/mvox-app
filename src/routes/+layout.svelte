@@ -188,7 +188,6 @@
 	activeRoute={page.url.pathname}
 	completionLocked={$completionGateStore === 'incomplete'}
 	anonymous={$authStore.status !== 'authenticated'}
-	canEditDb={$dbEditRight === 'editor'}
 	toolbar={feedbackEditor.open ? feedbackBar : undefined}
 	toolbarLabel={m.feedback_editor_label()}
 	overlay={feedbackEditor.open ? feedbackOverlay : undefined}
