@@ -105,13 +105,6 @@ describe('AgendaList — row content', () => {
 		expect(timeEl?.textContent?.trim()).toBe('12:00');
 	});
 
-	it('row contains duration via agenda_duration_min', () => {
-		const { container } = render(AgendaList, { items: itemSameDay });
-		const row = container.querySelector('[data-testid="agenda-row-r1"]');
-		const durationEl = row?.querySelector('[data-testid="row-duration"]');
-		expect(durationEl?.textContent).toContain('90 min');
-	});
-
 	it('row contains the rehearsal name', () => {
 		const { container } = render(AgendaList, { items: itemSameDay });
 		const row = container.querySelector('[data-testid="agenda-row-r1"]');
@@ -481,6 +474,45 @@ describe('AgendaList — event detail links (#101 TE.1)', () => {
 		const { container } = render(AgendaList, { items: itemSameDay, recentItems: recent });
 		const link = container.querySelector('a[href="/event/p8"][aria-label]')!;
 		expect(link.getAttribute('aria-label')).toBe('View event details');
+	});
+});
+
+describe('#919 — cards show start and end time, no duration', () => {
+	const end = (c: HTMLElement, row: string) =>
+		c.querySelector(`[data-testid="${row}"] [data-testid="row-end"]`)?.textContent?.trim();
+
+	it('upcoming and past cards: the end line is start + duration, and no duration shows', () => {
+		const recent = [item('p1', '2026-06-14T16:00:00.000Z', { durationMinutes: 150 })];
+		const { container } = render(AgendaList, { items: itemSameDay, recentItems: recent });
+		expect(end(container, 'agenda-row-r1')).toBe('–13:30');
+		expect(end(container, 'agenda-recent-row-p1')).toBe('–21:30');
+		expect(container.querySelector('[data-testid="row-duration"]')).toBeNull();
+		expect(container.textContent).not.toMatch(/\d+ min/);
+	});
+
+	it("12-hour mode: the end follows the person's format", async () => {
+		const { timeFormatStore } = await import('$lib/preferences/timeFormat');
+		timeFormatStore.set('ampm');
+		try {
+			const { container } = render(AgendaList, { items: itemSameDay });
+			expect(end(container, 'agenda-row-r1')).toBe('–1:30 PM');
+		} finally {
+			timeFormatStore.set('24h');
+		}
+	});
+
+	it('duration 0: the start time stands alone, no end line', () => {
+		const items = [item('r1', '2026-06-15T09:00:00.000Z', { durationMinutes: 0 })];
+		const { container } = render(AgendaList, { items });
+		const row = container.querySelector('[data-testid="agenda-row-r1"]')!;
+		expect(row.querySelector('[data-testid="row-time"]')?.textContent?.trim()).toBe('12:00');
+		expect(row.querySelector('[data-testid="row-end"]')).toBeNull();
+	});
+
+	it('crossing midnight: the end reads the clock time, with no next-day mark', () => {
+		const items = [item('r1', '2026-06-15T20:30:00.000Z', { durationMinutes: 60 })];
+		const { container } = render(AgendaList, { items });
+		expect(end(container, 'agenda-row-r1')).toBe('–00:30');
 	});
 });
 

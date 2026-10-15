@@ -32,4 +32,13 @@ staging:
   - label: GOTCHA
     record: "Series and season deletes share pendingId: gate on isSeasonDeletePending, not !== null"
     ref: "src/lib/agenda/seasonManageDelete.ts"
+  - label: GOTCHA
+    record: "admin-lookup-reduction counts every /profile read: a new section names its reads there"
+    ref: "#920"
+  - label: PATTERN
+    record: "Agenda works specs moved to /event by swapping the render helper; the wire world stayed"
+    ref: "src/lib/testing/pages/repertoireWiring.ts"
+  - label: GOTCHA
+    record: "Recent and upcoming share testid agenda-date-header: scope queries by section testid"
+    ref: "#918"
 # (*MVOX:Josquin*)

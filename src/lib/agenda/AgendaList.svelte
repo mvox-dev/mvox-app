@@ -10,6 +10,7 @@
 		longDayFormatter,
 		tallinnDayKey
 	} from '$lib/preferences/timeFormat';
+	import { endTime } from '$lib/events/eventTime';
 	import { rowLinkLabel, rsvpAnswerText } from '$lib/agenda/agendaRowParts';
 	import AgendaEmpty from '$lib/agenda/AgendaEmpty.svelte';
 	import EventTypeBadge from '$lib/agenda/EventTypeBadge.svelte';
@@ -150,9 +151,13 @@
 </script>
 
 {#snippet timeColumn(item: AgendaItem)}
+	{@const start = new Date(item.startDatetime)}
+	{@const end = endTime(start, item.durationMinutes, $timeFormatStore)}
 	<a href="/event/{item.id}" aria-hidden="true" tabindex="-1" class="flex flex-col font-mono">
-		<span data-testid="row-time" class="text-sm text-ink">{formatTime(tallinnHHMM(new Date(item.startDatetime)), $timeFormatStore)}</span>
-		<span data-testid="row-duration" class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
+		<span data-testid="row-time" class="text-sm text-ink">{formatTime(tallinnHHMM(start), $timeFormatStore)}</span>
+		{#if end !== null}
+			<span data-testid="row-end" class="text-[10px] text-ink-2">–{end}</span>
+		{/if}
 	</a>
 {/snippet}
 
