@@ -101,7 +101,9 @@ def main():
             return 1
         print("caps.yaml current")
         return 0
-    OUT.write_text(text, encoding="utf-8", newline="\n")
+    # Not OUT.write_text, whose newline= is Python 3.10+, and macOS's system python3 is 3.9 (kit #34).
+    with open(OUT, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
     print(f"wrote {OUT.name} from {SRC.name}")
     return 0
 

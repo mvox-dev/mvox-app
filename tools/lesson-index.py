@@ -27,6 +27,13 @@ import yaml
 FIELDS = ("summary", "learned", "ref", "enforcement", "trigger")
 
 
+def write(path, text):
+    """UTF-8 with LF on every platform. Not Path.write_text, whose newline= is Python 3.10+, and
+    macOS's system python3 is 3.9 (kit #34)."""
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+
+
 def front_matter(path):
     text = path.read_text(encoding="utf-8")
     if not text.startswith("---\n"):
@@ -68,7 +75,7 @@ def from_index(lessons_dir, index):
             continue
         meta = {k: r[k] for k in FIELDS if r.get(k) not in (None, "")}
         head = yaml.safe_dump(meta, allow_unicode=True, sort_keys=False, width=200)
-        p.write_text("---\n" + head + "---\n" + p.read_text(encoding="utf-8"), encoding="utf-8", newline="\n")
+        write(p, "---\n" + head + "---\n" + p.read_text(encoding="utf-8"))
         done += 1
     print(f"{index}: front matter written into {done} lesson(s)")
 
@@ -89,7 +96,7 @@ def main(argv):
             print(f"{index}: stale -- run memory-kit/tools/lesson-index.py")
             return 1
         return 0
-    index.write_text(want, encoding="utf-8", newline="\n")
+    write(index, want)
     print(f"{index}: {want.count('- slug:')} lessons")
     return 0
 

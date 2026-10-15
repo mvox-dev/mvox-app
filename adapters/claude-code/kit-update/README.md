@@ -86,6 +86,12 @@ It arrives as a plugin's prompt, and the session reads it under the plugin's nam
 person's words. If the home is several releases behind, the prompt names only the newest on the
 channel, because the script pulls straight to it.
 
+**After the pull** (the script, not this plugin; kit #37): when the pull changed a plugin and
+`claude` is on PATH, `tools/kit-update.py` runs `claude plugin marketplace update memory-kit` and
+`claude plugin update <p>@memory-kit` for each changed plugin installed, in the home, then says to
+`/reload-plugins`. That changes the harness's plugin state, user-level for a user-scope install.
+Without `claude` on PATH it prints the steps instead. The plugin itself still runs no process.
+
 ## One prompt per release, in one session
 
 The prompt is recorded in `$.store` as `prompt:<version>`. The store is shared live by every
@@ -201,6 +207,10 @@ In the `memory-kit` marketplace, beside the pane and the watch. The entry to add
 
 Then `claude plugin install kit-update@memory-kit`. For one session:
 `claude --plugin-dir ./memory-kit/adapters/claude-code/kit-update`.
+
+**Scope.** This installs at user scope: every session on the machine loads the plugin. What it
+does in a folder that is not a kit home, and the project-scope alternative:
+[Install scope](../README.md#install-scope-kit-35).
 
 ## Develop
 
