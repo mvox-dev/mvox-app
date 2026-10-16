@@ -7,7 +7,7 @@
 //
 // If the start folder's memory-kit.conf says `kit_home: <path>` (absolute, or relative to that
 // conf's folder), the home is the folder it names: that home's conf, memory-kit/VERSION, memory
-// directory, update:/upstream: and watch_sources count, and the pointer conf's other keys are
+// directory, update:/upstream: and watch_files count, and the pointer conf's other keys are
 // ignored (reported in `ignored`). One hop, never chained: the target's conf may not point on (a
 // loop is a chain too). `kit_home: .` is just the home. A target with no memory-kit.conf, and a
 // `~` path (not expanded), are problems said plainly, never a silent fall back.

@@ -1,74 +1,21 @@
 // Pure logic of the watch mod: no `$`, no I/O. Everything here is unit-tested.
 //
-// Sources are declared per kit home in memory-kit.conf (kit issue #9):
+// The watch is information only (kit #9, reshaped 2026-10-16). It rings doorbells on files the
+// home declares and reports the session's idleness and context growth; what any ring or report
+// means is the home's own rule. Declared per kit home in memory-kit.conf:
 //
-//   watch_sources:
-//     - "hub mail | hub | comms/inboxes/team-lead.json"
-//     - "kaarel | lines | ~/spool/kaarel.txt | ~/spool/archive/kaarel.txt"
-//   watch_retire_step: "touch .fresh-next, then exit"
+//   watch_files:
+//     - label: ""
+//       path: comms/inboxes/team-lead.json
+//       instruction: "consume the inbox or new messages won't land"
+//       inject: false
+//   watch_idle_minutes: 50
+//   watch_context_percent: 50, 60, 70, 80
 
 import type { PromptOrigin } from 'claude-code'
 
 // ---------------------------------------------------------------------------------------------
-// Sources.
-
-export type Format = 'hub' | 'lines'
-
-/**
- * Which entries of a shared hub inbox a source takes (kit #12): `unread` skips `read: true`,
- * `courier` takes only entries whose `from` ends in `-courier`. A source with either is shared:
- * the file is the harness's own teammate inbox, so only the taken entries leave it.
- */
-export type Take = { unread: boolean; courier: boolean }
-
-/** One declared source: the prefix each item arrives under, its format, its file, its archive. */
-export type Source = { prefix: string; format: Format; path: string; archive?: string; take?: Take }
-
-/** Parses `prefix | format [modifiers] | path [| archive]`; a string says what is wrong. */
-export function parseSource(spec: string): Source | string {
-  const parts = spec.split('|').map(p => p.trim())
-  if (parts.length < 3 || parts.length > 4) return `expected "prefix | format | path [| archive]"`
-  const [prefix = '', formatField = '', path = '', archive] = parts
-  const [format = '', ...modifiers] = formatField.split(/\s+/)
-  if (prefix === '') return `empty prefix`
-  if (format !== 'hub' && format !== 'lines') return `unknown format "${format}" (hub or lines)`
-  if (path === '') return `empty path`
-  const source: Source = archive === undefined || archive === '' ? { prefix, format, path } : { prefix, format, path, archive }
-  if (modifiers.length === 0) return source
-  if (format !== 'hub') return `modifiers apply only to a hub format`
-  const take: Take = { unread: false, courier: false }
-  for (const m of modifiers) {
-    if (m !== 'unread' && m !== 'courier') return `unknown modifier "${m}" (unread or courier)`
-    if (take[m]) return `modifier "${m}" given twice`
-    take[m] = true
-  }
-  return { ...source, take }
-}
-
-/** Whether a shared source takes this inbox entry. */
-export function takes(take: Take, entry: unknown): boolean {
-  if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return false
-  const e = entry as Record<string, unknown>
-  if (take.unread && e.read === true) return false
-  if (take.courier && !(typeof e.from === 'string' && e.from.endsWith('-courier'))) return false
-  return true
-}
-
-/** How an inbox entry is known across polls: its msg_id, else its whole content. */
-export function entryKey(entry: unknown): string {
-  const id = (entry as { msg_id?: unknown } | null)?.msg_id
-  return typeof id === 'string' && id !== '' ? `id:${id}` : `json:${JSON.stringify(entry)}`
-}
-
-/**
- * Courier mail stays this long in a shared inbox before the watch takes it: while the harness's
- * team is live it delivers (and removes) inbox entries itself within about a second (live check,
- * 2026-10-14), so the watch only takes what the harness is not picking up.
- */
-export const COURIER_GRACE_MS = 30_000
-
-/** The harness's lock (`<inbox>.lock`, a directory) is stale past this age, and broken. */
-export const STALE_LOCK_MS = 60_000
+// The conf.
 
 /** Strips a trailing ` # comment` and one pair of enclosing quotes. */
 function unquote(raw: string): string {
@@ -89,113 +36,123 @@ export function confValue(conf: string, key: string): string | undefined {
   return undefined
 }
 
-/**
- * What `watch_sources:` in memory-kit.conf declares (kit #14): a block list (`- "item"` lines) or
- * a flow list (`["a", 'b', c]`, on one line or several). `declared` is whether the key is there;
- * `problem` says why a declared list could not be read, so it is never silently empty. An
- * explicit `[]` is a home watching nothing on purpose: no problem.
- */
-export type SourceList = { declared: boolean; items: string[]; problem?: string }
+// ---------------------------------------------------------------------------------------------
+// Doorbells. A doorbell is a labeled file: when the file GROWS, the watch rings once -- one
+// prompt at the next turn seam. The watch never reads a file's meaning, never empties, moves or
+// archives it; consuming (read, then delete or empty) is the home's own step, and it is what
+// re-arms the bell. Created at 0 bytes is not growth; shrinking only resets the remembered size.
 
-export function readSources(conf: string): SourceList {
+/** One declared doorbell. Every field is always present in the conf; empty means its default. */
+export type Doorbell = {
+  /** The ring's label; '' means the file's name. */
+  label: string
+  path: string
+  /** Home-authored text the ring carries verbatim; '' means just the bell. */
+  instruction: string
+  /** Ring with the grown tail's lines included (for short, line-shaped files), not just the bell. */
+  inject: boolean
+}
+
+export const DOORBELL_KEYS = ['label', 'path', 'instruction', 'inject'] as const
+
+/**
+ * What `watch_files:` declares: a block list of entries, each a map of the four keys
+ * (`- label: ...` then indented `path:`, `instruction:`, `inject:`). `declared` is whether the
+ * key is there; every entry that cannot be used is a problem said out loud, never silently off.
+ * An explicit empty list is a home ringing nothing on purpose.
+ */
+export type DoorbellList = { declared: boolean; bells: Doorbell[]; problems: string[] }
+
+export function readDoorbells(conf: string): DoorbellList {
   const lines = conf.split(/\r?\n/)
-  const at = lines.findIndex(l => /^watch_sources:/.test(l))
-  if (at === -1) return { declared: false, items: [] }
-  const rest = (lines[at] ?? '').slice('watch_sources:'.length).trim()
-  if (rest.startsWith('[')) return flowList([rest, ...lines.slice(at + 1)].join('\n'))
-  if (rest !== '' && !rest.startsWith('#')) return { declared: true, items: [], problem: 'expected a list (block "- item" lines, or [ ... ])' }
-  const items: string[] = []
+  const at = lines.findIndex(l => /^watch_files:/.test(l))
+  if (at === -1) return { declared: false, bells: [], problems: [] }
+  const rest = (lines[at] ?? '').slice('watch_files:'.length).trim()
+  if (rest !== '' && !rest.startsWith('#'))
+    return { declared: true, bells: [], problems: ['expected a block list of entries ("- label: ..." lines), not an inline value'] }
+
+  const bells: Doorbell[] = []
+  const problems: string[] = []
+  let entry: Partial<Record<(typeof DOORBELL_KEYS)[number], string>> | undefined
+  let entryBad = false
+  const close = () => {
+    if (entry !== undefined && !entryBad) {
+      const n = bells.length + problems.length + 1
+      if (entry.path === undefined || entry.path === '') problems.push(`entry ${n}: no path`)
+      else if (entry.inject !== undefined && entry.inject !== '' && entry.inject !== 'true' && entry.inject !== 'false')
+        problems.push(`entry ${n}: inject must be true or false, not "${entry.inject}"`)
+      else bells.push({ label: entry.label ?? '', path: entry.path, instruction: entry.instruction ?? '', inject: entry.inject === 'true' })
+    }
+    entry = undefined
+    entryBad = false
+  }
   for (const raw of lines.slice(at + 1)) {
     if (/^\s*(#.*)?$/.test(raw)) continue
-    // Items may sit at column 0 under the key, as yaml.safe_dump writes them; any other
-    // column-0 line is the next key.
+    // Entries may sit at column 0 under the key, as yaml.safe_dump writes them; any other
+    // column-0 line that is not a list item is the next conf key.
     if (!/^\s/.test(raw) && !/^-(\s|$)/.test(raw)) break
-    const item = /^\s*-(?:\s+(.*))?$/.exec(raw)
-    if (!item) return { declared: true, items, problem: `not a list item: ${raw.trim()}` }
-    const v = unquote(item[1] ?? '')
-    if (v !== '') items.push(v)
-  }
-  return items.length === 0 ? { declared: true, items, problem: 'no items under it' } : { declared: true, items }
-}
-
-/** A YAML flow list of scalars, from its `[` to its `]` (which may be lines later). */
-function flowList(text: string): SourceList {
-  const items: string[] = []
-  const fail = (problem: string): SourceList => ({ declared: true, items: [], problem })
-  let i = 1
-  let expectItem = true
-  const skipBlank = () => {
-    for (;;) {
-      while (i < text.length && /\s/.test(text[i] ?? '')) i++
-      if (text[i] !== '#' || !/\s/.test(text[i - 1] ?? ' ')) return
-      while (i < text.length && text[i] !== '\n') i++
-    }
-  }
-  for (;;) {
-    skipBlank()
-    const c = text[i]
-    if (c === undefined) return fail('unterminated [ ... ]: no closing ]')
-    if (c === ']') {
-      const after = text.slice(i + 1).split('\n')[0]?.trim() ?? ''
-      if (after !== '' && !after.startsWith('#')) return fail(`text after the closing ]: ${after}`)
-      return { declared: true, items }
-    }
-    if (c === ',') {
-      if (expectItem) return fail('an empty item (two commas)')
-      expectItem = true
-      i++
+    const item = /^\s*-\s+(.*)$/.exec(raw)
+    const field = /^\s*([A-Za-z_]+):(.*)$/.exec(item?.[1] ?? raw.trim())
+    if (item) close()
+    if (!field) {
+      if (!entryBad) problems.push(`not a "key: value" line: ${raw.trim()}`)
+      entryBad = true
+      if (item) entry = {}
       continue
     }
-    if (!expectItem) return fail('items must be separated by a comma')
-    if (c === '[' || c === '{') return fail('nested lists or maps are not source items')
-    let value = ''
-    if (c === '"') {
-      i++
-      for (;;) {
-        const d = text[i]
-        if (d === undefined || d === '\n') return fail('unterminated "..." item')
-        if (d === '"') break
-        if (d === '\\') {
-          const n = text[i + 1] ?? ''
-          value += n === 'n' ? '\n' : n === 't' ? '\t' : n
-          i += 2
-          continue
-        }
-        value += d
-        i++
-      }
-      i++
-    } else if (c === "'") {
-      i++
-      for (;;) {
-        const d = text[i]
-        if (d === undefined || d === '\n') return fail("unterminated '...' item")
-        if (d === "'") {
-          if (text[i + 1] === "'") {
-            value += "'"
-            i += 2
-            continue
-          }
-          break
-        }
-        value += d
-        i++
-      }
-      i++
-    } else {
-      // A plain item ends at a comma, the closing ] or a line end.
-      while (i < text.length && !/[,\]\n]/.test(text[i] ?? '')) value += text[i++]
-      value = value.trim()
+    if (entry === undefined && !item) {
+      problems.push(`a field outside any entry (missing "- "?): ${raw.trim()}`)
+      continue
     }
-    if (value !== '') items.push(value)
-    expectItem = false
+    if (item) entry = {}
+    const key = field[1] ?? ''
+    if (!(DOORBELL_KEYS as readonly string[]).includes(key)) {
+      problems.push(`unknown field "${key}" (label, path, instruction, inject)`)
+      entryBad = true
+      continue
+    }
+    if (entry !== undefined && entry[key as (typeof DOORBELL_KEYS)[number]] !== undefined) {
+      problems.push(`field "${key}" given twice in one entry`)
+      entryBad = true
+      continue
+    }
+    if (entry !== undefined) entry[key as (typeof DOORBELL_KEYS)[number]] = unquote(field[2] ?? '')
   }
+  close()
+  if (bells.length === 0 && problems.length === 0) problems.push('no entries under it')
+  return { declared: true, bells, problems }
 }
 
-/** The `watch_sources:` items of memory-kit.conf, either list form. */
-export function sourcesOf(conf: string): string[] {
-  return readSources(conf).items
+const baseOf = (path: string) => path.slice(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1)
+
+/** A doorbell's effective label: its own, else the file's name. */
+export function bellLabel(bell: Doorbell, file: string): string {
+  return bell.label !== '' ? bell.label : baseOf(file)
 }
+
+/**
+ * One ring. Information plus the home's own instruction; with `inject`, the grown tail's
+ * non-blank lines ride along (meant for short, line-shaped files: the harness cuts long lines).
+ */
+export function ringText(bell: Doorbell, file: string, oldSize: number, content: string): string {
+  const head = `[${bellLabel(bell, file)}] ${file} grew.${bell.instruction === '' ? '' : ` ${bell.instruction}`}`
+  if (!bell.inject) return head
+  const tail = content
+    .slice(oldSize)
+    .split(/\r?\n/)
+    .map(l => l.trimEnd())
+    .filter(l => l.trim() !== '')
+  return [head, ...tail].join('\n')
+}
+
+/** One prompt for one poll's rings: every delivered prompt is a full-context turn. */
+export function combineRings(rings: readonly string[]): string {
+  if (rings.length === 1) return rings[0] ?? ''
+  return [`[watch] ${rings.length} doorbells:`, ...rings].join('\n')
+}
+
+// ---------------------------------------------------------------------------------------------
+// Paths.
 
 const ABSOLUTE = /^(\/|[A-Za-z]:[\\/]|\\\\)/
 
@@ -213,289 +170,10 @@ export function matchSegment(pattern: string, name: string): boolean {
   return re.test(name)
 }
 
-// ---------------------------------------------------------------------------------------------
-// Formats. An item is a head (who and when, '' for a plain line) and a body.
-
-export type Item = { head: string; body: string }
-
-/** A hub inbox: a JSON list of `{ from, text | summary, timestamp }`. undefined when it is not one. */
-export function hubItems(text: string): Item[] | undefined {
-  if (text.trim() === '') return []
-  let data: unknown
-  try {
-    data = JSON.parse(text)
-  } catch {
-    return undefined
-  }
-  if (!Array.isArray(data)) return undefined
-  const items: Item[] = []
-  for (const entry of data) {
-    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return undefined
-    const m = entry as Record<string, unknown>
-    const str = (v: unknown) => (typeof v === 'string' ? v : v === undefined || v === null ? '' : String(v))
-    items.push({ head: `from ${str(m.from)} [${str(m.timestamp)}]`, body: str(m.text) || str(m.summary) })
-  }
-  return items
-}
-
-/** A spool: one item per non-blank line. */
-export function lineItems(text: string): Item[] {
-  return text
-    .split(/\r?\n/)
-    .map(l => l.trimEnd())
-    .filter(l => l.trim() !== '')
-    .map(body => ({ head: '', body }))
-}
-
-const dirOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')))
-const baseOf = (path: string) => path.slice(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1)
-const stemOf = (path: string) => baseOf(path).replace(/\.[^.]*$/, '')
-
-/**
- * Where a drained file's items are kept: the source's archive (`{name}` is the file's stem),
- * else `archive/` beside the file: `<stem>-archive.json` for a hub inbox, the same name for lines.
- */
-export function archiveFor(template: string | undefined, file: string, format: Format): string {
-  if (template !== undefined) return template.replaceAll('{name}', stemOf(file))
-  return `${dirOf(file)}/archive/${format === 'hub' ? `${stemOf(file)}-archive.json` : baseOf(file)}`
-}
-
-const ASIDE = '.watch-drain-'
-
-/** The name a file is renamed to before it is read: a dotfile beside it, never matched by a glob. */
-export function asideOf(file: string, now: number, nonce: number): string {
-  return `${dirOf(file)}/${ASIDE}${baseOf(file)}-${now}-${nonce}`
-}
-
-/** Whether a directory entry is an aside of `file` (one this mod made, perhaps before a crash). */
-export function isAsideOf(file: string, name: string): boolean {
-  const head = `${ASIDE}${baseOf(file)}-`
-  return name.startsWith(head) && /^\d+-\d+$/.test(name.slice(head.length))
-}
-
-const PENDING = '.watch-pending-'
-
-/**
- * Where an aside's events wait once it is archived: the same name, `pending` for `drain`. Each
- * event leaves the file only after its $.prompt.submit was accepted.
- */
-export function pendingOf(aside: string): string {
-  const cut = Math.max(aside.lastIndexOf('/'), aside.lastIndexOf('\\')) + 1
-  return `${aside.slice(0, cut)}${aside.slice(cut).replace(ASIDE, PENDING)}`
-}
-
-/** Whether a directory entry holds events of `file` still waiting for delivery. */
-export function isPendingOf(file: string, name: string): boolean {
-  const head = `${PENDING}${baseOf(file)}-`
-  return name.startsWith(head) && /^\d+-\d+$/.test(name.slice(head.length))
-}
-
-/** The waiting events a pending file holds; [] for anything else. */
-export function pendingEvents(text: string): string[] {
-  try {
-    const data: unknown = JSON.parse(text)
-    return Array.isArray(data) ? data.filter((e): e is string => typeof e === 'string') : []
-  } catch {
-    return []
-  }
-}
-
-/** After `failures` refused deliveries in a row: 1 min, doubling, at most 30 min. */
-export function backoffMs(failures: number): number {
-  return failures <= 0 ? 0 : Math.min(30 * 60_000, 60_000 * 2 ** (failures - 1))
-}
-
-// ---------------------------------------------------------------------------------------------
-// Events: what one $.prompt.submit carries.
-
-/** Longest event, in characters: the harness cuts long lines, so a long item is a preview. */
-export const EVENT_LIMIT = 450
-
-/** `[prefix] head: body`, or for a long body `[prefix] head (long: N chars, full text in <archive>): preview…`. */
-export function formatEvent(prefix: string, item: Item, archive: string, limit = EVENT_LIMIT): string {
-  const lead = `[${prefix}]${item.head === '' ? '' : ` ${item.head}`}`
-  const whole = `${lead}${item.head === '' ? ' ' : ': '}${item.body}`
-  if (Array.from(whole).length <= limit) return whole
-  const chars = Array.from(item.body)
-  const head = `${lead} (long: ${chars.length} chars, full text in ${archive}): `
-  const room = Math.max(0, limit - Array.from(head).length - 1)
-  return `${head}${chars.slice(0, room).join('')}…`
-}
-
-/** Most items one prompt carries (kit #17): a burst of more goes as several prompts, in order. */
-export const BATCH_MAX = 20
-
-/**
- * One prompt for what one poll delivers (kit #17): every delivered prompt is a turn carrying the
- * session's whole context, so a burst of N items is one turn, not N. A single event goes as it
- * is; several go one per line under a count, each line still `[prefix] ...`.
- */
-export function batchPrompt(events: readonly string[]): string {
-  if (events.length === 1) return events[0] ?? ''
-  return [`[watch] ${events.length} items, oldest first:`, ...events].join('\n')
-}
-
-/** A prompt the human gave: typed, through Remote Control, or a Slack ping. */
-export function isHuman(origin: PromptOrigin): boolean {
-  return origin.kind === 'composer' || origin.kind === 'bridge' || origin.kind === 'slack-ping'
-}
-
-// ---------------------------------------------------------------------------------------------
-// Checkpoint and retire on idle: the five guards (kit #9, PO comment 2026-10-14).
-
-export const MINUTE = 60_000
-export const HOUR = 60 * MINUTE
-/** Guard 3: the ask still unanswered by a retire after this long raises one notice. */
-export const SURVIVE_MS = HOUR
-/** Guard 4: no retire within this long of the last one. */
-export const BRAKE_GAP_MS = 2 * HOUR
-/** Guard 4: at most this many retires in BRAKE_WINDOW_MS. */
-export const BRAKE_MAX = 4
-export const BRAKE_WINDOW_MS = 24 * HOUR
-
-export type RetireConfig = { idleMs: number; growthFraction: number }
-
-export type RetireInput = {
-  now: number
-  /** Last activity: a prompt, a step, a tool call, a turn's end. */
-  idleSince: number
-  /** Guard 1: a human prompt arrived since the session started. */
-  humanSeen: boolean
-  /** Guard 2: context tokens at the first human prompt (the startup's reading). */
-  baseline: number
-  tokens: number | undefined
-  window: number
-  /** Guard 3: when this session was asked, undefined if never. */
-  askedAt: number | undefined
-  survivedNotified: boolean
-  /** Guard 5: the mod asks nothing before this time (the brake tripped). */
-  stoppedUntil: number
-  /** Guard 4: every retire ask in the shared store. */
-  asks: readonly number[]
-}
-
-export type RetireAction = 'none' | 'ask' | 'survived' | 'brake'
-
-/** The asks still inside the brake's 24 h window. */
-export function recentAsks(asks: readonly number[], now: number): number[] {
-  return asks.filter(t => now - t < BRAKE_WINDOW_MS && t <= now)
-}
-
-/** Guard 4: whether another retire may be asked now. */
-export function brake(asks: readonly number[], now: number): { ok: true } | { ok: false; reason: string } {
-  const recent = recentAsks(asks, now)
-  if (recent.some(t => now - t < BRAKE_GAP_MS)) return { ok: false, reason: 'a retire less than 2 h ago' }
-  if (recent.length >= BRAKE_MAX) return { ok: false, reason: `${BRAKE_MAX} retires in 24 h` }
-  return { ok: true }
-}
-
-/** What the idle check does now. Every guard can only hold the ask back. */
-export function decideRetire(cfg: RetireConfig, s: RetireInput): RetireAction {
-  if (s.stoppedUntil > s.now) return 'none'
-  if (s.askedAt !== undefined) return !s.survivedNotified && s.now - s.askedAt >= SURVIVE_MS ? 'survived' : 'none'
-  if (!s.humanSeen) return 'none'
-  if (s.now - s.idleSince < cfg.idleMs) return 'none'
-  if (s.tokens === undefined || s.window <= 0) return 'none'
-  if (s.tokens - s.baseline < cfg.growthFraction * s.window) return 'none'
-  return brake(s.asks, s.now).ok ? 'ask' : 'brake'
-}
-
-/** The one checkpoint-and-retire prompt a session gets. */
-export function retirePrompt(retireStep: string, idleMinutes: number, grownPercent: number): string {
-  return [
-    `This session has been idle for ${idleMinutes} min and its context has grown ${grownPercent}% of the window since the first human prompt.`,
-    'Run your close routine now: regenerate the scratchpad current, run the lint, commit and push.',
-    'If you were waiting for an answer from the human, put that question in the checkpoint with its exact wording.',
-    `Then retire: ${retireStep}.`,
-    'This is asked once per session.',
-  ].join(' ')
-}
-
-// ---------------------------------------------------------------------------------------------
-// Platform (kit alpha.9). $.fs has no rename or delete, so the drain runs four file operations
-// on the host: POSIX mv / rm, or on Windows PowerShell's Move-Item / Remove-Item.
-
-export type Platform = 'posix' | 'windows'
-
-/** The operations: rename, rename only where nothing is (put-back), rename over, delete, and take / release a lock directory. */
-export type FileOp =
-  | { op: 'move' | 'move-keep' | 'move-replace'; from: string; to: string }
-  | { op: 'remove' | 'lock' | 'unlock'; path: string }
-
-/** Run where the home does not say: success means POSIX (macOS's BSD mv has no --version). */
-export const PROBE_ARGV = ['uname', '-s'] as const
-
-/** A drive-letter or UNC home is Windows; anything else needs the probe. */
-export function platformOfHome(home: string): Platform | undefined {
-  return /^([A-Za-z]:[\\/]|\\\\)/.test(home) ? 'windows' : undefined
-}
-
-/** A PowerShell single-quoted literal: no expansion; every character PowerShell reads as a single quote doubled. */
-export function psQuote(text: string): string {
-  return `'${text.replace(/['‘’‚‛]/g, q => q + q)}'`
-}
-
-const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-
-/** Base64 of the text's UTF-16LE bytes: what powershell.exe -EncodedCommand reads. */
-export function base64Utf16le(text: string): string {
-  const bytes: number[] = []
-  for (let i = 0; i < text.length; i++) {
-    const unit = text.charCodeAt(i)
-    bytes.push(unit & 0xff, unit >> 8)
-  }
-  let out = ''
-  for (let i = 0; i < bytes.length; i += 3) {
-    const [a = 0, b = 0, c = 0] = [bytes[i], bytes[i + 1], bytes[i + 2]]
-    const n = (a << 16) | (b << 8) | c
-    out += B64[(n >> 18) & 63] ?? ''
-    out += B64[(n >> 12) & 63] ?? ''
-    out += i + 1 < bytes.length ? (B64[(n >> 6) & 63] ?? '') : '='
-    out += i + 2 < bytes.length ? (B64[n & 63] ?? '') : '='
-  }
-  return out
-}
-
-/**
- * The argv for one operation. Windows: Windows PowerShell 5.1 (on every Windows 10 and 11), the
- * script passed as -EncodedCommand so no command-line quoting is involved; -LiteralPath so
- * `[ ]` in a path are not wildcards; a failure stops the script with exit code 1.
- */
-export function fileOpArgv(platform: Platform, f: FileOp): string[] {
-  if ('path' in f) {
-    // remove and unlock are quiet when the target is already gone (another session, or the
-    // harness breaking a stale lock), and still fail on a real failure. rmdir is not quiet, so
-    // the unlock is rm -d -f; on Windows, under Stop, even -ErrorAction SilentlyContinue fails
-    // on a missing path (kit #11), so the removal is guarded by Test-Path.
-    if (platform === 'posix') return f.op === 'remove' ? ['rm', '-f', '--', f.path] : f.op === 'lock' ? ['mkdir', '--', f.path] : ['rm', '-d', '-f', '--', f.path]
-    const path = psQuote(f.path)
-    return powershell(
-      f.op === 'lock'
-        ? // New-Item has no -LiteralPath; it fails when the directory exists, which the lock needs.
-          `New-Item -ItemType Directory -Path ${path} | Out-Null`
-        : `if (Test-Path -LiteralPath ${path}) { Remove-Item -LiteralPath ${path} -Force }`,
-    )
-  }
-  if (platform === 'posix') {
-    const flag = f.op === 'move-keep' ? ['-n'] : f.op === 'move-replace' ? ['-f'] : []
-    return ['mv', ...flag, '--', f.from, f.to]
-  }
-  return powershell(`Move-Item -LiteralPath ${psQuote(f.from)} -Destination ${psQuote(f.to)}${f.op === 'move-replace' ? ' -Force' : ''}`)
-}
-
-function powershell(command: string): string[] {
-  const script = `$ErrorActionPreference = 'Stop'; ${command}`
-  return ['powershell.exe', '-NoProfile', '-NonInteractive', '-EncodedCommand', base64Utf16le(script)]
-}
-
 /** A path's segments for glob expansion, on either separator; a leading '' is the POSIX root. */
 export function pathSegments(path: string): string[] {
   return path.split(/[\\/]/)
 }
-
-// ---------------------------------------------------------------------------------------------
-// One drain per home (kit #17). Two sessions draining one home split its items between them,
-// and a user-scope `home` option made every session on the box drain one home's sources.
 
 /** A path with `\\` as `/`, `.` and `..` resolved, no trailing slash: for comparing, never for opening. */
 export function normalPath(path: string): string {
@@ -509,27 +187,85 @@ export function normalPath(path: string): string {
   return out.length === 1 && out[0] === '' ? '/' : out.join('/')
 }
 
-/** Whether `dir` is `home` or lies inside it. A drive-letter or UNC path is Windows: no case. Symlinks are not followed. */
+/** A drive-letter or UNC path is Windows (for case folding); anything else is not. */
+export function isWindowsPath(path: string): boolean {
+  return /^([A-Za-z]:[\\/]|\\\\)/.test(path)
+}
+
+/** Whether `dir` is `home` or lies inside it. A Windows path folds case. Symlinks are not followed. */
 export function isInside(dir: string, home: string): boolean {
-  const fold = (p: string) => (platformOfHome(p) === 'windows' ? p.toLowerCase() : p)
+  const fold = (p: string) => (isWindowsPath(p) ? p.toLowerCase() : p)
   const d = fold(normalPath(dir))
   const h = fold(normalPath(home))
   return d === h || d.startsWith(h.endsWith('/') ? h : `${h}/`)
 }
 
-/** Who drains a home: the session holding its claim in $.store, refreshed every poll. */
-export type Claim = { session: string; cwd: string; at: number }
+// ---------------------------------------------------------------------------------------------
+// Prompts.
 
-/** A claim not refreshed for this long is a session gone: another may take the home over. */
-export const CLAIM_STALE_MS = 60_000
+/** A prompt the human gave: typed, through Remote Control, or a Slack ping. */
+export function isHuman(origin: PromptOrigin): boolean {
+  return origin.kind === 'composer' || origin.kind === 'bridge' || origin.kind === 'slack-ping'
+}
 
-/** The $.store key of a home's claim: one key per home, so a write for one never touches another. */
-export const claimKey = (home: string) => `drain:${normalPath(home)}`
+// ---------------------------------------------------------------------------------------------
+// Session sensors: idle and context marks. Information only, declared in memory-kit.conf;
+// absent means off.
 
-/** Whether this session drains the home now, given the home's claim record: yes unless another session holds it fresh. */
-export function claimDecision(record: unknown, me: string, now: number, staleMs: number): { drain: true } | { drain: false; holder: Claim } {
-  if (typeof record !== 'object' || record === null) return { drain: true }
-  const c = record as Partial<Claim>
-  if (typeof c.session !== 'string' || typeof c.at !== 'number' || c.session === me || now - c.at > staleMs) return { drain: true }
-  return { drain: false, holder: { session: c.session, cwd: typeof c.cwd === 'string' ? c.cwd : '?', at: c.at } }
+export const MINUTE = 60_000
+export const HOUR = 60 * MINUTE
+
+/** A conf number list that could not be used, said out loud (never silently off). */
+export type ConfNumbers = { declared: boolean; values: number[]; problem?: string }
+
+/** `watch_idle_minutes: 50` -- one value, whole minutes, at least 1. */
+export function confIdleMinutes(conf: string): ConfNumbers {
+  return confNumbers(conf, 'watch_idle_minutes', 1)
+}
+
+/** `watch_context_percent: 50, 60, 70, 80` -- percent marks of the window, 1-99, sorted. */
+export function confContextPercent(conf: string): ConfNumbers {
+  const read = confNumbers(conf, 'watch_context_percent', Infinity)
+  if (read.problem !== undefined) return read
+  if (read.values.some(v => v > 99)) return { declared: true, values: [], problem: 'marks are percent of the window: 1-99' }
+  return { ...read, values: [...read.values].sort((a, b) => a - b) }
+}
+
+function confNumbers(conf: string, key: string, max: number): ConfNumbers {
+  const raw = confValue(conf, key)
+  if (raw === undefined) return { declared: false, values: [] }
+  const parts = raw.split(',').map(p => p.trim())
+  const values = parts.map(p => (/^[0-9]+$/.test(p) ? Number(p) : NaN))
+  if (values.some(v => Number.isNaN(v) || v < 1)) return { declared: true, values: [], problem: `not a list of whole numbers >= 1: "${raw}"` }
+  if (values.length > max) return { declared: true, values: [], problem: `one value expected: "${raw}"` }
+  return { declared: true, values }
+}
+
+/**
+ * The marks newly crossed: declared, at or below the context's percent of the window, not yet
+ * reported this session. Several at once (a big jump) report together, highest last.
+ */
+export function marksCrossed(marks: readonly number[], reported: readonly number[], tokens: number | undefined, window: number): number[] {
+  if (tokens === undefined || window <= 0) return []
+  const pct = (tokens / window) * 100
+  return marks.filter(m => m <= pct && !reported.includes(m))
+}
+
+/** The context report: information only; the home's rules say what this level means. */
+export function contextReport(mark: number, tokens: number, window: number): string {
+  const pct = Math.round((tokens / window) * 100)
+  return [
+    `[watch] Context has reached ${pct}% of the window (${tokens.toLocaleString('en-US')} of ${window.toLocaleString('en-US')} tokens), past the ${mark}% mark declared in memory-kit.conf.`,
+    'This is information only; what to do at this level is this home\'s own rule.',
+  ].join(' ')
+}
+
+/**
+ * The idle report: information only. A declared watch_retire_step is quoted as the home's own
+ * declared step, decided by the home, not by the watch.
+ */
+export function idleReport(idleMinutes: number, retireStep: string | undefined): string {
+  const head = `[watch] This session has been idle for ${idleMinutes} min (the watch_idle_minutes mark in memory-kit.conf).`
+  const tail = retireStep === undefined ? 'This is information only; what idleness means here is this home\'s own rule.' : `The home's declared step for this (watch_retire_step): ${retireStep}.`
+  return `${head} ${tail}`
 }

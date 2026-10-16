@@ -1,41 +1,23 @@
 {
   "name": "watch",
-  "version": "0.4.0",
-  "description": "memory-kit watch: delivers a home's declared inboxes into the session as prompts (idle-safe), and optionally asks an idle, grown session to checkpoint and retire",
+  "version": "0.5.0",
+  "description": "memory-kit watch: delivers a home's declared inboxes into the session as prompts (idle-safe), and reports, information only, idleness and context growth past the marks the home declares in memory-kit.conf",
   "author": {
-    "name": "Mihkel Putrin\u0161"
+    "name": "Mihkel Putrinš"
   },
   "types": "./types/index.d.ts",
   "userConfig": {
     "home": {
       "type": "string",
       "title": "Kit home",
-      "description": "The kit home whose memory-kit.conf declares the sources (watch_sources) and the retire step (watch_retire_step). Empty: the directory the session started in.",
+      "description": "The kit home whose memory-kit.conf declares the sources (watch_sources) and the report marks (watch_idle_minutes, watch_context_percent). Empty: the directory the session started in.",
       "default": ""
     },
     "pollSeconds": {
       "type": "number",
       "title": "Poll interval (seconds)",
-      "description": "How often the sources are drained and the idle check runs. Local file reads only.",
+      "description": "How often the sources are drained and the report checks run. Local file reads only.",
       "default": 5
-    },
-    "retireOnIdle": {
-      "type": "boolean",
-      "title": "Checkpoint and retire on idle",
-      "description": "Ask an idle session whose context has grown to run its close routine and retire (the home's watch_retire_step). Off until proven in the household.",
-      "default": false
-    },
-    "idleMinutes": {
-      "type": "number",
-      "title": "Idle minutes before the retire ask",
-      "description": "Minutes with no prompt, step or tool call before the ask (default 50: before the 1 h prompt-cache expiry).",
-      "default": 50
-    },
-    "growthPercent": {
-      "type": "number",
-      "title": "Context growth threshold (%)",
-      "description": "Context grown since the first human prompt, as a percentage of the window, before the ask. Growth, not size: a heavy startup never counts.",
-      "default": 50
     }
   }
 }

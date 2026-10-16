@@ -158,6 +158,44 @@ A major means data shape changed. The kit ships `migrations/<version>/` for exac
     `.<stem>.lock`, then start a session) to pick it up. `--remind`, `--json` and `--status` are
     opt-in. Read the watch README's "Ack only what you read, by id" either way.
 
+- **0.1.0-alpha.16 -> 0.1.0-alpha.17:** a data step in `memory-kit.conf` only, for a home that
+  runs the watch; nothing in the home's memory changes. `kit-update.py` refuses this pull (it
+  takes only "no data step" entries): do it by hand. A home without the watch: pull, lint, done.
+  The watch (0.5.0) is now **information only**: it rings a doorbell when a declared file grows,
+  and never drains, archives or moves anything. **Consuming a file becomes the home's own step.**
+  - **Before you reload, have a consumer.** The plugin update reaches every session of a
+    user-scope install on that machine at its next `/reload-plugins` or restart, whatever its
+    subtree says. A hub inbox nobody empties stops the courier: the next message waits.
+  - **Own hub inbox** (`hub` on a file the courier alone writes, like the household's): consume
+    it with a script the session runs on each ring -- move the inbox aside (atomic), print the
+    messages in full, append them to your archive, and leave the inbox absent. The household's
+    `scripts/hub-consume.sh` is a working model.
+  - **The harness's teammate inbox** (`hub unread courier` on `~/.claude/teams/session-*/...`):
+    the watch no longer takes courier entries out of it. Before reloading, run your own consumer
+    for those entries (your earlier drain script, under the harness lock), or stay on alpha.16
+    with the plugin pinned (`claude plugin update` not run) until you have one.
+  - **A spool** (`lines`): declare it with `inject: true`; the ring carries the new lines and
+    the bookmark advances, so the spool needs no consuming and may grow.
+  - Then rewrite the conf: remove `watch_sources:` and declare `watch_files:`, each entry with
+    all four fields (empty where unused). A conf still holding `watch_sources` gets one notice
+    and nothing rings from it.
+
+    ```yaml
+    watch_files:
+      - label: "hub mail"
+        path: comms/inboxes/team-lead.json
+        instruction: "Run scripts/hub-consume.sh now: the courier delivers nothing more until it runs."
+        inject: false
+    ```
+  - Optional, new: `watch_idle_minutes: N` and `watch_context_percent: 50, 60, ...` -- reports
+    only; what they mean is the home's own rule. `watch_retire_step` is now only quoted in the
+    idle report.
+  - The plugin options `retireOnIdle`, `idleMinutes` and `growthPercent` are gone; a set
+    `retireOnIdle` gets one notice.
+  - Plugins: watch 0.5.0 (obligations-pane 0.5.1 and kit-update 0.3.1 unchanged). Update with
+    `claude plugin marketplace update memory-kit` and `claude plugin update watch@memory-kit`,
+    then `/reload-plugins`, then `/watch` to see what it understood.
+
 ## Always
 
 - The home's config for the kit lives outside the subtree; a pull must never clobber it.
