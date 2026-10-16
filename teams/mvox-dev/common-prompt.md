@@ -125,6 +125,10 @@ Before any PR:
 - External communication
 - Team composition changes
 
+### memory-kit and the machine: Passepartout (Mihkel 2026-10-16)
+- Take every memory-kit release Passepartout signs (a `verified/<tag>` marker or Passepartout's word over the hub) without asking Mihkel: `memory-kit/tools/kit-update.py` when the release has no data step, by hand per `memory-kit/UPGRADE.md` otherwise.
+- Questions about the kit, plugins, scripts, container, host or launch go to Passepartout over the hub, not to Mihkel.
+
 ### When in doubt: act and report.
 Make the decision, log it to your scratchpad, report to team-lead. PO may reverse, but waiting is the worse failure mode.
 
