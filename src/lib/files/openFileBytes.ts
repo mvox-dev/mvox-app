@@ -3,6 +3,7 @@
 import { signFileUrl } from '$lib/repertoire/fileUrls';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { CollectiveIdentity } from '$lib/collectives/store';
+import { reportProblem } from '$lib/problems/reportProblem';
 import { BYTE_STORE_CAP_BYTES, type ByteStore } from './byteStore';
 
 /** Only 'cache' and 'network-stored' mean this device holds an offline copy. */
@@ -112,13 +113,17 @@ export async function openFileBytes(
 	}
 	const filetype = res.headers.get('content-type') ?? 'application/octet-stream';
 
-	// A failed digest (no crypto.subtle off a secure origin) or put costs the row, not the score.
-	let stored = true;
-	try {
-		const sha256 = await sha256Hex(bytes);
-		await store.put(identity, fileId, { bytes, filetype, sha256 });
-	} catch {
-		stored = false;
+	// A failed digest or put costs the row, not the score. Only the put reports: a digest fails
+	// on every open from a plain-http origin, where crypto.subtle does not exist.
+	const sha256 = await sha256Hex(bytes).catch(() => null);
+	let stored = false;
+	if (sha256 !== null) {
+		try {
+			await store.put(identity, fileId, { bytes, filetype, sha256 });
+			stored = true;
+		} catch (error) {
+			reportProblem({ area: 'files', action: 'saving a part on this device', error });
+		}
 	}
 	return mint(
 		fileId,

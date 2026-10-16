@@ -1,5 +1,10 @@
 // Draws one PDF page into the viewer's canvas: the one canvas file the viewer fence allows.
-import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy } from 'pdfjs-dist';
+import {
+	GlobalWorkerOptions,
+	getDocument,
+	RenderingCancelledException,
+	type PDFDocumentProxy
+} from 'pdfjs-dist';
 // eslint-disable-next-line import/no-unresolved -- Vite's `?url` suffix, resolved at build time.
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
@@ -17,10 +22,19 @@ const MAX_DEVICE_PIXEL_RATIO = 3;
 
 export interface OpenedPdf {
 	numPages: number;
-	/** Draws page `pageNumber` (1-based) whole inside the canvas's box. */
-	renderPage(pageNumber: number, canvas: HTMLCanvasElement): Promise<RenderedPageGeometry>;
+	/** Draws page `pageNumber` (1-based) whole in the canvas's box, at `ratio` if one is given. */
+	renderPage(
+		pageNumber: number,
+		canvas: HTMLCanvasElement,
+		ratio?: number
+	): Promise<RenderedPageGeometry>;
 	/** Frees pdf.js's resources only; the blob URL is the caller's to release. */
 	destroy(): void;
+}
+
+// pdf.js rejects a render it cancelled itself when the document is torn down.
+export function isRenderCancelled(error: unknown): boolean {
+	return error instanceof RenderingCancelledException;
 }
 
 export async function openPdf(src: string): Promise<OpenedPdf> {
@@ -28,7 +42,7 @@ export async function openPdf(src: string): Promise<OpenedPdf> {
 	const doc: PDFDocumentProxy = await loadingTask.promise;
 	return {
 		numPages: doc.numPages,
-		async renderPage(pageNumber, canvas) {
+		async renderPage(pageNumber, canvas, ratio) {
 			const page = await doc.getPage(pageNumber);
 			const box = canvas.parentElement;
 			const availableWidth = box?.clientWidth || canvas.clientWidth || 1;
@@ -37,7 +51,7 @@ export async function openPdf(src: string): Promise<OpenedPdf> {
 			const scale =
 				Math.min(availableWidth / unscaled.width, availableHeight / unscaled.height) || 1;
 			// pdf.js's core render does not scale for the pixel ratio: size the backing store here.
-			const dpr = Math.min(globalThis.devicePixelRatio || 1, MAX_DEVICE_PIXEL_RATIO);
+			const dpr = ratio ?? Math.min(globalThis.devicePixelRatio || 1, MAX_DEVICE_PIXEL_RATIO);
 			const cssViewport = page.getViewport({ scale });
 			const viewport = page.getViewport({ scale: scale * dpr });
 			const geometry: RenderedPageGeometry = {
