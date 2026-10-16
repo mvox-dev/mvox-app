@@ -8,6 +8,7 @@ import {
 // eslint-disable-next-line import/no-unresolved -- Vite's `?url` suffix, resolved at build time.
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
+// The service worker precaches the worker, so a cold offline start can still draw.
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 export interface RenderedPageGeometry {
@@ -32,7 +33,6 @@ export interface OpenedPdf {
 	destroy(): void;
 }
 
-// pdf.js rejects a render it cancelled itself when the document is torn down.
 export function isRenderCancelled(error: unknown): boolean {
 	return error instanceof RenderingCancelledException;
 }

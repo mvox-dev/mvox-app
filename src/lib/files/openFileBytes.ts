@@ -13,7 +13,6 @@ export type FileBytesDeliveryReason =
 	| 'network-uncached'
 	| 'fallback-navigation';
 
-/** A minted object URL together with the handle that disposes of it. */
 export interface OpenedFileBytes {
 	// A blob URL, or on a passthrough a signed URL still inside its window. A caller that does
 	// not hand the URL on must call release, or the bytes stay pinned in page memory.
@@ -63,6 +62,7 @@ async function readStored(store: ByteStore, identity: CollectiveIdentity, fileId
 	}
 }
 
+// `identity` is captured when the request is issued, never read from a global.
 /** The cache is never a gate: only no identity, a non-OK response or a failed sign throws. */
 export async function openFileBytes(
 	cfg: EntuCfg,
