@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('$lib/repertoire/fileUrls', async () =>
 	(await import('$lib/testing/mocks/files')).fileUrlsModule()
 );
+const reportProblem = vi.hoisted(() => vi.fn());
+vi.mock('$lib/problems/reportProblem', () => ({ reportProblem, alreadyReported: () => {} }));
 
 import { openFileBytes } from './openFileBytes';
 import { BYTE_STORE_CAP_BYTES } from './byteStore';
@@ -36,6 +38,7 @@ let store: FakeByteStore;
 
 beforeEach(() => {
 	signFileUrlMock.mockReset();
+	reportProblem.mockReset();
 	selectedCollectiveDbStore.set(null);
 	store = createFakeByteStore();
 });
@@ -289,12 +292,15 @@ describe('openFileBytes — cap decided before buffering (#343 fix-round, findin
 	it('BELT — content-length absent/lying: buffering proceeds, the store\'s own cap throw (byteStore.ts) is caught, and the blob still delivers from the bytes already in hand, reason "network-uncached"', async () => {
 		signFileUrlMock.mockResolvedValue(SIGNED_URL);
 		const fetchImpl = vi.fn().mockResolvedValue(pdfResponse()); // no content-length header
-		store.put = vi.fn().mockRejectedValue(new Error('byteStore: record exceeds the cap'));
+		const overCap = new Error('byteStore: record exceeds the cap');
+		store.put = vi.fn().mockRejectedValue(overCap);
 
 		const opened = await openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
 
 		expect(opened.url).toMatch(/^blob:/);
 		expect(opened.reason).toBe('network-uncached');
+		expect(reportProblem).toHaveBeenCalledTimes(1);
+		expect(reportProblem).toHaveBeenCalledWith({ area: 'files', action: 'saving a part on this device', error: overCap });
 	});
 });
 
@@ -324,6 +330,8 @@ describe('openFileBytes — the cache is never a gate (#343 second review round)
 		expect(opened.url).toMatch(/^blob:/);
 		expect(opened.reason).toBe('network-uncached');
 		expect(opened.reason).not.toBe('cache');
+		expect(reportProblem).toHaveBeenCalledTimes(1);
+		expect(reportProblem).toHaveBeenCalledWith({ area: 'files', action: 'saving a part on this device', error: dead });
 	});
 
 	it('NON-SECURE ORIGIN: crypto.subtle absent, so the digest cannot be computed — the bytes already in hand still deliver as a blob, reason "network-uncached", nothing stored', async () => {
@@ -340,6 +348,7 @@ describe('openFileBytes — the cache is never a gate (#343 second review round)
 		}
 
 		expect(store.puts).toEqual([]);
+		expect(reportProblem).not.toHaveBeenCalled();
 	});
 
 	it('a BODY READ that rejects mid-stream hands back the signed URL still in hand, reason "fallback-navigation" — not a throw, not a discarded delivery', async () => {
