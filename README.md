@@ -35,10 +35,11 @@ The world still files natural language under "prose" and code under "engineering
 
 Where the kit is, and what each step waits for. Dates are targets; gates are not negotiable.
 
-- **0.1.0-alpha.N (now).** Six homes run the kit; upgrades need no data step since alpha.2.
-  alpha.15 shipped obligations' `owed_to` and the commitments tier ahead of 0.2, both additive:
-  a row without `owed_to` is counted, not failed, and a home opts into commitments by creating
-  the file.
+- **0.1.0-alpha.N (now).** Six homes run the kit. Upgrades needed no data step from alpha.2 to
+  alpha.16; alpha.17 has one, in the home's `memory-kit.conf` only (the watch's `watch_sources`
+  become `watch_files` doorbells), and none in its memory. alpha.15 shipped obligations'
+  `owed_to` and the commitments tier ahead of 0.2, both additive: a row without `owed_to` is
+  counted, not failed, and a home opts into commitments by creating the file.
 - **0.1.0** -- drops "alpha" when:
   - at least one home has passed ADOPTION GATE 3 (deletions) on the kit (household: 17.10), and
   - the adopting homes have filed their experience reports (household due 27.10).

@@ -5,11 +5,10 @@ declare module 'claude-code' {
     watch: {
       /** The session's working directory at its first session.start: the default kit home. */
       startCwd: string
-      /** When this session was asked to checkpoint and retire (0: never). Guard 3: once per session. */
-      askedAt: number
-      /** Whether the "still here an hour after the ask" notice went out. */
-      survivedNotified: boolean
+      /** Each watched file's last-seen size, by expanded path: growth past it rings the doorbell. */
+      bellSizes: Record<string, number>
+      /** Context marks already reported this session: once per mark, reloads included. */
+      reportedMarks: number[]
     }
   }
 }
-

@@ -1,5 +1,41 @@
 # Changelog
 
+## v0.1.0-alpha.17 -- 2026-10-16 -- the watch becomes a doorbell
+
+Plugin versions this release: watch 0.5.0, obligations-pane 0.5.1, kit-update 0.3.1.
+
+**A data step, in `memory-kit.conf` only** (UPGRADE.md alpha.16 -> alpha.17): the first since
+alpha.2. Nothing in a home's memory changes; `kit-update.py` refuses the pull, so it is done by
+hand.
+
+- **The watch is information only** (kit #9, reshaped with Mihkel 2026-10-16). It never reads a
+  file's meaning, never drains, moves or archives anything, and never says what a signal means;
+  that is the home's own rule.
+  - **Doorbells** (`watch_files`): each entry has `label` (empty: the file's name), `path`,
+    `instruction` (home-authored text the ring carries verbatim) and `inject` (ring with the new
+    lines). A ring is **growth**: created at 0 bytes, shrinking, truncating and deleting only move
+    the bookmark; delete-then-write rings. All of one poll's rings are one prompt; a refused ring
+    rolls back and rings again later.
+  - **Consuming is the home's**: read, then delete or empty -- either re-arms the bell. A spool
+    with `inject: true` needs no consuming; the bookmark advances.
+  - **Session reports**: `watch_idle_minutes` (armed by a human prompt, once per working stretch;
+    quotes `watch_retire_step` if declared) and `watch_context_percent` (marks of the window, once
+    each per session, against `$.session.usage()`).
+  - **Gone:** `watch_sources` and its `hub`/`lines` formats, `unread`/`courier` modifiers and
+    archives; the platform mv/rm layer and its Windows PowerShell path; the one-drain-per-home
+    claim; checkpoint-and-retire (`retireOnIdle`, the growth guard, the brake). A conf still
+    declaring `watch_sources`, and a set `retireOnIdle`, each get one notice. 2658 lines out,
+    838 in.
+  - `/watch` lists each doorbell (label, path, inject, instruction), every problem in the
+    declaration, and the sensor marks.
+- **Checked:** 64 watch tests (rewritten), 99 pane tests, 48 fixtures; then live in a throwaway
+  home on Claude Code 2.1.301, eight checks (plain bell, re-ring after consuming, inject, two
+  bells in one poll, the four no-ring cases, delete-then-write, a context mark after a live conf
+  edit, the idle report once). `--plugin-dir` replaces an installed watch of the same name for
+  that session rather than loading both.
+- **The household runs it first**, with its hub inbox as a plain doorbell consumed by
+  `scripts/hub-consume.sh` and its issue spool as an injecting one.
+
 ## v0.1.0-alpha.16 -- 2026-10-15 -- Python 3.9, plugin updates run, install scope, poller survey
 
 Plugin versions this release: watch 0.4.0, obligations-pane 0.5.1, kit-update 0.3.1.

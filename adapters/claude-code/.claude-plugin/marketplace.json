@@ -13,7 +13,7 @@
     {
       "name": "watch",
       "source": "./watch",
-      "description": "Delivers a home's declared inboxes into the session (idle-safe); optional checkpoint-and-retire on idle."
+      "description": "Rings a doorbell when a home's declared files grow, and reports the session's idleness and context marks. Information only."
     },
     {
       "name": "kit-update",

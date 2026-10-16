@@ -1,209 +1,119 @@
 # watch
 
-A Claude Code mod (function hooks) for a memory-kit home, kit issue #9. It is a separate plugin
-from the obligations pane, which stays read-only. A home can take either one without the other.
-Built against Claude Code 2.1.296's plugin API and checked live on 2.1.299 (early access; the API
-moves between releases).
+A Claude Code mod (function hooks) for a memory-kit home, kit issue #9, reshaped 2026-10-16. It
+is a separate plugin from the obligations pane, which stays read-only. A home can take either one
+without the other. Built against Claude Code 2.1.296's plugin API and checked live on 2.1.299
+(early access; the API moves between releases).
 
-It has two jobs, both on one timer (`pollSeconds`, default 5):
+**The watch is information only.** It never reads a file's meaning, never empties, moves or
+archives anything, and never says what a signal means: that is the home's own rule. On one timer
+(`pollSeconds`, default 5) it watches two kinds of things, both declared in the home's
+`memory-kit.conf` (absent means off):
 
-1. **Idle-safe notifications.** It drains the sources the home declares and delivers what each
-   poll found as one prompt, with `$.prompt.submit`. The prompt queues until the session is idle
-   and then starts a turn of its own, marked as coming from the plugin.
-2. **Checkpoint and retire on idle**, behind `retireOnIdle` (default off). An idle session whose
-   context has grown is asked, once, to run its close routine and then the home's own retire step.
+1. **Doorbells** (`watch_files`): when a declared file *grows*, the watch rings once -- one
+   `$.prompt.submit`, which queues until the session is idle and starts a turn of its own,
+   marked as coming from the plugin.
+2. **Session sensors** (`watch_idle_minutes`, `watch_context_percent`): one report when the
+   session has sat idle past the mark, one when its context crosses each declared percent of the
+   window.
 
-**What it costs: every delivered prompt is a full turn** (kit #17). The turn carries the
-session's whole context, so on a long session one prompt costs hundreds of thousands of input
-tokens, even when it says nothing new. An item that wakes an idle session costs the same.
+**What it costs: every ring or report is a full turn** (kit #17). The turn carries the session's
+whole context, so on a long session one prompt costs hundreds of thousands of input tokens, even
+when it says nothing new. Declare only what the session must act on.
 
-- One poll's items go as **one** prompt (since kit alpha.14), at most 20 to a prompt; see
-  Draining. A burst of five mails is one turn, not five.
-- Still, every source is a standing bill. Declare only what the session must act on, and keep
-  chatty feeds (status pings, logs) out of `watch_sources`.
-- One drain per home: a second session in the same home, and a session started outside a home
-  that only the `home` option names, deliver nothing (see "One drain per home").
-
-## Sources
-
-They are declared per home in `<home>/memory-kit.conf`. `<home>` is the home a `kit_home`
-pointer in the start folder's conf names (see below), else the `home` option, else the directory
-the session started in. The lint ignores keys it does not know.
+## Doorbells
 
 ```yaml
-watch_sources:
-  - "hub mail | hub | ~/passepartout/comms/inboxes/team-lead.json"
-  - "kaarel | lines | ~/passepartout/comms/spool/kaarel.txt"
-  - "hub mail | hub unread courier | ~/.claude/teams/session-*/inboxes/team-lead.json | ~/comms/archive/{name}-archive.json"
-watch_retire_step: "touch .fresh-next, then exit"
+watch_files:
+  - label: "hub mail"
+    path: comms/inboxes/team-lead.json
+    instruction: "consume the inbox or new messages won't land"
+    inject: false
+  - label: ""
+    path: ~/spool/links.txt
+    instruction: ""
+    inject: true
 ```
 
-Each item is `prefix | format [modifiers] | path [| archive]`:
+Every entry carries the same four fields, empty where unused:
 
-- **prefix**: what every item from the source arrives under, as `[prefix]`. Peer content stays
-  information and is never taken for the human's words.
-- **format**:
-  - `hub` is a JSON list of `{ from, text | summary, timestamp }`, as the hub courier writes.
-    An item reads `[hub mail] from <from> [<timestamp>]: <text>`.
-  - `lines` is one item per non-blank line, e.g. a spool a watcher script appends to. An item
-    reads `[kaarel] <line>`.
-- **modifiers**, for `hub` only (since 0.2.1, kit #12): `unread` skips entries marked
-  `read: true`, and `courier` takes only entries whose `from` ends in `-courier`. A source with
-  either is a shared inbox (see below). For the harness's teammate inbox, use both:
-  `hub unread courier`.
-- **path**: absolute (POSIX, `C:\`, `C:/` or UNC), `~/` for the user's home (`HOME`, else
-  `USERPROFILE` on Windows), or relative to the kit home. A `*` in a segment
-  matches entries of that directory (never a dotfile). This covers a team inbox under the
-  rotating `~/.claude/teams/session-<id>/`. Check that the glob matches only the inbox you mean.
-  `session-*` matches every team on the box, the dead ones included.
-- **archive**: where drained content is kept. `{name}` is the drained file's stem. The default
-  is `archive/` beside the file: `<stem>-archive.json` for hub, the same file name for lines. Both
-  defaults match the household's `comms/inboxes/archive/team-lead-archive.json`.
+- **label** -- what the ring arrives under, as `[label]`. Empty: the file's name.
+- **path** -- absolute (POSIX, `C:\`, `C:/` or UNC), `~/` for the user's home (`HOME`, else
+  `USERPROFILE` on Windows), or relative to the kit home. A `*` in a segment matches entries of
+  that directory (never a dotfile); each matched file is its own bell.
+- **instruction** -- home-authored text the ring carries verbatim. The watch relays the home's
+  own words; it still decides nothing. Empty: the ring is just the bell.
+- **inject** -- `true`: the ring includes the grown tail's non-blank lines, not just the bell.
+  For short, line-shaped files (a spool of URLs, one-line mail summaries): the harness cuts very
+  long lines, so a file of essays wants `inject: false` and a session that reads the file itself.
 
-**Either YAML list form** (since 0.2.3, kit #14):
+**A ring is growth.** The watch remembers each file's last-seen size; bigger rings once, and
+everything else only moves the bookmark: created at 0 bytes is not growth, shrinking and
+truncating are not growth, a deleted file counts 0 (so delete-then-write rings). A file that sits
+unconsumed is not nagged: no new growth, no new ring. All of one poll's rings go as **one**
+prompt. A ring the session's guards refuse rolls its bookmark back and rings again at a later
+poll.
 
-- the block form above, with items indented or at column 0;
-- the flow form, on one line or several:
-  `watch_sources: ["hub mail | hub unread courier | ~/.claude/teams/session-*/inboxes/team-lead.json"]`.
+**Consuming is the home's own step.** An inbox-style file is consumed by reading it and then
+deleting or emptying it -- either resets the bookmark, so the next real write rings again. A
+tail-style file (`inject: true`) needs no consuming: the bookmark simply advances, and the file
+may grow forever. Say the habit in the entry's `instruction`, where the session will read it.
 
-In the flow form, items may be `"double"` quoted (with `\"` and `\\`), `'single'` quoted (with
-`''`) or plain. A comma or bracket inside a quoted item is part of it. A plain item ends at a
-comma.
+A ring reads `[hub mail] /home/u/kit/comms/inboxes/team-lead.json grew. consume the inbox or new
+messages won't land` -- with `inject`, the new lines follow, one per line.
 
-**Never silently idle.** Each case below is one visible notice per session (notify, else a
-transcript line), never a debug line alone:
+**Never silently idle** (kit #14): a `watch_files` the watch cannot read, an entry without a
+path, an unknown field, an `inject` that is not true/false -- each is one visible notice (notify,
+else a transcript line), never a debug line alone, and the good entries still run. A conf still
+declaring `watch_sources` (watch 0.4.x and older) gets one migration notice: declare
+`watch_files`, and let the home consume its own files.
 
-- `watch_sources:` is there but cannot be read: no items under it, a value that is not a list,
-  an unterminated `[ ...`, nested lists or maps, or items without commas between them.
-- One item does not parse, or names `~` with no HOME. That item is skipped, and the rest still
-  run.
+## Session sensors
 
-`watch_sources: []` is a home watching nothing on purpose, so it gets no notice.
+```yaml
+watch_idle_minutes: 50
+watch_context_percent: 50, 60, 70, 80
+```
 
-**`/watch`** shows what is active now:
+- **Idle:** when the session has sat that many minutes with no prompt, tool call or turn end, one
+  report: `[watch] This session has been idle for 52 min ...`. If the conf declares a
+  `watch_retire_step`, the report quotes it as the home's own declared step. The report is armed
+  by a human prompt and disarmed by firing, so one working stretch gets one report -- the watch's
+  own rings never arm it, and a session no human spoke to is never pinged idle.
+- **Context:** percent marks of the window (1-99), against the exact
+  `$.session.usage()` reading. Crossing a mark gives one report naming the load and the mark;
+  each mark fires once per session; a jump over several names the highest. A compaction that
+  shrinks the context does not repeat old marks.
 
-- each source with its format and expanded path;
-- what was skipped, and why;
-- the retire switch and the poll interval.
-
-It re-reads `memory-kit.conf` every time, so it is the check to run after a reload.
-
-## Draining
-
-This is the same design as `scripts/hub-drain.sh` and esl-suvekool's `scripts/drain-inbox.py`.
-The mod reads both but changes neither.
-
-1. **Read first.** An empty file, or `[]`, is left alone. A file that is not a hub list is left
-   in place with one debug line.
-2. **Rename aside** to `.watch-drain-<file>-<time>-<n>` beside it, so a writer racing the
-   drain never loses an item. Renames and deletes run on the host (see Platforms).
-3. **Archive** the aside's content. Its events go into a pending file beside it
-   (`.watch-pending-…`), and then the aside is removed. The archive and the pending file are
-   each written through a temporary and a rename, so a crash never leaves half of either.
-4. **Deliver** the pending events, oldest first, **as one prompt** (kit #17):
-   - A single event goes as it is. Several go one per line under a count line, each line still
-     under its own `[prefix]`:
-
-     ```text
-     [watch] 3 items, oldest first:
-     [lelle] from=pepys id=a1 subject=...
-     [hub mail] from po-team [2026-10-14T08:00:00Z]: ...
-     [lelle] from=hr2 id=c3 subject=...
-     ```
-
-   - At most 20 events go in one prompt (about 9 KB at 450 characters each). A longer burst
-     goes as several prompts, in order.
-   - Each `$.prompt.submit` is awaited, and the batch's events leave their pending files only
-     once the submit was accepted.
-   - A submit resolves when its turn starts, so in a busy session the delivery pass waits for
-     it. Polls are single-flight: a poll tick that finds one running does nothing, so nothing is
-     sent twice and the order holds. New mail waits in its inbox until that turn starts, and
-     whatever has gathered by then goes as the next prompt.
-   - A crash between an accepted submit and the rewrite can deliver that one batch again, but
-     nothing is ever lost.
-5. **On a refusal**, for example another plugin's `prompt.submit` hook dropping it:
-   - The batch stays pending, whole, and the pass stops so the order holds.
-   - Retries back off: 1 min, then doubling, at most 30 min.
-   - The human gets one notice per streak of refusals, saying how many items wait, where, and
-     why.
-   - Draining into pending files goes on meanwhile, so the inbox never blocks a writer.
-
-Asides a crash left behind are picked up first at the next poll. An aside that turns out
-unreadable goes back to the file's name only if nothing new is there (no-clobber); otherwise it
-stays aside, never lost.
-
-**Long items.** No event is over 450 characters, because the harness cuts long lines. A longer
-item arrives as
-`[prefix] <head> (long: N chars, full text in <archive>): <preview>…`.
-
-## One drain per home (kit #17)
-
-Two sessions draining one home split its items between them: each item goes to whichever
-session polled first, and it is a full turn there. Two guards keep one drain per home:
-
-1. **The `home` option counts only inside that home.** The option is set at user scope, so it
-   applies to every session on the machine (FR's warning, the pepys desk). A session whose start
-   folder is not the home or below it drains nothing. It gets one notice that names a
-   `kit_home` pointer conf as the way to watch a home from another folder. A pointer, or a
-   session started in the home itself, is not affected. Paths are compared after `.` and `..`
-   are resolved, and without case for a drive-letter or UNC path. Symlinks are not followed.
-2. **One session per home: a claim in `$.store`** (`drain:<home>`), as kit-update claims a
-   release:
-   - The first session to poll a home with sources writes `{ session, cwd, at }`, reads it back
-     at once, and drains only if it is still its own. Of two sessions taking a free home at
-     once, the last writer drains.
-   - The holder refreshes the claim every poll tick, also while its delivery waits for a busy
-     turn.
-   - It lets go when its session ends (`session.end`; a `/clear` too), and the next session to
-     poll takes the home over. A claim not refreshed for 60 s (or 3 polls, if longer) is a
-     session gone, and is taken over too.
-   - Any other session drains nothing and delivers nothing from that home, including pending
-     files. It gets one notice naming the holder's start folder.
-   - Mail waits in its source meanwhile; nothing is lost.
-
-`/watch` says which session drains the home: `drained by this session`, `drained by another
-session in <folder>`, or why not here.
-
-- **Checked live** (2026-10-14, 2.1.299, three throwaway sessions on one `--plugin-dir`):
-  - The store is shared across processes: the second session saw the first one's claim at
-    once and gave its notice.
-  - New mail went to the first session only.
-  - When the first session exited, the second took the home over at its next poll, and the
-    next mail went there.
-  - A session started outside the home, with the `home` option naming it, gave the notice and
-    drained nothing.
-- **The store is per install.** A `--plugin-dir` copy and `watch@memory-kit` keep separate
-  stores, so they do not see each other's claims. Load one of them per machine.
-  (`[unverified]` whether two marketplace installs of one version share one store.)
+Both are information only: what a report means -- checkpoint, retire, nothing -- is the home's
+rule (CLAUDE.md or its kin), not the watch's.
 
 ## A remote hub: a spool fed by a peek-only poller (kit #16)
 
 The watch reads local files only, and it never touches a hub. For mail on a remote hub, such as
 Lelle's stationmaster reached with `evr-mail recv`, a poller peeks at the hub and appends one line
-per new item to a local spool. The home declares that spool as a `lines` source:
+per new item to a local spool. The home declares that spool as an injecting doorbell:
 
 ```yaml
-watch_sources:
-  - "lelle | lines | inbound/lelle-spool.txt"
+watch_files:
+  - label: lelle
+    path: inbound/lelle-spool.txt
+    instruction: "collect with recv, then ack BY ID what you read"
+    inject: true
 ```
 
-Each line arrives as `[lelle] from=… id=… subject=…`. The session then collects and acks the mail
-with its own `recv`, after recording it. **Custody stays with the session**: the poller only
-looks, and the watch only delivers the line.
+Each ring carries the new lines, `from=… id=… subject=…`. The session then collects and acks the
+mail with its own `recv`, after recording it. **Custody stays with the session**: the poller only
+looks, and the watch only rings. The spool is never consumed; the bookmark advances.
 
 **Ack only what you read, by id** (kit #39). `evr-mail recv` without `--peek` acks everything
 waiting on the hub, not what the peek showed: mail that arrived after the spool line is acked
 too. framework-research acked two messages unread that way on 2026-10-15; both needed resends.
+The rule: ack by id the messages you have read and recorded, and nothing else; an ack with no ids
+acks nothing. Until a home's mail tool acks by id: `recv` prints every message before it acks it,
+so read and record everything that run printed, not only the ones the ring named.
 
-- The rule: ack by id the messages you have read and recorded, and nothing else. An ack with no
-  ids acks nothing; refuse it rather than fall back to "all".
-- apex-research's `mail-ack.py <ids>`, which refuses an empty list, is a working model. The hub
-  acks by id already; `recv --ack <ids>` is for the evr-mail owner to add, not the kit.
-- Until a home's mail tool acks by id: `recv` prints every message before it acks it, so read and
-  record everything that run printed, not only the ones the spool line named.
-
-`spool/spool-poll.py` (Python 3, stdlib only) is the poller, generic over the command. It is
-built from the fleet's `lelle-watch.py --spool` rules (pepys desk, semafor, hr2):
+`spool/spool-poll.py` (Python 3, stdlib only) is the poller, generic over the command:
 
 ```sh
 python3 memory-kit/adapters/claude-code/watch/spool/spool-poll.py \
@@ -220,173 +130,66 @@ python3 memory-kit/adapters/claude-code/watch/spool/spool-poll.py \
   absent group is empty. Without `--line`, the line is the match itself, on one line. A line
   never holds a line break.
 - **Each item once.** Seen ids persist in `.<stem>-seen.json` beside the spool (the last 500,
-  `--keep`). So a peeked but uncollected item is not spooled again, across restarts too. The
-  line is written before its id is recorded: a crash between the two spools an item twice,
-  never loses one.
+  `--keep`). So a peeked but uncollected item is not spooled again, across restarts too.
 - **Health.** A run fails when the command cannot start, times out (`--timeout`, 90 s), exits
   non-zero, or prints nothing matching `--healthy`. After 3 failures in a row (`--tolerate`), the
   spool gets one `health: <why>` line, then at most one per 30 min (`--health-every`) while the
-  failures go on, and `health: recovered` once a run succeeds. A brief flap writes nothing.
-  Each health line is a delivered item, so a full turn.
-- **Every 30 s** (`--every`). The spool is opened per write, so the watch can drain it by
-  renaming it aside, and the next write makes it again.
-- **One poller per spool.** It holds `.<stem>.lock` beside the spool and writes its pid there.
-  The lock is `flock` on POSIX, the same lock the `flock` command takes, and `msvcrt` on Windows.
-  A second poller finds the lock held, says so and exits 0. The default names (`.lelle-spool.lock`,
-  `.lelle-spool-seen.json`, `.lelle-spool.log`) are the ones the fleet's poller already uses.
-- **JSON instead of a regex** (`--json`, kit #39, hr2). Give the peek command its JSON form
-  (`recv --peek --json --limit 500`) and `--json` in place of `--match`. The first JSON value in
-  the output must be a list of objects, each with an `id`; each object is an item. `--line` reads
-  the object's fields, nested ones by index: `from={from_team} id={id} subject={entry[summary]}`.
-  A missing field is empty. Without `--line`, the line is the object as JSON. The subject arrives
-  whole (the text peek cuts long ones), and output that is not such a list fails the run, so a
-  format change shows as a `health:` line instead of going quiet. evr-mail prints its
-  `collected N` line after the JSON; that tail is ignored.
-- **A reminder for mail left waiting** (`--remind N`, minutes, off by default; kit #39, after
-  semafor). A spool line is delivered once; a session that never runs `recv` heard nothing more.
-  With `--remind 15`, an id still in the peek 15 minutes after the poller first saw it gets one
-  more line: `waiting: id=<id> age=<age> -- <its line>`. The age runs from the hub's deposit
-  stamp when the peek carries one: `--deposited` is a template like `--line`, by default
-  `{deposited}`, a named group of `--match` (add `(?:\s+deposited=(?P<deposited>\S+))?` after the
-  id in the text regex), or `--deposited '{deposited_at}'` with `--json`. Without a stamp, from
-  when the poller first saw it. Once per id; a restarted poller may remind once more, after N
-  minutes of its own. Each line is a delivered item, so a full turn.
-- **Liveness** (kit #39). A dead poller was silent: four seats named it, and framework-research
-  could not date an outage. Each successful run writes `.<stem>.alive` beside the spool:
-  `<UTC time> pid=<pid> every=<s> timeout=<s>`. It is **stale** when older than two intervals
-  and a timeout (150 s at the defaults: alive, but not polling, or hung).
-  - `--status --spool PATH` prints whether a poller holds the lock (its pid), the last successful
-    poll and its age, and `stale: ...` when it is. Exit 0 running and fresh, 1 otherwise.
-  - `--keep-alive` prints one line when the poller holding the lock is stale, and when it starts
-    one after an outage it says when the last successful poll was. Otherwise it prints nothing.
-    `[unverified]`: whether the harness shows a SessionStart hook's output to the session.
-  - A failing hub also stops the stamp, and the `health:` lines say why; `--status` tells the two
-    apart by the lock: held and stale is a poller that runs but cannot poll.
-- `--once` polls once and exits, for a scheduler. Bad usage exits 2.
-- **The race it cannot close.** A line written in the instant between the watch's rename of the
-  spool and its read of the aside lands in the aside after the read, and is not delivered.
-  The write is a single call made microseconds after the open, while the watch's rename and
-  read are separate host calls milliseconds apart, so this is not expected in practice
-  (`[speculative]`). The mail is still on the hub, uncollected, for the session's next `recv`.
-
-**Keep-alive: a SessionStart hook.** `--keep-alive` makes sure one poller runs for the spool and
-returns at once. If a poller holds the lock, it exits 0. Otherwise it starts one detached, in its
-own session (`setsid`) with its output in `.<stem>.log`, and exits 0. It never blocks the session.
-The detached poller outlives the session that started it, so one poller serves every session
-of the home. Put it in the home's `.claude/settings.json`:
-
-```json
-{
-  "hooks": {
-    "SessionStart": [
-      { "hooks": [ { "type": "command", "command": "sh \"$CLAUDE_PROJECT_DIR/tools/lelle-spool-start.sh\"" } ] }
-    ]
-  }
-}
-```
-
-The script holds the poller's command line, so the regex is quoted once, by `sh`:
-
-```sh
-#!/bin/sh
-# tools/lelle-spool-start.sh: one Lelle spool poller for this home (kit #16).
-cd "$CLAUDE_PROJECT_DIR" || exit 0
-exec python3 memory-kit/adapters/claude-code/watch/spool/spool-poll.py --keep-alive \
-  --spool inbound/lelle-spool.txt \
-  --match '^--- \d+/\d+\s+from=(?P<from>\S+)\s+id=(?P<id>\S+)(?:\nsubject: (?P<subject>.*))?' \
-  --line 'from={from} id={id} subject={subject}' --healthy '^collected' \
-  -- python3 tools/evr-mail.py recv --peek
-```
-
-- **POSIX** (Linux, macOS): this replaces the `flock -n … setsid nohup …` hook (semafor's). It
-  uses no `flock` or `setsid` commands, which macOS lacks, and it takes the same lock, so an
-  old poller still running blocks a new one.
-- **Windows** (`[unverified]`: the tests run on Linux and check the flags passed): `--keep-alive`
-  starts the poller with `CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP`, and asks to break away
-  from the hook's job object, without that if the job refuses. Each peek also runs with
-  `CREATE_NO_WINDOW` (kit #39). Until alpha.16 it was `DETACHED_PROCESS`, which leaves the poller
-  no console, so each peek of a console program opened a visible one: a flash every 30 s (the
-  desk and framework-research; `CREATE_NO_WINDOW` fixed it in their own pollers). The hook command runs under Git Bash or PowerShell
-  as the harness runs hooks there; `python` may be the name instead of `python3`. Until a desk
-  confirms that the poller outlives the session that started it, starting it by hand each
-  session (as the desk does today) is the safe course.
-- **Stopping it:** kill the pid in `.<stem>.lock`.
-- **Checked live** (2026-10-14, 2.1.299, a throwaway home with a fake `recv --peek`):
-  - The SessionStart hook fired with `CLAUDE_PROJECT_DIR` set and the home as its working
-    directory.
-  - `--keep-alive` started one detached poller. A second session's start started none.
-  - The poller outlived the session that started it.
-  - Three mails peeked in one poll arrived as one `[watch] 3 items` prompt.
-
-## Checkpoint and retire on idle
-
-After `idleMinutes` (default 50, before the 1 h prompt-cache expiry) with no prompt, tool call or
-turn end, the session may be asked once to checkpoint and retire. The ask needs the context to have
-grown by `growthPercent` (default 50) of the window. The prompt asks the session to:
-
-- run its close routine (scratchpad `current`, lint, commit, push);
-- carry any question still waiting on the human with its exact wording;
-- then run the home's `watch_retire_step`.
-
-The mod never retires a session itself. Without `watch_retire_step` it never asks.
-
-The five guards (PO comment on #9, 2026-10-14). Each has its own tests:
-
-1. **Human input first.** It asks only after a typed, Remote Control or Slack-ping prompt in this
-   session. A session the resident loop started, which no human has touched, never retires
-   itself.
-2. **Growth, not size.** Growth is counted from the context at the first human prompt. If the
-   human spoke before any reading, it is counted from the first reading (system prompt, tools,
-   that turn). A startup that alone reads past 50% never counts.
-3. **One ask per session.** The ask is kept in `$.state`, so a reload does not repeat it. If the
-   session is still there an hour later, there is one notice to the human and never a second
-   ask.
-4. **A cross-session brake.** Asks are counted in `$.store` under `retires`. No ask within 2 h of
-   the last one, and at most 4 in 24 h. Past either, there is one notice instead.
-5. **Off switch.** `retireOnIdle` is off by default. After the brake trips, the mod asks nothing
-   for 24 h, or until a reload.
-
-A notice goes through `$.ui.notify`. Where that shows no text (no channel, as in tmux, or a bare
-bell), it also goes to the transcript as a dim line.
+  failures go on, and `health: recovered` once a run succeeds. Each health line grows the spool,
+  so it rings: a full turn.
+- **Every 30 s** (`--every`).
+- **One poller per spool.** It holds `.<stem>.lock` beside the spool and writes its pid there
+  (`flock` on POSIX, `msvcrt` on Windows). A second poller finds the lock held, says so and
+  exits 0.
+- **JSON instead of a regex** (`--json`, kit #39, hr2): give the peek command its JSON form and
+  `--json` in place of `--match`; the first JSON value must be a list of objects with an `id`.
+- **A reminder for mail left waiting** (`--remind N`, minutes, off by default; kit #39): an id
+  still in the peek N minutes after first seen gets one `waiting: ...` line.
+- **Liveness** (kit #39): each successful run stamps `.<stem>.alive`; `--status` prints the
+  poller's state (exit 0 running and fresh); `--keep-alive` makes sure one poller runs and
+  returns at once -- put it in the home's SessionStart hook (see `spool/spool-poll.py --help`
+  and the adapters README). `--once` polls once, for a scheduler.
 
 ## A session outside its home: `kit_home` (kit #18)
 
 **User-scope options apply to every session on the machine.** That covers `home` set in the
-user's settings, not only the home's own sessions. On the pepys desk a user-wide `home` made
-every session on the box drain the desk's spool, and six notifications were lost. Use a pointer
-conf instead: put this in the folder the session starts in:
+user's settings, not only the home's own sessions. Use a pointer conf instead: put this in the
+folder the session starts in:
 
 ```yaml
 kit_home: ../desk        # absolute, or relative to this conf's own folder
 ```
 
-- **What counts:** the home it names. That home's `memory-kit.conf` counts (`watch_sources`, `watch_retire_step`), with paths
-  relative to that home, and so does its `memory-kit/VERSION`. Other keys left in the pointer
-  conf are ignored, and `watch_sources` left there are a visible notice.
-- **Precedence:** the start folder's pointer first. It wins over the user-scope `home` option. Then
-  the option, then the start folder itself.
+- **What counts:** the home it names. That home's `memory-kit.conf` declares the doorbells and
+  sensors, with paths relative to that home. Other keys left in the pointer conf are ignored, and
+  `watch_files` left there are a visible notice.
+- **Precedence:** the start folder's pointer first. It wins over the user-scope `home` option.
+  Then the option, then the start folder itself.
 - **One hop, never chained.** If the target's own conf points on, that is refused, and so is a
   loop. `kit_home: .` is just the home.
-- **Absolute paths:** POSIX, a drive letter (`C:\` or `C:/`) or UNC. `~` is not expanded: write
-  the path absolute or relative to the conf.
-- **Never silent:** a target with no `memory-kit.conf`, a chained pointer or a `~` path is one visible notice (notify, else a transcript line), and the watch drains nothing. It never falls back to the start folder. `/watch` names the home and the pointer.
+- **Never silent:** a target with no `memory-kit.conf`, a chained pointer or a `~` path is one
+  visible notice, and the watch rings nothing. It never falls back to the start folder. `/watch`
+  names the home and the pointer.
+- A session whose home came from the user-scope `home` option but which started outside that home
+  rings nothing there (one notice); its own session sensors still run.
 - The lint and the tools follow the same pointer (`lint/kit_home.py`). This plugin's copy of the
   rules is `hooks/kit-home.ts`, identical in all three plugins; `lint/run-fixtures.sh` fails when
   the copies differ.
 
 ## Options (`userConfig`)
 
-- `home`: the kit home whose `memory-kit.conf` declares the sources. Empty: the session's start
-  directory. **Set user-wide, it applies to every session on the machine**: prefer a `kit_home`
-  pointer conf (above), which also wins over this option.
+- `home`: the kit home whose `memory-kit.conf` declares the doorbells and sensors. Empty: the
+  session's start directory. **Set user-wide, it applies to every session on the machine**:
+  prefer a `kit_home` pointer conf (above), which also wins over this option.
+- `pollSeconds` (5, at least 5): the poll interval. It reads local files only.
 - Setting options from a shell: `claude plugin configure watch@memory-kit --values-stdin` takes
-  a JSON object of **strings only**, e.g. `{"pollSeconds": "5", "retireOnIdle": "false"}`;
-  bare numbers and booleans are refused (found by mvox, 2026-10-14).
-- `pollSeconds` (5, at least 5): the drain and idle-check interval. It reads local files only.
-  For a `hub` source keep it at 5: the hub courier waits only about 10 s for an occupied inbox
-  (50 rounds of 0.2 s), so a slower poll makes a burst bounce and arrive late and out of order
-  (kit #10; the household flood test, 14.10).
-- `retireOnIdle` (off), `idleMinutes` (50), `growthPercent` (50): see above.
+  a JSON object of **strings only**, e.g. `{"pollSeconds": "5"}` (found by mvox, 2026-10-14).
+- `retireOnIdle`, `idleMinutes`, `growthPercent` are gone (watch 0.5.0): a conf setting
+  `retireOnIdle` gets one notice pointing at `watch_idle_minutes` and `watch_context_percent`.
+
+## /watch
+
+Answers with the home (and pointer), each doorbell (label, path, inject, instruction), every
+problem in the declaration, and the sensor marks.
 
 ## Live findings (2026-10-14, Claude Code 2.1.299, throwaway tmux sessions)
 
@@ -396,138 +199,20 @@ kit_home: ../desk        # absolute, or relative to this conf's own folder
   message: …".
 - **`$.session.usage()` while idle** gives the last response's input. Before the first response:
   `context.tokens` and `percent` undefined, `window` 1000000. After a turn: the last response's
-  input tokens, unchanged until the next turn (23943 throughout 40 s idle). So guard 2 reads a
-  stable figure.
+  input tokens, unchanged until the next turn. So the sensors read a stable figure.
 - A prompt the plugin submits does not reach its own `prompt.submit` hook ("re-entry" in the
-  debug log). In the probe, `turn.start` was not raised for it either; `turn.complete` was.
-  Activity is therefore taken from prompts, tool calls and turn ends.
+  debug log). Activity is therefore taken from prompts, tool calls and turn ends.
 - A typed prompt arrives with `origin.kind === 'composer'`.
 - `$.ui.notify` in tmux answered `no-channel`, hence the transcript fallback.
-- The store is per install (`~/.claude/plugins/store/watch_inline-<hash>.json` for a
-  `--plugin-dir` load). `watch@memory-kit` has its own, so the live checks left one `retires`
-  entry in the inline store only.
-
-## A shared inbox: the harness's teammate inbox (since 0.2.1, kit #12)
-
-In a team session the courier writes hub mail into `~/.claude/teams/session-<id>/inboxes/team-lead.json`,
-which is also the harness's own teammate inbox. A plain `hub` source would rename the whole file
-aside, taking teammate messages away from the harness. A source with modifiers works differently:
-
-- **Only its own entries leave.** The watch takes the entries the source takes (e.g. unread
-  courier mail). Everything else stays in place, unchanged and in order: read entries, and
-  teammate messages read or not. A file holding nothing to take is not touched at all.
-- **The harness goes first.** A takeable entry must sit in the file for 30 s before the watch
-  takes it. While the harness's team is live, the harness delivers inbox entries itself and
-  removes them within about a second, so the watch never sees them twice. The watch takes only
-  what the harness is not picking up.
-  The cost: while a courier entry waits out its 30 s, the inbox is not empty, so the courier
-  holds any further hub mail (it writes only into an empty inbox) and redelivers it later. A
-  burst into a team inbox therefore arrives about one message per 30-40 s, in custody and in
-  full, but slowly. A household-style inbox that only the courier writes needs no modifiers and
-  has no such delay.
-- **Under the harness's own lock.** The harness serialises its inbox with a `<inbox>.lock`
-  directory, made with mkdir (seen live, below). The watch takes the same lock with `mkdir`, or
-  `New-Item -ItemType Directory` on Windows; both fail when the lock exists. If the lock is
-  held, the watch tries again at the next poll. A lock older than 60 s is taken as stale and
-  broken, with one debug line. Under the lock the watch:
-  1. re-reads the file;
-  2. writes the taken entries to an aside (temp file + rename);
-  3. writes the rest back in place (temp file + rename, as the harness itself writes);
-  4. unlocks.
-
-  The aside then goes through the usual archive, pending and delivery steps. If writing the
-  rest back fails, the aside is removed and the inbox still holds everything.
-- **The courier.** `stationmaster-courier.py` writes only into an absent or empty inbox (empty,
-  rename-aside, then exclusive-create). The watch writes only when it takes something, so the file
-  is not empty when the watch acts, and the courier is then waiting.
-- **Never put back.** An unreadable aside of a shared source stays aside, with one debug line. It
-  is never moved into the harness's inbox.
-- **What can still go twice:** a crash after the aside is written but before the rest is written
-  back. The taken entries then sit in both, and arrive twice. None is lost.
-
-**Live check** (2026-10-14, Claude Code 2.1.299, throwaway team sessions, haiku, plan mode):
-
-- **No teammate.** The harness did not read its inbox at all, idle or at a turn's end. A courier
-  entry written there sat untouched: the esl "8 h unread" case. With the watch on
-  `hub unread courier`:
-  - the courier entry was delivered 35 s later as `[hub mail]`;
-  - a `read: true` teammate entry stayed in place, byte for byte;
-  - the watch took and released `team-lead.json.lock`.
-- **A live teammate.** The harness polled about once a second. It took its lock (a directory,
-  `team-lead.json.lock`), delivered the entry as "Message from @hub-courier" and replaced the
-  file with `[]` (temp file + rename: new inode). It removed every entry, `read: true` ones
-  included. The watch saw the entry for a second and did not deliver it.
-- **Unverified:**
-  - mvox's report that its harness marks entries `read: true` and leaves them. The harness here
-    removed them. Either way the watch leaves read entries alone.
-  - Whether every harness version takes the lock.
-  - Whether teammates' own writes into the inbox take it. A teammate's write here showed up as a
-    temp-file rename.
-
-## Platforms (since 0.2.0, kit alpha.9)
-
-`$.fs` has no rename or delete, so the drain runs its file operations on the host through
-`$.process.run`:
-
-| operation | used for | POSIX | Windows (PowerShell) |
-|---|---|---|---|
-| move | the inbox, renamed aside | `mv -- a b` | `Move-Item -LiteralPath 'a' -Destination 'b'` |
-| move, never over a file | an unreadable aside put back | `mv -n -- a b` | `Move-Item` as above: it fails when the target exists |
-| move over | archive and pending file, through a temporary | `mv -f -- a b` | `Move-Item ... -Force` |
-| remove | the aside, an emptied pending file | `rm -f -- a` | `if (Test-Path -LiteralPath 'a') { Remove-Item -LiteralPath 'a' -Force }` |
-| lock | a shared inbox's `<inbox>.lock` | `mkdir -- a` | `New-Item -ItemType Directory -Path 'a'`: it fails when the lock exists. New-Item has no `-LiteralPath`, so `[ ]` in the path is unverified |
-| unlock | the same | `rm -d -f -- a` | `if (Test-Path -LiteralPath 'a') { Remove-Item -LiteralPath 'a' -Force }` |
-
-- **Detection:** the platform is found once per module load and cached. A drive-letter or UNC
-  home is Windows. Otherwise `uname -s` decides: an answer means POSIX, no answer means Windows.
-  The probe is `uname` rather than `mv --version` because macOS's BSD `mv` has no `--version`.
-- **Windows calls:**
-  - The tool is `powershell.exe -NoProfile -NonInteractive -EncodedCommand <base64 of UTF-16LE>`.
-    That is Windows PowerShell 5.1, which every Windows 10 and 11 has.
-  - The encoded script never meets command-line quoting, so spaces and quotes in paths are safe.
-  - Inside the script each path is a single-quoted literal. Every character PowerShell reads as a
-    single quote (`'` and the typographic `‘ ’ ‚ ‛`) is doubled, so `$` and backticks stay
-    literal.
-  - `-LiteralPath` keeps `[ ]` from being read as wildcards.
-  - `$ErrorActionPreference = 'Stop'` makes a failed move exit non-zero.
-  - **Already gone counts as removed** (since 0.2.2, kit #11). Under `Stop`, `Remove-Item` on a
-    missing path exits 1 even with `-ErrorAction SilentlyContinue` (Pepys's desk). So remove and
-    unlock are guarded by `Test-Path`: exit 0 when the path is gone, exit 1 on a real failure.
-    The same trap was on POSIX for the unlock: `rmdir` fails on a missing directory, so it is now
-    `rm -d -f`.
-    - A file can already be gone because another session finished the same pending file.
-    - A lock can already be gone because the harness broke it as stale.
-    - The lock itself stays a plain `New-Item` / `mkdir`: failing when the lock exists is its
-      job.
-  - **Success is the exit code alone.** stderr goes only into the debug line of a failed call.
-    Windows PowerShell writes CLIXML progress records (`#< CLIXML …`) to stderr even on a call
-    that succeeded (Pepys's desk), and a test holds that.
-- **Checked on Windows 11** (Pepys's desk, part 1 of the check, kit #11):
-  - brackets in paths: pass;
-  - a failed move exits 1: pass;
-  - odd file names: pass;
-  - a missing path under `Stop` fails the remove, which 0.2.2 fixes.
-- **Speed.** One call costs 200 to 280 ms warm and 0.5 to 1.5 s cold. A drain of n items makes
-  5 calls (4 + one per batch of up to 20), so a single hub message costs about 1 to 1.5 s warm,
-  spread over one poll.
-  - A shared inbox adds 2 calls (lock and unlock) and a temp-file rename.
-  - The poll is single-flight, so a slow call delays the next poll and never overlaps it.
-- **Still unverified on Windows** (part 1, as reported to the watch):
-  - whether `New-Item -ItemType Directory -Path` takes `[ ]` literally for the lock;
-  - whether `$.fs` reads and lists `C:\...` paths and the `.watch-*` files there as it does on
-    Linux;
-  - a whole drain through the mod in a live session.
-
-  The tests run on Linux, against a fake host that decodes the script and models PowerShell's
-  `Stop` behaviour (a missing path fails, stderr may carry CLIXML).
 
 ## Limits
 
-- Do not drain one file from two places. Switch off the hub-drain Monitor for an inbox before
-  declaring it here: both rename aside, and both rewrite the same archive. The claim (One drain
-  per home) keeps two watch sessions apart, not a Monitor or a script.
-- The kaarel spool needs `kaarel-watch.sh` to append lines to the spool file instead of typing
-  into tmux. That change belongs to the household.
+- A ring is growth in the text `$.fs.read` returns, compared only with itself. A same-size
+  overwrite is invisible; that is the definition, not an accident.
+- The watch does not watch directories, only files (a `*` path is expanded per poll, so a new
+  matching file is picked up then).
+- Two sessions in one home each keep their own bookmarks: both ring. Information is per session;
+  consuming is not, so the home's rules say who consumes.
 
 ## Install
 
@@ -543,7 +228,7 @@ The marketplace entry to add upstream (`adapters/claude-code/.claude-plugin/mark
 {
   "name": "watch",
   "source": "./watch",
-  "description": "Delivers a home's declared inboxes into the session (idle-safe); optional checkpoint-and-retire on idle."
+  "description": "Rings a doorbell when a home's declared files grow, and reports the session's idleness and context marks. Information only."
 }
 ```
 
@@ -557,6 +242,6 @@ does in a folder that is not a kit home, and the project-scope alternative:
 
 ```sh
 claude plugin validate .
-claude plugin test .          # tests/*.test.ts; files, the host (POSIX or Windows), clock and store are mocked
+claude plugin test .          # tests/*.test.ts; files, clock, store and the session are mocked
 tsc -p .                      # once Claude Code has laid .claude-plugin/types/ (gitignored)
 ```
