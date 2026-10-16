@@ -5,7 +5,7 @@ A session or a tool starts in some folder. If that folder's memory-kit.conf says
     kit_home: ../desk          # absolute, or relative to this conf's own folder
 
 the home is that folder instead: its memory-kit.conf, memory-kit/VERSION, memory directory,
-update:/upstream: and watch_sources all count, and the pointer conf's other keys are ignored.
+update:/upstream: and watch_files all count, and the pointer conf's other keys are ignored.
 
 - One hop, never chained: the target's own conf may not point on (a loop is a chain too). A home
   naming itself (`kit_home: .`) is just the home.

@@ -26,16 +26,16 @@ each plugin does there, as each plugin's tests hold it (`claude plugin test .`, 
   is logged. It still registers `/obligations` and refreshes every 20 s and at each turn end,
   which reads the start folder's `memory-kit.conf` and `memory/obligations.yaml` and finds
   neither. `/obligations` opens the pane, which says "no obligations file here (`<path>`)".
-- **watch: silent.** Nothing is delivered, nothing is written, no notice or transcript line, no
-  process, no drain claim. It still registers `/watch` and reads the start folder's
-  `memory-kit.conf` every poll (5 s). `/watch` says "no watch_sources in `<path>`; nothing to
-  watch." With `retireOnIdle` on, it never asks there (no `watch_retire_step`); one debug line.
+- **watch: silent.** Nothing is rung or reported, nothing is written, no notice or transcript
+  line, no process. It still registers `/watch` and reads the start folder's `memory-kit.conf`
+  every poll (5 s). `/watch` says "no watch_files in `<path>`; no doorbells." and that both
+  session sensors are off.
 
 **User-scope options end the silence.** They reach every session, so set them in a home's own
 sessions only, or not at all:
 
 - the pane's `memoryDir`: every session reads that home's ledger and opens the pane;
-- the watch's `home`: every session outside that home gets one notice and drains nothing;
+- the watch's `home`: every session outside that home gets one notice and rings nothing there;
 - kit-update's `home`: every session checks that home's channel.
 
 A `kit_home` pointer conf in the start folder does the same job for one folder and wins over all
