@@ -20,10 +20,10 @@ current:
     record: "About page (urls/mvox-about) is the public baseline for publishers; it names no partner or dispute"
     ref: "2026-06-14"
   - label: DECISION
-    record: "Apply verified memory-kit updates without asking: worktree, kit-update.py, merge commit"
-    ref: mihkel:2026-10-15
+    record: "Apply every memory-kit update Passepartout signs, without asking; kit questions go to Passe"
+    ref: mihkel:2026-10-16
   - label: DECISION
-    record: "Hub mail comes via the watch plugin; never drain team-lead.json by hand"
+    record: "Hub mail: the watch rings, then run scripts/hub-consume.py; no other hand drain"
     ref: memory-kit.conf
   - label: DEFERRED
     record: "Untested: agenda view toggle with no chips."
