@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const pdfjs = vi.hoisted(() => {
+	class RenderingCancelledException extends Error {}
 	const renderCalls: Array<{ canvas: unknown; viewport: { width: number; height: number } }> = [];
 	const getDocument = vi.fn(() => ({
 		promise: Promise.resolve({
@@ -22,17 +23,18 @@ const pdfjs = vi.hoisted(() => {
 		}),
 		destroy: vi.fn()
 	}));
-	return { getDocument, renderCalls };
+	return { getDocument, renderCalls, RenderingCancelledException };
 });
 vi.mock('pdfjs-dist', () => ({
 	GlobalWorkerOptions: { workerSrc: '' },
-	getDocument: pdfjs.getDocument
+	getDocument: pdfjs.getDocument,
+	RenderingCancelledException: pdfjs.RenderingCancelledException
 }));
 vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', async () =>
 	(await import('$lib/testing/mocks/files')).pdfWorkerUrlModule()
 );
 
-import { openPdf } from './pdfRenderer';
+import { isRenderCancelled, openPdf } from './pdfRenderer';
 
 /** A canvas inside a box of a KNOWN layout size: happy-dom reports 0 for
  *  clientWidth/clientHeight, and the wrapper's fit reads the parent box. */
@@ -148,6 +150,27 @@ describe('#427 — the page is rasterised at the DEVICE pixel ratio, not the CSS
 		});
 		expect(canvas.style.width).toBe('300px');
 		expect(canvas.style.height).toBe('400px');
+	});
+});
+
+describe('#942 — the retry after a failed draw', () => {
+	it('a ratio of 1 overrides the device ratio: the backing store is the fit size', async () => {
+		vi.stubGlobal('devicePixelRatio', 3);
+		const canvas = canvasInBox(600, 800);
+
+		const pdf = await openPdf('blob:mvox/score');
+		const geometry = await pdf.renderPage(1, canvas, 1);
+
+		expect(geometry).toEqual({ cssWidth: 600, cssHeight: 800, deviceWidth: 600, deviceHeight: 800 });
+		expect(pdfjs.renderCalls[0].viewport.width).toBe(600);
+	});
+
+	it("only pdf.js's cancelled render counts as cancelled", () => {
+		expect(isRenderCancelled(new pdfjs.RenderingCancelledException('Rendering cancelled'))).toBe(
+			true
+		);
+		expect(isRenderCancelled(new Error('canvas too big'))).toBe(false);
+		expect(isRenderCancelled(undefined)).toBe(false);
 	});
 });
 

@@ -20,7 +20,9 @@ const PART_VIEWER_KEYS = [
 	'part_viewer_draw',
 	'part_viewer_hide_marks',
 	'part_viewer_not_on_device',
-	'part_viewer_page_of'
+	'part_viewer_page_failed',
+	'part_viewer_page_of',
+	'part_viewer_retry'
 ] as const;
 
 describe('#427 — part_viewer_ keys: placeholders, translation, key set', () => {

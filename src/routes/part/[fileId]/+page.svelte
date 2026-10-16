@@ -13,7 +13,8 @@
 	import { getAppLabelStore } from '$lib/files/appLabelStore';
 	import { recordPartLabel } from '$lib/files/labelStore';
 	import { openFileBytes, type OpenedFileBytes } from '$lib/files/openFileBytes';
-	import { openPdf, type OpenedPdf } from '$lib/parts/pdfRenderer';
+	import { isRenderCancelled, openPdf, type OpenedPdf } from '$lib/parts/pdfRenderer';
+	import PageFailedNotice from '$lib/parts/PageFailedNotice.svelte';
 	import { createTapTracker, type TapTracker } from '$lib/parts/tapZone';
 	import DownloadLink from './DownloadLink.svelte';
 	import PageInk from '$lib/strokes/PageInk.svelte';
@@ -48,17 +49,26 @@
 
 	// Renders are serialised: pdf.js rejects a render while another runs on the same canvas.
 	let renderChain: Promise<void> = Promise.resolve();
+	let drawFailed = $state(false);
 
+	// A failed draw is retried once at ratio 1, the smallest canvas; a cancelled one is teardown.
 	function renderCurrentPage(): Promise<void> {
-		renderChain = renderChain
-			.then(async () => {
-				if (!pdf || !canvasEl) return;
-				const rendered = await pdf.renderPage(currentPage, canvasEl);
+		renderChain = renderChain.then(async () => {
+			drawFailed = false;
+			const [doc, canvas, pageNumber] = [pdf, canvasEl, currentPage];
+			if (!doc || !canvas) return;
+			const draw = (ratio?: number) => doc.renderPage(pageNumber, canvas, ratio);
+			try {
+				const rendered = await draw().catch((error: unknown) =>
+					isRenderCancelled(error) ? Promise.reject(error) : draw(1)
+				);
 				pageSize = { width: rendered.cssWidth, height: rendered.cssHeight };
-			})
-			.catch(() => {
-				// A failed render leaves the previous page on screen; no retry loop.
-			});
+			} catch (error) {
+				if (isRenderCancelled(error)) return;
+				drawFailed = true;
+				reportProblem({ area: 'part', action: 'showing the page', error });
+			}
+		});
 		return renderChain;
 	}
 
@@ -281,6 +291,17 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
+{#snippet closeButton()}
+	<button
+		type="button"
+		class="font-sans text-sm text-paper underline"
+		data-testid="part-viewer-close"
+		onclick={close}
+	>
+		{m.part_viewer_close()}
+	</button>
+{/snippet}
+
 <div
 	bind:this={rootEl}
 	class="fixed inset-0 flex h-[100dvh] w-screen flex-col bg-ink text-paper"
@@ -321,6 +342,9 @@
 					onnext={next}
 				/>
 			{/if}
+			{#if drawFailed}
+				<PageFailedNotice onretry={() => void renderCurrentPage()} />
+			{/if}
 		</div>
 		<div class="flex shrink-0 items-center justify-between px-6 py-3">
 			<span data-testid="part-viewer-page-indicator" class="font-sans text-sm text-ink-5">
@@ -353,43 +377,21 @@
 					<DownloadLink {...source} fileId={page.params.fileId ?? ''} label={page.state.partLabel} />
 				{/if}
 			</div>
-			<button
-				type="button"
-				class="font-sans text-sm text-paper underline"
-				data-testid="part-viewer-close"
-				onclick={close}
-			>
-				{m.part_viewer_close()}
-			</button>
+			{@render closeButton()}
 		</div>
 	{:else if status === 'missing'}
 		<div class="flex flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
 			<p data-testid="part-viewer-not-on-device" class="font-sans text-base text-paper">
 				{m.part_viewer_not_on_device()}
 			</p>
-			<button
-				type="button"
-				class="font-sans text-sm text-paper underline"
-				data-testid="part-viewer-close"
-				onclick={close}
-			>
-				{m.part_viewer_close()}
-			</button>
+			{@render closeButton()}
 		</div>
 	{:else if status === 'open-failed'}
-		<!-- Reuses repertoire_pdf_error: no new part_viewer_ key, so the i18n pins stay true. -->
 		<div class="flex flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
 			<p data-testid="part-viewer-open-failed" class="font-sans text-base text-paper">
 				{m.repertoire_pdf_error()}
 			</p>
-			<button
-				type="button"
-				class="font-sans text-sm text-paper underline"
-				data-testid="part-viewer-close"
-				onclick={close}
-			>
-				{m.part_viewer_close()}
-			</button>
+			{@render closeButton()}
 		</div>
 	{/if}
 </div>

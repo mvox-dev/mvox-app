@@ -44,4 +44,7 @@ staging:
   - label: GOTCHA
     record: "Recent and upcoming share testid agenda-date-header: scope queries by section testid"
     ref: "#918"
+  - label: GOTCHA
+    record: "Both pdfjs-dist specs mock the whole module: a new pdf.js import must be added to each mock"
+    ref: "#942"
 # (*MVOX:Josquin*)

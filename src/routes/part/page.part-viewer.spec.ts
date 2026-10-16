@@ -53,8 +53,10 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 const pdfjs = vi.hoisted(() => {
+	class RenderingCancelledException extends Error {}
 	const destroy = vi.fn();
 	const renderCalls: unknown[] = [];
+	const renderFailures: unknown[] = [];
 	const getDocument = vi.fn((_src: unknown) => ({
 		promise: Promise.resolve({
 			numPages: 3,
@@ -66,17 +68,20 @@ const pdfjs = vi.hoisted(() => {
 				}),
 				render: (args: unknown) => {
 					renderCalls.push(args);
-					return { promise: Promise.resolve(), cancel: vi.fn() };
+					const failure = renderFailures.shift();
+					const promise = failure ? Promise.reject(failure) : Promise.resolve();
+					return { promise, cancel: vi.fn() };
 				}
 			})
 		}),
 		destroy
 	}));
-	return { getDocument, destroy, renderCalls };
+	return { getDocument, destroy, renderCalls, renderFailures, RenderingCancelledException };
 });
 vi.mock('pdfjs-dist', () => ({
 	GlobalWorkerOptions: { workerSrc: '' },
-	getDocument: pdfjs.getDocument
+	getDocument: pdfjs.getDocument,
+	RenderingCancelledException: pdfjs.RenderingCancelledException
 }));
 vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', async () =>
 	(await import('$lib/testing/mocks/files')).pdfWorkerUrlModule()
@@ -206,6 +211,7 @@ afterEach(() => {
 	pdfjs.getDocument.mockClear();
 	pdfjs.destroy.mockClear();
 	pdfjs.renderCalls.length = 0;
+	pdfjs.renderFailures.length = 0;
 	gotoMock.mockReset();
 	signFileUrlMock.mockReset();
 	afterNavigateCallbacks.length = 0;
@@ -848,6 +854,112 @@ async function turn(c: HTMLElement, key: 'ArrowRight' | 'ArrowLeft', expected: s
 	await fireEvent.keyDown(window, { key });
 	await waitFor(() => expect(indicator(c)).toEqual(expected));
 }
+
+describe('#942 — a page that fails to draw is retried, then says so', () => {
+	const SHOW_FAILED = 'part: showing the page failed';
+
+	function renderScale(call: number): number {
+		return (pdfjs.renderCalls[call] as { viewport: { scale: number } }).viewport.scale;
+	}
+
+	function notice(c: HTMLElement): Element | null {
+		return c.querySelector('[data-testid="part-viewer-page-failed"]');
+	}
+
+	function retryButton(c: HTMLElement): HTMLButtonElement | null {
+		return c.querySelector('[data-testid="part-viewer-retry"]');
+	}
+
+	async function settled(): Promise<void> {
+		await new Promise((r) => setTimeout(r, 0));
+	}
+
+	async function openWith(failures: unknown[]): Promise<HTMLElement> {
+		vi.stubGlobal('devicePixelRatio', 2);
+		pdfjs.renderFailures.push(...failures);
+		deadFetch();
+		signFileUrlMock.mockRejectedValue(deadWire());
+		seedHeldPart();
+		const { container } = renderViewer();
+		await loaded(container);
+		return container;
+	}
+
+	async function openFailed(): Promise<HTMLElement> {
+		const c = await openWith([new Error('canvas too big'), new Error('still too big')]);
+		await waitFor(() => expect(notice(c)).not.toBeNull());
+		return c;
+	}
+
+	let consoleSpy: ReturnType<typeof vi.spyOn>;
+	let restore: () => void;
+	beforeEach(() => {
+		consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		restore = setRequestFullscreen(undefined);
+	});
+	afterEach(() => {
+		consoleSpy.mockRestore();
+		restore();
+	});
+
+	it('a draw that fails once is redrawn at pixel ratio 1 and shown, with no message and no report', async () => {
+		const c = await openWith([new Error('canvas too big')]);
+		await waitFor(() => expect(pdfjs.renderCalls).toHaveLength(2));
+		await settled();
+
+		expect(renderScale(1)).toBe(renderScale(0) / 2);
+		expect(notice(c)).toBeNull();
+		expect(consoleSpy).not.toHaveBeenCalledWith(SHOW_FAILED, expect.anything());
+	});
+
+	it('a draw that fails twice shows the message and a native Try again over the page, and reports once', async () => {
+		const second = new Error('still too big');
+		const c = await openWith([new Error('canvas too big'), second]);
+		await waitFor(() => expect(notice(c)).not.toBeNull());
+
+		expect(notice(c)?.textContent?.trim()).toBe('[part_viewer_page_failed]');
+		expect(retryButton(c)?.tagName).toBe('BUTTON');
+		expect(retryButton(c)?.textContent?.trim()).toBe('[part_viewer_retry]');
+		expect(consoleSpy).toHaveBeenCalledWith(SHOW_FAILED, second);
+		expect(consoleSpy.mock.calls.filter((call: unknown[]) => call[0] === SHOW_FAILED)).toHaveLength(1);
+		expect(pdfjs.renderCalls).toHaveLength(2);
+		expect(indicator(c)).toEqual(INDICATOR_1_OF_3);
+		expect(c.querySelector('[data-testid="part-viewer-close"]')).not.toBeNull();
+		expect(zoneNext(c)).not.toBeNull();
+	});
+
+	it('Try again draws the page again at the normal ratio and clears the message', async () => {
+		const c = await openFailed();
+
+		await fireEvent.click(retryButton(c) as HTMLButtonElement);
+		await waitFor(() => expect(pdfjs.renderCalls).toHaveLength(3));
+		await settled();
+
+		expect(renderScale(2)).toBe(renderScale(0));
+		expect(notice(c)).toBeNull();
+	});
+
+	it('paging away clears the message, and keyboard paging still works over it', async () => {
+		const c = await openFailed();
+
+		await fireEvent.keyDown(window, { key: 'ArrowRight' });
+		await waitFor(() => expect(indicator(c)).toEqual(INDICATOR_2_OF_3));
+		await waitFor(() => expect(pdfjs.renderCalls).toHaveLength(3));
+		await settled();
+
+		expect(notice(c)).toBeNull();
+	});
+
+	it('a render pdf.js cancelled on teardown is not a failure: no retry, no message, no report', async () => {
+		const c = await openWith([new pdfjs.RenderingCancelledException('Rendering cancelled')]);
+		await waitFor(() => expect(pdfjs.renderCalls).toHaveLength(1));
+		await settled();
+
+		expect(pdfjs.renderCalls).toHaveLength(1);
+		expect(notice(c)).toBeNull();
+		expect(consoleSpy).not.toHaveBeenCalledWith(SHOW_FAILED, expect.anything());
+	});
+});
 
 describe('#615 — drawing on the page', () => {
 	usePageBox();
