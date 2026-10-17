@@ -30,13 +30,14 @@ vi.mock('modern-screenshot', async () =>
 import Layout from './+layout.svelte';
 import { resetGate } from '$lib/profile/completionGate';
 import { resetMembership } from '$lib/collective/membershipStore';
-import { cancelSavedFeedbackRetry } from '$lib/feedback/sendFeedback';
+import { cancelSavedFeedbackRetry, sendSavedFeedback } from '$lib/feedback/sendFeedback';
 import { getProblemLog, resetProblemLog } from '$lib/problems/problemLog';
 import { reportProblem } from '$lib/problems/reportProblem';
 import { goOffline, goOnline, resetOnLine } from '$lib/testing/networkSignal';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { resetAppState } from '$lib/testing/appReset';
 import { createBodies, feedbackEntu, prop } from '$lib/testing/feedbackEntu';
+import { json } from '$lib/testing/entuFetchKit';
 import { installLocks } from '$lib/testing/locks';
 import { SAMPLEDB, signIn } from '$lib/testing/session';
 import { discoverMock } from '$lib/testing/routeMocks';
@@ -127,6 +128,33 @@ describe('#948 the open form and the reports that went by themselves', () => {
 			'roster'
 		]);
 		expect(JSON.parse(prop(form, 'metadata')!).problems).toEqual([]);
+	});
+	it('a form send racing the auto-sender carries the report once', async () => {
+		let release!: () => void;
+		const held = new Promise<void>((resolve) => (release = resolve));
+		let calls = 0;
+		entu = feedbackEntu({
+			create: () => (++calls === 1 ? held.then(() => json({ _id: 'fb-99' })) : undefined)
+		});
+		vi.stubGlobal('fetch', entu.fetchImpl);
+		await renderSignedIn();
+		reportProblem({ area: 'roster', action: 'loading the join states', error: new Error('broke') });
+		await kept(1);
+		await openEditor();
+		await vi.waitFor(() => expect(screen.getAllByRole('checkbox').length).toBe(1));
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+		await vi.waitFor(() => expect(calls).toBe(1));
+		await goOffline();
+		await goOnline();
+		release();
+
+		await vi.waitFor(() => expect(screen.queryByRole('toolbar')).toBeNull());
+		await sendSavedFeedback();
+		const carrying = createBodies(entu.fetchImpl).filter(
+			(body) => JSON.parse(prop(body, 'metadata')!).problems.length > 0
+		);
+		expect(carrying.length).toBe(1);
 	});
 });
 

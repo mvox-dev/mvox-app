@@ -245,6 +245,32 @@ describe('#948 never twice', () => {
 		expect(await queuedP()).toEqual([]);
 	});
 
+	it('a failing log remove holds back only the report; saved feedback still goes', async () => {
+		signIn({ token: 'jwt-p', collectives: [P] });
+		await queue().put({
+			id: 'saved-1',
+			...P,
+			screenshot: new Blob(['png'], { type: 'image/png' }),
+			strokes: { v: 1, strokes: [] },
+			description: 'typed',
+			pagePath: '/roster',
+			page: { route: '/roster', time: '2026-10-05T08:00:00.000Z', locale: 'en', viewport: '390x844' }
+		});
+		await keep();
+		const crashing: ProblemLog = {
+			...log(),
+			remove: () => Promise.reject(new Error('the tab closed'))
+		};
+
+		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, log: crashing });
+		expect(createBodies(entu.fetchImpl).map((b) => prop(b, 'description'))).toEqual(['typed']);
+		await sendSavedFeedback({ fetchImpl: entu.fetchImpl });
+
+		expect(createBodies(entu.fetchImpl).length).toBe(2);
+		expect(await queuedP()).toEqual([]);
+		expect(await keptP()).toEqual([]);
+	});
+
 	it('a queue put that fails leaves the report in the log', async () => {
 		signIn({ token: 'jwt-p', collectives: [P] });
 		await keep();
