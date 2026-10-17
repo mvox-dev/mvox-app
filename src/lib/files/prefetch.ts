@@ -1,28 +1,35 @@
-// #409 — the opportunistic-while-open prefetch for the next event's parts.
-// Epic #334's standing constraint: every byte fetch runs on HER OWN key,
-// while the app is open — never in the background while away.
-//
-// Contract (pinned in prefetch.spec.ts and page.works-wiring.spec.ts):
-//   - ONE keys-only store.heldFileIds(db, personId) read decides the skips —
-//     a prefetch never counts as an open (no get(), no touch, no recency).
-//   - Missing parts run through openFileBytes SEQUENTIALLY (no parallel S3
-//     storms); every minted blob URL is release()d — nothing consumes it.
-//   - `isCurrent` is consulted at each settle; false stops the walk — no
-//     further part is signed.
-//   - NEVER throws: a failed part is a result ({ fileId, outcome: 'failed' }),
-//     a null identity resolves [].
+// The next event's parts, fetched while the app is open, never in the background (#409).
+// One keys-only heldFileIds read decides the skips; missing parts open one at a time, each URL
+// released; `isCurrent` false stops the walk. Never throws: a failed part is a result.
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { CollectiveIdentity } from '$lib/collectives/store';
 import type { ByteStore } from './byteStore';
-import { openFileBytes, type FileBytesDeliveryReason } from './openFileBytes';
+import { reportProblem } from '$lib/problems/reportProblem';
+import { openFileBytes, type FileBytesDeliveryReason, type NotStoredCause } from './openFileBytes';
 
-/** Per-part answer: openFileBytes' own delivery reason for a fetched part,
- *  'held' for a part already on the device, 'failed' for a signing failure. */
 export type PrefetchPartOutcome = FileBytesDeliveryReason | 'held' | 'failed';
 
 export interface PrefetchPartResult {
 	fileId: string;
 	outcome: PrefetchPartOutcome;
+}
+
+// A failed save is reported inside openFileBytes already.
+const WHY: Record<Exclude<NotStoredCause['kind'], 'save-failed'>, string> = {
+	'over-cap': 'too large to store',
+	'no-digest': 'this address cannot check files',
+	'fetch-threw': 'the download did not start',
+	'read-threw': 'the download broke off'
+};
+
+// db + fileId + reason: one report per part and reason for the app session.
+const reported = new Set<string>();
+
+function reportOnce(db: string, fileId: string, why: string, error: unknown): void {
+	const key = JSON.stringify([db, fileId, why]);
+	if (reported.has(key)) return;
+	reported.add(key);
+	reportProblem({ area: 'files', action: 'preloading a part for the next rehearsal', error });
 }
 
 export async function prefetchNextEventParts(
@@ -35,8 +42,7 @@ export async function prefetchNextEventParts(
 ): Promise<PrefetchPartResult[]> {
 	if (identity === null || fileIds.length === 0) return [];
 
-	// ONE keys-only read decides every skip — never a per-row get() (a get
-	// counts as an open and would move recency; see byteStore.presence.spec.ts).
+	// A get() counts as an open and would move recency.
 	const held = new Set(await store.heldFileIds(identity.db, identity.personId));
 	const results: PrefetchPartResult[] = [];
 
@@ -50,12 +56,16 @@ export async function prefetchNextEventParts(
 
 		try {
 			const opened = await openFileBytes(cfg, identity, fileId, store, fetchImpl);
-			// Nothing consumes a prefetched URL — there is no tab to hand it to.
 			opened.release();
 			results.push({ fileId, outcome: opened.reason });
-		} catch {
-			// A signing failure is a result, not a raise — the walk continues.
+			const cause = opened.cause;
+			if (cause && cause.kind !== 'save-failed' && isCurrent()) {
+				const why = WHY[cause.kind];
+				reportOnce(identity.db, fileId, why, cause.error ?? new Error(`part ${fileId}: ${why}`));
+			}
+		} catch (error) {
 			results.push({ fileId, outcome: 'failed' });
+			if (isCurrent()) reportOnce(identity.db, fileId, 'not opened', error);
 		}
 	}
 
