@@ -8,6 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
+vi.mock('$lib/problems/reportProblem', async () =>
+	(await import('$lib/testing/mocks/session')).reportProblemModule()
+);
 vi.mock('$lib/agenda/agendaData', () => ({
 	loadFullAgenda: loadFullAgendaMock,
 	listFullAgenda: listFullAgendaMock
@@ -59,6 +62,7 @@ import { agendaEvent, setAuthedWithTwoCollectives } from '$lib/testing/pages/age
 import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 import { goOffline, goOnline } from '$lib/testing/networkSignal';
 import { pdfData } from '$lib/testing/pages/event';
+import { reportProblem } from '$lib/testing/mocks/session';
 
 let fakeByteStore: FakeByteStore;
 const P = { db: 'sampledb', personId: 'person-p' };
@@ -134,6 +138,7 @@ afterEach(async () => {
 	cleanup();
 	await goOnline();
 	loadFullAgendaMock.mockReset();
+	reportProblem.mockReset();
 	listFullAgendaMock.mockReset();
 	loadWorksByEventIdMock.mockReset();
 	signFileUrlMock.mockReset();
@@ -266,6 +271,27 @@ describe('#945 — Download all', () => {
 		});
 		expect(byId(container, 'agenda-next-parts-failure')?.textContent?.match(/\[agenda_parts_/g)).toHaveLength(1);
 		expect(downloadButton(line)?.disabled).toBe(false);
+	});
+
+	it('a failed read of the parts held says Could not download and is reported', async () => {
+		setAuthedWithOneCollective();
+		const { container } = render(Page);
+		const line = await partsLine(container, 'ev-1', 0, 2);
+		const error = new Error('the held ids read broke');
+		fakeByteStore.heldFileIds = () => Promise.reject(error);
+
+		await fireEvent.click(downloadButton(line)!);
+
+		await vi.waitFor(() => {
+			expect(byId(container, 'agenda-next-parts-failure')?.textContent).toContain(
+				'[agenda_parts_download_failed]'
+			);
+		});
+		expect(reportProblem).toHaveBeenCalledWith({
+			area: 'files',
+			action: 'downloading the next rehearsal parts',
+			error
+		});
 	});
 
 	it('the message clears when the next run starts', async () => {
