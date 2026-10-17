@@ -6,6 +6,7 @@ import { getAppByteStore } from '$lib/files/appByteStore';
 import { prefetchNextEventParts, type PrefetchPartResult } from '$lib/files/prefetch';
 import type { PresenceRefresh } from '$lib/files/presenceRefresh';
 import { online } from '$lib/net/online';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export type NextEventPartsFailure = 'storage-full' | 'too-large' | 'no-connection' | 'not-downloaded';
 
@@ -48,7 +49,10 @@ export async function downloadNextEventParts(
 	const store = getAppByteStore();
 	const results = await prefetchNextEventParts(
 		cfgFor(identity.db), identity, fileIds, store, fetch, isCurrent
-	).catch(() => null);
+	).catch((error: unknown) => {
+		if (isCurrent()) reportProblem({ area: 'files', action: 'downloading the next rehearsal parts', error });
+		return null;
+	});
 	if (!isCurrent()) return null;
 	refreshPresence(identity.db, identity.personId, isCurrent);
 	return { failure: results === null ? 'not-downloaded' : failureOf(results, !get(online)) };
