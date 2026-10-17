@@ -1,12 +1,13 @@
-// createFeedback: one feedback entity plus its screenshot; any failed step deletes it and rejects.
+// createFeedback: one feedback entity plus its screenshot, when it has one; any failed step
+// deletes it and rejects.
 import { entuFetch } from '$lib/entu/request';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { serialize, type StrokeData } from '$lib/strokes/strokes';
 import { deletePhantomProperty, putUploadBytes, type UploadObject } from '$lib/files/entuUpload';
 
 export interface CreateFeedbackInput {
-	screenshot: Blob;
-	strokes: StrokeData;
+	screenshot?: Blob;
+	strokes?: StrokeData;
 	description: string;
 	pagePath: string;
 	metadata: string;
@@ -67,6 +68,7 @@ export async function createFeedback(
 	fetchImpl: typeof fetch = fetch,
 	onCreated?: (feedbackId: string) => void | Promise<void>
 ): Promise<string> {
+	const { screenshot, strokes } = input;
 	const typeId = await resolveTypeId(cfg, 'feedback', fetchImpl);
 
 	const submissionDate = new Date().toISOString().slice(0, 10);
@@ -77,7 +79,7 @@ export async function createFeedback(
 		{ type: '_parent', reference: memberId },
 		{ type: 'name', string: name },
 		...(input.description ? [{ type: 'description' as const, string: input.description }] : []),
-		{ type: 'doodle_layer', string: serialize(input.strokes) },
+		...(strokes ? [{ type: 'doodle_layer' as const, string: serialize(strokes) }] : []),
 		{ type: 'metadata', string: input.metadata }
 	];
 
@@ -101,6 +103,7 @@ export async function createFeedback(
 		throw new Error('createFeedback: create returned 2xx without _id (apparent-success trap)');
 	}
 	await onCreated?.(feedbackId);
+	if (!screenshot) return feedbackId;
 
 	const metaRes = await entuFetch(
 		cfg.db,
@@ -113,8 +116,8 @@ export async function createFeedback(
 				{
 					type: 'screenshot',
 					filename: 'screenshot.png',
-					filesize: input.screenshot.size,
-					filetype: input.screenshot.type
+					filesize: screenshot.size,
+					filetype: screenshot.type
 				}
 			])
 		},
@@ -138,7 +141,7 @@ export async function createFeedback(
 	let putOk: boolean;
 	let putError: unknown = null;
 	try {
-		const putRes = await putUploadBytes(entry.upload, input.screenshot, fetchImpl);
+		const putRes = await putUploadBytes(entry.upload, screenshot, fetchImpl);
 		putOk = putRes.ok;
 	} catch (e) {
 		putOk = false;

@@ -5,6 +5,7 @@ import { selectedCollectiveIdentityStore, type CollectiveIdentity } from '$lib/c
 import { getProblemLog, type LoggedProblem } from '$lib/problems/problemLog';
 import type { StrokeData } from '$lib/strokes/strokes';
 import { captureScreen, ClipboardImageUnsupported, copyInked, type Capture } from './capture';
+import { SEND_LOCK } from './savedFeedback';
 import { sendFeedback } from './sendFeedback';
 
 export type EditorNotice =
@@ -18,6 +19,12 @@ export type EditorNotice =
 export interface EditorShot extends Capture {
 	url: string;
 	pagePath: string;
+}
+
+// The auto-sender queues kept failures under this lock; with no navigator.locks it never runs.
+async function underSendLock<T>(task: () => Promise<T>): Promise<T> {
+	if (!navigator.locks) return task();
+	return (await navigator.locks.request(SEND_LOCK, task)) as T;
 }
 
 const noStrokes = (): StrokeData => ({ v: 1, strokes: [] });
@@ -80,6 +87,18 @@ export function createFeedbackEditor() {
 		ticked = next;
 	}
 
+	// Read again at send: a failure the app has since sent by itself (#948) is not sent twice.
+	async function stillKept(): Promise<LoggedProblem[]> {
+		const log = getProblemLog();
+		if (!problemOwner || !log) return [];
+		try {
+			return await log.list(problemOwner.db, problemOwner.personId);
+		} catch (e) {
+			console.error('reading the kept failures failed', e);
+			return [];
+		}
+	}
+
 	// A failure leaves the list once a feedback carries it, sent now or kept to send later.
 	async function forgetSent(ids: string[]): Promise<void> {
 		const log = getProblemLog();
@@ -118,16 +137,21 @@ export function createFeedbackEditor() {
 	async function send(): Promise<void> {
 		if (!shot || notice === 'send-after-sign-in') return;
 		notice = null;
-		const sending = problems.filter((p) => ticked.has(p.id));
+		const { blob, pagePath } = shot;
+		const drawn = $state.snapshot(strokes);
 		try {
-			const outcome = await sendFeedback({
-				screenshot: shot.blob,
-				strokes: $state.snapshot(strokes),
-				description,
-				pagePath: shot.pagePath,
-				problems: sending.map(({ area, action, time, detail }) => ({ area, action, time, detail }))
+			const outcome = await underSendLock(async () => {
+				const sending = (await stillKept()).filter((p) => ticked.has(p.id));
+				const sent = await sendFeedback({
+					screenshot: blob,
+					strokes: drawn,
+					description,
+					pagePath,
+					problems: sending.map(({ area, action, time, detail }) => ({ area, action, time, detail }))
+				});
+				await forgetSent(sending.map((p) => p.id));
+				return sent;
 			});
-			await forgetSent(sending.map((p) => p.id));
 			if (outcome === 'after-sign-in') {
 				notice = 'send-after-sign-in';
 				return;

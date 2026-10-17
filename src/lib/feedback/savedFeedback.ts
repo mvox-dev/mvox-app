@@ -8,8 +8,9 @@ export interface SavedFeedback {
 	id: string;
 	db: string;
 	personId: string;
-	screenshot: Blob;
-	strokes: StrokeData;
+	/** Absent on a report the app sent by itself (#948), and so are the strokes. */
+	screenshot?: Blob;
+	strokes?: StrokeData;
 	description: string;
 	pagePath: string;
 	page: PageContext;
@@ -17,6 +18,8 @@ export interface SavedFeedback {
 	problems?: SentProblem[];
 	/** Set once a send's create has landed, so a retry replaces that entity instead of adding one. */
 	entityId?: string;
+	/** The kept failure rows an automatic report carries, so none is queued twice (#948). */
+	reportIds?: string[];
 }
 
 export interface SavedFeedbackStore {
@@ -25,7 +28,10 @@ export interface SavedFeedbackStore {
 	delete(db: string, personId: string, id: string): Promise<void>;
 }
 
-type Row = Omit<SavedFeedback, 'screenshot'> & { bytes: ArrayBuffer; filetype: string };
+type Row = Omit<SavedFeedback, 'screenshot'> & { bytes?: ArrayBuffer; filetype?: string };
+
+/** Held by every send from the queue, and by the form while it sends kept failures (#948). */
+export const SEND_LOCK = 'mvox-saved-feedback-send';
 
 const DB_NAME = 'mvox-saved-feedback';
 const DB_VERSION = 1;
@@ -39,7 +45,9 @@ export function createSavedFeedbackStore(factory?: IDBFactory): SavedFeedbackSto
 	return {
 		async put(item) {
 			const { screenshot, ...rest } = item;
-			const row: Row = { ...rest, bytes: await screenshot.arrayBuffer(), filetype: screenshot.type };
+			const row: Row = screenshot
+				? { ...rest, bytes: await screenshot.arrayBuffer(), filetype: screenshot.type }
+				: rest;
 			const database = await getDb();
 			const req = database
 				.transaction(STORE, 'readwrite')
@@ -55,10 +63,9 @@ export function createSavedFeedbackStore(factory?: IDBFactory): SavedFeedbackSto
 			)) as Row[];
 			return rows
 				.filter((row) => row.db === db && row.personId === personId)
-				.map(({ bytes, filetype, ...rest }) => ({
-					...rest,
-					screenshot: new Blob([bytes], { type: filetype })
-				}));
+				.map(({ bytes, filetype, ...rest }) =>
+					bytes ? { ...rest, screenshot: new Blob([bytes], { type: filetype }) } : rest
+				);
 		},
 
 		async delete(db, personId, id) {
@@ -79,6 +86,10 @@ export function getSavedFeedbackStore(): SavedFeedbackStore | null {
 	if (typeof indexedDB === 'undefined') return null;
 	instance ??= createSavedFeedbackStore();
 	return instance;
+}
+
+export function resetSavedFeedbackStore(): void {
+	instance = null;
 }
 
 // (*MVOX:Josquin*)

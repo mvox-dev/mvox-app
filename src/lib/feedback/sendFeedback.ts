@@ -6,20 +6,28 @@ import { isAuthExpiredError } from '$lib/entu/auth-expired';
 import { selectedCollectiveIdentityStore } from '$lib/collectives/store';
 import { online } from '$lib/net/online';
 import { findMyMemberId } from '$lib/rsvp/rsvpData';
-import type { SentProblem } from '$lib/problems/problemLog';
+import { getProblemLog, type ProblemLog, type SentProblem } from '$lib/problems/problemLog';
+import { queueKeptProblems, whenProblemsKept } from '$lib/problems/autoReport';
 import { createFeedback, discardFeedback, type CreateFeedbackInput } from './feedbackActions';
 import { capturePage, feedbackMetadata, readAppVersion } from './pageMetadata';
-import { getSavedFeedbackStore, type SavedFeedback, type SavedFeedbackStore } from './savedFeedback';
+import {
+	SEND_LOCK,
+	getSavedFeedbackStore,
+	type SavedFeedback,
+	type SavedFeedbackStore
+} from './savedFeedback';
 
-export type FeedbackDraft = Omit<CreateFeedbackInput, 'metadata'> & { problems: SentProblem[] };
+export type FeedbackDraft = Required<Omit<CreateFeedbackInput, 'metadata'>> & {
+	problems: SentProblem[];
+};
 export type SendOutcome = 'sent' | 'saved' | 'after-sign-in';
 
 interface SendDeps {
 	fetchImpl?: typeof fetch;
 	store?: SavedFeedbackStore | null;
+	log?: ProblemLog | null;
 }
 
-const SEND_LOCK = 'mvox-saved-feedback-send';
 export const FIRST_RETRY_MS = 15_000;
 const MAX_RETRY_MS = 5 * 60_000;
 
@@ -108,7 +116,8 @@ export async function sendFeedback(
 // The lock spans every tab, and an item leaves the device only after Entu has confirmed it.
 export async function sendSavedFeedback({
 	fetchImpl = fetch,
-	store = getSavedFeedbackStore()
+	store = getSavedFeedbackStore(),
+	log = getProblemLog()
 }: SendDeps = {}): Promise<void> {
 	if (!store) return;
 	if (!navigator.locks) throw new Error('sendSavedFeedback: this browser has no navigator.locks');
@@ -117,7 +126,16 @@ export async function sendSavedFeedback({
 		const token = liveToken();
 		if (auth.status !== 'authenticated' || !token) return;
 		for (const [db, personId] of Object.entries(auth.personIdByDb)) {
+			// A half-done move holds back its report until a later run drops what is already queued.
+			let reportsHeld = false;
+			try {
+				if (log) await queueKeptProblems(db, personId, store, log);
+			} catch (e) {
+				console.error('queueing the kept failures failed; they wait in the log', e);
+				reportsHeld = true;
+			}
 			for (const item of await store.list(db, personId)) {
+				if (reportsHeld && item.reportIds) continue;
 				try {
 					await deliver(item, token, fetchImpl, (kept) => store.put(kept));
 				} catch (e) {
@@ -135,15 +153,21 @@ export async function sendSavedFeedback({
 
 export function startSendingSavedFeedback(): () => void {
 	let ready = false;
-	return derived(
+	const send = () => sendSavedFeedback().catch((e) => console.error('sending saved feedback failed', e));
+	const stopKept = whenProblemsKept(() => {
+		if (get(online)) send();
+	});
+	const stopEdge = derived(
 		[online, authStore],
 		([isOnline, auth]) => isOnline && auth.status === 'authenticated'
 	).subscribe((now) => {
-		if (now && !ready) {
-			sendSavedFeedback().catch((e) => console.error('sending saved feedback failed', e));
-		}
+		if (now && !ready) send();
 		ready = now;
 	});
+	return () => {
+		stopKept();
+		stopEdge();
+	};
 }
 
 // (*MVOX:Josquin*)

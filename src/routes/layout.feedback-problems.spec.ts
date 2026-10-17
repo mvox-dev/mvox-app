@@ -26,6 +26,11 @@ vi.mock('$lib/collective/membershipStore', async (importOriginal) =>
 vi.mock('modern-screenshot', async () =>
 	(await import('$lib/testing/mocks/files')).screenshotModule()
 );
+// #948 sends kept failures by itself; held here, the form sees them as a quick open would.
+vi.mock('$lib/problems/autoReport', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/problems/autoReport')>()),
+	whenProblemsKept: () => () => {}
+}));
 
 import Layout from './+layout.svelte';
 import { resetGate } from '$lib/profile/completionGate';
