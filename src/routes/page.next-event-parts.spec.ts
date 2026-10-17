@@ -142,6 +142,8 @@ afterEach(async () => {
 });
 
 const byId = (root: ParentNode, id: string) => root.querySelector(`[data-testid="${id}"]`);
+const anyPartsLine = (root: ParentNode | null) =>
+	root?.querySelector('[data-testid^="agenda-next-parts-"]') ?? null;
 const count = (held: number, total: number) =>
 	`[agenda_parts_on_device ${JSON.stringify({ held, total })}]`;
 
@@ -167,7 +169,7 @@ describe('#945 — the next event shows how many of its parts are on this device
 		const line = await partsLine(container, 'ev-1', 1, 2);
 		expect(byId(container, 'agenda-row-ev-1')?.contains(line)).toBe(true);
 		expect(byId(container, 'agenda-row-ev-2')).not.toBeNull();
-		expect(byId(container, 'agenda-next-parts-ev-2')).toBeNull();
+		expect(anyPartsLine(byId(container, 'agenda-row-ev-2'))).toBeNull();
 		expect(downloadButton(line)?.textContent).toContain('[agenda_parts_download_all]');
 	});
 
@@ -180,7 +182,7 @@ describe('#945 — the next event shows how many of its parts are on this device
 		await vi.waitFor(() => expect(heldSpy).toHaveBeenCalled());
 		await vi.waitFor(() => expect(byId(container, 'agenda-row-ev-1')).not.toBeNull());
 		await new Promise((r) => setTimeout(r, 0));
-		expect(byId(container, 'agenda-next-parts-ev-1')).toBeNull();
+		expect(anyPartsLine(container)).toBeNull();
 	});
 
 	it('with every part held the line stays and there is no button', async () => {
@@ -203,7 +205,7 @@ describe('#945 — the next event shows how many of its parts are on this device
 
 		await vi.waitFor(() => expect(byId(container, 'agenda-row-ev-1')).toBeNull());
 		expect(byId(container, 'agenda-row-ev-2')).not.toBeNull();
-		expect(byId(container, 'agenda-next-parts-ev-2')).toBeNull();
+		expect(anyPartsLine(byId(container, 'agenda-row-ev-2'))).toBeNull();
 	});
 });
 
