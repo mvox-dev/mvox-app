@@ -56,4 +56,7 @@ staging:
   - label: GOTCHA
     record: "prefetch.spec.ts pins results with toEqual: a new result field changes those assertions"
     ref: "src/lib/files/prefetch.spec.ts"
+  - label: GOTCHA
+    record: "startSendingSavedFeedback sweeps at once on sign-in: await a sweep before keeping a report"
+    ref: "src/lib/problems/autoReport.spec.ts"
 # (*MVOX:Josquin*)
