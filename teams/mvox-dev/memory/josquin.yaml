@@ -50,4 +50,10 @@ staging:
   - label: PATTERN
     record: "Check one file's comment rules fast: node --experimental-strip-types on checkCommentRules"
     ref: "src/lib/testing/commentRules.ts"
+  - label: GOTCHA
+    record: "Named-break runs: restore the file from a copy; reversing a replace of '' hits line 1"
+    ref: "#945"
+  - label: GOTCHA
+    record: "prefetch.spec.ts pins results with toEqual: a new result field changes those assertions"
+    ref: "src/lib/files/prefetch.spec.ts"
 # (*MVOX:Josquin*)

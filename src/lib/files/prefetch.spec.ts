@@ -286,7 +286,7 @@ describe('#409 — a failed part is a result, never a raise', () => {
 
 		expect(results).toEqual([
 			{ fileId: 'file-1', outcome: 'network-stored' },
-			{ fileId: 'file-2', outcome: 'failed' },
+			{ fileId: 'file-2', outcome: 'failed', error: expect.objectContaining({ message: '403' }) },
 			{ fileId: 'file-3', outcome: 'network-stored' }
 		]);
 		expect(store.puts.map((p) => p.fileId)).toEqual(['file-1', 'file-3']);
@@ -312,7 +312,11 @@ describe('#409 — a failed part is a result, never a raise', () => {
 
 		expect(results).toEqual([
 			{ fileId: 'file-1', outcome: 'network-stored' },
-			{ fileId: 'file-2', outcome: 'fallback-navigation' },
+			{
+				fileId: 'file-2',
+				outcome: 'fallback-navigation',
+				cause: { kind: 'fetch-threw', error: expect.any(TypeError) }
+			},
 			{ fileId: 'file-3', outcome: 'network-stored' }
 		]);
 		expect(store.puts.map((p) => p.fileId)).toEqual(['file-1', 'file-3']);

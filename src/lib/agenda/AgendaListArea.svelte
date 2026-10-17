@@ -11,6 +11,9 @@
 	import { attendancePanelOf, myAttendanceByEventIdOf } from '$lib/agenda/agendaAttendanceView';
 	import type { AgendaLoadState } from '$lib/agenda/agendaLoad';
 	import type { AgendaPageView } from '$lib/agenda/agendaPageView.svelte';
+	import { nextEventFileIds } from '$lib/agenda/nextEventFileIds';
+	import { downloadNextEventParts, type NextEventPartsView } from '$lib/agenda/nextEventDownload';
+	import type { PresenceRefresh } from '$lib/files/presenceRefresh';
 
 	type ListProps = ComponentProps<typeof AgendaList>;
 
@@ -23,7 +26,8 @@
 		onrsvpchange,
 		ontakeattendance,
 		onattendancetoggle,
-		onattendanceclose
+		onattendanceclose,
+		refreshPresence
 	}: {
 		ag: AgendaLoadState;
 		view: AgendaPageView;
@@ -34,7 +38,15 @@
 		ontakeattendance: ListProps['ontakeattendance'];
 		onattendancetoggle: Parameters<typeof attendancePanelOf>[1];
 		onattendanceclose: Parameters<typeof attendancePanelOf>[2];
+		refreshPresence: PresenceRefresh;
 	} = $props();
+
+	const nextEventParts: NextEventPartsView = $derived({
+		eventId: ag.agendaItems[0]?.id ?? '',
+		fileIds: nextEventFileIds(ag.agendaItems, ag.worksByEventId),
+		heldFileIds: ag.heldFileIds,
+		download: (fileIds) => downloadNextEventParts(fileIds, refreshPresence)
+	});
 
 	const attendancePanel = $derived(attendancePanelOf(ag, onattendancetoggle, onattendanceclose));
 	const myAttendanceByEventId = $derived(myAttendanceByEventIdOf(ag.myAttendance));
@@ -93,6 +105,7 @@
 		scheduleItemsByEventId={ag.scheduleByEventId}
 		{attendancePanel}
 		{justCreatedEventId}
+		{nextEventParts}
 		emptyState={ag.agendaTypeFilter !== 'all' ? agendaFilterEmptyState : undefined}
 		recentEmptyState={ag.agendaTypeFilter !== 'all' && ag.recentItems.length > 0
 			? agendaRecentFilterEmptyState

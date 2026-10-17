@@ -23,6 +23,8 @@
 	import AttendanceBadge, { type BadgeStatus } from '$lib/components/attendance/AttendanceBadge.svelte';
 	import TakeAttendanceButton from '$lib/components/attendance/TakeAttendanceButton.svelte';
 	import { compareScheduleItems, type ScheduleItem } from '$lib/schedule/scheduleSort';
+	import NextEventParts from '$lib/agenda/NextEventParts.svelte';
+	import type { NextEventPartsView } from '$lib/agenda/nextEventDownload';
 
 	interface Props {
 		items: AgendaItem[];
@@ -43,6 +45,7 @@
 		recentEmptyState?: Snippet;
 		scheduleItemsByEventId?: Record<string, ScheduleItem[]>;
 		justCreatedEventId?: string | null;
+		nextEventParts?: NextEventPartsView;
 	}
 	const {
 		items,
@@ -62,7 +65,8 @@
 		emptyState,
 		recentEmptyState,
 		scheduleItemsByEventId = {},
-		justCreatedEventId = null
+		justCreatedEventId = null,
+		nextEventParts
 	}: Props = $props();
 
 	let showAllRecent = $state(false);
@@ -341,6 +345,9 @@
 								/>
 							{/if}
 						</div>
+						{#if nextEventParts?.eventId === item.id && nextEventParts.fileIds.length > 0 && nextEventParts.heldFileIds !== null}
+							<NextEventParts parts={{ ...nextEventParts, heldFileIds: nextEventParts.heldFileIds }} />
+						{/if}
 					</div>
 				{/each}
 			</section>
