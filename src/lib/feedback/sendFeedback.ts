@@ -10,7 +10,12 @@ import { getProblemLog, type ProblemLog, type SentProblem } from '$lib/problems/
 import { queueKeptProblems, whenProblemsKept } from '$lib/problems/autoReport';
 import { createFeedback, discardFeedback, type CreateFeedbackInput } from './feedbackActions';
 import { capturePage, feedbackMetadata, readAppVersion } from './pageMetadata';
-import { getSavedFeedbackStore, type SavedFeedback, type SavedFeedbackStore } from './savedFeedback';
+import {
+	SEND_LOCK,
+	getSavedFeedbackStore,
+	type SavedFeedback,
+	type SavedFeedbackStore
+} from './savedFeedback';
 
 export type FeedbackDraft = Required<Omit<CreateFeedbackInput, 'metadata'>> & {
 	problems: SentProblem[];
@@ -23,7 +28,6 @@ interface SendDeps {
 	log?: ProblemLog | null;
 }
 
-const SEND_LOCK = 'mvox-saved-feedback-send';
 export const FIRST_RETRY_MS = 15_000;
 const MAX_RETRY_MS = 5 * 60_000;
 
@@ -122,13 +126,16 @@ export async function sendSavedFeedback({
 		const token = liveToken();
 		if (auth.status !== 'authenticated' || !token) return;
 		for (const [db, personId] of Object.entries(auth.personIdByDb)) {
+			// A half-done move holds back its report until a later run drops what is already queued.
+			let reportsHeld = false;
 			try {
 				if (log) await queueKeptProblems(db, personId, store, log);
 			} catch (e) {
 				console.error('queueing the kept failures failed; they wait in the log', e);
-				continue;
+				reportsHeld = true;
 			}
 			for (const item of await store.list(db, personId)) {
+				if (reportsHeld && item.reportIds) continue;
 				try {
 					await deliver(item, token, fetchImpl, (kept) => store.put(kept));
 				} catch (e) {

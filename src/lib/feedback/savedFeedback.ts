@@ -30,6 +30,9 @@ export interface SavedFeedbackStore {
 
 type Row = Omit<SavedFeedback, 'screenshot'> & { bytes?: ArrayBuffer; filetype?: string };
 
+/** Held by every send from the queue, and by the form while it sends kept failures (#948). */
+export const SEND_LOCK = 'mvox-saved-feedback-send';
+
 const DB_NAME = 'mvox-saved-feedback';
 const DB_VERSION = 1;
 const STORE = 'items';
