@@ -4,13 +4,32 @@
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { CollectiveIdentity } from '$lib/collectives/store';
 import type { ByteStore } from './byteStore';
-import { openFileBytes, type FileBytesDeliveryReason } from './openFileBytes';
+import { reportProblem } from '$lib/problems/reportProblem';
+import { openFileBytes, type FileBytesDeliveryReason, type NotStoredCause } from './openFileBytes';
 
 export type PrefetchPartOutcome = FileBytesDeliveryReason | 'held' | 'failed';
 
 export interface PrefetchPartResult {
 	fileId: string;
 	outcome: PrefetchPartOutcome;
+}
+
+// A failed save is reported inside openFileBytes already.
+const WHY: Record<Exclude<NotStoredCause['kind'], 'save-failed'>, string> = {
+	'over-cap': 'too large to store',
+	'no-digest': 'this address cannot check files',
+	'fetch-threw': 'the download did not start',
+	'read-threw': 'the download broke off'
+};
+
+// db + fileId + reason: one report per part and reason for the app session.
+const reported = new Set<string>();
+
+function reportOnce(db: string, fileId: string, why: string, error: unknown): void {
+	const key = JSON.stringify([db, fileId, why]);
+	if (reported.has(key)) return;
+	reported.add(key);
+	reportProblem({ area: 'files', action: 'preloading a part for the next rehearsal', error });
 }
 
 export async function prefetchNextEventParts(
@@ -39,8 +58,14 @@ export async function prefetchNextEventParts(
 			const opened = await openFileBytes(cfg, identity, fileId, store, fetchImpl);
 			opened.release();
 			results.push({ fileId, outcome: opened.reason });
-		} catch {
+			const cause = opened.cause;
+			if (cause && cause.kind !== 'save-failed' && isCurrent()) {
+				const why = WHY[cause.kind];
+				reportOnce(identity.db, fileId, why, cause.error ?? new Error(`part ${fileId}: ${why}`));
+			}
+		} catch (error) {
 			results.push({ fileId, outcome: 'failed' });
+			if (isCurrent()) reportOnce(identity.db, fileId, 'not opened', error);
 		}
 	}
 
