@@ -12,6 +12,8 @@ export type PrefetchPartOutcome = FileBytesDeliveryReason | 'held' | 'failed';
 export interface PrefetchPartResult {
 	fileId: string;
 	outcome: PrefetchPartOutcome;
+	cause?: NotStoredCause;
+	error?: unknown;
 }
 
 // A failed save is reported inside openFileBytes already.
@@ -57,14 +59,14 @@ export async function prefetchNextEventParts(
 		try {
 			const opened = await openFileBytes(cfg, identity, fileId, store, fetchImpl);
 			opened.release();
-			results.push({ fileId, outcome: opened.reason });
 			const cause = opened.cause;
+			results.push({ fileId, outcome: opened.reason, ...(cause && { cause }) });
 			if (cause && cause.kind !== 'save-failed' && isCurrent()) {
 				const why = WHY[cause.kind];
 				reportOnce(identity.db, fileId, why, cause.error ?? new Error(`part ${fileId}: ${why}`));
 			}
 		} catch (error) {
-			results.push({ fileId, outcome: 'failed' });
+			results.push({ fileId, outcome: 'failed', error });
 			if (isCurrent()) reportOnce(identity.db, fileId, 'not opened', error);
 		}
 	}

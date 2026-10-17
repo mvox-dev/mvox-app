@@ -356,6 +356,7 @@
 							ontakeattendance={openAttendancePanel}
 							onattendancetoggle={handleAttendanceToggle}
 							onattendanceclose={closeAttendancePanel}
+							{refreshPresence}
 						/>
 					{/if}
 				</div>
