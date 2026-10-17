@@ -41,11 +41,16 @@ const queuedP = () => queue().list('sampledb', 'person-p');
 const keep = (action = PRELOAD) =>
 	log().add('sampledb', 'person-p', { area: 'files', action, detail: 'QuotaExceededError: full' });
 
+const waitKept = (count: number) =>
+	vi.waitFor(async () => expect((await keptP()).length).toBe(count));
+
 let entu: ReturnType<typeof feedbackEntu>;
 let stop: (() => void) | null = null;
 
-function start() {
+// The sweep the sign-in starts is let finish first, so it cannot pick up a report early.
+async function start() {
 	stop = startSendingSavedFeedback();
+	await sendSavedFeedback();
 }
 
 beforeEach(() => {
@@ -80,11 +85,13 @@ afterEach(() => {
 describe('#948 a kept report goes by itself', () => {
 	it('online and signed in: one create, no screenshot or ink, the report in the metadata', async () => {
 		signIn({ token: 'jwt-p', collectives: [P] });
-		start();
+		await start();
 
 		reportProblem({ area: 'files', action: PRELOAD, error: quota() });
+		await waitKept(1);
 		await vi.advanceTimersByTimeAsync(REPORT_DELAY_MS);
 
+		await vi.waitFor(async () => expect(createBodies(entu.fetchImpl).length).toBe(1));
 		await vi.waitFor(async () => expect(await queuedP()).toEqual([]));
 		expect(nonGetCalls(entu.fetchImpl).map(([u, i]) => [(i as RequestInit).method, String(u)])).toEqual(
 			[['POST', `${API}sampledb/entity`]]
@@ -113,15 +120,19 @@ describe('#948 a kept report goes by itself', () => {
 
 	it('a burst goes in one feedback that names each report in log order', async () => {
 		signIn({ token: 'jwt-p', collectives: [P] });
-		start();
+		await start();
 
 		reportProblem({ area: 'files', action: PRELOAD, error: quota() });
+		await waitKept(1);
 		await vi.advanceTimersByTimeAsync(500);
 		reportProblem({ area: 'roster', action: 'loading the join states', error: new TypeError('x') });
+		await waitKept(2);
 		await vi.advanceTimersByTimeAsync(500);
 		reportProblem({ area: 'library', action: 'loading the checkout data', error: 'odd' });
+		await waitKept(3);
 		await vi.advanceTimersByTimeAsync(REPORT_DELAY_MS);
 
+		await vi.waitFor(async () => expect(createBodies(entu.fetchImpl).length).toBe(1));
 		await vi.waitFor(async () => expect(await queuedP()).toEqual([]));
 		expect(createBodies(entu.fetchImpl).map((b) => prop(b, 'description'))).toEqual([
 			'Automatic problem report: 3 problems — ' +
@@ -133,10 +144,11 @@ describe('#948 a kept report goes by itself', () => {
 
 	it('offline nothing is sent; it goes once the signal returns', async () => {
 		signIn({ token: 'jwt-p', collectives: [P] });
-		start();
+		await start();
 		await goOffline();
 
 		reportProblem({ area: 'files', action: PRELOAD, error: quota() });
+		await waitKept(1);
 		await vi.advanceTimersByTimeAsync(REPORT_DELAY_MS * 5);
 		expect(entu.fetchImpl).not.toHaveBeenCalled();
 		expect((await keptP()).length).toBe(1);
@@ -149,9 +161,9 @@ describe('#948 a kept report goes by itself', () => {
 
 	it('signed out nothing is sent; it goes at the next sign-in', async () => {
 		signIn({ token: 'jwt-p', collectives: [P] });
-		start();
+		await start();
 		reportProblem({ area: 'files', action: PRELOAD, error: quota() });
-		await vi.waitFor(async () => expect((await keptP()).length).toBe(1));
+		await waitKept(1);
 		endSession({ preserveProvider: false });
 
 		await vi.advanceTimersByTimeAsync(REPORT_DELAY_MS * 5);

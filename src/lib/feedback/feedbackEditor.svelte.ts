@@ -80,6 +80,18 @@ export function createFeedbackEditor() {
 		ticked = next;
 	}
 
+	// Read again at send: a failure the app has since sent by itself (#948) is not sent twice.
+	async function stillKept(): Promise<LoggedProblem[]> {
+		const log = getProblemLog();
+		if (!problemOwner || !log) return [];
+		try {
+			return await log.list(problemOwner.db, problemOwner.personId);
+		} catch (e) {
+			console.error('reading the kept failures failed', e);
+			return [];
+		}
+	}
+
 	// A failure leaves the list once a feedback carries it, sent now or kept to send later.
 	async function forgetSent(ids: string[]): Promise<void> {
 		const log = getProblemLog();
@@ -118,7 +130,7 @@ export function createFeedbackEditor() {
 	async function send(): Promise<void> {
 		if (!shot || notice === 'send-after-sign-in') return;
 		notice = null;
-		const sending = problems.filter((p) => ticked.has(p.id));
+		const sending = (await stillKept()).filter((p) => ticked.has(p.id));
 		try {
 			const outcome = await sendFeedback({
 				screenshot: shot.blob,

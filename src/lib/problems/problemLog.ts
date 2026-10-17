@@ -104,12 +104,20 @@ export function setProblemOwner(store: typeof owner): void {
 	owner = store;
 }
 
+let kept: (() => void) | null = null;
+
+/** Called after each failure is kept; #948's auto-sender listens here. */
+export function setProblemKept(listener: typeof kept): void {
+	kept = listener;
+}
+
 export function keepProblem(area: string, action: string, error: unknown): void {
 	const identity = owner && get(owner);
 	const log = getProblemLog();
 	if (!identity || !log) return;
 	log
 		.add(identity.db, identity.personId, { area, action, detail: redactError(error) })
+		.then(() => kept?.())
 		.catch((e) => console.error('keeping a failure for feedback failed', e));
 }
 

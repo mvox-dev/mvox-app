@@ -28,8 +28,8 @@ describe('#611 saved feedback store', () => {
 		const { screenshot, ...rest } = read;
 		const { screenshot: _s, ...expected } = item();
 		expect(rest).toEqual(expected);
-		expect(screenshot.type).toBe('image/png');
-		expect(new Uint8Array(await screenshot.arrayBuffer())).toEqual(BYTES);
+		expect(screenshot?.type).toBe('image/png');
+		expect(new Uint8Array(await screenshot!.arrayBuffer())).toEqual(BYTES);
 	});
 
 	it("lists only one person's feedback in one collective", async () => {
