@@ -274,4 +274,26 @@ describe('#395 createFeedback — an empty description is OMITTED, not posted em
 	});
 });
 
+describe('#948 createFeedback — a feedback with no screenshot is one create and nothing else', () => {
+	it('creates the entity with no doodle_layer, and posts no screenshot property or bytes', async () => {
+		const fetchImpl = makeFetch();
+		const { description, pagePath, metadata } = input();
+
+		const id = await createFeedback(cfg, MEMBER_ID, { description, pagePath, metadata }, fetchImpl);
+
+		expect(id).toBe(NEW_ID);
+		expect(fetchImpl.mock.calls.map(([u, i]) => [i?.method ?? 'GET', String(u)])).toEqual([
+			['GET', `${API}sampledb/entity?_type.string=entity&name.string=feedback&props=_id&limit=1`],
+			['POST', `${API}sampledb/entity`]
+		]);
+		expect(JSON.parse(String(fetchImpl.mock.calls[1][1]?.body))).toEqual([
+			{ type: '_type', reference: TYPE_ID },
+			{ type: '_parent', reference: MEMBER_ID },
+			{ type: 'name', string: `${PAGE_PATH} 2026-09-29` },
+			{ type: 'description', string: DESCRIPTION },
+			{ type: 'metadata', string: METADATA }
+		]);
+	});
+});
+
 // (*MVOX:Tallis*)

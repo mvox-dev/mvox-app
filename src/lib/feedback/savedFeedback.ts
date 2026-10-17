@@ -81,4 +81,8 @@ export function getSavedFeedbackStore(): SavedFeedbackStore | null {
 	return instance;
 }
 
+export function resetSavedFeedbackStore(): void {
+	instance = null;
+}
+
 // (*MVOX:Josquin*)

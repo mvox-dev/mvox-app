@@ -6,17 +6,20 @@ import { isAuthExpiredError } from '$lib/entu/auth-expired';
 import { selectedCollectiveIdentityStore } from '$lib/collectives/store';
 import { online } from '$lib/net/online';
 import { findMyMemberId } from '$lib/rsvp/rsvpData';
-import type { SentProblem } from '$lib/problems/problemLog';
+import type { ProblemLog, SentProblem } from '$lib/problems/problemLog';
 import { createFeedback, discardFeedback, type CreateFeedbackInput } from './feedbackActions';
 import { capturePage, feedbackMetadata, readAppVersion } from './pageMetadata';
 import { getSavedFeedbackStore, type SavedFeedback, type SavedFeedbackStore } from './savedFeedback';
 
-export type FeedbackDraft = Omit<CreateFeedbackInput, 'metadata'> & { problems: SentProblem[] };
+export type FeedbackDraft = Required<Omit<CreateFeedbackInput, 'metadata'>> & {
+	problems: SentProblem[];
+};
 export type SendOutcome = 'sent' | 'saved' | 'after-sign-in';
 
 interface SendDeps {
 	fetchImpl?: typeof fetch;
 	store?: SavedFeedbackStore | null;
+	log?: ProblemLog | null;
 }
 
 const SEND_LOCK = 'mvox-saved-feedback-send';

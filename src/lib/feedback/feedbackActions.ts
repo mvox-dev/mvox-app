@@ -5,8 +5,8 @@ import { serialize, type StrokeData } from '$lib/strokes/strokes';
 import { deletePhantomProperty, putUploadBytes, type UploadObject } from '$lib/files/entuUpload';
 
 export interface CreateFeedbackInput {
-	screenshot: Blob;
-	strokes: StrokeData;
+	screenshot?: Blob;
+	strokes?: StrokeData;
 	description: string;
 	pagePath: string;
 	metadata: string;
@@ -67,6 +67,8 @@ export async function createFeedback(
 	fetchImpl: typeof fetch = fetch,
 	onCreated?: (feedbackId: string) => void | Promise<void>
 ): Promise<string> {
+	const { screenshot, strokes } = input;
+	if (!screenshot || !strokes) throw new Error('createFeedback: no screenshot is not built yet (#948)');
 	const typeId = await resolveTypeId(cfg, 'feedback', fetchImpl);
 
 	const submissionDate = new Date().toISOString().slice(0, 10);
@@ -77,7 +79,7 @@ export async function createFeedback(
 		{ type: '_parent', reference: memberId },
 		{ type: 'name', string: name },
 		...(input.description ? [{ type: 'description' as const, string: input.description }] : []),
-		{ type: 'doodle_layer', string: serialize(input.strokes) },
+		{ type: 'doodle_layer', string: serialize(strokes) },
 		{ type: 'metadata', string: input.metadata }
 	];
 
@@ -113,8 +115,8 @@ export async function createFeedback(
 				{
 					type: 'screenshot',
 					filename: 'screenshot.png',
-					filesize: input.screenshot.size,
-					filetype: input.screenshot.type
+					filesize: screenshot.size,
+					filetype: screenshot.type
 				}
 			])
 		},
@@ -138,7 +140,7 @@ export async function createFeedback(
 	let putOk: boolean;
 	let putError: unknown = null;
 	try {
-		const putRes = await putUploadBytes(entry.upload, input.screenshot, fetchImpl);
+		const putRes = await putUploadBytes(entry.upload, screenshot, fetchImpl);
 		putOk = putRes.ok;
 	} catch (e) {
 		putOk = false;
