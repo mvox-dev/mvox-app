@@ -47,4 +47,7 @@ staging:
   - label: GOTCHA
     record: "Both pdfjs-dist specs mock the whole module: a new pdf.js import must be added to each mock"
     ref: "#942"
+  - label: PATTERN
+    record: "Check one file's comment rules fast: node --experimental-strip-types on checkCommentRules"
+    ref: "src/lib/testing/commentRules.ts"
 # (*MVOX:Josquin*)
