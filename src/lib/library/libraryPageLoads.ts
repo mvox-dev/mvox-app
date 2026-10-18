@@ -177,6 +177,10 @@ export function createLibrarianLoad(lib: LibraryState) {
 			}
 			if (g !== librarianGen) return;
 			libraryEditRight.set(result.state);
+		}).catch((e) => {
+			if (g !== librarianGen) return;
+			reportProblem({ area: 'library', action: 'reading the librarian rights', error: e });
+			libraryEditRight.set('error');
 		});
 	}
 

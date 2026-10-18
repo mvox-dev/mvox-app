@@ -28,7 +28,8 @@ vi.mock('$lib/library/libraryPageData', () => ({
 	loadLibrarianMemberNames: () => page.names()
 }));
 
-import { resolveLibraryEditRight } from '$lib/library/libraryRights';
+import { libraryEditRight, resolveLibraryEditRight } from '$lib/library/libraryRights';
+import { get } from 'svelte/store';
 import { createLibrarianLoad, createLibraryTreeLoads } from '$lib/library/libraryPageLoads';
 import { createLibraryState } from '$lib/library/libraryState';
 import { resolveDbEditRight, resolveDbRight } from '$lib/nav/dbRights';
@@ -69,8 +70,8 @@ function memberDeps(actions: object, current = () => true) {
 	} as unknown as MemberOpsDeps<unknown>;
 }
 
-function librarian(stage: 'pickers' | 'names') {
-	page.state = () => Promise.resolve({ state: 'editor', libraryId: 'lib-1' });
+function librarian(stage: 'rights' | 'pickers' | 'names') {
+	page.state = stage === 'rights' ? fail : () => Promise.resolve({ state: 'editor', libraryId: 'lib-1' });
 	page.pickers =
 		stage === 'pickers'
 			? fail
@@ -209,6 +210,28 @@ describe('a failed store read is reported (#756)', () => {
 		rejectPickers(boom);
 		await settle();
 		expect(reportProblem).not.toHaveBeenCalled();
+	});
+
+	it('a failed librarian rights read is reported and the edit right ends as error', async () => {
+		librarian('rights').select(SELECTED);
+		await settle();
+		expect(reportProblem.mock.calls).toEqual([
+			[{ area: 'library', action: 'reading the librarian rights', error: boom }]
+		]);
+		expect(get(libraryEditRight)).toBe('error');
+	});
+
+	it('a librarian rights read superseded by a collective switch is not reported', async () => {
+		let rejectRights!: (e: unknown) => void;
+		const load = librarian('names');
+		page.state = () => new Promise((_, reject) => (rejectRights = reject));
+		load.select(SELECTED);
+		await settle();
+		load.select(null);
+		rejectRights(boom);
+		await settle();
+		expect(reportProblem).not.toHaveBeenCalled();
+		expect(get(libraryEditRight)).toBe('loading');
 	});
 
 	it('a member-names read superseded by a collective switch is not reported', async () => {
