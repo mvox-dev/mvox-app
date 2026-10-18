@@ -196,6 +196,12 @@ A major means data shape changed. The kit ships `migrations/<version>/` for exac
     `claude plugin marketplace update memory-kit` and `claude plugin update watch@memory-kit`,
     then `/reload-plugins`, then `/watch` to see what it understood.
 
+- **0.1.0-alpha.17 -> 0.1.0-alpha.18:** no data step. Pull, lint, then update the plugins:
+  `claude plugin marketplace update memory-kit`, `claude plugin update obligations-pane@memory-kit`,
+  `/reload-plugins`. Optional: add `agent_name: <name>` to the home's `memory-kit.conf` to name the
+  main agent in the pane's footer; without it the `agentName` option or the folder's name applies
+  as before.
+
 ## Always
 
 - The home's config for the kit lives outside the subtree; a pull must never clobber it.

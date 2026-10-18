@@ -51,6 +51,20 @@ export type PaneSnapshot = {
   agents: PaneAgent[]
 }
 
+/** One workflow run as the footer tracks it, keyed by its run id (`wf_…`). */
+export type WorkflowRun = {
+  /** From the run's saved script `<name>-<runId>.js`; '' until found (the footer shows the run id). */
+  name: string
+  /** The phase the run's journal names for its latest started agent; '' when unread. */
+  phase: string
+  /** The label (agent description) of the run's latest started agent: the phase fallback. */
+  label: string
+  /** agentIds started, in order. */
+  started: string[]
+  /** agentIds finished (turn.complete), in order. */
+  done: string[]
+}
+
 declare module 'claude-code' {
   interface PluginState {
     'obligations-pane': {
@@ -65,6 +79,8 @@ declare module 'claude-code' {
       mainModel: string
       /** The session's working directory at its first session.start: the home the pane reads. */
       startCwd: string
+      /** runId -> run, from agent.spawn's `workflow` tag and turn.complete (workflow agents are not in agent.list). */
+      workflows: Record<string, WorkflowRun>
     }
   }
 }
