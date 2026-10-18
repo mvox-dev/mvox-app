@@ -61,6 +61,7 @@ export function createFakeAdapter(): FakeAdapter {
 		async list() {
 			return Array.from(map.values());
 		},
+		// Keys come from the map's own keys, never the rows, so a payload-reading caller shows.
 		async listKeys() {
 			return Array.from(map.keys()).map((k) => {
 				const [db, personId, fileId] = triple(k);
@@ -116,7 +117,7 @@ export function createFakeByteStore(): FakeByteStore {
 			protectedLog.push(keys);
 		},
 		async relieve() {
-			// No estimate() seam: 'unsupported', as the real store without navigator.storage.
+			// No estimate() seam, so 'unsupported'; callers must not gate on its outcome.
 			return { outcome: 'unsupported' as const };
 		},
 		seed(identity, fileId, data) {

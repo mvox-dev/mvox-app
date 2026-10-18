@@ -1,5 +1,4 @@
 // The byte store's policy: partition keys, the global cap, eviction and the pressure sweep.
-import type { CollectiveIdentity } from '$lib/collectives/store';
 import {
 	BYTE_STORE_CAP_BYTES,
 	PRESSURE_RATIO,
