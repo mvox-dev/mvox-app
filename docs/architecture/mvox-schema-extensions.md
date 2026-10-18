@@ -258,6 +258,7 @@ isolate-and-assert-explicit `_inheritrights: false` pattern.
 | `doodle_layer` | text | no       | ink drawn over the screenshot — [mvox-app#394](https://github.com/mvox-dev/mvox-app/issues/394)'s StrokeData JSON (`src/lib/strokes/strokes.ts` serialize/parse) |
 | `description`  | text | no       | the member's feedback in their own words                                                             |
 | `metadata`     | text | no       | JSON: route path, time, app version (the [mvox-app#350](https://github.com/mvox-dev/mvox-app/issues/350) build stamp), locale and viewport; nothing personal. Since [mvox-app#684](https://github.com/mvox-dev/mvox-app/issues/684) also the failures sent with it, each its area, action, time and redacted error. Added on crede by hand (Mihkel, 2026-10-01) and recorded here by [mvox-app#611](https://github.com/mvox-dev/mvox-app/issues/611); no provisioning run |
+| `issue_url`    | string | no     | multi-value (one value per issue): URL of an issue this feedback led to, on any platform; no URL validation. Added on crede by [mvox-app#951](https://github.com/mvox-dev/mvox-app/issues/951), `scripts/migrations/seed-951-feedback-issue-url-crede-2026-10-18.ts`. Values are set by hand in Entu for now; a scripted write to a multi-value property may replace rather than append — see the header of `seed-445-person-rsvp-domain-inherit-crede.ts` |
 
 **Rights posture**: the member who created a feedback owns it (`_owner`,
 Entu's create-time auto-grant); every domain-tier reader in the same
@@ -305,7 +306,7 @@ The app calls Entu directly, in the authenticated user's rights by default.
 | `schedule_item`         | domain                            | matches event       | name, datetime                                        |
 | `admin_member_record`   | domain                            | domain (asserted)   | `person`, `name` ONLY — `phone`/`email`/`birthdate`/`id_code` never leave the private bucket, per-property, regardless of the type/instance tier |
 | `link`                  | domain                            | matches database     | name, url, description, display_order — nothing private on this type          |
-| `feedback`              | domain (intended; not yet provisioned — verify at the #395 live run) | domain (asserted, explicit) | screenshot, doodle_layer, description, metadata — nothing private on this type |
+| `feedback`              | domain (intended; not yet provisioned — verify at the #395 live run) | domain (asserted, explicit) | screenshot, doodle_layer, description, metadata, issue_url — nothing private on this type |
 
 Note on the "Type `_sharing`" column: the salvaged v4E draft literal declared
 `schedule_item.sharing = 'public'` (design-time aspiration). A live read-only

@@ -1,0 +1,30 @@
+{
+  "db": "mvox_crede",
+  "kind": "read-only read-back of the #951 feedback.issue_url provisioning (Perotin, 2026-10-18)",
+  "sensitive": false,
+  "ledgers": [
+    "seed-951-feedback-issue-url-crede-dry-2026-10-18T01-24-04-041Z.json",
+    "seed-951-feedback-issue-url-crede-live-2026-10-18T01-29-14-206Z.json"
+  ],
+  "note": "read from the live entity, not the ledger: the ledger's `after` omits `list`",
+  "propdef": {
+    "id": "6ad420e93ab4bc14605edc15",
+    "name": "issue_url",
+    "type": "string",
+    "list": true,
+    "ordinal": 5,
+    "sharing": "domain",
+    "mandatory": false,
+    "parent": "feedback (6abb6b9256069f238dec7ce2)",
+    "meta_type": "property (6a8f471a5eb2498f434e50e0)"
+  },
+  "feedback_propdefs_after": [
+    ["screenshot", "file", false, 1, "domain"],
+    ["doodle_layer", "text", false, 2, "domain"],
+    ["description", "text", false, 3, "domain"],
+    ["metadata", "text", false, 4, "domain"],
+    ["name", "string", false, 0, "domain"],
+    ["issue_url", "string", true, 5, "domain"]
+  ],
+  "columns": "[name, type, list, ordinal, sharing]"
+}

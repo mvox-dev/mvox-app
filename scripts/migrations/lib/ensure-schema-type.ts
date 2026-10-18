@@ -1,23 +1,6 @@
-// New primitive (mvox-app#246): idempotent, check-then-create type-def +
-// prop-def CREATE against a live Entu db. This is NEW WORK, not an extension of
-// an existing lib — no prior Pérotin script in workspace-app does full type-def
-// creation (the one prior tool that did, `lib/v4e-translator.ts`, only ever
-// existed in the legacy `~/workspace` repo and was never migrated). The nearest
-// precedent is entu-research's `setup-entity-types.ts` (foreign repo, foreign
-// team) — this reproduces its proven wire-shape (meta-type refs, check-then-
-// create, add_from wiring) as a small workspace-app-owned primitive, per the
-// #246 settle's approval of "the new type+prop-def CREATE primitive... as new
-// work." First use: schedule_item, on the dev/test collective and mvox_crede.
-//
-// Per Pérotin's own standing toolkit-extraction discipline: this stays local to
-// scripts/migrations/lib/ (not proposed into Josquin's `$lib/entu/*`) until a
-// SECOND app-extension type needs it — one use does not earn a foundation change.
-//
-// Meta-type ids (the "entity" and "property" type-definitions themselves) are
-// RESOLVED PER-DB, never hardcoded: each Entu database is a distinct collection
-// with its own auto-generated ids, so a constant proven on the dev/test
-// collective would be silently wrong on mvox_crede. This mirrors
-// setup-entity-types.ts's own Step 1.
+// Idempotent check-then-create of type-defs and prop-defs on a live Entu db (#246).
+
+// Meta-type ids are resolved per db, never hardcoded: each db has its own generated ids.
 
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
@@ -29,10 +12,7 @@ function errMsg(err: unknown): string {
 
 export type EnsureOutcome = { id: string; outcome: 'found' | 'created' };
 
-/** One list GET per meta-type, by name — same lookup shape as
- * entu-research's Step 1, so a db that genuinely lacks either meta-type
- * (should never happen — they are Entu platform bootstrap fixtures) fails
- * loud with a clear message instead of a confusing downstream 400. */
+/** List GET per meta-type by name; fails loud if a db lacks either, instead of a downstream 400. */
 export async function resolveMetaTypeIds(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch
@@ -64,10 +44,7 @@ export async function resolveMetaTypeIds(
 	return { entityMetaTypeId, propertyMetaTypeId };
 }
 
-/** Resolve any existing type-def (canonical or extension) by name — used to
- * find `event`'s type-def id for the `parents`/`add_from` wiring without
- * hardcoding a per-db id. Fails loud: an app-extension type's parent MUST
- * already exist (schema-mutation-in-flight check, common-prompt discipline). */
+/** Resolve an existing type-def by name; fails loud, as a parent type must already exist. */
 export async function resolveTypeIdByName(
 	cfg: EntuCfg,
 	entityMetaTypeId: string,
@@ -98,10 +75,7 @@ export type LedgerStep = {
 	error?: string;
 };
 
-/**
- * Check-then-create the type-def. `dryRun=true` never writes — it resolves
- * whether the type already exists and reports what a live run would do.
- */
+/** Check-then-create the type-def; `dryRun` only reports what a live run would do. */
 export async function ensureEntityType(
 	cfg: EntuCfg,
 	entityMetaTypeId: string,
@@ -171,23 +145,8 @@ export async function ensureEntityType(
 	return body._id;
 }
 
-/**
- * Check-then-create one prop-def under an existing type-def.
- *
- * `sharing` is the TYPE-LEVEL default (gate 2's tier, or — for a property
- * addition to an existing type like mvox-app#265's R2 toggle — the live
- * type's own current `_sharing`, resolved by the caller before this is
- * invoked). `prop.sharing`, when present, OVERRIDES it for this one property
- * (mvox-app#265's per-property-sharing tooling extension). Our own code
- * always writes an explicit `_sharing` value into the CREATE payload either
- * way — we never rely on Entu's own create-time inherit-from-parent behavior
- * to fill it in, precisely because that behavior is the surprise a live probe
- * surfaced (omitting `_sharing` inherits the PARENT's tier, not private-by-
- * default). When the intent genuinely IS "inherit the type's tier" (the R2
- * toggle), the caller passes that resolved tier as `sharing` and leaves
- * `prop.sharing` unset — the fallback below computes the identical value our
- * own code asserts, rather than leaving it to chance.
- */
+/** Check-then-create one prop-def; `prop.sharing` overrides the type's. `_sharing` is always
+ * written, as an omitted one inherits the PARENT's tier (#265). */
 export async function ensurePropDef(
 	cfg: EntuCfg,
 	propertyMetaTypeId: string,
@@ -234,6 +193,7 @@ export async function ensurePropDef(
 	if (prop.ordinal !== undefined) props.push({ type: 'ordinal', number: prop.ordinal });
 	if (prop.table) props.push({ type: 'table', boolean: true });
 	if (prop.search) props.push({ type: 'search', boolean: true });
+	if (prop.list) props.push({ type: 'list', boolean: true });
 
 	const res = await entuFetch(
 		cfg.db,
@@ -258,15 +218,7 @@ export async function ensurePropDef(
 	return body._id;
 }
 
-/**
- * Read back a prop-def's effective `_sharing` and assert it matches intent —
- * PO-required provisioning discipline (mvox-app#265, comment 5561754737,
- * citing #264 item 6's same unasserted-dependency class): a create-time write
- * landing is not proof it landed AS WRITTEN, given Entu's own create-time
- * inherit-from-parent behavior can silently substitute a different value when
- * `_sharing` is omitted. Fails loudly (throws) on mismatch rather than
- * recording a false 'created' outcome.
- */
+/** Read back a prop-def's `_sharing`, throw on mismatch: a landed write may differ (#265). */
 export async function assertPropDefSharing(
 	cfg: EntuCfg,
 	propDefId: string,
@@ -289,9 +241,7 @@ export async function assertPropDefSharing(
 	ledger.push({ action: 'ensure-propdef', target: `${label}.sharing-readback`, id: propDefId, outcome: 'found', after: { sharing: actualSharing } });
 }
 
-/** Wire `add_from` on a type-def → another type-def's id, append-only and
- * idempotent (skip if already set to the same target; warn-and-leave if set
- * to something else — same caution as entu-research's `ensureAddFrom`). */
+/** Wire `add_from` on a type-def to another's id; idempotent, leaves a different target. */
 export async function ensureAddFrom(
 	cfg: EntuCfg,
 	typeId: string,

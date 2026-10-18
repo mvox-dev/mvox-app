@@ -1,0 +1,21 @@
+{
+  "dryRun": true,
+  "db": "mvox_crede",
+  "sensitive": false,
+  "typeId": "6abb6b9256069f238dec7ce2",
+  "propDefId": null,
+  "instancesCreated": 0,
+  "ledger": [
+    {
+      "action": "ensure-propdef",
+      "target": "feedback.issue_url",
+      "outcome": "dry-run",
+      "after": {
+        "type": "string",
+        "sharing": "domain",
+        "mandatory": false
+      }
+    }
+  ],
+  "authorizedBy": "dry run — no authorization required"
+}

@@ -1,0 +1,31 @@
+{
+  "dryRun": false,
+  "db": "mvox_crede",
+  "sensitive": false,
+  "typeId": "6abb6b9256069f238dec7ce2",
+  "propDefId": "6ad420e93ab4bc14605edc15",
+  "instancesCreated": 0,
+  "ledger": [
+    {
+      "action": "ensure-propdef",
+      "target": "feedback.issue_url",
+      "id": "6ad420e93ab4bc14605edc15",
+      "outcome": "created",
+      "after": {
+        "type": "string",
+        "sharing": "domain",
+        "mandatory": false
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "feedback.issue_url.sharing-readback",
+      "id": "6ad420e93ab4bc14605edc15",
+      "outcome": "found",
+      "after": {
+        "sharing": "domain"
+      }
+    }
+  ],
+  "authorizedBy": "team-lead: I authorize this run (#951)"
+}
