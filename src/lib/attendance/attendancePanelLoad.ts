@@ -1,13 +1,13 @@
 // The attendance panel load shared by the agenda and the event page.
 import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
 import { without } from '$lib/collections/immutable';
-import type { AttendanceEntry } from '$lib/attendance/attendanceChangeQueue';
+import type { RsvpEntry } from '$lib/rsvp/rsvpChangeQueue';
 import type * as AttendanceData from '$lib/attendance/attendanceData';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { reportProblem } from '$lib/problems/reportProblem';
 
-export type AttendanceMap = Record<string, AttendanceEntry>;
-export type AttendanceRsvpMap = Record<string, { rsvpId: string; status: string }>;
+export type AttendanceMap = AttendanceData.AttendanceByMemberId;
+export type AttendanceRsvpMap = Record<string, RsvpEntry>;
 
 export interface AttendancePanelRead {
 	roster: RosterRow[];

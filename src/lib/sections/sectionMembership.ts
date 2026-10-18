@@ -3,12 +3,7 @@ import { entuFetch } from '$lib/entu/request';
 import { readParentValues } from '$lib/entu/readParents';
 import { SectionMembershipMissingError } from './sectionErrors';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
-
-export interface MemberParentValue {
-	_id: string;
-	reference: string;
-	entity_type?: string;
-}
+import type { ParentValue } from '$lib/entu/wireTypes';
 
 // POST appends, so this adds one `_parent` and leaves the rest. A stale row can add a duplicate;
 // unassign sweeps every match and rosterData groups them, so no read-modify-write here.
@@ -38,7 +33,7 @@ export async function unassignMemberSection(
 	sectionId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<void> {
-	const parents = await readParentValues<MemberParentValue>(
+	const parents = await readParentValues<ParentValue>(
 		cfg,
 		memberId,
 		'unassignMemberSection',

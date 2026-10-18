@@ -20,8 +20,13 @@ export interface EventAttendance {
 	status: AttendanceStatus;
 }
 
+export interface AttendanceEntry {
+	attendanceId: string;
+	status: AttendanceStatus;
+}
+
 /** The panel's per-member initial state, keyed by member id. */
-export type AttendanceByMemberId = Record<string, { attendanceId: string; status: AttendanceStatus }>;
+export type AttendanceByMemberId = Record<string, AttendanceEntry>;
 
 /** A singer's own attendance; the event id is read off `_parent`. */
 export interface MyAttendance {

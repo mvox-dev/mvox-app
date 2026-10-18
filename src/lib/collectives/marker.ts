@@ -1,15 +1,11 @@
 // The mvox-collective marker: is this db a collective, and what is it called?
 import { entuFetch, isAuthExpiredError, type EntuFetchOptions } from '$lib/entu/request';
+import type { EntuSearchResponse } from '$lib/entu/wireTypes';
 import type { MarkerResult } from './types';
 import { reportProblem } from '$lib/problems/reportProblem';
 
 // Only an mvox collective holds this `_sharing: domain` entity; its `name` is the picker label.
 export const MVOX_COLLECTIVE_MARKER_TYPE = 'mvox_collective';
-
-type EntuSearchResponse = {
-	count?: number;
-	entities?: Array<{ _id: string; name?: Array<{ string: string }> }>;
-};
 
 // 'error' is never 'not-collective': a blip must not drop a real collective. The cache
 // flag in `opts` is the caller's (discover.ts), never this reader's.

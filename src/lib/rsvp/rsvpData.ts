@@ -20,8 +20,13 @@ export interface MyRsvp {
 	status: RsvpStatus;
 }
 
+export interface RsvpEntry {
+	rsvpId: string;
+	status: RsvpStatus;
+}
+
 /** The row-control's initial state, keyed by event id. */
-export type RsvpByEventId = Record<string, { rsvpId: string; status: RsvpStatus }>;
+export type RsvpByEventId = Record<string, RsvpEntry>;
 
 // The singer's active member id, or null with no roster row. Callers that write must not pass
 // a cache flag in `opts`: this read is a step inside the rsvp write.
@@ -50,7 +55,7 @@ export async function findMyRsvpForEvent(
 	personId: string,
 	eventId: string,
 	fetchImpl: typeof fetch = fetch
-): Promise<{ rsvpId: string; status: RsvpStatus } | null> {
+): Promise<RsvpEntry | null> {
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=rsvp&_parent.reference=${encodeURIComponent(personId)}&event.reference=${encodeURIComponent(eventId)}&props=status&limit=1`,

@@ -1,53 +1,17 @@
 import { applyRsvpChange } from './rsvpOptimistic';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
-import type { MyRsvp, RsvpStatus } from './rsvpData';
+import type { MyRsvp, RsvpEntry, RsvpStatus } from './rsvpData';
 
-// #15 fix — double-tapping an RSVP stuck it until reload. Root cause (confirmed
-// by team-lead reading the old inline `handleRsvpChange` in +page.svelte):
-//   1. First tap on an unanswered event optimistically stored a PLACEHOLDER id
-//      ('__optimistic__') and fired createRsvp (~300ms).
-//   2. A SECOND tap before that resolved read the placeholder as `existing` and
-//      fired update/deleteRsvp AGAINST IT → 404.
-//   3. The failure `.catch` reverted the WHOLE rsvpByEventId map to a stale
-//      snapshot that still held the placeholder — clobbering the first write's
-//      real-id reconciliation too. The event was stuck at '__optimistic__'
-//      forever (every later change 404s); only a reload (which refetches the
-//      real id) recovered.
-//
-// FIX SHAPE (Mihkel's ruling, 2026-08-06): "the button should not be clickable
-// until resolved." NOT coalescing — the whole RsvpControl (all 4 status
-// buttons) for an event disables while that event's write is in flight, and
-// re-enables on resolve (success or failure). This makes a second tap on the
-// SAME event structurally impossible at the UI layer — no second write can
-// ever fire against the placeholder. `request()`'s own guard against a
-// concurrent call for the same event is a defensive backstop (correct even if
-// something bypasses the disabled control), not the primary mechanism — the
-// primary mechanism is AgendaList wiring `pendingEventIds` into each row's
-// `disabled` prop (see AgendaList.spec.ts).
-//
-// The other #15 defect — a whole-map revert clobbering a concurrent event's
-// state — is fixed the same way regardless of shape: setOptimistic/setPending/
-// reconcile/revert are all PER-EVENT callbacks. There is no whole-map
-// operation in this module's API for a caller to misuse.
-//
-// One instance lives for the page's lifetime — Byrd creates it once in
-// +page.svelte and calls .request() from the RsvpControl onchange handler.
+// One RSVP write per event (#15). The caller disables the event's control in flight: a second
+// tap would write against the '__optimistic__' placeholder and 404 (AgendaList.spec.ts tests it).
+// Every callback is per-event, so a failed write never reverts another event.
 
-/** The row-control's value for one event — same shape as RsvpByEventId's values. */
-export interface RsvpEntry {
-	rsvpId: string;
-	status: RsvpStatus;
-}
+export type { RsvpEntry };
 
 export interface RsvpChangeCallbacks {
-	/** Apply the optimistic value for exactly this event, synchronously. */
 	setOptimistic(eventId: string, entry: RsvpEntry | null): void;
-	/** Mark/unmark this event as having a write in flight — the caller threads
-	 *  this into that row's RsvpControl `disabled` prop (all 4 buttons). */
 	setPending(eventId: string, pending: boolean): void;
-	/** A write settled successfully — the final, reconciled value for this event. */
 	reconcile(eventId: string, entry: RsvpEntry | null): void;
-	/** A write failed — restore exactly this event's PRE-tap value. Nothing else. */
 	revert(eventId: string, before: RsvpEntry | null): void;
 }
 
@@ -56,19 +20,9 @@ export interface RequestRsvpChangeInput {
 	personId: string;
 	memberId: string | null;
 	eventId: string;
-	/** #372 review F1 — a LAST-RESORT lookup for the member id, used only when
-	 *  `memberId` is null AND this tap takes the create path (the only path that
-	 *  needs one). The page resolves the member id at load; when that read
-	 *  REJECTED it parks at null forever, and the control is now enabled on the
-	 *  Entu grant alone, so every tap would throw 'cannot create without a
-	 *  memberId' — a repeatable error with no way out short of a reload. Retrying
-	 *  the lookup here turns a transient blip into a write that lands. A reject
-	 *  here PROPAGATES (revert + save-failed, same as any other failed write);
-	 *  a null result reaches applyRsvpChange's backstop throw, and the page's
-	 *  own resolver records the confirmed non-member so the control gives way to
-	 *  the hint. */
+	// A last-resort member-id lookup for the create path when the load-time read failed (#372);
+	// a reject propagates like any other failed write.
 	resolveMemberId?: () => Promise<string | null>;
-	/** The real (or already-reconciled) existing rsvp for this event, or null. */
 	existing: MyRsvp | null;
 	newStatus: RsvpStatus | null;
 }
@@ -78,18 +32,13 @@ export interface RsvpChangeQueue {
 }
 
 export function createRsvpChangeQueue(callbacks: RsvpChangeCallbacks): RsvpChangeQueue {
-	// The only mutable state this module owns: which events currently have a
-	// write in flight. Everything else (the actual rsvp values) lives with the
-	// caller, touched exclusively through the per-event callbacks above.
 	const pending = new Set<string>();
 
 	return {
 		request(input) {
 			const { cfg, personId, memberId, eventId, existing, newStatus, resolveMemberId } = input;
 
-			// Defensive backstop (see module doc) — the primary guard is the UI
-			// disabling the control for a pending event, via `setPending`.
-			if (pending.has(eventId)) return;
+			if (pending.has(eventId)) return; // a backstop: the caller disables the control too
 
 			pending.add(eventId);
 			callbacks.setPending(eventId, true);
@@ -98,11 +47,7 @@ export function createRsvpChangeQueue(callbacks: RsvpChangeCallbacks): RsvpChang
 				newStatus !== null ? { rsvpId: existing?.rsvpId ?? '__optimistic__', status: newStatus } : null;
 			callbacks.setOptimistic(eventId, optimisticEntry);
 
-			// Only the create path consults `memberId` at all (rsvpOptimistic.ts), so
-			// an update/delete never pays for — nor can be failed by — this lookup.
-			// When nothing needs resolving, the write is dispatched SYNCHRONOUSLY,
-			// exactly as before: the retry must not insert a microtask into the
-			// normal path.
+			// Only the create path needs a member id; nothing to resolve keeps the write synchronous.
 			const needsLookup = !existing && newStatus !== null && memberId === null && !!resolveMemberId;
 			const write = needsLookup
 				? resolveMemberId!().then((resolved) =>

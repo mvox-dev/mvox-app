@@ -6,12 +6,7 @@ import { entuFetch } from '$lib/entu/request';
 import { readParentValues } from '$lib/entu/readParents';
 import { overwriteEntityValues } from '$lib/entu/replaceProperty';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
-
-interface EventParentValue {
-	_id: string;
-	reference: string;
-	entity_type?: string;
-}
+import type { ParentValue } from '$lib/entu/wireTypes';
 
 export class EventSeriesMissingError extends Error {
 	constructor(readonly eventId: string) {
@@ -20,7 +15,7 @@ export class EventSeriesMissingError extends Error {
 	}
 }
 
-function seriesParentValueOf(values: EventParentValue[]): EventParentValue | undefined {
+function seriesParentValueOf(values: ParentValue[]): ParentValue | undefined {
 	return values.find((p) => p.entity_type === 'event_series');
 }
 
@@ -30,7 +25,7 @@ export async function reassignEventSeries(
 	newSeriesId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<void> {
-	const parents = await readParentValues<EventParentValue>(
+	const parents = await readParentValues<ParentValue>(
 		cfg,
 		eventId,
 		'reassignEventSeries',
@@ -57,7 +52,7 @@ export async function unassignEventSeries(
 	eventId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<void> {
-	const parents = await readParentValues<EventParentValue>(
+	const parents = await readParentValues<ParentValue>(
 		cfg,
 		eventId,
 		'unassignEventSeries',
