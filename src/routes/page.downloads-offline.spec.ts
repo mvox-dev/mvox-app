@@ -31,8 +31,7 @@ vi.mock('$lib/auth/storage', () => ({
 }));
 
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
-
-type PartLabel = { work: string; composer: string; edition: string; filename: string };
+import type { PartLabel } from '$lib/files/labelStore';
 
 function createFakeLabelStore() {
 	const map = new Map<string, PartLabel>();

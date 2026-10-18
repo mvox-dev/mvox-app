@@ -1,11 +1,22 @@
-// Season, series and event rows as Entu returns them; each reader Picks the props it asks for.
+// Entu wire shapes: rows as Entu returns them; each reader Picks the props it asks for.
 export interface ParentRef {
 	reference: string;
 	entity_type?: string;
 }
 
+// A stored `_parent` value; its `_id` is what a write deletes or replaces.
+export interface ParentValue extends ParentRef {
+	_id: string;
+}
+
 export interface NamedValue {
 	string: string;
+}
+
+// The `GET {db}/entity?...` envelope: the match count and the rows.
+export interface EntuSearchResponse {
+	count?: number;
+	entities?: Array<{ _id: string; name?: NamedValue[] }>;
 }
 
 // Rights props sit in the private bucket: a caller without a grant reads the row but not these.

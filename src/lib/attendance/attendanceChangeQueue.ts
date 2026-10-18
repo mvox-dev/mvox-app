@@ -1,7 +1,6 @@
 // The attendance optimistic write queue: one write per (event, member) tap.
-import { applyAttendanceChange } from './attendanceOptimistic';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
-import type { EventAttendance, AttendanceStatus } from './attendanceData';
+import { applyAttendanceChange, type AttendanceChangeInput } from './attendanceOptimistic';
+import type { AttendanceStatus } from './attendanceData';
 
 export interface AttendanceEntry {
 	attendanceId: string;
@@ -18,17 +17,8 @@ export interface AttendanceChangeCallbacks {
 	revert(eventId: string, memberId: string, before: AttendanceEntry | null): void;
 }
 
-export interface RequestAttendanceChangeInput {
-	cfg: EntuCfg;
-	eventId: string;
-	memberId: string;
-	/** The real (or already-reconciled) existing attendance for this member, or null. */
-	existing: EventAttendance | null;
-	newStatus: AttendanceStatus | null;
-}
-
 export interface AttendanceChangeQueue {
-	request(input: RequestAttendanceChangeInput): void;
+	request(input: AttendanceChangeInput): void;
 	/** Reopening an event reads these back, so a row still saving shows as pending. */
 	pendingMembersForEvent(eventId: string): Set<string>;
 	/** The in-flight values for an event's members; a pending clear has no entry. */

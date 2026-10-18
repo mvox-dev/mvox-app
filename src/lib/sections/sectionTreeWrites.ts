@@ -7,7 +7,7 @@ import {
 	SectionReparentPartialError
 } from './sectionErrors';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
-import type { MemberParentValue } from './sectionMembership';
+import type { EntuSearchResponse, ParentValue } from '$lib/entu/wireTypes';
 
 // A broken stream on an already-failing response must not mask the status the caller needs.
 async function bodyTextOf(res: Response): Promise<string> {
@@ -36,13 +36,8 @@ export async function renumberDisplayOrder(
 
 export const reorderSections = renumberDisplayOrder;
 
-interface CountBody {
-	count?: number;
-	entities?: unknown[];
-}
-
 async function countOf(res: Response): Promise<number> {
-	const body = (await res.json()) as CountBody;
+	const body = (await res.json()) as EntuSearchResponse;
 	return body.count ?? body.entities?.length ?? 0;
 }
 
@@ -89,7 +84,7 @@ export async function reparentSection(
 	if (!getRes.ok) {
 		throw new SectionReparentPartialError('reparent', 0, 0, getRes.status, await bodyTextOf(getRes));
 	}
-	const body = (await getRes.json()) as { entity?: { _parent?: MemberParentValue[] } };
+	const body = (await getRes.json()) as { entity?: { _parent?: ParentValue[] } };
 	const existing = body.entity?._parent ?? [];
 
 	if (existing.length !== 1) {

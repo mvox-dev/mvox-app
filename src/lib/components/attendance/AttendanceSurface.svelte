@@ -6,25 +6,18 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import type { AgendaItem } from '$lib/agenda/types';
 	import type { AttendanceStatus } from '$lib/attendance/attendanceData';
+	import type { AttendanceEntry } from '$lib/attendance/attendanceChangeQueue';
+	import type { RsvpEntry } from '$lib/rsvp/rsvpChangeQueue';
 	import type { RosterRow } from '$lib/roster/rosterData';
 	import SegmentedPill from '$lib/components/SegmentedPill.svelte';
 	import PersonName from '$lib/components/PersonName.svelte';
 	import { writesAvailable } from '$lib/net/online';
 
-	interface AttendanceEntryLite {
-		attendanceId: string;
-		status: AttendanceStatus;
-	}
-	interface RsvpEntryLite {
-		rsvpId: string;
-		status: string;
-	}
-
 	interface Props {
 		item: AgendaItem;
 		members?: RosterRow[];
-		attendanceByMemberId?: Record<string, AttendanceEntryLite>;
-		rsvpByMemberId?: Record<string, RsvpEntryLite>;
+		attendanceByMemberId?: Record<string, AttendanceEntry>;
+		rsvpByMemberId?: Record<string, RsvpEntry>;
 		loading?: boolean;
 		error?: boolean;
 		pendingMemberIds?: ReadonlySet<string>;
