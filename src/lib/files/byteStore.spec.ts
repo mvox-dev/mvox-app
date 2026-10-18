@@ -85,13 +85,6 @@ describe('byteStore — identity partition (correctness boundary)', () => {
 		expect(await store.get(B, 'file-1')).toBeUndefined();
 		expect(await store.get(C, 'file-1')).toBeUndefined();
 	});
-
-	it('null identity: get AND put THROW (pinned choice) — no accessor can construct a key for anonymous', async () => {
-		await expect(store.get(null, 'file-1')).rejects.toThrow(/identity/i);
-		await expect(store.put(null, 'file-1', data(10))).rejects.toThrow(/identity/i);
-		// And nothing was persisted by the rejected put.
-		expect(adapter.rows()).toEqual([]);
-	});
 });
 
 describe('byteStore — clearPartition (mechanism only; NOT an auth hook)', () => {

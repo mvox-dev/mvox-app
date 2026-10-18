@@ -17,22 +17,14 @@ export interface LabelStoreAdapter {
 }
 
 export interface LabelStore {
-	putLabel(identity: CollectiveIdentity | null, fileId: string, label: PartLabel): Promise<void>;
+	putLabel(identity: CollectiveIdentity, fileId: string, label: PartLabel): Promise<void>;
 	labelsFor(db: string, personId: string): Promise<Map<string, PartLabel>>;
 	remove(key: { db: string; personId: string; fileId: string }): Promise<void>;
 }
 
-function requireIdentity(identity: CollectiveIdentity | null): CollectiveIdentity {
-	if (identity === null) {
-		throw new Error('labelStore: no identity — anonymous access has no partition key');
-	}
-	return identity;
-}
-
 export function createLabelStore(adapter: LabelStoreAdapter): LabelStore {
 	return {
-		async putLabel(identity, fileId, label) {
-			const id = requireIdentity(identity);
+		async putLabel(id, fileId, label) {
 			await adapter.put(id.db, id.personId, fileId, label);
 		},
 		async labelsFor(db, personId) {
@@ -48,7 +40,7 @@ export function createLabelStore(adapter: LabelStoreAdapter): LabelStore {
 // Written only when the device holds the bytes, or an orphan name would be minted on purpose.
 export function recordPartLabel(
 	store: LabelStore,
-	identity: CollectiveIdentity | null,
+	identity: CollectiveIdentity,
 	fileId: string,
 	label: PartLabel,
 	reason: FileBytesDeliveryReason

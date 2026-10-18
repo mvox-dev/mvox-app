@@ -47,9 +47,9 @@ export interface ByteStoreMeta extends ByteStoreKey {
 }
 
 export interface ByteStore {
-	get(identity: CollectiveIdentity | null, fileId: string): Promise<StoredFileRecord | undefined>;
+	get(identity: CollectiveIdentity, fileId: string): Promise<StoredFileRecord | undefined>;
 	put(
-		identity: CollectiveIdentity | null,
+		identity: CollectiveIdentity,
 		fileId: string,
 		data: { bytes: ArrayBuffer; filetype: string; sha256: string }
 	): Promise<void>;

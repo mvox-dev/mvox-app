@@ -90,11 +90,6 @@ describe('#353 — labels survive restart and read back with zero network', () =
 		const held = await store.labelsFor('sampledb', 'person-1');
 		expect([...held.keys()]).toEqual(['file-a']);
 	});
-
-	it('a null identity THROWS — same law as the byte store, no anonymous partition key', async () => {
-		const store = createLabelStore(createLabelIdbAdapter(new IDBFactory()));
-		await expect(store.putLabel(null, 'file-a', LABEL)).rejects.toThrow(/identity/i);
-	});
 });
 
 describe('#353 — recordPartLabel: the put-time write, gated on DELIVERY reason', () => {

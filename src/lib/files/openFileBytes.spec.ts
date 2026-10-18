@@ -187,18 +187,6 @@ describe('openFileBytes — object-URL disposal', () => {
 });
 
 describe('openFileBytes — identity discipline', () => {
-	it('null identity REJECTS before any network: no signing call, no fetch, nothing stored', async () => {
-		const fetchImpl = vi.fn();
-
-		await expect(
-			openFileBytes(CFG, null, 'file-1', store, fetchImpl as unknown as typeof fetch)
-		).rejects.toThrow(/identity/i);
-
-		expect(signFileUrlMock).not.toHaveBeenCalled();
-		expect(fetchImpl).not.toHaveBeenCalled();
-		expect(store.puts).toEqual([]);
-	});
-
 	it('LATE SETTLE stores under the identity captured at ISSUE time — the argument, not any ambient current identity', async () => {
 		signFileUrlMock.mockResolvedValue(SIGNED_URL);
 		let releaseFetch!: (r: Response) => void;

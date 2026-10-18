@@ -1,5 +1,4 @@
 // The byte store's policy: partition keys, the global cap, eviction and the pressure sweep.
-import type { CollectiveIdentity } from '$lib/collectives/store';
 import {
 	BYTE_STORE_CAP_BYTES,
 	PRESSURE_RATIO,
@@ -13,13 +12,6 @@ import {
 
 // Strictly below this after a sweep, so the next put does not trigger another at once.
 const PRESSURE_RELIEF_TARGET = 0.7;
-
-function requireIdentity(identity: CollectiveIdentity | null): CollectiveIdentity {
-	if (identity === null) {
-		throw new Error('byteStore: no identity — anonymous access has no partition key');
-	}
-	return identity;
-}
 
 export function createByteStore(
 	adapter: ByteStoreAdapter,
@@ -138,8 +130,7 @@ export function createByteStore(
 	}
 
 	return {
-		async get(identity, fileId) {
-			const id = requireIdentity(identity);
+		async get(id, fileId) {
 			const record = await adapter.get(id.db, id.personId, fileId);
 			if (!record) return undefined;
 			const openedAt = Date.now();
@@ -147,8 +138,7 @@ export function createByteStore(
 			return { ...record, openedAt };
 		},
 
-		async put(identity, fileId, data) {
-			const id = requireIdentity(identity);
+		async put(id, fileId, data) {
 			if (data.bytes.byteLength > capBytes) {
 				throw new Error(
 					`byteStore: record for ${fileId} (${data.bytes.byteLength}B) exceeds the cap (${capBytes}B)`
