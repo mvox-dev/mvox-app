@@ -1,5 +1,5 @@
 // The `feedback` type in the schema of record: a child of member, created by the member, with the
-// type and all four fields explicitly domain-shared. Its narrative lives in the extensions doc.
+// type and all five fields explicitly domain-shared. Its narrative lives in the extensions doc.
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -53,6 +53,16 @@ const EXPECTED_FEEDBACK_DEF = {
 			descriptionEn: 'The page the feedback was given on: route path, time, app version, locale and viewport size, as JSON.',
 			descriptionEt: 'Leht, mille kohta tagasiside anti: aadress, aeg, rakenduse versioon, keel ja vaate mõõdud JSON-vormingus.',
 			ordinal: 4
+		},
+		{
+			name: 'issue_url',
+			type: 'string',
+			list: true,
+			sharing: 'domain',
+			required: false,
+			descriptionEn: 'URL of an issue this feedback led to, on any platform; one value per issue.',
+			descriptionEt: 'Ülesande link, mille see tagasiside kaasa tõi, mis tahes platvormil; üks väärtus ülesande kohta.',
+			ordinal: 5
 		}
 	],
 	creators: [{ kind: 'self' }],
@@ -78,7 +88,8 @@ describe('#395 — feedback in the schema of record', () => {
 			['screenshot', 'domain'],
 			['doodle_layer', 'domain'],
 			['description', 'domain'],
-			['metadata', 'domain']
+			['metadata', 'domain'],
+			['issue_url', 'domain']
 		]);
 	});
 });
@@ -98,7 +109,7 @@ describe('#395 — feedback narrative in docs/architecture/mvox-schema-extension
 		expect(sectionAt).toBeLessThan(additionsAt);
 	});
 
-	it('the section names the four fields, the member parent, the self creator and the commissioning issue', () => {
+	it('the section names the five fields, the member parent, the self creator and the commissioning issue', () => {
 		const start = doc.indexOf('### `feedback`');
 		expect(start).toBeGreaterThan(-1);
 		const rest = doc.slice(start + 1);
@@ -109,6 +120,7 @@ describe('#395 — feedback narrative in docs/architecture/mvox-schema-extension
 			'`doodle_layer`',
 			'`description`',
 			'`metadata`',
+			'`issue_url`',
 			'`member`',
 			'self',
 			'https://github.com/mvox-dev/mvox-app/issues/395'

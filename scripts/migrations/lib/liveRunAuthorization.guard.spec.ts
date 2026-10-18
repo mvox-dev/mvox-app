@@ -28,7 +28,8 @@ const CREDE_MUTATING_SCRIPTS = [
 	'seed-282-id-code-propdef-crede-2026-09-07.ts',
 	'seed-293-crede-season-repertoire-2026-09-08.ts',
 	'seed-395-feedback-type-crede-2026-09-28.ts',
-	'seed-445-person-rsvp-domain-inherit-crede.ts'
+	'seed-445-person-rsvp-domain-inherit-crede.ts',
+	'seed-951-feedback-issue-url-crede-2026-10-18.ts'
 ] as const;
 
 function migrationsDir(): string {

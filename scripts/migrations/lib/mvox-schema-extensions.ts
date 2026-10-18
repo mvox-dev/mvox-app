@@ -25,6 +25,8 @@ export interface PropertySpec {
 	ordinal?: number;
 	table?: boolean;
 	search?: boolean;
+	// Multi-value property: Entu's `list` flag on the prop-def.
+	list?: boolean;
 	// Set on every prop-def: an omitted one inherits the TYPE's tier (#265), which need not match
 	// its sibling fields. Read the siblings' own sharing and set the match explicitly.
 	sharing?: Sharing;
@@ -349,6 +351,16 @@ export const feedback: MvoxEntityDef = {
 			descriptionEn: 'The page the feedback was given on: route path, time, app version, locale and viewport size, as JSON.',
 			descriptionEt: 'Leht, mille kohta tagasiside anti: aadress, aeg, rakenduse versioon, keel ja vaate mõõdud JSON-vormingus.',
 			ordinal: 4
+		},
+		{
+			name: 'issue_url',
+			type: 'string',
+			list: true,
+			sharing: 'domain',
+			required: false,
+			descriptionEn: 'URL of an issue this feedback led to, on any platform; one value per issue.',
+			descriptionEt: 'Ülesande link, mille see tagasiside kaasa tõi, mis tahes platvormil; üks väärtus ülesande kohta.',
+			ordinal: 5
 		}
 	],
 	creators: [{ kind: 'self' }],
