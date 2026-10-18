@@ -59,6 +59,15 @@ deleting or emptying it -- either resets the bookmark, so the next real write ri
 tail-style file (`inject: true`) needs no consuming: the bookmark simply advances, and the file
 may grow forever. Say the habit in the entry's `instruction`, where the session will read it.
 
+**A consumer must take everything a ring announced, or retry by itself.** The ring is growth
+only: a file the consumer leaves as it was never grows again, so it never rings again, and what
+it holds waits until something else writes to the file. esl-suvekool met this on its first live
+ring (2026-10-16): its consumer waits 10 s before taking fresh courier mail, the ring came inside
+those 10 s, and the message stayed until a hand-run. Its fix is a model: when mail is too fresh,
+or the harness holds the lock, wait once and pass again; if something is still left, say so
+(a non-zero exit, a printed line) instead of returning quietly. A consumer that takes everything
+at once, as the household's does, is not exposed.
+
 A ring reads `[hub mail] /home/u/kit/comms/inboxes/team-lead.json grew. consume the inbox or new
 messages won't land` -- with `inject`, the new lines follow, one per line.
 

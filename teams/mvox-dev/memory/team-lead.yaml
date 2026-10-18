@@ -5,8 +5,8 @@
 
 current:
   - label: WIP
-    record: "Queue empty after PR #949 (#948); open #390, #333 carry no ready label"
-    ref: "2026-10-18"
+    record: "Queue: #959 > #955 > #954 > #956 > #957 > epic #962 > epic #963 (#958 merged 6e6f9be5)"
+    ref: scratchpad/findings-session.md
   - label: WIP
     record: "GATE 3 done 2026-10-15: fallback deleted (git: fd701a4c); adoption closed"
     ref: teams/mvox-dev/memory-adoption/05-debt.md

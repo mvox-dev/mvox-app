@@ -42,10 +42,24 @@ plugin API (early access; the API moves between releases).
   names get 9 chars + `…`), a colour-coded model letter, and the context weight such as
   `127k/1M`. The letters are F = Fable, O = Opus, S = Sonnet, H = Haiku, and a dim `·` when the model is unknown.
   One more line per live subagent or teammate follows, in the same name and model columns,
-  then its context load (dimmed unless running). The load is the latest model step's input,
-  cache read, cache write and output tokens added together. It reads `84k/1M` when the agent
+  then its context load (dimmed unless running). The load is the latest model step's input side:
+  input, cache read and cache write tokens added together, output left out, as Claude Code
+  computes the status line's `used_percentage` (since 0.6.0; output was added before). It reads `84k/1M` when the agent
   runs on the main loop's model, whose window the session reports, and `84k` alone otherwise:
   windows are never guessed. An agent with no step seen yet shows a dim `·` and no load.
+  One more line per running workflow follows (since 0.6.0): its name in the name column, a `≡`
+  where the model letter stands, the current phase, and agents done/started, for example
+  `pane-live… ≡ Finish 2/3`. The line shows while one of the run's agents works and goes when
+  the last finishes. `$.agent.list()` leaves a workflow's agents out, so the pane counts them
+  itself: `agent.spawn` tags each with its run id (`e.workflow.runId`) and `turn.complete` names
+  the one that finished. "Started" counts the agents started so far: a run announces no total.
+  - The phase is read from the run's journal,
+    `<config>/projects/<cwd slug>/<session id>/subagents/workflows/<run id>/journal.jsonl`
+    (the `phase` of its last `started` entry). That file is Claude Code's own and undocumented:
+    when it cannot be read, the label of the latest started agent gives the phase by convention,
+    the part before its first colon (`Review:bugs` -> `Review`); a label without a colon gives none.
+  - The name is the saved script's, `<session dir>/workflows/scripts/<name>-<run id>.js`. A run
+    started again from a saved script keeps the first run's file name, so it shows its run id.
 - **Footer figures are never cut.** The pane knows its width from the harness
   (`e.props.bodyColumns`). The footer subtracts its padding (one column each side) and shows `used/window`
   only when the whole line fits, otherwise `used` alone. Its lines wrap rather than truncate, so
@@ -192,7 +206,9 @@ Or for one session only: `claude --plugin-dir ./memory-kit/adapters/claude-code/
 Options (`userConfig`):
 
 - `agentName` is the footer name of the main agent. Left empty, the footer uses the working
-  directory's name.
+  directory's name. A home's own `agent_name:` in its `memory-kit.conf` wins over it (gh#4):
+  plugin options are read from user settings only, so on a box with several homes each one
+  names itself there.
 - `memoryDir` points the pane at a home's memory directory (see Data source). **Set user-wide, it
   applies to every session on the machine**: prefer a `kit_home` pointer conf, which also wins
   over this option.

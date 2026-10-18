@@ -4,7 +4,7 @@
 // owed_to, since, check, expires, ref}]). URL tier: memory-kit/types/memory-urls.ts
 // (memory/urls/<name>, one URL on line 1).
 
-import type { AgentLoad, ObligationRow, PaneAgent } from '../types'
+import type { AgentLoad, ObligationRow, PaneAgent, WorkflowRun } from '../types'
 
 // ---------------------------------------------------------------------------------------------
 // Parsing: a small strict parser for exactly the obligations shape. The mod environment has no
@@ -346,6 +346,15 @@ export function parentDir(path: string): string {
 /** Reads `memory_dir:` from a kit home's memory-kit.conf; undefined when absent. */
 export function memoryDirOf(conf: string): string | undefined {
   return confValue(conf, 'memory_dir')
+}
+
+/**
+ * The main agent's footer name (gh#4): the home's `agent_name:`, else the agentName option,
+ * else the folder's name. The home wins because plugin options are user-wide: a box with
+ * several homes needs each to name itself.
+ */
+export function selfName(conf: string, option: string, cwd: string): string {
+  return confValue(conf, 'agent_name') ?? (option || basename(cwd))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -714,9 +723,12 @@ export type StepUsage = {
   model: string
 }
 
-/** A loop's context load after a step: everything the request read plus what it wrote. */
+/**
+ * A loop's context load after a step: the request's input side (uncached, cache read and cache
+ * write), as Claude Code computes the status line's used_percentage. Output is left out (0.6.0).
+ */
 export function contextLoad(u: StepUsage): number {
-  return u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens + u.output_tokens
+  return u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens
 }
 
 /**
@@ -747,6 +759,9 @@ export const FOOTER_CHROME = 2
 
 export const RULE_COLOR = '#b8a24a'
 
+/** The workflow mark (≡) on a footer line, where an agent's model letter stands. */
+export const WORKFLOW_FG = '#1f1b3a'
+
 /**
  * The figure a footer line can show in `available` columns: `used/window` when the whole line
  * (name 10, space, letter, space, figure) fits, else `used` alone. Never cut inside the figure.
@@ -768,4 +783,98 @@ export function wheelStep(by: number, now: number, lastStep: number | undefined)
   // A clock that went backwards (a reset) starts a fresh burst.
   if (by === 0 || (gap >= 0 && gap < WHEEL_THROTTLE_MS)) return { delta: 0, lastStep }
   return { delta: Math.sign(by), lastStep: now }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Workflow runs. A workflow's agents are not in $.agent.list(): agent.spawn tags them with the
+// run id, turn.complete names the one that finished. The phase and the name are read from the
+// files Claude Code keeps for a run (undocumented, so a miss falls back, never fails).
+
+/** Runs kept at most; finished ones are dropped oldest first, live ones never. */
+export const MAX_RUNS = 20
+
+function emptyRun(): WorkflowRun {
+  return { name: '', phase: '', label: '', started: [], done: [] }
+}
+
+/** Drops the oldest finished runs while there are more than MAX_RUNS. Key order is start order. */
+function pruneRuns(runs: Record<string, WorkflowRun>): Record<string, WorkflowRun> {
+  const ids = Object.keys(runs)
+  let excess = ids.length - MAX_RUNS
+  if (excess <= 0) return runs
+  const out: Record<string, WorkflowRun> = {}
+  for (const id of ids) {
+    const run = runs[id]!
+    if (excess > 0 && run.done.length >= run.started.length) {
+      excess--
+      continue
+    }
+    out[id] = run
+  }
+  return out
+}
+
+/** Records a workflow agent's start: counted as started, its label the latest. */
+export function recordWorkflowSpawn(
+  runs: Readonly<Record<string, WorkflowRun>>,
+  runId: string,
+  agentId: string,
+  label: string,
+): Record<string, WorkflowRun> {
+  const run = runs[runId] ?? emptyRun()
+  if (run.started.includes(agentId)) return { ...runs }
+  return pruneRuns({ ...runs, [runId]: { ...run, label, started: [...run.started, agentId] } })
+}
+
+/** Records an agent's finish in the run that started it; any other agent changes nothing. */
+export function recordWorkflowDone(runs: Readonly<Record<string, WorkflowRun>>, agentId: string): Record<string, WorkflowRun> {
+  for (const [id, run] of Object.entries(runs)) {
+    if (run.started.includes(agentId) && !run.done.includes(agentId)) {
+      return { ...runs, [id]: { ...run, done: [...run.done, agentId] } }
+    }
+  }
+  return { ...runs }
+}
+
+/** Runs with an agent still working, in start order. */
+export function liveWorkflows(runs: Readonly<Record<string, WorkflowRun>>): Array<[string, WorkflowRun]> {
+  return Object.entries(runs).filter(([, run]) => run.done.length < run.started.length)
+}
+
+/** The label convention's phase: the part before the first colon ('' without one). */
+export function labelPhase(label: string): string {
+  const at = label.indexOf(':')
+  return at < 0 ? '' : label.slice(0, at).trim()
+}
+
+/** The phase of the last `started` entry in a run's journal.jsonl that names one; '' if none. */
+export function journalPhase(text: string): string {
+  let phase = ''
+  for (const line of text.split('\n')) {
+    if (!line.includes('"started"')) continue
+    try {
+      const entry = JSON.parse(line) as { type?: unknown; phase?: unknown }
+      if (entry.type === 'started' && typeof entry.phase === 'string' && entry.phase !== '') phase = entry.phase
+    } catch {
+      // A torn or foreign line: skip it.
+    }
+  }
+  return phase
+}
+
+/** The run's name from its saved script `<name>-<runId>.js`; '' when no file matches. */
+export function workflowNameOf(fileNames: readonly string[], runId: string): string {
+  const suffix = `-${runId}.js`
+  const file = fileNames.find(f => f.endsWith(suffix) && f.length > suffix.length)
+  return file === undefined ? '' : file.slice(0, -suffix.length)
+}
+
+/** Claude Code's folder name for a project: every character but a letter or digit becomes '-'. */
+export function projectSlug(cwd: string): string {
+  return cwd.replace(/[^A-Za-z0-9]/g, '-')
+}
+
+/** What a workflow line shows after the name: the phase (when known), then done/started. */
+export function workflowTail(phase: string, done: number, started: number): string {
+  return [phase, `${done}/${started}`].filter(p => p !== '').join(' ')
 }

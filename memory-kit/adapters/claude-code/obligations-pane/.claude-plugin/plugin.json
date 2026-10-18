@@ -1,6 +1,6 @@
 {
   "name": "obligations-pane",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Side pane showing the memory-kit obligations tier (memory/obligations.yaml), soonest expiry first; read-only",
   "author": {
     "name": "Mihkel Putrin\u0161"
@@ -10,7 +10,7 @@
     "agentName": {
       "type": "string",
       "title": "Agent name",
-      "description": "The name the footer shows for this session's main agent. Empty uses the working directory's name.",
+      "description": "The name the footer shows for this session's main agent. A home's agent_name: in its memory-kit.conf wins over it. Empty uses the working directory's name.",
       "default": ""
     },
     "memoryDir": {

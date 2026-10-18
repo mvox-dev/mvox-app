@@ -8,7 +8,6 @@ import type { ObligationRow, PaneAgent, PaneSnapshot } from '../types'
 import { resolveKitHome } from './kit-home'
 import {
   actorColor,
-  basename,
   cachedCheck,
   clampIndex,
   confValue,
@@ -26,6 +25,14 @@ import {
   HEADER_BG,
   HEADER_FG,
   isAbsolutePath,
+  journalPhase,
+  labelPhase,
+  liveWorkflows,
+  projectSlug,
+  recordWorkflowDone,
+  recordWorkflowSpawn,
+  workflowNameOf,
+  workflowTail,
   isFresh,
   isoDate,
   kitLabel,
@@ -34,6 +41,7 @@ import {
   liveAgents,
   MODEL_COLORS,
   memoryDirOf,
+  selfName,
   modelLetter,
   newestRelease,
   offsetFromZ,
@@ -53,6 +61,7 @@ import {
   urlNamesOf,
   urlOfFile,
   wheelStep,
+  WORKFLOW_FG,
 } from './obligations'
 import type { Segment } from './obligations'
 
@@ -66,6 +75,7 @@ const models = atom({ plugin: 'obligations-pane', key: 'models' } as const, {})
 const loads = atom({ plugin: 'obligations-pane', key: 'loads' } as const, {})
 const mainModel = atom({ plugin: 'obligations-pane', key: 'mainModel' } as const, '')
 const startCwd = atom({ plugin: 'obligations-pane', key: 'startCwd' } as const, '')
+const workflows = atom({ plugin: 'obligations-pane', key: 'workflows' } as const, {})
 
 /** The pane's userConfig, trimmed. */
 export type Settings = { agentName: string; memoryDir: string; checkUpdates: boolean }
@@ -233,7 +243,7 @@ export async function refresh($: EngineInterface, settings: Settings): Promise<v
     ...('problem' in found ? { kitVersion: '', upstreamUrl: '', latest: '' } : await kitOf($, cwd, root, checkUpdates, pointed)),
     now,
     offsetMinutes: await offsetOf($, now),
-    self: { name: agentName || basename(cwd), model, tokens, window },
+    self: { name: selfName(conf, agentName, cwd), model, tokens, window },
     agents: liveAgents(agents),
   }
   await $.state.set({ plugin: 'obligations-pane', key: 'snapshot' }, value)
@@ -313,6 +323,48 @@ async function refreshAll($: EngineInterface, settings: Settings): Promise<void>
   void safeCheck($)
 }
 
+/**
+ * The session's folder under Claude Code's projects directory, where it keeps each workflow run's
+ * journal and saved script (undocumented layout: any miss leaves the phase and name to fall back).
+ */
+async function sessionDir($: EngineInterface): Promise<string> {
+  const config = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${(await $.env.get('HOME')) ?? ''}/.claude`
+  const cwd = (await read($, startCwd)) || (await $.session.cwd())
+  return `${config}/projects/${projectSlug(cwd)}/${await $.session.id()}`
+}
+
+/** Reads each live run's phase (journal) and, until found, its name (saved script). Never throws. */
+async function refreshWorkflows($: EngineInterface): Promise<void> {
+  try {
+    const live = liveWorkflows(await read($, workflows))
+    if (live.length === 0) return
+    const dir = await sessionDir($)
+    let scripts: string[] | undefined
+    for (const [runId, run] of live) {
+      let phase = run.phase
+      try {
+        phase = journalPhase(await $.fs.read(`${dir}/subagents/workflows/${runId}/journal.jsonl`))
+      } catch {
+        // No journal (yet): the label fallback stands.
+      }
+      let name = run.name
+      if (name === '') {
+        try {
+          scripts ??= (await $.fs.list(`${dir}/workflows/scripts`)).map(entry => entry.name)
+          name = workflowNameOf(scripts, runId)
+        } catch {
+          scripts = []
+        }
+      }
+      if (phase !== run.phase || name !== run.name) {
+        await update($, workflows, w => (w[runId] === undefined ? w : { ...w, [runId]: { ...w[runId], phase, name } }))
+      }
+    }
+  } catch (err) {
+    $.ui.log(`obligations-pane: workflow refresh failed: ${String(err)}`, { to: 'debug' })
+  }
+}
+
 export const register: Register = (on, options) => {
   const settings: Settings = {
     agentName: typeof options.agentName === 'string' ? options.agentName.trim() : '',
@@ -346,7 +398,10 @@ export const register: Register = (on, options) => {
 
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
+    const agentId = e.agentId
+    if (agentId !== undefined) await update($, workflows, w => recordWorkflowDone(w, agentId))
     await refreshAll($, settings)
+    await refreshWorkflows($)
     return done
   })
 
@@ -373,6 +428,11 @@ export const register: Register = (on, options) => {
     const id = result.agentId
     if (result.deny === undefined && id !== undefined) {
       await update($, models, m => ({ ...m, [id]: result.model }))
+      const runId = e.workflow?.runId
+      if (runId !== undefined && runId !== '') {
+        await update($, workflows, w => recordWorkflowSpawn(w, runId, id, e.description))
+        await refreshWorkflows($)
+      }
       await safeRefresh($, settings)
     }
     return result
@@ -392,6 +452,7 @@ export const register: Register = (on, options) => {
     const snap = await read($, snapshot)
     const at = await read($, index)
     const agentLoads = await read($, loads)
+    const runs = liveWorkflows(await read($, workflows))
     const mainId = await read($, mainModel)
     const rows = e.props.scroll.bodyRows
 
@@ -520,6 +581,15 @@ export const register: Register = (on, options) => {
             const weight = subagentWeight(load, mainId !== '' ? mainId : snap.self.model, snap.self.window)
             return agentLine(`agent-${a.id}`, a.name, model, weight, a.status !== 'running')
           })}
+          {runs.map(([runId, run]) => (
+            <Text key={`wf-${runId}`} color={DATE_FG} wrap="wrap">
+              {fitName(run.name !== '' ? run.name : runId)}{' '}
+              <Text bold color={WORKFLOW_FG}>
+                ≡
+              </Text>{' '}
+              {workflowTail(run.phase !== '' ? run.phase : labelPhase(run.label), run.done.length, run.started.length)}
+            </Text>
+          ))}
         </Box>
       </Box>
     )
