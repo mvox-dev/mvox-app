@@ -40,8 +40,7 @@ function createFakeLabelStore() {
 		seed(db: string, personId: string, fileId: string, label: PartLabel) {
 			map.set(key(db, personId, fileId), label);
 		},
-		async putLabel(identity: { db: string; personId: string } | null, fileId: string, label: PartLabel) {
-			if (identity === null) throw new Error('label store: no identity');
+		async putLabel(identity: { db: string; personId: string }, fileId: string, label: PartLabel) {
 			map.set(key(identity.db, identity.personId, fileId), label);
 		},
 		async labelsFor(db: string, personId: string) {

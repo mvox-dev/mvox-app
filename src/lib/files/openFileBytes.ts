@@ -80,18 +80,14 @@ async function readStored(store: ByteStore, identity: CollectiveIdentity, fileId
 }
 
 // `identity` is captured when the request is issued, never read from a global.
-/** The cache is never a gate: only no identity, a non-OK response or a failed sign throws. */
+/** The cache is never a gate: only a non-OK response or a failed sign throws. */
 export async function openFileBytes(
 	cfg: EntuCfg,
-	identity: CollectiveIdentity | null,
+	identity: CollectiveIdentity,
 	fileId: string,
 	store: ByteStore,
 	fetchImpl: typeof fetch = fetch
 ): Promise<OpenedFileBytes> {
-	if (identity === null) {
-		throw new Error('openFileBytes: no identity — anonymous access has no partition key');
-	}
-
 	const hit = await readStored(store, identity, fileId);
 	if (hit) {
 		return mint(fileId, new Blob([hit.bytes], { type: hit.filetype }), 'cache');
