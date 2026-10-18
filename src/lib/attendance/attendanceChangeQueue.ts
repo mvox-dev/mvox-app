@@ -1,11 +1,8 @@
 // The attendance optimistic write queue: one write per (event, member) tap.
 import { applyAttendanceChange, type AttendanceChangeInput } from './attendanceOptimistic';
-import type { AttendanceStatus } from './attendanceData';
+import type { AttendanceEntry } from './attendanceData';
 
-export interface AttendanceEntry {
-	attendanceId: string;
-	status: AttendanceStatus;
-}
+export type { AttendanceEntry };
 
 export interface AttendanceChangeCallbacks {
 	/** Apply the optimistic value for exactly this event+member, synchronously. */

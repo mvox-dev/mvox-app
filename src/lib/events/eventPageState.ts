@@ -10,7 +10,7 @@ import type { createEvent } from '$lib/entity/entityCreate';
 import type { findMyMemberId, findMyRsvpForEvent } from '$lib/rsvp/rsvpData';
 import type { createRsvpChangeQueue } from '$lib/rsvp/rsvpChangeQueue';
 import type {
-	AttendanceStatus,
+	AttendanceByMemberId,
 	attendanceByMemberId,
 	listAllRsvpsForEvent,
 	listAttendance
@@ -98,7 +98,7 @@ export interface EventPageState {
 	pickableWorksVisible: boolean | undefined;
 	scheduleRows: ScheduleItem[];
 	scheduleLoaded: boolean;
-	attendanceMap: Record<string, { attendanceId: string; status: AttendanceStatus }>;
+	attendanceMap: AttendanceByMemberId;
 }
 
 export function createEventPageState(): EventPageState {

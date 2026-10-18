@@ -4,9 +4,9 @@ import type { CollectiveIdentity } from '$lib/collectives/store';
 import type { RosterRow } from '$lib/roster/rosterData';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { AgendaItem } from '$lib/agenda/types';
-import type { AttendanceStatus, MyAttendance } from '$lib/attendance/attendanceData';
+import type { MyAttendance } from '$lib/attendance/attendanceData';
 import type { AttendanceEntry } from '$lib/attendance/attendanceChangeQueue';
-import type { AttendanceRsvpMap } from '$lib/attendance/attendancePanelLoad';
+import type { AttendanceMap, AttendanceRsvpMap } from '$lib/attendance/attendancePanelLoad';
 import type { ManageRightsState, WorkRow } from '$lib/repertoire/types';
 import type { RepertoireItem } from '$lib/repertoire/repertoireData';
 import type { RsvpByEventId } from '$lib/rsvp/rsvpData';
@@ -73,7 +73,7 @@ export function createAgendaLoadState() {
 		attendanceError: false,
 		attendanceRoster: [] as RosterRow[],
 		attendanceRosterPartial: false,
-		attendanceMap: {} as Record<string, { attendanceId: string; status: AttendanceStatus }>,
+		attendanceMap: {} as AttendanceMap,
 		attendanceRsvpMap: {} as AttendanceRsvpMap,
 		attendancePendingMemberIds: new Set() as Set<string>,
 		attendanceFailedMemberIds: new Set() as Set<string>,

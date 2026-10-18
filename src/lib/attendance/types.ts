@@ -3,13 +3,13 @@
 import type { AgendaItem } from '$lib/agenda/types';
 import type { AttendanceStatus } from '$lib/attendance/attendanceData';
 import type { RosterRow } from '$lib/roster/rosterData';
-import type { AttendanceRsvpMap } from '$lib/attendance/attendancePanelLoad';
+import type { AttendanceMap, AttendanceRsvpMap } from '$lib/attendance/attendancePanelLoad';
 
 // One prop, not a dozen: AgendaList alone knows which recent row owns the open panel.
 export interface AttendancePanel {
 	item: AgendaItem;
 	members: RosterRow[];
-	attendanceByMemberId: Record<string, { attendanceId: string; status: AttendanceStatus }>;
+	attendanceByMemberId: AttendanceMap;
 	rsvpByMemberId: AttendanceRsvpMap;
 	loading: boolean;
 	error: boolean;
