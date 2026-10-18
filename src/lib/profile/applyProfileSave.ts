@@ -26,6 +26,7 @@ export interface ApplyProfileSaveResult {
 	profileId: string;
 }
 
+// Rejects on any failure, never swallows, so the queue's fail-loud path always fires.
 export async function applyProfileSave(
 	input: ApplyProfileSaveInput,
 	fetchImpl: typeof fetch = fetch

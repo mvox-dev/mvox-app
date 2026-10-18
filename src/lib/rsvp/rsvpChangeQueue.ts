@@ -2,8 +2,9 @@ import { applyRsvpChange } from './rsvpOptimistic';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { MyRsvp, RsvpEntry, RsvpStatus } from './rsvpData';
 
-// One RSVP write per event (#15): the caller disables the event's control while it is in
-// flight, and every callback is per-event, so a failed write never reverts another event.
+// One RSVP write per event (#15). The caller disables the event's control in flight: a second
+// tap would write against the '__optimistic__' placeholder and 404 (AgendaList.spec.ts tests it).
+// Every callback is per-event, so a failed write never reverts another event.
 
 export type { RsvpEntry };
 
@@ -46,8 +47,7 @@ export function createRsvpChangeQueue(callbacks: RsvpChangeCallbacks): RsvpChang
 				newStatus !== null ? { rsvpId: existing?.rsvpId ?? '__optimistic__', status: newStatus } : null;
 			callbacks.setOptimistic(eventId, optimisticEntry);
 
-			// Only the create path needs a member id; with nothing to resolve, the write is
-			// dispatched synchronously, adding no microtask to the normal path.
+			// Only the create path needs a member id; nothing to resolve keeps the write synchronous.
 			const needsLookup = !existing && newStatus !== null && memberId === null && !!resolveMemberId;
 			const write = needsLookup
 				? resolveMemberId!().then((resolved) =>
