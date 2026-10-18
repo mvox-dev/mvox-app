@@ -106,15 +106,15 @@ fi
 
 ### Phase 5: Spawn
 
-Spawn order:
+Spawn nobody at startup (Mihkel 2026-10-18). Spawn each member only when work needs them:
 
-1. **finn** + **bentham** (parallel — intros are independent)
+1. **finn** (per research task) and **bentham** (per review wave)
 2. **josquin-<N>** — one fresh implementer per issue, spawned from `~/workspace/scratchpad/brief-<N>.md` when the issue is picked up
 3. **comenius** (only if i18n work is needed this session)
 4. **victoria** (only if requirements analysis is needed this session)
 5. **perotin** (only if seeding / data refresh / write-probe / data-quality work is needed this session — on-demand specialist)
 
-No intro wait: implementers are spawned fresh per issue from a brief; they do not wait for finn or bentham to intro.
+Implementers do not wait for finn or bentham to intro.
 
 **Before each spawn:** Check `config.json` for existing members with the same name.
 - If agent already registered → `SendMessage` with the new task. Do NOT re-spawn.
