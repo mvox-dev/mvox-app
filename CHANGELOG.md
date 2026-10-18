@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.1.0-alpha.18 -- 2026-10-18 -- the pane names its home and lists workflows
+
+Plugin versions this release: obligations-pane 0.6.0 (watch 0.5.0 and kit-update 0.3.1 unchanged).
+
+No data step.
+
+- **The home names its main agent** (gh#4): `agent_name:` in the home's `memory-kit.conf` wins
+  over the pane's `agentName` option, which wins over the folder's name. Plugin options are read
+  from user settings only, so a box with several homes could not name each one; the conf can.
+- **Running workflows in the footer:** one line per run -- name, current phase, agents
+  done/started (e.g. "pane-live = Finish 2/3"); cleared when the run completes.
+- **Subagent load counts the input side only**, as Claude Code's `used_percentage` does, so
+  every figure in the footer means the same.
+- watch README: a consumer must take everything a ring announced, or retry (esl-suvekool 16.10).
+- **Checked:** 113 pane, 64 watch and 57 kit-update tests; the workflow line live in a session.
+- **The household runs it first.**
+
 ## v0.1.0-alpha.17 -- 2026-10-16 -- the watch becomes a doorbell
 
 Plugin versions this release: watch 0.5.0, obligations-pane 0.5.1, kit-update 0.3.1.
