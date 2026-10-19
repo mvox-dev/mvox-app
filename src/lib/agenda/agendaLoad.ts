@@ -1,5 +1,6 @@
 // Agenda data load: the page owns the state object and every write; reads from modules that
 // also write reach this file through `deps`, so the write-gate fence still sees them in the page.
+import { createLatest } from '$lib/async/latest';
 import type { CollectiveIdentity } from '$lib/collectives/store';
 import type { RosterRow } from '$lib/roster/rosterData';
 import type { SectionNode } from '$lib/sections/sectionData';
@@ -94,10 +95,10 @@ export type AgendaLoadState = ReturnType<typeof createAgendaLoadState>;
 export function createLoadCounters() {
 	return {
 		panelRepertoireSeasonId: null as string | null,
-		requestId: 0,
+		request: createLatest(),
 		pressureSweepRanAtOpen: false,
-		worksLoadId: 0,
-		scheduleLoadId: 0,
+		worksLoad: createLatest(),
+		scheduleLoad: createLatest(),
 	};
 }
 

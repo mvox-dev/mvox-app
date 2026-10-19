@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { createLatest } from '$lib/async/latest';
 	import ListOfStuff from '$lib/components/ListOfStuff.svelte';
 	import { reportProblem } from '$lib/problems/reportProblem';
 	import FormError from '$lib/components/FormError.svelte';
@@ -49,12 +50,12 @@
 	}
 
 	// On a cold load this mounts before hydrateAuth resolves: wait out 'loading' and
-	// reload on every later resolution. loadGen drops a stale resolve.
-	let loadGen = 0;
+	// reload on every later resolution. rowsLoad drops a stale resolve.
+	const rowsLoad = createLatest();
 	$effect(() => {
 		const auth = $authStore;
 		if (auth.status === 'loading') return;
-		const g = ++loadGen;
+		const isCurrent = rowsLoad.next();
 		if (auth.status !== 'authenticated') {
 			rows = [];
 			loaded = true;
@@ -65,13 +66,13 @@
 		loadError = false;
 		loadRows(auth)
 			.then((out) => {
-				if (g !== loadGen) return;
+				if (!isCurrent()) return;
 				rows = out;
 				loaded = true;
 			})
 			.catch((e) => {
 				// An IDB read error shows as a failure, never as an endless "Loading…".
-				if (g !== loadGen) return;
+				if (!isCurrent()) return;
 				reportProblem({ area: 'downloads', action: 'loading the downloaded parts', error: e });
 				loaded = true;
 				loadError = true;

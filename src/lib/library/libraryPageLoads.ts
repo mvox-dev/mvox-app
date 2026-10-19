@@ -1,4 +1,5 @@
 // The library page's tree-node and librarian loads, over state the page owns.
+import { createLatest } from '$lib/async/latest';
 import { getToken } from '$lib/auth/storage';
 import type { Collective } from '$lib/collectives/types';
 import { isAuthExpiredError } from '$lib/entu/request';
@@ -114,7 +115,7 @@ export function createLibraryTreeLoads(ctx: LibraryTreeContext) {
 // #72 — every selection goes back to 'loading', and a generation guard drops a stale
 // collective's late answer. The pickers load before the tools show.
 export function createLibrarianLoad(lib: LibraryState) {
-	let librarianGen = 0;
+	const librarianLoad = createLatest();
 
 	// #321 — a picker claim must never outlive the options it described.
 	function resetLibrarianPickerPartial(): void {
@@ -124,7 +125,7 @@ export function createLibrarianLoad(lib: LibraryState) {
 
 	function select(current: { db: string; personId: string } | null): Promise<void> {
 		if (!current) {
-			++librarianGen;
+			librarianLoad.cancel();
 			resetLibraryEditRight();
 			resetLibrarianPickerPartial();
 			return Promise.resolve();
@@ -141,11 +142,11 @@ export function createLibrarianLoad(lib: LibraryState) {
 	}
 
 	function loadLibrarian(current: { db: string; personId: string }): Promise<void> {
-		const g = ++librarianGen;
+		const isCurrent = librarianLoad.next();
 		const token = getToken();
 		const cfg = { db: current.db, token: token ?? '' };
 		return loadLibraryEditRight(cfg, current.personId).then(async (result) => {
-			if (g !== librarianGen) return;
+			if (!isCurrent()) return;
 			if (result.state === 'editor') {
 				try {
 					const {
@@ -153,7 +154,7 @@ export function createLibrarianLoad(lib: LibraryState) {
 						copies: copiesRead,
 						members: membersRead
 					} = await loadLibrarianPickers(cfg);
-					if (g !== librarianGen) return;
+					if (!isCurrent()) return;
 					lib.allEditions = editionsRead.items;
 					lib.allCopies = copiesRead.items;
 					lib.allMembers = membersRead.items;
@@ -162,23 +163,23 @@ export function createLibrarianLoad(lib: LibraryState) {
 					const memberIdList = membersRead.items.map((mbr) => mbr.memberId);
 					loadLibrarianMemberNames(cfg, memberIdList)
 						.then((names) => {
-							if (g === librarianGen) lib.memberNames = names;
+							if (isCurrent()) lib.memberNames = names;
 						})
 						.catch((e) => {
-							if (g !== librarianGen) return;
+							if (!isCurrent()) return;
 							reportProblem({ area: 'library', action: 'loading the member names', error: e });
 						});
 				} catch (e) {
-					if (g !== librarianGen) return;
+					if (!isCurrent()) return;
 					reportProblem({ area: 'library', action: 'loading the checkout data', error: e });
 					libraryEditRight.set('error');
 					return;
 				}
 			}
-			if (g !== librarianGen) return;
+			if (!isCurrent()) return;
 			libraryEditRight.set(result.state);
 		}).catch((e) => {
-			if (g !== librarianGen) return;
+			if (!isCurrent()) return;
 			reportProblem({ area: 'library', action: 'reading the librarian rights', error: e });
 			libraryEditRight.set('error');
 		});
@@ -186,7 +187,7 @@ export function createLibrarianLoad(lib: LibraryState) {
 
 	// #800 — the page's teardown: a load still in flight writes nothing to the shared store.
 	function destroy(): void {
-		++librarianGen;
+		librarianLoad.cancel();
 	}
 
 	return { select, retryLibrarianLoad, destroy };

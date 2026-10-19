@@ -2,6 +2,7 @@
 	lookups run whether or not the section shows. -->
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
+	import { createLatest } from '$lib/async/latest';
 	import { copyLabel, isActiveLending } from '$lib/library/libraryData';
 	import type { Copy, Edition, Lending, LoanChain, Work } from '$lib/library/libraryData';
 	import { formatDate, isOverdue } from '$lib/library/lendingView';
@@ -46,27 +47,27 @@
 
 	// Copy names, so a loan never renders a raw entity id. A librarian already holds every
 	// copy, so those resolve locally; the rest take one read.
-	let copyNameGen = 0;
+	const copyNameLoad = createLatest();
 	$effect(() => {
 		const loans = myActiveLoans;
-		const g = ++copyNameGen;
+		const isCurrent = copyNameLoad.next();
 		void resolveLocalFirst({
 			loans,
 			selected: () => selected,
 			allCopies: () => allCopies,
 			local: copyLabel,
 			fetch: (cfg, ids) => loadCopyNames(cfg, ids),
-			isCurrent: () => g === copyNameGen,
+			isCurrent,
 			apply: (names) => (copyNames = names),
 			what: 'name'
 		});
 	});
 
 	// #129 — copy, edition and work for each loan's label; same local-first split.
-	let chainGen = 0;
+	const chainLoad = createLatest();
 	$effect(() => {
 		const loans = myActiveLoans;
-		const g = ++chainGen;
+		const isCurrent = chainLoad.next();
 		void resolveLocalFirst<LoanChain>({
 			loans,
 			selected: () => selected,
@@ -81,7 +82,7 @@
 				};
 			},
 			fetch: (cfg, ids) => loadCopyChains(cfg, ids, works),
-			isCurrent: () => g === chainGen,
+			isCurrent,
 			apply: (chains) => (copyChains = chains),
 			what: 'chain'
 		});
