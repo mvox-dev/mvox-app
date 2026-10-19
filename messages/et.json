@@ -320,7 +320,6 @@
 	"library_librarian_retry": "Proovi uuesti",
 	"library_my_loans_title": "Minu laenutused ({count})",
 	"library_copy_name_unknown": "Nimetu koopia",
-	"library_my_loans_copy_label": "{copyName}",
 	"library_my_loans_overdue": "Hilinenud",
 	"library_checkout_submit": "Laenuta",
 	"library_return": "Tagasta",

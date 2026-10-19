@@ -113,7 +113,7 @@
 			<ul id="my-loans-list" class="mt-2 flex flex-col gap-1">
 				{#each myActiveLoans as loan (loan.id)}
 					<li data-testid="my-loans-item-{loan.id}" class="flex items-center justify-between text-xs">
-						<span>{m.library_my_loans_copy_label({ copyName: loanLabel(loan.copyId) })}</span>
+						<span>{loanLabel(loan.copyId)}</span>
 						<span class="text-ink-2">
 							{formatDate(loan.assignedAt)}{#if loan.assignedUntil} – {formatDate(loan.assignedUntil)}{/if}
 						</span>
