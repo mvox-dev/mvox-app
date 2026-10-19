@@ -186,7 +186,7 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 		const cfg = cfgFor(selected.db);
 		const eventIds = [...ag.agendaItems, ...ag.recentItems].map((item) => item.id);
 		const seasonId = ag.currentSeasonId;
-		const isRequestCurrent = seq.request.current();
+		const isRequestCurrent = seq.request.whileCurrent();
 		const isWorksCurrent = seq.worksLoad.next();
 		const editor = ag.seasonManageRights === 'editor';
 		return refetchWorkRows(cfg, eventIds, seasonId, worksRefetch(isRequestCurrent, isWorksCurrent, editor));

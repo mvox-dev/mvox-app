@@ -121,7 +121,7 @@ export function createAgendaRepertoireQueues(
 		const cfg = manageCfg();
 		const seasonId = seq.panelRepertoireSeasonId;
 		if (!cfg || seasonId === null) return Promise.resolve();
-		const isRequestCurrent = seq.request.current();
+		const isRequestCurrent = seq.request.whileCurrent();
 		const thisSwitch = deps.switchGeneration();
 		return deps
 			.listRepertoireItems(cfg, seasonId)

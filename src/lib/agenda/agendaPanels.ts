@@ -71,7 +71,7 @@ export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps:
 	}
 
 	function loadPanelRepertoire(cfg: EntuCfg, seasonId: string): Promise<void> {
-		const isRequestCurrent = seq.request.current();
+		const isRequestCurrent = seq.request.whileCurrent();
 		const thisSwitch = deps.seasonManageSwitchGeneration();
 		const stale = () =>
 			isPanelReadStale(isRequestCurrent, thisSwitch, deps.seasonManageSwitchGeneration());

@@ -94,7 +94,7 @@ function setup(reads: Partial<Record<string, Read>> = {}) {
 const select = ({ loader }: Loader) => loader.loadForSelected();
 const prefetch = (l: Loader) => {
 	l.ag.agendaItems = [{ id: 'ev-1' } as (typeof l.ag.agendaItems)[number]];
-	return l.loader.prefetchNextEventPartsAfterSettle(CFG, l.seq.request.current());
+	return l.loader.prefetchNextEventPartsAfterSettle(CFG, l.seq.request.whileCurrent());
 };
 
 beforeEach(() => {
@@ -129,14 +129,14 @@ describe('agenda reads that fail are reported (#756)', () => {
 		{
 			read: 'the work rows',
 			wire: { workRows: fail },
-			run: (l: Loader) => l.loader.loadWorksAndManagement(CFG, ['ev-1'], 's-1', l.seq.request.current()),
+			run: (l: Loader) => l.loader.loadWorksAndManagement(CFG, ['ev-1'], 's-1', l.seq.request.whileCurrent()),
 			action: 'loading the work rows',
 			shown: (l: Loader) => expect(l.ag.worksByEventId).toEqual({})
 		},
 		{
 			read: 'the schedule items',
 			reads: { listScheduleItemsByEventId: fail },
-			run: (l: Loader) => l.loader.loadScheduleItems(CFG, ['ev-1'], l.seq.request.current()),
+			run: (l: Loader) => l.loader.loadScheduleItems(CFG, ['ev-1'], l.seq.request.whileCurrent()),
 			action: 'loading the schedule items',
 			shown: (l: Loader) => expect(l.ag.scheduleByEventId).toEqual({})
 		},
@@ -220,7 +220,7 @@ describe('agenda reads that fail are reported (#756)', () => {
 		Object.assign(wire, { detail: fail, parts: fail });
 		const l = setup();
 		l.ag.agendaItems = [{ id: 'ev-1' } as (typeof l.ag.agendaItems)[number]];
-		const superseded = l.seq.request.current();
+		const superseded = l.seq.request.whileCurrent();
 		l.seq.request.cancel();
 		await l.loader.prefetchNextEventPartsAfterSettle(CFG, superseded);
 		expect(reportProblem).not.toHaveBeenCalled();

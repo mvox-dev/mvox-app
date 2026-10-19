@@ -28,10 +28,10 @@ describe('createLatest', () => {
 		expect(latest.next()()).toBe(true);
 	});
 
-	it('current checks the open load without opening another', () => {
+	it('whileCurrent checks the open load without opening another', () => {
 		const latest = createLatest();
 		const open = latest.next();
-		const check = latest.current();
+		const check = latest.whileCurrent();
 		expect(open()).toBe(true);
 		expect(check()).toBe(true);
 		latest.next();

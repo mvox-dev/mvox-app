@@ -1,4 +1,4 @@
-// One way to drop a stale async result: next() opens a load, current() reads it, cancel() voids it.
+// Drops stale async results: next() opens a load, whileCurrent() reads it, cancel() voids it.
 export function createLatest() {
 	let gen = 0;
 	return {
@@ -6,7 +6,7 @@ export function createLatest() {
 			const mine = ++gen;
 			return () => mine === gen;
 		},
-		current(): () => boolean {
+		whileCurrent(): () => boolean {
 			const mine = gen;
 			return () => mine === gen;
 		},
