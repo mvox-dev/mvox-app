@@ -20,6 +20,7 @@ export {
 	deriveWorkAvailability,
 	isActiveLending,
 	activeLendingForMemberInEdition,
+	copyLabel,
 	formatLoanChainLabel,
 	resolveCopyChains,
 	type CopyAvailability,

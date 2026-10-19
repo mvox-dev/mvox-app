@@ -3,7 +3,7 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
 	import RedactedText from '$lib/components/RedactedText.svelte';
-	import type { Copy } from '$lib/library/libraryData';
+	import { copyLabel, type Copy } from '$lib/library/libraryData';
 	import type { ActiveMember } from '$lib/roster/rosterData';
 	import type { TreeActions } from '$lib/library/libraryState';
 	import { formatDate, type LendingView } from '$lib/library/lendingView';
@@ -42,7 +42,7 @@
 
 {#if canEditLibrary || activeLending}
 	<div data-testid="library-copy-{copy.id}" class="flex items-center justify-between text-xs">
-		<span class="text-ink">{copy.name || (copy.copyNumber ? `#${copy.copyNumber}` : m.library_copy_name_unknown())}</span>
+		<span class="text-ink">{copyLabel(copy)}</span>
 		<span class="flex items-center gap-1">
 			{#if availability.status === 'available'}
 				{#if canEditLibrary}

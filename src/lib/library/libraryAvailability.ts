@@ -1,4 +1,5 @@
 // Library availability and the name lookups behind lent copies and my-loans rows.
+import { m } from '$lib/paraglide/messages.js';
 import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { listMyProfiles } from '$lib/profile/profileData';
@@ -150,6 +151,10 @@ export interface LoanChain {
 	copyNumber: number;
 	workName: string;
 	editionName: string;
+}
+
+export function copyLabel(copy: Copy): string {
+	return copy.name || (copy.copyNumber ? `#${copy.copyNumber}` : m.library_copy_name_unknown());
 }
 
 export function formatLoanChainLabel(chain: LoanChain): string {

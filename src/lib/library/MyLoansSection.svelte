@@ -2,7 +2,7 @@
 	lookups run whether or not the section shows. -->
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
-	import { isActiveLending } from '$lib/library/libraryData';
+	import { copyLabel, isActiveLending } from '$lib/library/libraryData';
 	import type { Copy, Edition, Lending, LoanChain, Work } from '$lib/library/libraryData';
 	import { formatDate, isOverdue } from '$lib/library/lendingView';
 	import { resolveLocalFirst } from '$lib/library/resolveLocalFirst';
@@ -54,7 +54,7 @@
 			loans,
 			selected: () => selected,
 			allCopies: () => allCopies,
-			local: (copy) => copy.name || (copy.copyNumber ? `#${copy.copyNumber}` : ''),
+			local: copyLabel,
 			fetch: (cfg, ids) => loadCopyNames(cfg, ids),
 			isCurrent: () => g === copyNameGen,
 			apply: (names) => (copyNames = names),
