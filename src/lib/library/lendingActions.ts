@@ -12,7 +12,8 @@ export interface CreateLendingPayload {
 	assignedUntil?: string;
 }
 
-// No `_sharing` (#133): no ancestor walk; Entu copies it only from the create body's `_parent`.
+// Safe without setting `_sharing` (#133): Entu does not walk up the tree; it copies `_sharing`
+// only from the parent named in the create request, here the library.
 export async function createLending(
 	cfg: EntuCfg,
 	libraryId: string,
