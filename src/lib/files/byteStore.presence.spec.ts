@@ -1,4 +1,4 @@
-// The byte store's presence query: one heldFileIds(db, personId) call per list that moves no
+// The byte store's presence query: one heldFileIds(identity) call per list that moves no
 // recency, since a per-row get() would count as an open and reorder eviction by render.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createByteStore, type ByteStore, type StoredFileRecord } from './byteStore';
