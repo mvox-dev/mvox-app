@@ -94,7 +94,7 @@ function setup(reads: Partial<Record<string, Read>> = {}) {
 const select = ({ loader }: Loader) => loader.loadForSelected();
 const prefetch = (l: Loader) => {
 	l.ag.agendaItems = [{ id: 'ev-1' } as (typeof l.ag.agendaItems)[number]];
-	l.loader.prefetchNextEventPartsAfterSettle(CFG, l.seq.requestId);
+	return l.loader.prefetchNextEventPartsAfterSettle(CFG, l.seq.requestId);
 };
 
 beforeEach(() => {
@@ -204,8 +204,7 @@ describe('agenda reads that fail are reported (#756)', () => {
 		Object.assign(wire, { detail: fail, parts: fail });
 		const l = setup();
 		l.ag.agendaItems = [{ id: 'ev-1' } as (typeof l.ag.agendaItems)[number]];
-		l.loader.prefetchNextEventPartsAfterSettle(CFG, l.seq.requestId - 1);
-		await settle();
+		await l.loader.prefetchNextEventPartsAfterSettle(CFG, l.seq.requestId - 1);
 		expect(reportProblem).not.toHaveBeenCalled();
 	});
 
