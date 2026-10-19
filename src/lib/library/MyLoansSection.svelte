@@ -95,7 +95,7 @@
 </script>
 
 {#if myActiveLoans.length > 0}
-	<section data-testid="my-loans" class="rounded-md border border-ink-5 px-4 py-3">
+	<section data-testid="my-loans" aria-labelledby="my-loans-heading" class="rounded-md border border-ink-5 px-4 py-3">
 		<button
 			type="button"
 			data-testid="my-loans-toggle"
@@ -106,7 +106,7 @@
 				expanded = !expanded;
 			}}
 		>
-			<span>{m.library_my_loans_title({ count: myActiveLoans.length })}</span>
+			<span id="my-loans-heading">{m.library_my_loans_title({ count: myActiveLoans.length })}</span>
 			<span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
 		</button>
 		{#if expanded}
