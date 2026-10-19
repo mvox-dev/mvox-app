@@ -8,6 +8,7 @@ import { refreshLibraryLendings, resolveWriteLibraryId } from '$lib/library/libr
 import { createLending, returnLending, bulkCheckout } from '$lib/library/lendingActions';
 import { createWork, createEdition } from '$lib/entity/entityCreate';
 import { uploadEditionFiles } from '$lib/library/editionFiles';
+import { isActiveLending } from '$lib/library/libraryData';
 import { without } from '$lib/collections/immutable';
 import {
 	applyLendings,
@@ -236,7 +237,7 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 		if (!current) return;
 		if (!ctx.bulk().editionId || ctx.bulk().members.size === 0) return;
 		const cfg = cfgFor(current.db);
-		const activeLendings = lib.lendings.filter((l) => l.returnedAt === '');
+		const activeLendings = lib.lendings.filter(isActiveLending);
 		try {
 			const libraryId = await requireWriteLibraryId(cfg, 'handleBulkCheckout');
 			const result = await bulkCheckout(cfg, libraryId, {

@@ -2,6 +2,7 @@
 	lookups run whether or not the section shows. -->
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
+	import { isActiveLending } from '$lib/library/libraryData';
 	import type { Copy, Edition, Lending, LoanChain, Work } from '$lib/library/libraryData';
 	import { formatDate, isOverdue } from '$lib/library/lendingView';
 	import { resolveLocalFirst } from '$lib/library/resolveLocalFirst';
@@ -40,7 +41,7 @@
 	let copyChains = $state<Map<string, LoanChain>>(new Map());
 
 	const myActiveLoans = $derived(
-		myMemberId ? lendings.filter((l) => l.memberId === myMemberId && l.returnedAt === '') : []
+		myMemberId ? lendings.filter((l) => l.memberId === myMemberId && isActiveLending(l)) : []
 	);
 
 	// Copy names, so a loan never renders a raw entity id. A librarian already holds every

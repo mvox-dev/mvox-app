@@ -3,6 +3,7 @@ import {
 	deriveCopyAvailability,
 	deriveEditionAvailability,
 	deriveWorkAvailability,
+	isActiveLending,
 	type CopyAvailability,
 	type Lending
 } from '$lib/library/libraryData';
@@ -44,7 +45,7 @@ export function createLendingView(
 ): LendingView {
 	return {
 		activeLendingForCopy: (copyId) =>
-			lib.lendings.find((l) => l.copyId === copyId && l.returnedAt === ''),
+			lib.lendings.find((l) => l.copyId === copyId && isActiveLending(l)),
 		copyAvailability: (copyId) => deriveCopyAvailability(copyId, lib.lendings),
 		workAvailability: (workId) =>
 			deriveWorkAvailability(workId, lib.allEditions, lib.allCopies, lib.lendings),

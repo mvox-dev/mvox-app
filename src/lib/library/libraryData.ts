@@ -18,6 +18,7 @@ export {
 	resolveBorrowerNames,
 	deriveEditionAvailability,
 	deriveWorkAvailability,
+	isActiveLending,
 	activeLendingForMemberInEdition,
 	formatLoanChainLabel,
 	resolveCopyChains,
