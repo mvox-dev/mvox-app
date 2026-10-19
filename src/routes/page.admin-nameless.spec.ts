@@ -120,7 +120,7 @@ describe('/admin — a role row with no name (#841)', () => {
 			sections: [],
 			sectionsError: false,
 			isOffline: false,
-			loadSeq: () => 0,
+			loadCurrent: () => () => true,
 			refreshRole: vi.fn(),
 			writes: {
 				addAdmin: vi.fn(),

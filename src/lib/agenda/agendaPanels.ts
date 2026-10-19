@@ -9,10 +9,9 @@ import type { AgendaLoadDeps, AgendaLoadState, LoadCounters } from '$lib/agenda/
 
 export function isPanelReadStale(
 	isRequestCurrent: () => boolean,
-	thisSwitch: number,
-	switchNow: number
+	isSwitchCurrent: () => boolean
 ): boolean {
-	return !isRequestCurrent() || thisSwitch !== switchNow;
+	return !isRequestCurrent() || !isSwitchCurrent();
 }
 
 export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps: AgendaLoadDeps) {
@@ -72,9 +71,9 @@ export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps:
 
 	function loadPanelRepertoire(cfg: EntuCfg, seasonId: string): Promise<void> {
 		const isRequestCurrent = seq.request.whileCurrent();
-		const thisSwitch = deps.seasonManageSwitchGeneration();
+		const isSwitchCurrent = deps.seasonManageSwitchCurrent();
 		const stale = () =>
-			isPanelReadStale(isRequestCurrent, thisSwitch, deps.seasonManageSwitchGeneration());
+			isPanelReadStale(isRequestCurrent, isSwitchCurrent);
 		seq.panelRepertoireSeasonId = seasonId;
 		ag.panelRepertoireError = false;
 		ag.panelRepertoireLoading = true;

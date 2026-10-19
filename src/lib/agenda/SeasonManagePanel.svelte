@@ -59,7 +59,7 @@
 		panelManageError: boolean;
 		panelManageStatus: string;
 		currentRequest: () => () => boolean;
-		switchGeneration: () => number;
+		switchCurrent: () => () => boolean;
 		getRoster: (cfg: EntuCfg) => Promise<RosterRow[]>;
 		getSections: (cfg: EntuCfg) => Promise<SectionNode[]>;
 		rosterPickerOptions: (excludeIds: readonly string[]) => Array<{ id: string; label: string }>;
@@ -119,7 +119,7 @@
 		panelManageError,
 		panelManageStatus,
 		currentRequest,
-		switchGeneration,
+		switchCurrent,
 		getRoster,
 		getSections,
 		rosterPickerOptions,
@@ -237,8 +237,8 @@
 
 	function loadSeriesList(cfg: EntuCfg, seasonId: string, { opening }: { opening: boolean }): void {
 		const isRequestCurrent = currentRequest();
-		const thisSwitch = switchGeneration();
-		const stale = () => !isRequestCurrent() || thisSwitch !== switchGeneration();
+		const isSwitchCurrent = switchCurrent();
+		const stale = () => !isRequestCurrent() || !isSwitchCurrent();
 		listEventSeriesForSeason(cfg, seasonId)
 			.then((result) => {
 				if (stale()) return;
@@ -326,7 +326,7 @@
 				{panelRepertoireError}
 				{panelManageError}
 				{panelManageStatus}
-				{switchGeneration}
+				{switchCurrent}
 				{rosterPickerOptions}
 				{pickerPromptText}
 				{loadForSelected}

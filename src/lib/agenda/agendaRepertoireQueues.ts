@@ -50,7 +50,7 @@ export function resetPanelRepertoire(
 export interface AgendaRepertoireDeps {
 	selected: () => { db: string } | null | undefined;
 	isOffline: () => boolean;
-	switchGeneration: () => number;
+	switchCurrent: () => () => boolean;
 	refreshWorksAfterWrite: () => Promise<void>;
 	actions: Pick<
 		RepertoireRowActions,
@@ -101,11 +101,11 @@ export function createAgendaRepertoireQueues(
 		hooks?: { apply?: () => void; rollback?: () => void }
 	): void {
 		if (repertoireQueue.isPending(key)) return;
-		const thisSwitch = deps.switchGeneration();
+		const isSwitchCurrent = deps.switchCurrent();
 		repertoireQueue.request(key, write, {
 			apply: hooks?.apply,
 			rollback: () => {
-				if (!repertoirePending.isCurrent(key) || thisSwitch !== deps.switchGeneration()) return;
+				if (!repertoirePending.isCurrent(key) || !isSwitchCurrent()) return;
 				hooks?.rollback?.();
 			}
 		});
@@ -122,16 +122,16 @@ export function createAgendaRepertoireQueues(
 		const seasonId = seq.panelRepertoireSeasonId;
 		if (!cfg || seasonId === null) return Promise.resolve();
 		const isRequestCurrent = seq.request.whileCurrent();
-		const thisSwitch = deps.switchGeneration();
+		const isSwitchCurrent = deps.switchCurrent();
 		return deps
 			.listRepertoireItems(cfg, seasonId)
 			.then((items) => {
-				if (isPanelReadStale(isRequestCurrent, thisSwitch, deps.switchGeneration())) return;
+				if (isPanelReadStale(isRequestCurrent, isSwitchCurrent)) return;
 				ag.panelRepertoire = items;
 				ag.panelRepertoireItemsOk = true;
 			})
 			.catch((e) => {
-				if (isPanelReadStale(isRequestCurrent, thisSwitch, deps.switchGeneration())) return;
+				if (isPanelReadStale(isRequestCurrent, isSwitchCurrent)) return;
 				const action = 're-reading the season-manage repertoire';
 				reportProblem({ area: 'agenda', action, error: e });
 			});

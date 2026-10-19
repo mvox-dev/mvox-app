@@ -60,7 +60,7 @@
 		apiDeleteSeason,
 		canDeleteSeries,
 		currentRequest,
-		switchGeneration,
+		switchCurrent,
 		seriesRunUnfinished,
 		createEntryPointsBlocked,
 		locationSuggestionsId,
@@ -104,7 +104,7 @@
 		apiDeleteSeason: Panel['apiDeleteSeason'];
 		canDeleteSeries: Panel['canDeleteSeries'];
 		currentRequest: Panel['currentRequest'];
-		switchGeneration: Panel['switchGeneration'];
+		switchCurrent: Panel['switchCurrent'];
 		seriesRunUnfinished: boolean;
 		createEntryPointsBlocked: boolean;
 		locationSuggestionsId: string;
@@ -169,7 +169,7 @@
 	panelManageError={panel.manageError}
 	panelManageStatus={panel.manageStatus}
 	{currentRequest}
-	{switchGeneration}
+	{switchCurrent}
 	{...seams}
 	{listEventSeriesForSeason}
 	{updateSeasonField}

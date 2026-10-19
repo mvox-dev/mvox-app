@@ -299,7 +299,7 @@ describe('#328 season fields — failure handling stays byte-identical', () => {
 });
 
 describe('#328 season fields — a late settle never announces onto the NEW season’s panel', () => {
-	it('a name save on A still in flight when the admin switches to B: B starts blank; A’s write settling late announces NOTHING, paints NO value and raises NO error on B (seasonManageSwitchGeneration gates the settle)', async () => {
+	it('a name save on A still in flight when the admin switches to B: B starts blank; A’s write settling late announces NOTHING, paints NO value and raises NO error on B (seasonManageSwitchCurrent gates the settle)', async () => {
 		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
 		const d = deferred<undefined>();
 		updateSeasonFieldMock.mockReturnValue(d.promise);

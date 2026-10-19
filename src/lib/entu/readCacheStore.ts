@@ -1,5 +1,6 @@
 // The read cache's IndexedDB store: connection, entries, and the byte budget.
 
+import { createLatest } from '$lib/async/latest';
 import type { CollectiveIdentity } from '$lib/collectives/store';
 import { compositeKey, reqToPromise } from '$lib/files/idb';
 
@@ -84,16 +85,14 @@ let explicitFactory: IDBFactory | null | undefined;
 let dbPromise: Promise<IDBDatabase> | null = null;
 
 // Bumped on every factory swap: a read that started against the old database serves nothing.
-let factoryGeneration = 0;
+const factoryLoad = createLatest();
 
-export function currentFactoryGeneration(): number {
-	return factoryGeneration;
-}
+export const whileFactoryCurrent = factoryLoad.whileCurrent;
 
 export function setReadCacheFactory(factory?: IDBFactory | null): void {
 	explicitFactory = factory;
 	dbPromise = null;
-	factoryGeneration += 1;
+	factoryLoad.cancel();
 }
 
 function resolveFactory(): IDBFactory | null {
@@ -126,7 +125,7 @@ export async function readCacheGet({
 	pathAndQuery
 }: ReadCacheKey): Promise<ReadCacheEntry | undefined> {
 	if (!personId) return undefined;
-	const generation = factoryGeneration;
+	const isFactoryCurrent = factoryLoad.whileCurrent();
 	const openPromise = getDb();
 	if (!openPromise) return undefined;
 	try {
@@ -134,7 +133,7 @@ export async function readCacheGet({
 		const tx = database.transaction(STORE_NAME, 'readonly');
 		const req = tx.objectStore(STORE_NAME).get(compositeKey(db, personId, pathAndQuery));
 		const entry = (await reqToPromise(req)) as ReadCacheEntry | undefined;
-		return generation === factoryGeneration ? entry : undefined;
+		return isFactoryCurrent() ? entry : undefined;
 	} catch {
 		// A failed store read is a miss: the caller gets the network's own error.
 		return undefined;

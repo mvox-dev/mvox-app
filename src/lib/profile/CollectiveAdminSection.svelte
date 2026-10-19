@@ -1,6 +1,7 @@
 <!-- The collective's admin section at the end of /profile (#916): name, rights, invites. -->
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { createLatest } from '$lib/async/latest';
 	import { reportProblem } from '$lib/problems/reportProblem';
 	import { isAuthExpiredError } from '$lib/entu/auth-expired';
 	import { m } from '$lib/paraglide/messages.js';
@@ -51,7 +52,7 @@
 	let status = $state<Exclude<RouteLoadStatus, 'no-collective'>>('loading');
 	let request = $state<Request | null>(null);
 	let started: Request | null = null;
-	let seq = 0;
+	const loadLatest = createLatest();
 	let cfg = $state<EntuCfg | null>(null);
 	let dbEntityId = $state<string | null>(null);
 	let libraryId = $state<string | null>(null);
@@ -85,7 +86,7 @@
 	export function reset(): void {
 		request = null;
 		started = null;
-		seq++;
+		loadLatest.cancel();
 		status = 'loading';
 		roles?.reset();
 		nameEditor?.reset();
@@ -126,18 +127,18 @@
 		onSessionExpired();
 	}
 
-	function currentFor(r: Request, mine: number): () => boolean {
-		return () => mine === seq && r.g === generation();
+	function currentFor(r: Request, isLoad: () => boolean): () => boolean {
+		return () => isLoad() && r.g === generation();
 	}
 
-	async function refreshRole(kind: RoleKind, thisLoad: number): Promise<void> {
-		if (thisLoad !== seq) return;
+	async function refreshRole(kind: RoleKind, isLoadCurrent: () => boolean): Promise<void> {
+		if (!isLoadCurrent()) return;
 		const entityId = kind === 'admin' ? dbEntityId : libraryId;
 		if (!cfg || !entityId || !viewerId) return;
 		// The roster maps ids to names for rows whose aggregated name has not caught up yet.
 		const list = kind === 'admin' ? listAdmins : listLibrarians;
 		const listing = await list(cfg, entityId, viewerId, undefined, roster);
-		if (thisLoad !== seq) return;
+		if (!isLoadCurrent()) return;
 		if (kind === 'admin') {
 			admins = listing.persons;
 			canManageAdmins = listing.canManage;
@@ -187,8 +188,8 @@
 	}
 
 	async function run(r: Request): Promise<void> {
-		const mine = ++seq;
-		const isCurrent = currentFor(r, mine);
+		const isLoad = loadLatest.next();
+		const isCurrent = currentFor(r, isLoad);
 		status = 'loading';
 		cfg = r.cfg;
 		viewerId = r.personId;
@@ -212,8 +213,8 @@
 			libraryId = libResult.libraryId;
 			nameMarker = resolvedNameMarker;
 			await Promise.all([
-				refreshRole('admin', mine),
-				libraryId ? refreshRole('librarian', mine) : Promise.resolve()
+				refreshRole('admin', isLoad),
+				libraryId ? refreshRole('librarian', isLoad) : Promise.resolve()
 			]);
 			if (isCurrent() && status === 'loading') status = 'ready';
 		} catch (e) {
@@ -269,7 +270,7 @@
 				bind:nameHeldOffline
 				{cfg}
 				{isOffline}
-				loadSeq={() => seq}
+				loadCurrent={loadLatest.whileCurrent}
 				updateCollectiveName={(...a) => updateCollectiveName(...a)}
 			/>
 
@@ -302,7 +303,7 @@
 				{sections}
 				{sectionsError}
 				{isOffline}
-				loadSeq={() => seq}
+				loadCurrent={loadLatest.whileCurrent}
 				{refreshRole}
 				writes={{
 					addAdmin: (...a) => addAdmin(...a),

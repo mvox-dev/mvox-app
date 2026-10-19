@@ -80,19 +80,19 @@
 		if (isOffline) return;
 		const cfg = selected ? cfgFor(selected.db) : null;
 		const rowId = seasonDeleteRowId(seasonId);
-		const generation = sm.seasonManageDeleteGeneration;
+		const isDeleteCurrent = sm.seasonManageDeleteLoad.whileCurrent();
 		await armSeasonManageDelete(rowId, confirmTestid);
 		if (!cfg) return;
 		try {
 			const scope = await apiCountSeasonScope(cfg, seasonId);
 			if (
-				generation === sm.seasonManageDeleteGeneration &&
+				isDeleteCurrent() &&
 				sm.seasonManageDeleteArmed === rowId
 			) {
 				sm.seasonManageDeleteScope = scope;
 			}
 		} catch (e) {
-			if (generation !== sm.seasonManageDeleteGeneration) return;
+			if (!isDeleteCurrent()) return;
 			reportProblem({ area: 'agenda', action: 'counting what the season delete removes', error: e });
 		}
 	}

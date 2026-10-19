@@ -4,6 +4,7 @@ import { without } from '$lib/collections/immutable';
 import type { RsvpEntry } from '$lib/rsvp/rsvpData';
 import type * as AttendanceData from '$lib/attendance/attendanceData';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { createLatest } from '$lib/async/latest';
 import { reportProblem } from '$lib/problems/reportProblem';
 
 export type AttendanceMap = AttendanceData.AttendanceByMemberId;
@@ -72,11 +73,11 @@ export function failedMarksFor(byEvent: FailedByEvent, eventId: string): Set<str
 }
 
 export function createAttendancePanelLoad(deps: AttendancePanelLoadDeps) {
-	let requestId = 0;
+	const requestLoad = createLatest();
 
 	function open(cfg: EntuCfg, eventId: string, target: AttendancePanelTarget): Promise<void> {
-		const thisRequest = ++requestId;
-		const current = () => thisRequest === requestId && target.isCurrent();
+		const isRequestCurrent = requestLoad.next();
+		const current = () => isRequestCurrent() && target.isCurrent();
 		return Promise.all([
 			loadRoster(cfg),
 			deps.listAttendance(cfg, eventId),
@@ -105,7 +106,7 @@ export function createAttendancePanelLoad(deps: AttendancePanelLoadDeps) {
 	}
 
 	function cancel(): void {
-		requestId++;
+		requestLoad.cancel();
 	}
 
 	return { open, cancel };
