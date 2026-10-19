@@ -2,6 +2,7 @@
 import { writable, type Writable } from 'svelte/store';
 import type { MyProfile } from './profileData';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { createLatest } from '$lib/async/latest';
 import { reportProblem } from '$lib/problems/reportProblem';
 
 export type GateState = 'loading' | 'complete' | 'incomplete';
@@ -10,14 +11,14 @@ export const completionGateStore: Writable<GateState> = writable('loading');
 
 // One generation for every gate read, layout and /profile alike (#800): an answer is dropped
 // when a newer read or a reset began, never because the page that asked has unmounted.
-let gateGeneration = 0;
+const gateLoad = createLatest();
 
 export async function refreshGate(
 	read: () => Promise<GateState>,
 	wanted: () => boolean = () => true
 ): Promise<void> {
-	const g = ++gateGeneration;
-	const live = () => g === gateGeneration && wanted();
+	const isGateCurrent = gateLoad.next();
+	const live = () => isGateCurrent() && wanted();
 	try {
 		const state = await read();
 		if (live()) completionGateStore.set(state);
@@ -27,7 +28,7 @@ export async function refreshGate(
 }
 
 export function resetGate(): void {
-	++gateGeneration;
+	gateLoad.cancel();
 	completionGateStore.set('loading');
 }
 

@@ -17,6 +17,7 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import AgendaNotices from '$lib/agenda/AgendaNotices.svelte';
 	import AgendaCollectivesStatus from '$lib/agenda/AgendaCollectivesStatus.svelte';
+	import { createLatest } from '$lib/async/latest';
 	import AgendaManageArea from '$lib/agenda/AgendaManageArea.svelte';
 	import AgendaListArea from '$lib/agenda/AgendaListArea.svelte';
 	import { agendaViewStore } from '$lib/preferences/agendaView';
@@ -51,6 +52,7 @@
 
 	const ag = $state(createAgendaLoadState());
 	const seq = createLoadCounters();
+	const seasonManageSwitch = createLatest();
 	let pendingEventIds = $state<Set<string>>(new Set());
 	const flow = $state(createCreateFlowState());
 	const reads = agendaLoaderReads();
@@ -96,7 +98,7 @@
 	} = createAgendaLoader(ag, seq, {
 		selected: () => selected,
 		seasonManageOpen: () => seasonManageOpen,
-		seasonManageSwitchGeneration: () => seasonManageSwitchGeneration,
+		seasonManageSwitchCurrent: seasonManageSwitch.whileCurrent,
 		collectiveIdentity: () => get(selectedCollectiveIdentityStore),
 		collectivesState: () => get(collectiveState),
 		isRepertoirePending: (key) => repertoireQueue.isPending(key),
@@ -123,7 +125,7 @@
 	} = createAgendaRepertoireQueues(ag, seq, panel, {
 		selected: () => selected,
 		isOffline: () => isOffline,
-		switchGeneration: () => seasonManageSwitchGeneration,
+		switchCurrent: seasonManageSwitch.whileCurrent,
 		refreshWorksAfterWrite,
 		...agendaRepertoireSeams()
 	});
@@ -131,13 +133,12 @@
 	const view = createAgendaPageView(ag, panel);
 
 	let seasonManageOpen = $state(false);
-	let seasonManageSwitchGeneration = 0;
 	let seasonManagePanelEl = $state<HTMLDivElement | null>(null);
 	let seasonManagePanel = $state<SeasonManagePanel>();
 
 	function resetSeasonManage(): void {
 		seasonManageOpen = false;
-		seasonManageSwitchGeneration += 1;
+		seasonManageSwitch.cancel();
 		seasonManagePanel?.resetPanelState();
 		resetPanelRepertoire(ag, seq, panel);
 	}
@@ -331,7 +332,7 @@
 							{apiDeleteSeason}
 							{canDeleteSeries}
 							currentRequest={seq.request.whileCurrent}
-							switchGeneration={() => seasonManageSwitchGeneration}
+							switchCurrent={seasonManageSwitch.whileCurrent}
 							{seriesRunUnfinished}
 							{createEntryPointsBlocked}
 							locationSuggestionsId={LOCATION_SUGGESTIONS_ID}

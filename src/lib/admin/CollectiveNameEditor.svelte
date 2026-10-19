@@ -14,7 +14,7 @@
 		nameHeldOffline: boolean;
 		cfg: EntuCfg | null;
 		isOffline: boolean;
-		loadSeq: () => number;
+		loadCurrent: () => () => boolean;
 		updateCollectiveName: typeof CollectiveName.updateCollectiveName;
 	}
 
@@ -23,7 +23,7 @@
 		nameHeldOffline = $bindable(),
 		cfg,
 		isOffline,
-		loadSeq,
+		loadCurrent,
 		updateCollectiveName
 	}: Props = $props();
 
@@ -79,21 +79,21 @@
 		}
 		editingName = false;
 		nameDraft = '';
-		const thisLoad = loadSeq();
+		const isLoadCurrent = loadCurrent();
 		const writeCfg = cfgFor(cfg.db);
 		nameWritePending = true;
 		try {
 			await updateCollectiveName(writeCfg, before.markerId, draft);
-			if (thisLoad !== loadSeq()) return; // superseded by a newer selection
+			if (!isLoadCurrent()) return; // superseded by a newer selection
 			nameMarker = { ...before, name: draft };
 			renameCollectiveInStore(writeCfg.db, draft);
 			nameError = false;
 		} catch (e) {
-			if (thisLoad !== loadSeq()) return;
+			if (!isLoadCurrent()) return;
 			console.error('admin collective name: write failed', e);
 			nameError = true;
 		} finally {
-			if (thisLoad === loadSeq()) {
+			if (isLoadCurrent()) {
 				nameWritePending = false;
 				// A re-opened editor owns focus now; a late restore would pull it out of the input.
 				if (restoreFocus && !editingName) {

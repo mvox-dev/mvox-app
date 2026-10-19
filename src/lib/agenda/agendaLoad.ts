@@ -107,7 +107,7 @@ export type LoadCounters = ReturnType<typeof createLoadCounters>;
 export interface AgendaLoadDeps {
 	selected: () => { db: string; personId: string } | null;
 	seasonManageOpen: () => boolean;
-	seasonManageSwitchGeneration: () => number;
+	seasonManageSwitchCurrent: () => () => boolean;
 	collectiveIdentity: () => CollectiveIdentity | null;
 	collectivesState: () => CollectiveState;
 	isRepertoirePending: (key: string) => boolean;

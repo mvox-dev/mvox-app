@@ -14,7 +14,7 @@
 		manageableSeasonId: string | null;
 		seasonManagePanelEl: HTMLDivElement | null;
 		isOffline: boolean;
-		switchGeneration: () => number;
+		switchCurrent: () => () => boolean;
 		updateSeasonField: typeof SeasonManage.updateSeasonField;
 		seasonManageName: string;
 		seasonManageStartDate: string;
@@ -32,7 +32,7 @@
 		manageableSeasonId,
 		seasonManagePanelEl,
 		isOffline,
-		switchGeneration,
+		switchCurrent,
 		updateSeasonField,
 		seasonManageName = $bindable(),
 		seasonManageStartDate = $bindable(),
@@ -136,19 +136,19 @@
 
 		const cfg = cfgFor(selected.db);
 		const seasonId = manageableSeasonId;
-		const thisSeasonManage = switchGeneration();
+		const isSwitchCurrent = switchCurrent();
 		clearSeasonFieldError(field);
 		seasonEditStatus = '';
 		seasonEditPending = { ...seasonEditPending, [field]: true };
 		applySeasonFieldLocally(field, value);
 		updateSeasonField(cfg, seasonId, field, value)
 			.then(() => {
-				if (thisSeasonManage !== switchGeneration()) return;
+				if (!isSwitchCurrent()) return;
 				seasonEditPending = { ...seasonEditPending, [field]: false };
 				seasonEditStatus = m.season_manage_saved();
 			})
 			.catch((e) => {
-				if (thisSeasonManage !== switchGeneration()) return;
+				if (!isSwitchCurrent()) return;
 				console.error('agenda: season field save failed', field, e);
 				seasonEditPending = { ...seasonEditPending, [field]: false };
 				applySeasonFieldLocally(field, before);

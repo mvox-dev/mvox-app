@@ -46,7 +46,7 @@
 		panelRepertoireError: boolean;
 		panelManageError: boolean;
 		panelManageStatus: string;
-		switchGeneration: () => number;
+		switchCurrent: () => () => boolean;
 		rosterPickerOptions: (excludeIds: readonly string[]) => Array<{ id: string; label: string }>;
 		pickerPromptText: (optionCount: number, addPrompt: string) => string;
 		loadForSelected: (opts?: { keepSeasonManage?: boolean }) => void;
@@ -98,7 +98,7 @@
 		panelRepertoireError,
 		panelManageError,
 		panelManageStatus,
-		switchGeneration,
+		switchCurrent,
 		rosterPickerOptions,
 		pickerPromptText,
 		loadForSelected,
@@ -145,7 +145,7 @@
 		{manageableSeasonId}
 		{seasonManagePanelEl}
 		{isOffline}
-		{switchGeneration}
+		{switchCurrent}
 		{updateSeasonField}
 		bind:seasonManageName={sm.seasonManageName}
 		bind:seasonManageStartDate={sm.seasonManageStartDate}
@@ -166,7 +166,7 @@
 		{rosterPartial}
 		{sectionsReadFailed}
 		seasonManageRosterLoading={sm.seasonManageRosterLoading}
-		{switchGeneration}
+		{switchCurrent}
 		{rosterPickerOptions}
 		{pickerPromptText}
 		{addSeasonConductor}

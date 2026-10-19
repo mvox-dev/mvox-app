@@ -8,7 +8,7 @@ import { authStore } from '$lib/auth/session';
 import { clearReadFellBackToCache, noteReadFellBackToCache } from '$lib/net/cacheFallback';
 import {
 	READ_CACHE_MAX_ENTRY_BYTES,
-	currentFactoryGeneration,
+	whileFactoryCurrent,
 	encodedByteLength,
 	readCacheGet,
 	readCachePut
@@ -93,7 +93,7 @@ export function readThroughGet(
 	if (!isGetMethod(init)) return attemptFetch().then(onResolved);
 
 	const personId = currentPersonId(db);
-	const generation = currentFactoryGeneration();
+	const isFactoryCurrent = whileFactoryCurrent();
 	const epoch = loadEpoch;
 
 	return attemptFetch().then(
@@ -118,7 +118,7 @@ export function readThroughGet(
 		},
 		(err) => {
 			if (storeOnly || !personId) throw err;
-			if (generation !== currentFactoryGeneration()) throw err;
+			if (!isFactoryCurrent()) throw err;
 			return readCacheGet({ db, personId, pathAndQuery }).then((cached) => {
 				if (!cached) throw err;
 				if (epoch === loadEpoch) {

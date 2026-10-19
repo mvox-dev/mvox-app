@@ -35,8 +35,8 @@
 		sections: SectionNode[];
 		sectionsError: boolean;
 		isOffline: boolean;
-		loadSeq: () => number;
-		refreshRole: (kind: RoleKind, thisLoad: number) => Promise<void>;
+		loadCurrent: () => () => boolean;
+		refreshRole: (kind: RoleKind, isLoadCurrent: () => boolean) => Promise<void>;
 		writes: RoleWrites;
 	}
 
@@ -56,7 +56,7 @@
 		sections,
 		sectionsError,
 		isOffline,
-		loadSeq,
+		loadCurrent,
 		refreshRole,
 		writes
 	}: Props = $props();
@@ -113,7 +113,7 @@
 		return role === 'owner' ? m.admin_roles_role_owner() : m.admin_roles_role_editor();
 	}
 
-	// Handlers snapshot the sequence; a collective switch mid-write drops their results.
+	// Handlers snapshot the load; a collective switch mid-write drops their results.
 	async function runRoleWrite(
 		kind: RoleKind,
 		personId: string | null,
@@ -126,21 +126,21 @@
 		if (rolesPending) return;
 		const entityId = kind === 'admin' ? dbEntityId : libraryId;
 		if (!personId || !cfg || !entityId) return;
-		const thisLoad = loadSeq();
+		const isLoadCurrent = loadCurrent();
 		actionError = false;
 		rolesStatus = '';
 		rolesPending = true;
 		try {
 			await write(cfgFor(cfg.db), entityId, personId);
-			await refreshRole(kind, thisLoad);
-			if (thisLoad !== loadSeq()) return;
+			await refreshRole(kind, isLoadCurrent);
+			if (!isLoadCurrent()) return;
 			rolesStatus = m.admin_roles_saved();
 		} catch (e) {
-			if (thisLoad !== loadSeq()) return;
+			if (!isLoadCurrent()) return;
 			console.error(label, e);
 			actionError = true;
 		} finally {
-			if (thisLoad === loadSeq()) rolesPending = false;
+			if (isLoadCurrent()) rolesPending = false;
 		}
 	}
 

@@ -287,7 +287,7 @@ describe('#325 conductor — failure text kept, controls re-enabled for retry', 
 });
 
 describe('#325 conductor — the pending flag does not leak across a season switch', () => {
-	it('an add on A still in flight when the admin switches to B: B’s panel shows NO pending notice and an ENABLED select; A’s write settling late announces NOTHING and re-raises NO pending on B (seasonManageSwitchGeneration gates the settle path)', async () => {
+	it('an add on A still in flight when the admin switches to B: B’s panel shows NO pending notice and an ENABLED select; A’s write settling late announces NOTHING and re-raises NO pending on B (seasonManageSwitchCurrent gates the settle path)', async () => {
 		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
 		const d = deferred<undefined>();
 		addSeasonConductorMock.mockReturnValue(d.promise);

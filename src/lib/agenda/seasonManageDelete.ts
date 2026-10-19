@@ -44,7 +44,7 @@ export interface SeasonManageDeleteSlot {
 	pendingId: string | null;
 	error: SeasonManageDeleteError | null;
 	progress: { current: number; total: number } | null;
-	readonly generation: number;
+	whileCurrent(): () => boolean;
 }
 
 const DELETE_LOG_NAME = { season: 'season', series: 'event series' } as const;
@@ -67,19 +67,19 @@ export function runSeasonManageDelete<T>({
 	slot.error = null;
 	slot.progress = null;
 	slot.pendingId = rowId;
-	const generation = slot.generation;
+	const isDeleteCurrent = slot.whileCurrent();
 	call((current, total) => {
-		if (generation === slot.generation) slot.progress = { current, total };
+		if (isDeleteCurrent()) slot.progress = { current, total };
 	})
 		.then((result) => {
-			if (generation === slot.generation) onDone(result);
+			if (isDeleteCurrent()) onDone(result);
 		})
 		.catch((e) => {
 			console.error(`agenda: deleting ${DELETE_LOG_NAME[list]} failed`, logId, e);
-			if (generation === slot.generation) slot.error = seasonManageDeleteFailure(list, e);
+			if (isDeleteCurrent()) slot.error = seasonManageDeleteFailure(list, e);
 		})
 		.finally(() => {
 			slot.pendingId = null;
-			if (generation === slot.generation) slot.progress = null;
+			if (isDeleteCurrent()) slot.progress = null;
 		});
 }

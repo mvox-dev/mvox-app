@@ -8,6 +8,7 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
+import { createLatest } from '$lib/async/latest';
 import { createAgendaLoader, createAgendaLoadState, createLoadCounters } from './agendaLoad';
 import type { AgendaLoadDeps } from './agendaLoad';
 import type { RepertoireItem } from '$lib/repertoire/repertoireData';
@@ -24,9 +25,9 @@ const ITEM: RepertoireItem = {
 
 function setup(items: Promise<RepertoireItem[]>) {
 	const ag = createAgendaLoadState();
-	let switchGen = 0;
+	const panelSwitch = createLatest();
 	const deps = {
-		seasonManageSwitchGeneration: () => switchGen,
+		seasonManageSwitchCurrent: panelSwitch.whileCurrent,
 		listRepertoireItems: vi.fn().mockReturnValue(items),
 		listWorks: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 		listAllEditions: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
@@ -35,7 +36,7 @@ function setup(items: Promise<RepertoireItem[]>) {
 	return {
 		ag,
 		loader: createAgendaLoader(ag, createLoadCounters(), deps),
-		reset: () => switchGen++
+		reset: panelSwitch.cancel
 	};
 }
 

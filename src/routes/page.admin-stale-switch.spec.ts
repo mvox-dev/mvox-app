@@ -50,6 +50,7 @@ vi.mock('$lib/entu-config', async () =>
 import { get } from 'svelte/store';
 import { deferred } from '$lib/testing/entuFetchKit';
 import Page from './profile/+page.svelte';
+import { createLatest } from '$lib/async/latest';
 import AdminRoles from '$lib/admin/AdminRoles.svelte';
 import { collectiveState, selectedCollectiveDbStore, selectedCollectiveStore } from '$lib/collectives/store';
 import {
@@ -139,7 +140,7 @@ describe('/profile — a switch drops the old collective’s late answers', () =
 
 	it('AdminRoles: a grant settling after its load was replaced announces nothing', async () => {
 		const write = deferred<undefined>();
-		let seq = 0;
+		const load = createLatest();
 		const { container } = render(AdminRoles, {
 			cfg: CFG,
 			dbEntityId: 'org-1',
@@ -156,7 +157,7 @@ describe('/profile — a switch drops the old collective’s late answers', () =
 			sections: [],
 			sectionsError: false,
 			isOffline: false,
-			loadSeq: () => seq,
+			loadCurrent: load.whileCurrent,
 			refreshRole: vi.fn().mockResolvedValue(undefined),
 			writes: {
 				addAdmin: vi.fn().mockReturnValue(write.promise),
@@ -169,7 +170,7 @@ describe('/profile — a switch drops the old collective’s late answers', () =
 		await fireEvent.change(q<HTMLSelectElement>(container, 'admin-add-admin-select')!, {
 			target: { value: 'p-bela' }
 		});
-		seq++;
+		load.cancel();
 		write.resolve(undefined);
 		await new Promise((r) => setTimeout(r, 0));
 

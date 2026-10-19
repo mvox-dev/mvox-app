@@ -17,7 +17,7 @@
 		rosterPartial: boolean;
 		sectionsReadFailed: boolean;
 		seasonManageRosterLoading: boolean;
-		switchGeneration: () => number;
+		switchCurrent: () => () => boolean;
 		rosterPickerOptions: (excludeIds: readonly string[]) => Array<{ id: string; label: string }>;
 		pickerPromptText: (optionCount: number, addPrompt: string) => string;
 		addSeasonConductor: typeof SeasonManage.addSeasonConductor;
@@ -36,7 +36,7 @@
 		rosterPartial,
 		sectionsReadFailed,
 		seasonManageRosterLoading,
-		switchGeneration,
+		switchCurrent,
 		rosterPickerOptions,
 		pickerPromptText,
 		addSeasonConductor,
@@ -86,19 +86,19 @@
 		if (!selected || manageableSeasonId === null) return;
 		const cfg = cfgFor(selected.db);
 		const seasonId = manageableSeasonId;
-		const thisSeasonManage = switchGeneration();
+		const isSwitchCurrent = switchCurrent();
 		seasonManageConductorError = false;
 		seasonManageConductorStatus = '';
 		seasonManageConductorPending = true;
 		seasonManageConductorIds = nextIds;
 		write(cfg, seasonId, personId)
 			.then(() => {
-				if (thisSeasonManage !== switchGeneration()) return;
+				if (!isSwitchCurrent()) return;
 				seasonManageConductorPending = false;
 				seasonManageConductorStatus = m.season_manage_conductor_saved();
 			})
 			.catch((e) => {
-				if (thisSeasonManage !== switchGeneration()) return;
+				if (!isSwitchCurrent()) return;
 				console.error(`agenda: ${verb} season conductor failed`, personId, e);
 				seasonManageConductorIds = revert();
 				seasonManageConductorError = true;

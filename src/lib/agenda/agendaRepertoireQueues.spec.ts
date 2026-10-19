@@ -45,7 +45,7 @@ function setup(listRepertoireItems = vi.fn(NEVER)) {
 	const queues = createAgendaRepertoireQueues(ag, seq, panel, {
 		selected: () => ({ db: 'sampledb' }),
 		isOffline: () => false,
-		switchGeneration: () => 0,
+		switchCurrent: () => () => true,
 		refreshWorksAfterWrite: vi.fn(),
 		actions,
 		createRepertoireWriteQueue,

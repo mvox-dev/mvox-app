@@ -1,3 +1,4 @@
+import { createLatest } from '$lib/async/latest';
 import type { SeasonEditableField, SeriesListItem } from '$lib/seasons/seasonManage';
 import type { SeasonManageDeleteError, SeasonManageDeleteSlot } from './seasonManageDelete';
 
@@ -22,7 +23,7 @@ export function createSeasonManagePanelState() {
 		seasonManageDeletePendingId: null as string | null,
 		seasonManageDeleteStatus: '',
 		seasonManageDeleteProgress: null as { current: number; total: number } | null,
-		seasonManageDeleteGeneration: 0,
+		seasonManageDeleteLoad: createLatest(),
 		seasonManageConductorError: false,
 		seasonManageConductorPending: false,
 		seasonManageConductorStatus: '',
@@ -38,12 +39,14 @@ export function createSeasonManagePanelState() {
 
 export type SeasonManagePanelState = ReturnType<typeof createSeasonManagePanelState>;
 
-// The offline hold survives a reset; the delete generation moves on, so a late reply is dropped.
+// The offline hold survives a reset; the delete load is cancelled, so a late reply is dropped.
 export function resetSeasonManagePanelState(sm: SeasonManagePanelState): void {
+	const deleteLoad = sm.seasonManageDeleteLoad;
 	Object.assign(sm, createSeasonManagePanelState(), {
 		seasonEditHeldOffline: sm.seasonEditHeldOffline,
-		seasonManageDeleteGeneration: sm.seasonManageDeleteGeneration + 1
+		seasonManageDeleteLoad: deleteLoad
 	});
+	deleteLoad.cancel();
 }
 
 export function seasonManageDeleteSlotFor(
@@ -68,8 +71,8 @@ export function seasonManageDeleteSlotFor(
 		set progress(v) {
 			state().seasonManageDeleteProgress = v;
 		},
-		get generation() {
-			return state().seasonManageDeleteGeneration;
+		whileCurrent() {
+			return state().seasonManageDeleteLoad.whileCurrent();
 		}
 	};
 }

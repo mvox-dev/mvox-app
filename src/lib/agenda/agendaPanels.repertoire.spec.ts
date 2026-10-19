@@ -28,7 +28,7 @@ function setup(fail: { items?: Error; sources?: Error; works?: Promise<unknown> 
 	const ag = createAgendaLoadState();
 	const reject = (e: Error) => vi.fn().mockRejectedValue(e);
 	const deps = {
-		seasonManageSwitchGeneration: () => 0,
+		seasonManageSwitchCurrent: () => () => true,
 		listRepertoireItems: fail.items ? reject(fail.items) : vi.fn().mockResolvedValue([ITEM]),
 		listWorks: fail.works
 			? vi.fn().mockReturnValue(fail.works)
