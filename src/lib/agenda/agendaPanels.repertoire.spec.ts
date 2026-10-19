@@ -24,7 +24,6 @@ const ITEM: RepertoireItem = {
 };
 const WORK = { id: 'work-1' };
 
-
 function setup(fail: { items?: Error; sources?: Error; works?: Promise<unknown> } = {}) {
 	const ag = createAgendaLoadState();
 	const reject = (e: Error) => vi.fn().mockRejectedValue(e);
