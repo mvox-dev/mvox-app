@@ -201,6 +201,14 @@ A major means data shape changed. The kit ships `migrations/<version>/` for exac
   `/reload-plugins`. Optional: add `agent_name: <name>` to the home's `memory-kit.conf` to name the
   main agent in the pane's footer; without it the `agentName` option or the folder's name applies
   as before.
+- **0.1.0-alpha.18 -> 0.1.0-alpha.19:** no data step. Pull, lint, then update all three plugins:
+  `claude plugin marketplace update memory-kit`, `claude plugin update obligations-pane@memory-kit`,
+  `claude plugin update watch@memory-kit`, `claude plugin update kit-update@memory-kit`,
+  `/reload-plugins`. The pane now has a tab per tier (`/memory-pane`); a home whose sessions start
+  in a subfolder of it may drop a `kit_home` pointer conf there, since the plugins look upward.
+  Optional: `"idleCompaction": false` in `~/.claude/settings.json` for a home that retires instead
+  of compacting, and `watch_idle_repeat: true` beside `watch_idle_minutes` for a repeating idle
+  report (adapters README; watch README).
 
 ## Always
 

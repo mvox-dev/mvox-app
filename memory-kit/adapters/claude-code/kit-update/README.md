@@ -128,8 +128,17 @@ kit_home: ../desk        # absolute, or relative to this conf's own folder
 - **What counts:** the home it names. That home's `memory-kit.conf` counts (`update:`, `upstream:`), with paths
   relative to that home, and so does its `memory-kit/VERSION`. Other keys left in the pointer
   conf are ignored, and `update:` or `upstream:` left there are a visible notice.
-- **Precedence:** the start folder's pointer first. It wins over the user-scope `home` option. Then
-  the option, then the start folder itself.
+- **Precedence:** the start folder's pointer first, or the nearest conf above a start folder that
+  has none (kit #42). Either wins over the user-scope `home` option. Then the option, then the
+  start folder itself. The option is normalized as a pointer is (kit #46).
+- **Found above** (kit #42): a start folder with no `memory-kit.conf` takes the nearest one above
+  it, as git finds `.git`, so a session started in a subfolder or a git worktree of a home finds
+  that home; a pointer conf found there is followed as if the session had started in its folder.
+  The walk stops at the filesystem root. `/kit-update` says where it looked: "`<start>` has no
+  memory-kit.conf; using the nearest one above it, in `<folder>`".
+- **The start folder** is the session's root at its first `session.start`, which a shell `cd` does
+  not move (kit #45): an install or enable mid-session fires `session.start` with the shell's
+  folder after any `cd`, which had made a subfolder the home.
 - **One hop, never chained.** If the target's own conf points on, that is refused, and so is a
   loop. `kit_home: .` is just the home.
 - **Absolute paths:** POSIX, a drive letter (`C:\` or `C:/`) or UNC. `~` is not expanded: write

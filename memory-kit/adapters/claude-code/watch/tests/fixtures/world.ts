@@ -11,6 +11,10 @@ export const typed = (text: string): PromptSubmitInput => ({ text, wait: false, 
 /** The world beneath the plugin, in memory: files, the host's mv and rm, the session's figures. */
 export type World = {
   files: Map<string, string>
+  /** What $.session.cwd() answers now: a shell cd mid-session moves it. */
+  cwd: string
+  /** What $.session.root() answers: the folder the session started in; a shell cd does not move it (kit #45). */
+  root: string
   /** What $.session.usage() reports: tokens undefined before a first answer. */
   tokens: number | undefined
   window: number
@@ -48,7 +52,17 @@ export type World = {
   afterStoreSet: ((key: string) => void) | undefined
 }
 
-const abs = (path: string) => (path.startsWith('/') ? path : `${CWD}/${path}`)
+/** As a real file system resolves a path: under the cwd unless absolute, `.` and `..` resolved, so
+ *  two spellings of one file are one file (kit #46). */
+const abs = (path: string) => {
+  const out: string[] = []
+  for (const part of (path.startsWith('/') ? path : `${CWD}/${path}`).split('/')) {
+    if (part === '' || part === '.') continue
+    if (part === '..') out.pop()
+    else out.push(part)
+  }
+  return `/${out.join('/')}`
+}
 
 /** What Windows PowerShell writes to stderr on a call that succeeded (kit #11, Pepys's desk). */
 export const CLIXML = '#< CLIXML\r\n<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV></PR></MS></Obj></Objs>\r\n'
@@ -71,6 +85,8 @@ export function worldOf(
   const held: (() => void)[] = []
   const world: World = {
     files: new Map(Object.entries(files).map(([p, t]) => [abs(p), t])),
+    cwd: CWD,
+    root: CWD,
     tokens: undefined,
     window: 1_000_000,
     submitted: [],
@@ -214,7 +230,8 @@ export function worldOf(
     return fail(`not mocked: ${argv.join(' ')}`)
   })
   on('command.register', ($, e) => ({ value: { command: e.name } }))
-  on('session.cwd', () => ({ value: CWD }))
+  on('session.cwd', () => ({ value: world.cwd }))
+  on('session.root', () => ({ value: world.root }))
   on('session.id', () => ({ value: world.sessionId }))
   on('session.end', ($, e) => ({ sessionId: e.sessionId }))
   on('session.usage', () => ({

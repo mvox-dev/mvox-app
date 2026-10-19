@@ -1,6 +1,6 @@
 {
   "name": "kit-update",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "memory-kit kit-update: checks upstream for a newer release on the home's channel (memory-kit.conf update: pinned|verified|latest) and prompts the session, once per release, to run tools/kit-update.py. Never runs git, never changes files.",
   "author": {
     "name": "Mihkel Putrin\u0161"

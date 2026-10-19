@@ -192,6 +192,16 @@ export function isWindowsPath(path: string): boolean {
   return /^([A-Za-z]:[\\/]|\\\\)/.test(path)
 }
 
+/**
+ * The key a file's bookkeeping goes by (kit #46): one per file however its path is spelled --
+ * separators and `.`/`..` normalized, a Windows path (drive or UNC, either slash) case-folded.
+ * Two spellings of one spool once kept two bookmarks, and each new line rang twice.
+ */
+export function fileKey(path: string): string {
+  const key = normalPath(path)
+  return isWindowsPath(path.replaceAll('/', '\\')) ? key.toLowerCase() : key
+}
+
 /** Whether `dir` is `home` or lies inside it. A Windows path folds case. Symlinks are not followed. */
 export function isInside(dir: string, home: string): boolean {
   const fold = (p: string) => (isWindowsPath(p) ? p.toLowerCase() : p)
@@ -221,6 +231,18 @@ export type ConfNumbers = { declared: boolean; values: number[]; problem?: strin
 /** `watch_idle_minutes: 50` -- one value, whole minutes, at least 1. */
 export function confIdleMinutes(conf: string): ConfNumbers {
   return confNumbers(conf, 'watch_idle_minutes', 1)
+}
+
+/**
+ * `watch_idle_repeat: true` (kit #47): the idle report recurs after each further idle interval,
+ * instead of once per working stretch. Its turn re-reads the prompt cache before the cache's hour
+ * runs out: a keep-alive for a long session. `false` or absent: once.
+ */
+export function confIdleRepeat(conf: string): { on: boolean; problem?: string } {
+  const raw = confValue(conf, 'watch_idle_repeat')
+  if (raw === undefined || raw === 'false') return { on: false }
+  if (raw === 'true') return { on: true }
+  return { on: false, problem: `true or false, not "${raw}"` }
 }
 
 /** `watch_context_percent: 50, 60, 70, 80` -- percent marks of the window, 1-99, sorted. */
@@ -264,8 +286,9 @@ export function contextReport(mark: number, tokens: number, window: number): str
  * The idle report: information only. A declared watch_retire_step is quoted as the home's own
  * declared step, decided by the home, not by the watch.
  */
-export function idleReport(idleMinutes: number, retireStep: string | undefined): string {
-  const head = `[watch] This session has been idle for ${idleMinutes} min (the watch_idle_minutes mark in memory-kit.conf).`
+export function idleReport(idleMinutes: number, retireStep: string | undefined, repeat = false): string {
+  const mark = repeat ? 'the watch_idle_minutes mark in memory-kit.conf, repeating while idle (watch_idle_repeat)' : 'the watch_idle_minutes mark in memory-kit.conf'
+  const head = `[watch] This session has been idle for ${idleMinutes} min (${mark}).`
   const tail = retireStep === undefined ? 'This is information only; what idleness means here is this home\'s own rule.' : `The home's declared step for this (watch_retire_step): ${retireStep}.`
   return `${head} ${tail}`
 }

@@ -514,7 +514,7 @@ def count_ignored(mem, f):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(add_help=False)
-    ap.add_argument("target", nargs="?", default=".")
+    ap.add_argument("target", nargs="?")
     ap.add_argument("--gate", action="store_true")
     ap.add_argument("--report", action="store_true")
     ap.add_argument("--shipped-rules", action="store_true",
@@ -541,17 +541,22 @@ def main(argv=None):
     # The target is the home, or its memory directory directly. memory-kit.conf lives in
     # the home; its memory_dir names the memory directory (default "memory"). An explicit
     # memory-directory path wins over the conf.
-    target = pathlib.Path(a.target).resolve()
+    target = pathlib.Path(a.target or ".").resolve()
     home = target.parent if target.name == "memory" else target
     pointer_lines, pointer_notes = [], []
     if target.name != "memory":
         # A pointer conf (kit_home:) hands the lint to the home it names, one hop (kit #18). A
         # pointer-only conf so passes when its home does; a broken pointer fails in every mode.
-        found = kit_home.resolve(home)
+        # Only an unnamed folder looks upward for a conf (kit #42): a named one (a fixture inside
+        # a vendored kit) is taken as given.
+        found = kit_home.resolve(home, upward=a.target is None)
         if found.problem:
             print(f"memory-kit lint {version} -- {home}")
             print(f"  FAIL memory-kit.conf: {found.problem}")
             return 2
+        if found.found_in:
+            pointer_lines.append(f"  {kit_home.found_above_note(home, found.found_in)}")
+            home = found.home
         if found.pointer:
             home = found.home
             pointer_lines.append(f"  following kit_home in {found.pointer} to {home}")

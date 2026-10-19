@@ -1,7 +1,7 @@
 {
   "name": "obligations-pane",
-  "version": "0.6.0",
-  "description": "Side pane showing the memory-kit obligations tier (memory/obligations.yaml), soonest expiry first; read-only",
+  "version": "0.7.0",
+  "description": "The memory pane: a side pane over a memory-kit home's memory, one tab per tier (obligations, scratchpad, commitments, rules, lessons, facts, keys, secrets); read-only",
   "author": {
     "name": "Mihkel Putrin\u0161"
   },
@@ -22,7 +22,7 @@
     "autoOpen": {
       "type": "boolean",
       "title": "Open at session start",
-      "description": "Open the pane when a session starts in a folder that has an obligations file (it still waits for a wide enough terminal). /obligations opens it any time.",
+      "description": "Open the pane when a session starts in a folder that has an obligations file (it still waits for a wide enough terminal). /memory-pane or /obligations opens it any time.",
       "default": true
     },
     "checkUpdates": {

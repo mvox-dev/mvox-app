@@ -21,7 +21,7 @@ import {
   upgradeUrl,
 } from './release'
 import type { Channel } from './release'
-import { isAbsolute, noConfNotice, resolveKitHome } from './kit-home'
+import { foundAboveNote, isAbsolute, noConfNotice, normalizePath, resolveKitHome } from './kit-home'
 import type { KitHome } from './kit-home'
 
 const MINUTE = 60_000
@@ -65,16 +65,30 @@ async function readOrEmpty($: EngineInterface, path: string): Promise<string> {
 
 /**
  * The kit home (kit #18). The start folder's memory-kit.conf decides first: a `kit_home:` pointer
- * names the home, one hop, and wins over the user-scope `home` option, which applies to every
- * session on the machine. Without a pointer, the option, else the start folder.
+ * names the home, one hop; a start folder without a conf takes the nearest one above it (kit
+ * #42). A home so found wins over the user-scope `home` option, which applies to every session on
+ * the machine. Otherwise the option (normalized as the pointer is, kit #46), else the start folder.
  */
 async function homeOf($: EngineInterface, settings: Settings): Promise<KitHome> {
-  const start = startCwd || (await $.session.cwd())
+  const start = await startOf($)
   const found = await resolveKitHome(start, async p => ((await $.fs.exists(p)) ? $.fs.read(p) : undefined))
-  if ('problem' in found || found.pointer !== undefined || settings.home === '') return found
-  return { home: isAbsolute(settings.home) ? settings.home : `${start}/${settings.home}`, ignored: [] }
+  if ('problem' in found || found.pointer !== undefined || found.foundIn !== undefined || settings.home === '') return found
+  return { home: normalizePath(isAbsolute(settings.home) ? settings.home : `${start}/${settings.home}`), ignored: [] }
 }
+/** The folder the session started in, set at the first session.start (see there). */
 let startCwd = ''
+
+/** The start folder: the first session.start's, else the session's root. */
+const startOf = async ($: EngineInterface) => startCwd || (await startFolder($, ''))
+
+/** The folder the session started in: its root, which a shell cd does not move (kit #45); `cwd` if the engine gives none. */
+async function startFolder($: EngineInterface, cwd: string): Promise<string> {
+  try {
+    return (await $.session.root()) || cwd || (await $.session.cwd())
+  } catch {
+    return cwd || (await $.session.cwd())
+  }
+}
 
 /** tools/kit-update.py says the same. */
 const noConfText = (home: string) => `${noConfNotice(home)}. kit-update checks nothing until it has one.`
@@ -227,11 +241,12 @@ async function homeState($: EngineInterface, settings: Settings) {
   const home = 'problem' in found ? '' : found.home
   const pointer = found.pointer
   const ignored = 'problem' in found ? [] : found.ignored
+  const foundAbove = !('problem' in found) && found.foundIn !== undefined ? foundAboveNote(await startOf($), found.foundIn) : ''
   const conf = pointerProblem !== undefined ? '' : await readOrEmpty($, `${home}/memory-kit.conf`)
   // kit #31: no conf reads as pinned and checks nothing, which looked the same as "nothing newer".
   const noConf = pointerProblem === undefined && !(await existsOrNot($, `${home}/memory-kit.conf`))
   const version = pointerProblem !== undefined ? undefined : kitVersionOf(await readOrEmpty($, `${home}/memory-kit/VERSION`))
-  return { home, pointer, pointerProblem, noConf, ignored, conf, version, ...channelOf(conf), upstream: confValue(conf, 'upstream') }
+  return { home, pointer, pointerProblem, noConf, ignored, foundAbove, conf, version, ...channelOf(conf), upstream: confValue(conf, 'upstream') }
 }
 
 async function tick($: EngineInterface, settings: Settings): Promise<void> {
@@ -283,6 +298,7 @@ async function status($: EngineInterface, settings: Settings): Promise<string> {
   if (h.noConf) return noConfText(h.home)
   const via = h.pointer !== undefined ? `, by kit_home in ${h.pointer}` : ''
   const lines = [`channel: ${h.channel}${h.problem !== undefined ? ` (${h.problem})` : ''}`, `this home: ${h.version ?? 'no memory-kit/VERSION'} (${h.home}${via})`]
+  if (h.foundAbove !== '') lines.push(h.foundAbove)
   if (h.channel === 'pinned') {
     lines[0] += ' -- no checks; set update: verified or latest in memory-kit.conf to follow releases'
     return lines.join('\n')
@@ -319,7 +335,9 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     const started = await next(e)
-    if (startCwd === '') startCwd = e.cwd
+    // The first start only. It may be an install or enable mid-session, whose e.cwd is the
+    // shell's folder after any cd: the session's root is not moved by a cd (kit #45).
+    if (startCwd === '') startCwd = await startFolder($, e.cwd)
     if (token === '') token = `${await $.clock.now()}-${Math.random().toString(36).slice(2, 10)}`
     await $.command.register({ name: 'kit-update', description: "Show the kit's update channel, this home's version, the newest release and the last check" })
     timer?.cancel()

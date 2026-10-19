@@ -3,9 +3,43 @@
 This folder is the `memory-kit` marketplace. It holds three plugins, each with its own README:
 
 - [`obligations-pane`](obligations-pane/README.md): a read-only side pane over the obligations tier.
-- [`watch`](watch/README.md): delivers a home's declared inboxes into the session.
+- [`watch`](watch/README.md): rings a doorbell when a file the home declares grows, and reports
+  idleness and context growth, information only.
 - [`kit-update`](kit-update/README.md): prompts the session when a kit release is out on the home's
   channel.
+
+## Idle compaction: turn it off in a home that retires instead (Claude Code 2.1.290+)
+
+Claude Code compacts a conversation over 200k tokens while the session is idle, before its
+one-hour prompt cache expires: at about 54 idle minutes (90% of the hour), whatever the window.
+A compaction replaces the conversation with a summary, and the session afterwards works from that
+summary: what it had read and checked becomes something it infers. A home whose rule is to
+checkpoint into its memory files and retire by its context gauge, never to compact, loses exactly
+that. The household saw it twice (18.10 and 19.10.2026, at 256k and 239k tokens, the gauge at
+23% of a 1M window): both came after 55 minutes idle, not from a full window.
+
+Turn it off in the user's settings, `~/.claude/settings.json`:
+
+```json
+{
+  "idleCompaction": false
+}
+```
+
+- The key and its meaning are Claude Code's own (2.1.303's settings schema: "Set to false to stop
+  Claude Code from compacting a long conversation while the session is idle"). `true` does not
+  turn it on; leave the key out for the default.
+- **User scope applies to every session on the machine**, every home included. `[unverified]`:
+  whether a project's `.claude/settings.json` is read for this key (plugin options, for one, are
+  read from user settings only).
+- `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` moves the 200k minimum instead of turning it off.
+- Compaction at a full window stays on (`autoCompactEnabled`); a home retiring at its gauge's
+  mark (the household: 80%) stays below it.
+- With idle compaction off, the first turn after an hour idle reads the whole context uncached.
+  The watch's repeating idle report (`watch_idle_repeat: true`, kit #47) keeps the cache warm
+  instead; see the watch README.
+- How to tell: the transcript's `compact_boundary` line carries `compactMetadata.trigger` and
+  `preTokens`; an idle compaction follows a gap of about 54 minutes after the last turn.
 
 ## Install scope (kit #35)
 

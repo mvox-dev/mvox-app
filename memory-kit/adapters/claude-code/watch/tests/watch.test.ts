@@ -8,6 +8,7 @@ import {
   confValue,
   contextReport,
   expandHome,
+  fileKey,
   idleReport,
   isHuman,
   isInside,
@@ -220,5 +221,16 @@ describe('isHuman', () => {
     expect(isHuman({ kind: 'bridge' } as never)).toBe(true)
     expect(isHuman({ kind: 'slack-ping' } as never)).toBe(true)
     expect(isHuman({ kind: 'plugin' } as never)).toBe(false)
+  })
+})
+
+describe('fileKey: one bookkeeping key per file (kit #46)', () => {
+  test('separators, dots and Windows case fold to one key; POSIX case is kept', () => {
+    const fr = 'C:\\Users\\m\\framework-research/inbound/lelle-spool.txt'
+    expect(fileKey(fr)).toBe(fileKey('C:/Users/m/framework-research/inbound/lelle-spool.txt'))
+    expect(fileKey(fr)).toBe(fileKey('c:/users/M/Framework-Research/inbound/./lelle-spool.txt'))
+    expect(fileKey('\\\\srv\\share\\a.txt')).toBe(fileKey('//srv/share/A.txt'))
+    expect(fileKey('/home/u/./inbound/../inbound/spool.txt')).toBe('/home/u/inbound/spool.txt')
+    expect(fileKey('/home/u/Spool.txt')).not.toBe(fileKey('/home/u/spool.txt'))
   })
 })

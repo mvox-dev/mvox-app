@@ -251,11 +251,14 @@ def main(argv):
         return 2
     dry = "--dry-run" in opts
     start = pathlib.Path(args[0] if args else ".").resolve()
-    found = kit_home.resolve(start)
+    # Only an unnamed folder looks upward for a conf (kit #42); a named one is taken as given.
+    found = kit_home.resolve(start, upward=not args)
     if found.problem:
         say(found.problem)
         return 2
     home = found.home
+    if found.found_in:
+        say(kit_home.found_above_note(start, found.found_in))
     if found.pointer:
         say(f"following kit_home in {found.pointer} to {home}")
     vfile, cfile = home / "memory-kit" / "VERSION", home / "memory-kit.conf"

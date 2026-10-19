@@ -2,7 +2,7 @@
 // as hooks/kit-home.ts is; lint/run-fixtures.sh fails when the copies differ (kit #18).
 import { describe, expect, test } from 'claude-code/testing'
 
-import { isAbsolute, noConfNotice, normalizePath, resolveKitHome } from '../hooks/kit-home'
+import { foundAboveNote, isAbsolute, noConfNotice, normalizePath, parentOf, resolveKitHome } from '../hooks/kit-home'
 
 /** An in-memory file system: path -> text. */
 const reader = (files: Record<string, string>) => async (path: string) => files[normalizePath(path)]
@@ -62,5 +62,68 @@ describe('kit_home: memory-kit.conf names the kit home (kit #18)', () => {
       '/u/desk/memory-kit.conf': '',
     }
     expect(await resolveKitHome('/u/start', reader(files))).toEqual({ home: '/u/desk', pointer: '/u/start/memory-kit.conf', ignored: ['watch_sources', 'memory_dir'] })
+  })
+})
+
+describe('a start folder without memory-kit.conf looks upward for the nearest one (kit #42)', () => {
+  test('a subfolder of a home finds the home', async () => {
+    const files = { '/u/home/memory-kit.conf': 'memory_dir: memory\n' }
+    expect(await resolveKitHome('/u/home/a/b', reader(files))).toEqual({ home: '/u/home', ignored: [], foundIn: '/u/home' })
+  })
+
+  test("a worktree below a pointer conf follows the pointer, relative to that conf's own folder", async () => {
+    const files = { '/u/3D/memory-kit.conf': 'kit_home: workshop\n', '/u/3D/workshop/memory-kit.conf': 'memory_dir: memory\n' }
+    expect(await resolveKitHome('/u/3D/slicer/.worktrees/m4', reader(files))).toEqual({
+      home: '/u/3D/workshop',
+      pointer: '/u/3D/memory-kit.conf',
+      ignored: [],
+      foundIn: '/u/3D',
+    })
+  })
+
+  test("the nearest conf wins, and the start folder's own conf beats any above it", async () => {
+    const files = { '/u/memory-kit.conf': '', '/u/home/memory-kit.conf': '', '/u/home/a/memory-kit.conf': '' }
+    expect(await resolveKitHome('/u/home/x', reader(files))).toEqual({ home: '/u/home', ignored: [], foundIn: '/u/home' })
+    expect(await resolveKitHome('/u/home/a', reader(files))).toEqual({ home: '/u/home/a', ignored: [] })
+  })
+
+  test('no conf anywhere leaves the start folder as the home; the walk reads the root conf too', async () => {
+    const asked: string[] = []
+    const r = await resolveKitHome('/u/a', async p => {
+      asked.push(p)
+      return undefined
+    })
+    expect(r).toEqual({ home: '/u/a', ignored: [] })
+    expect(asked).toEqual(['/u/a/memory-kit.conf', '/u/memory-kit.conf', '/memory-kit.conf'])
+    expect(await resolveKitHome('/u/a', reader({ '/memory-kit.conf': '' }))).toEqual({ home: '/', ignored: [], foundIn: '/' })
+  })
+
+  test('a broken pointer found above is still a problem, never a silent fall back', async () => {
+    const r = await resolveKitHome('/u/home/a', reader({ '/u/home/memory-kit.conf': 'kit_home: ../gone\n' }))
+    expect(r).toEqual({ pointer: '/u/home/memory-kit.conf', problem: expect.stringContaining('/u/gone: no memory-kit.conf there') })
+  })
+
+  test('a folder above that cannot be read ends the walk; the start folder itself still throws', async () => {
+    const refusing = async (p: string) => {
+      if (p !== '/s/share/a/memory-kit.conf') throw new Error('network location')
+      return undefined
+    }
+    expect(await resolveKitHome('/s/share/a', refusing)).toEqual({ home: '/s/share/a', ignored: [] })
+    await expect(resolveKitHome('/s/other', refusing)).rejects.toThrow('network location')
+  })
+
+  test('parentOf stops at every kind of root', () => {
+    expect(parentOf('/u/a/')).toBe('/u')
+    expect(parentOf('/u')).toBe('/')
+    expect(parentOf('/')).toBeUndefined()
+    expect(parentOf('C:\\Users\\m')).toBe('C:/Users')
+    expect(parentOf('C:/Users')).toBe('C:/')
+    expect(parentOf('C:/')).toBeUndefined()
+    expect(parentOf('\\\\server\\share\\kit')).toBe('//server/share')
+    expect(parentOf('//server/share')).toBeUndefined()
+  })
+
+  test('the found-above note, worded as lint/kit_home.py words it', () => {
+    expect(foundAboveNote('/u/3D/slicer/', '/u/3D')).toBe('/u/3D/slicer has no memory-kit.conf; using the nearest one above it, in /u/3D')
   })
 })

@@ -303,6 +303,50 @@ class KitHomePointer(unittest.TestCase):
         self.assertEqual(kit_home.resolve(self.root / "start").ignored, ["watch_sources", "memory_dir"])
 
 
+class KitHomeUpward(unittest.TestCase):
+    """kit #42: a start folder without a conf takes the nearest one above it, when asked."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = pathlib.Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_a_subfolder_finds_its_home_only_when_asked(self):
+        tree(self.root, {"home/memory-kit.conf": "memory_dir: memory\n", "home/a/b/x.txt": ""})
+        r = kit_home.resolve(self.root / "home/a/b", upward=True)
+        self.assertEqual((r.home, r.pointer, r.problem, r.found_in), (self.root / "home", None, None, self.root / "home"))
+        r = kit_home.resolve(self.root / "home/a/b")
+        self.assertEqual((r.home, r.found_in), (self.root / "home/a/b", None))
+
+    def test_a_pointer_found_above_counts_from_its_own_folder(self):
+        tree(self.root, {"3D/memory-kit.conf": "kit_home: workshop\n", "3D/workshop/memory-kit.conf": "", "3D/slicer/.worktrees/m4/x": ""})
+        r = kit_home.resolve(self.root / "3D/slicer/.worktrees/m4", upward=True)
+        self.assertEqual((r.home, r.pointer, r.found_in), (self.root / "3D/workshop", self.root / "3D/memory-kit.conf", self.root / "3D"))
+
+    def test_the_start_folders_own_conf_beats_any_above(self):
+        tree(self.root, {"home/memory-kit.conf": "", "home/a/memory-kit.conf": ""})
+        r = kit_home.resolve(self.root / "home/a", upward=True)
+        self.assertEqual((r.home, r.found_in), (self.root / "home/a", None))
+
+    def test_a_broken_pointer_found_above_is_a_problem(self):
+        tree(self.root, {"home/memory-kit.conf": "kit_home: ../gone\n", "home/a/x": ""})
+        self.assertIn("no memory-kit.conf there", kit_home.resolve(self.root / "home/a", upward=True).problem)
+
+    def test_the_note_is_the_plugins_text(self):
+        self.assertEqual(kit_home.found_above_note("/u/3D/slicer/", "/u/3D"), "/u/3D/slicer has no memory-kit.conf; using the nearest one above it, in /u/3D")
+
+    def test_the_lint_walks_only_when_no_folder_is_named(self):
+        kit = HERE.parent
+        tree(self.root, {"home/memory-kit.conf": "memory_dir: memory\n", "home/memory/rules.yaml": "rules: []\n", "home/sub/x": ""})
+        lint = [sys.executable, str(kit / "lint" / "memory_lint.py")]
+        unnamed = subprocess.run(lint, cwd=self.root / "home/sub", capture_output=True, text=True, encoding="utf-8")
+        self.assertIn("using the nearest one above it", unnamed.stdout)
+        named = subprocess.run([*lint, str(self.root / "home/sub")], capture_output=True, text=True, encoding="utf-8")
+        self.assertNotIn("using the nearest one above it", named.stdout)
+
+
 class NoConf(unittest.TestCase):
     """Kit #31: a start folder with no memory-kit.conf is said plainly, worded as the plugins'
     hooks/kit-home.ts words it."""

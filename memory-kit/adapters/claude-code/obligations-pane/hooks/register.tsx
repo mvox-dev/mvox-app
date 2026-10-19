@@ -1,11 +1,13 @@
-// Obligations pane: shows memory/obligations.yaml of the session's working directory in a side
-// pane, soonest expiry first. Read-only for good (Mihkel, 2026-10-14): it never writes.
+// Memory pane (the obligations pane until kit #43): a side pane over the home's memory, one tab
+// per tier. The Obligations tab shows memory/obligations.yaml, soonest expiry first, as 0.6.0 did;
+// the other tabs are tiers.ts's views. Read-only for good (Mihkel, 2026-10-14): it never writes
+// into the home; the open tab is remembered in the plugin's own $.store.
 
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { ObligationRow, PaneAgent, PaneSnapshot } from '../types'
-import { resolveKitHome } from './kit-home'
+import type { ObligationRow, PaneAgent, PaneSnapshot, TierView, ViewChoice, ViewLine } from '../types'
+import { foundAboveNote, resolveKitHome } from './kit-home'
 import {
   actorColor,
   cachedCheck,
@@ -58,15 +60,31 @@ import {
   trailingLinksOf,
   updateNote,
   upstreamTagsUrl,
+  urlNamesIn,
   urlNamesOf,
   urlOfFile,
   wheelStep,
   WORKFLOW_FG,
 } from './obligations'
 import type { Segment } from './obligations'
+import {
+  choiceKey,
+  choiceOf,
+  commitmentsView,
+  DEFAULT_CHOICE,
+  factsView,
+  keysView,
+  LESSON_FILTERS,
+  lessonsView,
+  nextView,
+  rulesView,
+  secretFiles,
+  secretsView,
+  TABS,
+} from './tiers'
 
 export const PANE = 'obligations'
-export const TITLE = 'Obligations'
+export const TITLE = 'Memory'
 export const REFRESH_MS = 20_000
 
 const snapshot = atom({ plugin: 'obligations-pane', key: 'snapshot' } as const, null)
@@ -76,6 +94,8 @@ const loads = atom({ plugin: 'obligations-pane', key: 'loads' } as const, {})
 const mainModel = atom({ plugin: 'obligations-pane', key: 'mainModel' } as const, '')
 const startCwd = atom({ plugin: 'obligations-pane', key: 'startCwd' } as const, '')
 const workflows = atom({ plugin: 'obligations-pane', key: 'workflows' } as const, {})
+const choice = atom({ plugin: 'obligations-pane', key: 'choice' } as const, DEFAULT_CHOICE)
+const choiceHome = atom({ plugin: 'obligations-pane', key: 'choiceHome' } as const, '')
 
 /** The pane's userConfig, trimmed. */
 export type Settings = { agentName: string; memoryDir: string; checkUpdates: boolean }
@@ -134,9 +154,10 @@ async function readObligations(
   return { source: 'ok', error: '', items: sortByExpires(parsed.items) }
 }
 
-async function resolveUrls($: EngineInterface, root: string, items: readonly ObligationRow[]) {
+async function resolveUrls($: EngineInterface, root: string, items: readonly ObligationRow[], tier: TierView | null) {
   const urls: Record<string, string> = {}
-  const names = [...new Set(items.flatMap(urlNamesOf))].slice(0, 100)
+  const cited = tier?.kind === 'ok' ? urlNamesIn(tier.lines.flatMap(l => [l.text, l.note])) : []
+  const names = [...new Set([...items.flatMap(urlNamesOf), ...cited])].slice(0, 100)
   for (const name of names) {
     try {
       const url = urlOfFile(await $.fs.read(`${root}/urls/${name}`))
@@ -149,6 +170,85 @@ async function resolveUrls($: EngineInterface, root: string, items: readonly Obl
 }
 
 let badUpstreamLogged = false
+
+/** A file's text, undefined when it is not there; a read that fails throws. */
+async function readIfThere($: EngineInterface, path: string): Promise<string | undefined> {
+  return (await $.fs.exists(path)) ? $.fs.read(path) : undefined
+}
+
+/** The most facts files one refresh reads: a home with more shows these, and says so in the count. */
+const MAX_FACT_FILES = 200
+
+/**
+ * The open tab's view (kit #43), read from the memory directory `root`. Only the open tab is read:
+ * a refresh reads one tier besides obligations, however many tabs there are. A tier that cannot be
+ * read is its own tab's message, never the other tabs' business.
+ */
+async function readTier($: EngineInterface, view: ViewChoice, root: string, today: string, offset: number): Promise<TierView | null> {
+  const missing = (file: string): TierView => ({ kind: 'missing', message: `no ${file} here (${root}/${file})` })
+  try {
+    switch (view.tab) {
+      case 'O':
+        return null
+      case 'N': {
+        const text = await readIfThere($, `${root}/scratchpad.yaml`)
+        return text === undefined ? missing('scratchpad.yaml') : nextView(text)
+      }
+      case 'C':
+        return commitmentsView(await readIfThere($, `${root}/commitments.yaml`))
+      case 'R': {
+        const text = await readIfThere($, `${root}/rules.yaml`)
+        return text === undefined ? missing('rules.yaml') : rulesView(text)
+      }
+      case 'L': {
+        const text = await readIfThere($, `${root}/lessons/index.yaml`)
+        return text === undefined ? missing('lessons/index.yaml') : lessonsView(text, view.lessons, `${root}/lessons`)
+      }
+      case 'F': {
+        if (!(await $.fs.exists(`${root}/facts`))) return missing('facts/')
+        const names = (await $.fs.list(`${root}/facts`))
+          .filter(e => e.kind === 'file' && /\.ya?ml$/.test(e.name))
+          .map(e => e.name)
+          .sort()
+        const files: { name: string; text: string }[] = []
+        for (const name of names.slice(0, MAX_FACT_FILES)) files.push({ name, text: await $.fs.read(`${root}/facts/${name}`) })
+        const v = factsView(files, today)
+        return v.kind === 'ok' && names.length > MAX_FACT_FILES ? { ...v, count: `${v.count} · first ${MAX_FACT_FILES} of ${names.length} files` } : v
+      }
+      case 'K': {
+        const text = await readIfThere($, `${root}/keys.yaml`)
+        return text === undefined ? missing('keys.yaml') : keysView(text)
+      }
+      case 'S': {
+        // Names and dates only: the README and a listing, never an encrypted file's bytes.
+        const dir = `${root}/secrets`
+        const readme = await readIfThere($, `${dir}/README.md`)
+        const entries = (await $.fs.exists(dir)) ? await $.fs.list(dir) : []
+        return secretsView(readme, secretFiles(entries, ms => isoDate(ms, offset)))
+      }
+    }
+  } catch (err) {
+    return { kind: 'error', message: `cannot read: ${String(err)}` }
+  }
+}
+
+/**
+ * The open tab and lessons filter for `home`: what $.state holds when it is this home's, else
+ * what $.store remembers for the home (kit #43: it outlives a restart), else Obligations.
+ */
+async function choiceFor($: EngineInterface, home: string): Promise<ViewChoice> {
+  if ((await read($, choiceHome)) === home) return choiceOf(await read($, choice))
+  let stored: unknown
+  try {
+    stored = await $.store.get(choiceKey(home))
+  } catch {
+    // No store: the default tab.
+  }
+  const loaded = choiceOf(stored)
+  await $.state.set({ plugin: 'obligations-pane', key: 'choice' }, loaded)
+  await $.state.set({ plugin: 'obligations-pane', key: 'choiceHome' }, home)
+  return loaded
+}
 
 /**
  * The release check's inputs (kit #4, #7): the home's memory-kit/VERSION, the tags URL to ask
@@ -189,24 +289,39 @@ async function kitOf($: EngineInterface, cwd: string, root: string, checkUpdates
   return { kitVersion, upstreamUrl: url, latest }
 }
 
+/** The folder the session started in: its root, which a shell cd does not move (kit #45); `cwd` if the engine gives none. */
+async function startFolder($: EngineInterface, cwd: string): Promise<string> {
+  try {
+    return (await $.session.root()) || cwd
+  } catch {
+    return cwd
+  }
+}
+
 /** Gathers everything the pane draws and writes it to state in one go. No network. */
 export async function refresh($: EngineInterface, settings: Settings): Promise<void> {
   const { agentName, memoryDir, checkUpdates } = settings
   const now = await $.clock.now()
   // The home is where the session started (kit issue #3): a shell cd into another repo
-  // mid-session must not switch the ledger. $.session.cwd() only when no start was seen.
-  const cwd = (await read($, startCwd)) || (await $.session.cwd())
-  // kit #18: the start folder's memory-kit.conf may point at the home (kit_home:, one hop). The
-  // pointer wins over the user-scope memoryDir option, which applies to every session.
+  // mid-session must not switch the ledger. Without a start seen (a plugin installed mid-session,
+  // kit #45), the session's root: a shell cd does not move it, as it moves $.session.cwd().
+  const cwd = (await read($, startCwd)) || (await $.session.root())
+  // kit #18: the start folder's memory-kit.conf may point at the home (kit_home:, one hop); kit
+  // #42: a start folder without one takes the nearest above it. A home so found wins over the
+  // user-scope memoryDir option, which applies to every session.
   const found = await resolveKitHome(cwd, async p => ((await $.fs.exists(p)) ? $.fs.read(p) : undefined))
-  const pointed = !('problem' in found) && found.pointer !== undefined ? found.home : undefined
+  const pointed = !('problem' in found) && (found.pointer !== undefined || found.foundIn !== undefined) ? found.home : undefined
   const home = pointed ?? cwd
   const conf = await readOrEmpty($, `${home}/memory-kit.conf`)
   const root = memoryRoot(home, conf, pointed !== undefined ? '' : memoryDir)
   const path = 'problem' in found ? found.pointer : `${root}/obligations.yaml`
   const ledger: Pick<PaneSnapshot, 'source' | 'error' | 'items'> =
     'problem' in found ? { source: 'pointer', error: found.problem, items: [] } : await readObligations($, path)
-  const urls = await resolveUrls($, root, ledger.items)
+  const offsetMinutes = await offsetOf($, now)
+  // kit #43: the open tab, remembered per home; a broken pointer shows on every tab as it is.
+  const view = await choiceFor($, home)
+  const tier = 'problem' in found ? null : await readTier($, view, root, isoDate(now, offsetMinutes), offsetMinutes)
+  const urls = await resolveUrls($, root, ledger.items, tier)
 
   let tokens: number | null = null
   let window: number | null = null
@@ -240,9 +355,13 @@ export async function refresh($: EngineInterface, settings: Settings): Promise<v
     path,
     ...ledger,
     urls,
+    foundAbove: !('problem' in found) && found.foundIn !== undefined ? foundAboveNote(cwd, found.foundIn) : '',
+    home,
+    tab: view.tab,
+    tier,
     ...('problem' in found ? { kitVersion: '', upstreamUrl: '', latest: '' } : await kitOf($, cwd, root, checkUpdates, pointed)),
     now,
-    offsetMinutes: await offsetOf($, now),
+    offsetMinutes,
     self: { name: selfName(conf, agentName, cwd), model, tokens, window },
     agents: liveAgents(agents),
   }
@@ -251,14 +370,41 @@ export async function refresh($: EngineInterface, settings: Settings): Promise<v
 
 let lastWheelStep: number | undefined
 
+/** How many rows the open tab scrolls through: obligations, or the tab's lines. */
+function rowCount(snap: PaneSnapshot | null): number {
+  if (snap === null) return 0
+  const tier = snap.tier ?? null
+  return tier === null ? snap.items.length : tier.kind === 'ok' ? tier.lines.length : 0
+}
+
 /** One wheel event: at most one item, and nothing within the throttle of the last step. */
 async function wheel($: EngineInterface, by: number): Promise<void> {
   const { delta, lastStep } = wheelStep(by, await $.clock.now(), lastWheelStep)
   lastWheelStep = lastStep
   if (delta === 0) return
-  const snap = await read($, snapshot)
-  const length = snap?.items.length ?? 0
+  const length = rowCount(await read($, snapshot))
   await update($, index, i => step(i, delta, length))
+}
+
+/**
+ * A tab or filter chosen (kit #43): shown at once from the top, remembered for the home in
+ * $.store (never in the home's memory), then the tab is read.
+ */
+async function choose($: EngineInterface, settings: Settings, change: Partial<ViewChoice>): Promise<void> {
+  const before = choiceOf(await read($, choice))
+  const next = { ...before, ...change }
+  await $.state.set({ plugin: 'obligations-pane', key: 'choice' }, next)
+  if (next.tab !== before.tab || next.lessons !== before.lessons) await $.state.set({ plugin: 'obligations-pane', key: 'index' }, 0)
+  const home = (await read($, snapshot))?.home ?? ''
+  if (home !== '') {
+    await $.state.set({ plugin: 'obligations-pane', key: 'choiceHome' }, home)
+    try {
+      await $.store.set(choiceKey(home), next)
+    } catch (err) {
+      $.ui.log(`obligations-pane: the tab is not remembered: ${String(err)}`, { to: 'debug' })
+    }
+  }
+  await safeRefresh($, settings)
 }
 
 /**
@@ -329,7 +475,7 @@ async function refreshAll($: EngineInterface, settings: Settings): Promise<void>
  */
 async function sessionDir($: EngineInterface): Promise<string> {
   const config = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${(await $.env.get('HOME')) ?? ''}/.claude`
-  const cwd = (await read($, startCwd)) || (await $.session.cwd())
+  const cwd = (await read($, startCwd)) || (await $.session.root())
   return `${config}/projects/${projectSlug(cwd)}/${await $.session.id()}`
 }
 
@@ -377,9 +523,22 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
     // Kept in $.state, which outlives a reload: a reload fires session.start again with the
-    // directory the session is in by then, so only the first start sets it.
-    if ((await read($, startCwd)) === '') await $.state.set({ plugin: 'obligations-pane', key: 'startCwd' }, e.cwd)
-    await $.command.register({ name: 'obligations', description: 'Open the obligations pane (memory/obligations.yaml)' })
+    // directory the session is in by then, so only the first start sets it. That first start may
+    // be an install or enable mid-session, whose e.cwd is the shell's folder after any cd: the
+    // session's root is not moved by a cd (kit #45).
+    if ((await read($, startCwd)) === '') await $.state.set({ plugin: 'obligations-pane', key: 'startCwd' }, await startFolder($, e.cwd))
+    // A refused command is a debug line, never a skipped start: a refusal used to throw out of
+    // this hook, and the pane never opened (/memory, Claude Code's built-in, live on 2.1.303).
+    for (const command of [
+      { name: 'obligations', description: 'Open the memory pane on its Obligations tab (memory/obligations.yaml)' },
+      { name: 'memory-pane', description: 'Open the memory pane: one tab per memory tier' },
+    ]) {
+      try {
+        await $.command.register(command)
+      } catch (err) {
+        $.ui.log(`obligations-pane: /${command.name} not registered: ${String(err)}`, { to: 'debug' })
+      }
+    }
     await safeRefresh($, settings)
     timer?.cancel()
     timer = $.clock.every(REFRESH_MS, () => void refreshAll($, settings))
@@ -391,9 +550,15 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'obligations' }, async $ => {
-    await safeRefresh($, settings)
+    await choose($, settings, { tab: 'O' })
     const opened = await $.ui.open({ id: PANE, title: TITLE })
     return { text: opened.isPlaced ? 'Obligations pane opened.' : 'Obligations pane waits for a wider terminal.' }
+  })
+
+  on('command.run', { command: 'memory-pane' }, async $ => {
+    await safeRefresh($, settings)
+    const opened = await $.ui.open({ id: PANE, title: TITLE })
+    return { text: opened.isPlaced ? 'Memory pane opened.' : 'Memory pane waits for a wider terminal.' }
   })
 
   on('turn.complete', async ($, e, next) => {
@@ -466,21 +631,74 @@ export const register: Register = (on, options) => {
 
     const today = isoDate(snap.now, snap.offsetMinutes)
     const items = snap.items
-    const first = clampIndex(at, items.length)
-    const move = (delta: number) => () => update($, index, i => step(i, delta, items.length))
+    // kit #43: the tab the person chose, at once; its view once a refresh has read it.
+    const view = choiceOf(await read($, choice))
+    const onO = view.tab === 'O'
+    const tier = !onO && snap.tab === view.tab ? (snap.tier ?? null) : null
+    const count = onO ? items.length : tier?.kind === 'ok' ? tier.lines.length : 0
+    const first = clampIndex(at, count)
+    const move = (delta: number) => () => update($, index, i => step(i, delta, count))
+    const pick = (change: Partial<ViewChoice>) => () => choose($, settings, change)
+
+    // The tab row (kit #43): the open tab by its full name, the others by one letter, so the row
+    // fits a narrow pane; it wraps when even that does not fit. Digits 1-8 pick a tab too.
+    const tabRow = (
+      <Box key="tabs" flexDirection="row" flexWrap="wrap" flexShrink={0} paddingX={1}>
+        {TABS.map(t =>
+          t.id === view.tab ? (
+            <Button key={`tab-${t.id}`} plain onPress={pick({ tab: t.id })}>
+              <Text bold color={HEADER_FG} backgroundColor={HEADER_BG}>
+                [{t.name}]
+              </Text>
+            </Button>
+          ) : (
+            <Button key={`tab-${t.id}`} plain onPress={pick({ tab: t.id })}>
+              <Text color={DATE_FG}>[{t.id}]</Text>
+            </Button>
+          ),
+        )}
+        <Box display="none">
+          {TABS.map((t, i) => (
+            <Button key={`tab-key-${t.id}`} plain hotkey={String(i + 1)} onPress={pick({ tab: t.id })}>
+              {t.id}
+            </Button>
+          ))}
+        </Box>
+      </Box>
+    )
+
+    // The lessons filter (kit #43): one chip per enforcement type, under the header.
+    const chips = view.tab === 'L' && (
+      <Box key="chips" flexDirection="row" flexWrap="wrap" flexShrink={0} paddingX={1}>
+        {LESSON_FILTERS.map(f => (
+          <Button key={`chip-${f}`} plain onPress={pick({ lessons: f })}>
+            {f === view.lessons ? (
+              <Text bold color={HEADER_FG} backgroundColor={HEADER_BG}>
+                [{f}]
+              </Text>
+            ) : (
+              <Text color={DATE_FG}>[{f}]</Text>
+            )}
+          </Button>
+        ))}
+      </Box>
+    )
+
+    // The header's middle: the obligations counts on O, the open tab's own count elsewhere.
+    const headerCount = onO ? (snap.source === 'ok' ? countsLabel(countsOf(items, today)) : '') : tier?.kind === 'ok' ? tier.count : ''
 
     const header = (
       <Box key="header" backgroundColor={HEADER_BG} flexDirection="row" justifyContent="space-between" paddingX={1} flexShrink={0}>
         <Text color={HEADER_FG} bold wrap="truncate-end">
           {/* `?? ''`: a snapshot a 0.2.x module wrote before a hot reload has neither field. */}
-          {[kitLabel(snap.kitVersion ?? '', updateNote(snap.kitVersion ?? '', snap.latest ?? '')), snap.source === 'ok' ? countsLabel(countsOf(items, today)) : '']
+          {[kitLabel(snap.kitVersion ?? '', updateNote(snap.kitVersion ?? '', snap.latest ?? '')), headerCount]
             .filter(part => part !== '')
             .join('  ')}
         </Text>
-        {items.length > 1 && (
+        {count > 1 && (
           <Box flexDirection="row" flexShrink={0}>
             <Text color={HEADER_FG}>
-              {first + 1}/{items.length}
+              {first + 1}/{count}
             </Text>
             {/* Not drawn: they only carry the k / j hotkeys. The wheel scrolls (ui.scroll). */}
             <Box display="none">
@@ -541,7 +759,65 @@ export const register: Register = (on, options) => {
       )
     }
 
-    const body =
+    // kit #42: a home found above the start folder is said, so a surprising home is visible.
+    // `?? ''`: a snapshot an older module wrote before a hot reload has no such field.
+    const foundAbove = (snap.foundAbove ?? '') !== '' && (
+      <Text key="found-above" color={DATE_FG} dimColor wrap="wrap">
+        {snap.foundAbove}
+      </Text>
+    )
+
+    // One line of a tier tab (kit #43): a heading, or tag, text with its links, note and flag.
+    const tierLine = (l: ViewLine) => {
+      if (l.heading)
+        return (
+          <Box key={l.key} flexDirection="column" flexShrink={0} paddingX={1}>
+            <Text bold underline color={DATE_FG}>
+              {l.text}
+              {l.flag !== '' ? <Text color="#9e0000"> {l.flag}</Text> : null}
+            </Text>
+          </Box>
+        )
+      const text = segmentsOf(l.text, snap.urls).map(segment)
+      return (
+        <Box key={l.key} flexDirection="column" flexShrink={0} paddingX={1}>
+          <Text color={DATE_FG} dimColor={l.dim}>
+            {l.tag !== '' ? [<Text key="tag" bold color={view.tab === 'K' ? actorColor(l.tag) : DATE_FG}>{l.tag}</Text>, ' '] : null}
+            {l.href !== '' ? (
+              <Link key="file" href={l.href}>
+                <Text color={LINK_FG}>{l.text}</Text>
+              </Link>
+            ) : (
+              text
+            )}
+            {l.note !== '' ? <Text dimColor> {l.note}</Text> : null}
+            {l.flag !== '' ? <Text color="#9e0000"> {l.flag}</Text> : null}
+          </Text>
+        </Box>
+      )
+    }
+
+    const tierBody =
+      tier === null ? (
+        <Text color={DATE_FG}>reading…</Text>
+      ) : tier.kind === 'missing' ? (
+        <Text color={DATE_FG}>{tier.message}</Text>
+      ) : tier.kind === 'error' ? (
+        <Text color="#9e0000">{tier.message}</Text>
+      ) : (
+        [
+          tier.banner !== '' ? (
+            <Text key="banner" color="#9e0000" bold wrap="wrap">
+              {tier.banner}
+            </Text>
+          ) : null,
+          ...(tier.lines.length === 0 ? [<Text key="empty" color={DATE_FG}>nothing here yet</Text>] : tier.lines.slice(first).map(tierLine)),
+        ]
+      )
+
+    const body = !onO && snap.source !== 'pointer' ? (
+      tierBody
+    ) :
       snap.source === 'missing' ? (
         <Text color={DATE_FG}>no obligations file here ({snap.path})</Text>
       ) : snap.source === 'pointer' ? (
@@ -596,8 +872,11 @@ export const register: Register = (on, options) => {
 
     return (
       <Box backgroundColor={PANE_BG} flexDirection="column" height={rows}>
+        {tabRow}
         {header}
+        {chips}
         <Box key="body" flexDirection="column" flexGrow={1} flexShrink={1} overflow="hidden" gap={1} paddingTop={1}>
+          {foundAbove}
           {body}
         </Box>
         {footer}

@@ -167,6 +167,40 @@ describe('kit_home: the start folder points at the home (kit #18)', () => {
   })
 })
 
+describe('the start folder: found above, not moved by a cd, the option normalized (kit #42, #45, #46)', () => {
+  test('a start folder below the home finds it; /kit-update says where it looked', async ($, on) => {
+    const world = homeOn(on, 'verified')
+    world.cwd = world.root = `${CWD}/sub/worktree`
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start({ ...SESSION, cwd: world.cwd })
+    await clock.advance(5_000)
+    expect(world.submitted).toHaveLength(1)
+    expect(world.submitted[0]).toContain(`kit-update.py '${CWD}'`)
+    const { text } = await $.command.run({ command: 'kit-update', args: '', origin: { kind: 'composer' } } as never)
+    expect(text).toContain(`this home: 0.1.0-alpha.12 (${CWD})`)
+    expect(text).toContain(`${CWD}/sub/worktree has no memory-kit.conf; using the nearest one above it, in ${CWD}`)
+  })
+
+  test('enabled mid-session after a shell cd: the session root, not the cd folder', async ($, on) => {
+    const world = homeOn(on, 'verified')
+    world.files.set('/home/u/other/memory-kit.conf', 'update: pinned\n')
+    world.cwd = '/home/u/other'
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start({ ...SESSION, cwd: '/home/u/other' })
+    await clock.advance(5_000)
+    expect(world.submitted).toHaveLength(1)
+    expect(world.submitted[0]).toContain(`kit-update.py '${CWD}'`)
+  })
+
+  test('the home option is normalized as a pointer is', { options: { home: '/home/u/./elsewhere/' } }, async ($, on) => {
+    const world = worldOf(on, { '/home/u/elsewhere/memory-kit/VERSION': '0.1.0-alpha.12\n' })
+    world.files.delete(`${CWD}/memory-kit.conf`)
+    const clock = mock.clock(on, { now: NOW })
+    await start($, clock)
+    expect(world.notified).toEqual([expect.stringMatching(/^\/home\/u\/elsewhere has no memory-kit.conf/)])
+  })
+})
+
 describe('no memory-kit.conf where the home is looked for (kit #31)', () => {
   const NOTICE = (folder: string) =>
     `${folder} has no memory-kit.conf, so it is not a kit home; if the home is elsewhere, put kit_home: <path> in a memory-kit.conf here. kit-update checks nothing until it has one.`

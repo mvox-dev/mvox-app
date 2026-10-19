@@ -5,11 +5,14 @@
     python3 spool-poll.py --status --spool PATH
 
 Kit #16, after the fleet's lelle-watch.py --spool (pepys desk, semafor, hr2). The watch reads
-local files only; this poller bridges a hub it cannot read, and the home declares the spool as a
-`lines` source:
+local files only; this poller bridges a hub it cannot read, and the home declares the spool as an
+injecting doorbell in memory-kit.conf (watch 0.5.0; the watch's README, "A remote hub"):
 
-    watch_sources:
-      - "lelle | lines | inbound/lelle-spool.txt"
+    watch_files:
+      - label: lelle
+        path: inbound/lelle-spool.txt
+        instruction: "collect with recv, then ack BY ID what you read"
+        inject: true
 
 Every --every seconds (30) it runs COMMAND, which must only LOOK at the hub (e.g. `evr-mail recv
 --peek`): it never collects or acks, so custody stays with the session's own collect, after the

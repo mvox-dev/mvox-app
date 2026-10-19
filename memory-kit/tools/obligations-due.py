@@ -5,7 +5,7 @@
 
     home   the home (the folder holding memory-kit.conf), or its memory directory, or a folder
            whose memory-kit.conf points at the home (kit_home:, kit #18). Default: the current
-           directory.
+           directory, or the nearest folder above it with a memory-kit.conf (kit #42).
     days   the window after today. Default: 7.
 
 Prints each row as `expires  actor -> owed_to: obligation` (no arrow on a row without owed_to).
@@ -33,14 +33,16 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "lint"))
 import kit_home  # noqa: E402
 
 
-def memory_dir(target):
+def memory_dir(target, upward=False):
     target = pathlib.Path(target).resolve()
     if target.name == "memory":
         return target
-    found = kit_home.resolve(target)
+    found = kit_home.resolve(target, upward)
     if found.problem:
         sys.stderr.write(f"memory-kit: {found.problem}\n")
         sys.exit(2)
+    if found.found_in:
+        sys.stderr.write(f"memory-kit: {kit_home.found_above_note(target, found.found_in)}\n")
     target = found.home
     conf = target / "memory-kit.conf"
     name = "memory"
@@ -52,7 +54,8 @@ def memory_dir(target):
 def main(argv):
     target = argv[1] if len(argv) > 1 else "."
     days = int(argv[2]) if len(argv) > 2 else 7
-    mem = memory_dir(target)
+    # Only an unnamed folder looks upward for a conf (kit #42); a named one is taken as given.
+    mem = memory_dir(target, upward=len(argv) <= 1)
     if not mem.is_dir():
         sys.stderr.write(f"memory-kit: no such memory directory: {mem}\n")
         return 2

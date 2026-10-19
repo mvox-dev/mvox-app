@@ -20,6 +20,12 @@ or relative to that conf's folder), the lint runs on the home it names: that hom
   live in `lint/kit_home.py`, which the tools import too.
 - A memory-directory path given directly is linted as given, pointer or not.
 
+**Found above** (kit #42). Run with no path, in a folder with no `memory-kit.conf`, the lint takes
+the nearest conf above it (as git finds `.git`) and says so: "`<folder>` has no memory-kit.conf;
+using the nearest one above it, in `<home>`". A path named on the command line is taken as given,
+so a fixture inside a vendored kit is linted as itself. `tools/obligations-due.py` and
+`tools/kit-update.py` do the same with no folder named.
+
 **A gate must pass on the tree it is introduced to.** A lint that fails on day one teaches
 `--no-verify`.
 

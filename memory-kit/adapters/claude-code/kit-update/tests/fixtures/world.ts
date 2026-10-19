@@ -6,6 +6,10 @@ export const SESSION: SessionStartInput = { surface: 'terminal', isInteractive: 
 /** The world beneath the plugin, in memory: the home's files, upstream, the store, the session. */
 export type World = {
   files: Map<string, string>
+  /** What $.session.cwd() answers now: a shell cd mid-session moves it. */
+  cwd: string
+  /** What $.session.root() answers: the folder the session started in; a shell cd does not move it (kit #45). */
+  root: string
   /** Upstream tag names, newest first, as the tags API lists them. */
   tags: string[]
   /** UPGRADE.md per release tag (`v0.1.0-alpha.N`); a tag not listed answers 404. */
@@ -33,6 +37,8 @@ const json = (data: unknown): HttpResponse => ({ status: 200, ok: true, headers:
 export function worldOf(on: On, files: Readonly<Record<string, string>>, store: Readonly<Record<string, unknown>> = {}): World {
   const world: World = {
     files: new Map(Object.entries(files).map(([p, t]) => [abs(p), t])),
+    cwd: CWD,
+    root: CWD,
     tags: [],
     upgrade: {},
     offline: false,
@@ -63,7 +69,8 @@ export function worldOf(on: On, files: Readonly<Record<string, string>>, store: 
     const text = world.files.get(abs(e.path))
     return text === undefined ? { deny: `ENOENT: ${e.path}` } : { value: text }
   })
-  on('session.cwd', () => ({ value: CWD }))
+  on('session.cwd', () => ({ value: world.cwd }))
+  on('session.root', () => ({ value: world.root }))
   // Codeberg: the tags API, 50 to a page; raw files at a ref.
   on('http.fetch', ($, e) => {
     world.requests.push(e.url)

@@ -1,4 +1,4 @@
-// The obligations pane's $.state contract. Self-contained: no imports.
+// The memory pane's $.state contract (the obligations pane until kit #43). Self-contained: no imports.
 
 /** One obligation as parsed from memory/obligations.yaml, plus the line its item starts on. */
 export type ObligationRow = {
@@ -13,6 +13,40 @@ export type ObligationRow = {
   /** 1-based line of the item's "- " in the file: file order for ties, and the row key. */
   line: number
 }
+
+/** The memory pane's tabs (kit #43): Obligations, Next (the scratchpad), Commitments, Rules,
+ *  Lessons, Facts, Keys, Secrets. */
+export type TabId = 'O' | 'N' | 'C' | 'R' | 'L' | 'F' | 'K' | 'S'
+
+export type LessonFilter = 'all' | 'hooked' | 'linted' | 'recognition'
+
+/** What the pane remembers per home ($.store): the open tab and the lessons filter. */
+export type ViewChoice = { tab: TabId; lessons: LessonFilter }
+
+/** One line of a tab's body (every tab but Obligations, which keeps its own rows). */
+export type ViewLine = {
+  key: string
+  /** Drawn first, bold (a label, a number, a date, a subject); '' for none. */
+  tag: string
+  /** The line's text; every urls/<name> in it is a link. */
+  text: string
+  /** Drawn dim after the text (who, when, how to revoke); '' for none. */
+  note: string
+  /** The whole line drawn dim (a stale fact). */
+  dim: boolean
+  /** A group heading (a scratchpad section, a facts subject). */
+  heading: boolean
+  /** Drawn in red after the note: what is off with this line; '' for nothing. */
+  flag: string
+  /** The line links here (a lesson's file); '' for no link. */
+  href: string
+}
+
+/** A tab's body: its lines and the header's count, or one message in place of them. */
+export type TierView =
+  | { kind: 'ok'; count: string; lines: ViewLine[]; banner: string }
+  | { kind: 'missing'; message: string }
+  | { kind: 'error'; message: string }
 
 /** One live subagent or teammate as the footer lists it. */
 export type PaneAgent = {
@@ -37,6 +71,14 @@ export type PaneSnapshot = {
   items: ObligationRow[]
   /** urls/<name> -> URL, for every name the items cite that resolved. */
   urls: Record<string, string>
+  /** kit #42: the note when the home came from a memory-kit.conf above the start folder; '' otherwise. */
+  foundAbove: string
+  /** The resolved home: the key the open tab is remembered by (kit #43). */
+  home: string
+  /** The tab this snapshot's `tier` was read for. */
+  tab: TabId
+  /** The open tab's view; null on the Obligations tab, which reads `items`. */
+  tier: TierView | null
   /** Milliseconds since the epoch when the snapshot was taken. */
   now: number
   /** Local UTC offset in minutes east, for "today". */
@@ -81,6 +123,10 @@ declare module 'claude-code' {
       startCwd: string
       /** runId -> run, from agent.spawn's `workflow` tag and turn.complete (workflow agents are not in agent.list). */
       workflows: Record<string, WorkflowRun>
+      /** The open tab and the lessons filter (kit #43), loaded from $.store for `choiceHome`. */
+      choice: ViewChoice
+      /** The home whose stored choice `choice` holds; '' before the first refresh. */
+      choiceHome: string
     }
   }
 }

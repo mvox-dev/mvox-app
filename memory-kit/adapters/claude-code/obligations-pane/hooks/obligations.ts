@@ -16,8 +16,7 @@ export type ParseResult =
   | { kind: 'error'; line: number; message: string }
 
 const KEYS = ['obligation', 'actor', 'owed_to', 'since', 'check', 'expires', 'ref'] as const
-type Key = (typeof KEYS)[number]
-const REQUIRED: readonly Key[] = ['obligation', 'actor', 'expires']
+const REQUIRED = ['obligation', 'actor', 'expires'] as const
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 class ParseError extends Error {
@@ -155,6 +154,48 @@ function foldQuoted(parts: readonly string[]): string {
   return fold(parts).replace(/\u0000([0-9a-f]+);/g, (_, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
 }
 
+/**
+ * The entries of a one-line flow map (`{rule: "x", ref: ''}`), as a list item may be written: the
+ * kit's own fixtures do, and YAML allows it. Commas inside quotes are content; nested
+ * collections are not supported.
+ */
+function flowEntries(text: string, line: number): [string, string][] {
+  const hash = text.search(/\}\s*(#.*)?$/)
+  if (!text.startsWith('{') || hash === -1) throw new ParseError(line, 'a flow map must open and close on its line')
+  const inner = text.slice(1, hash)
+  const parts: string[] = []
+  let current = ''
+  let quote = ''
+  for (let i = 0; i < inner.length; i++) {
+    const c = inner[i] ?? ''
+    if (quote !== '') {
+      current += c
+      if (c === '\\' && quote === '"') current += inner[++i] ?? ''
+      else if (c === quote) {
+        if (quote === "'" && inner[i + 1] === "'") current += inner[++i] ?? ''
+        else quote = ''
+      }
+      continue
+    }
+    // A quote opens a value only where the value starts: `It's` in a plain value is content.
+    if ((c === '"' || c === "'") && /(^|[:,])\s*$/.test(current)) quote = c
+    if (c === '{' || c === '[') throw new ParseError(line, 'nested values are not supported')
+    if (c === ',') {
+      parts.push(current)
+      current = ''
+      continue
+    }
+    current += c
+  }
+  if (quote !== '') throw new ParseError(line, 'unterminated quoted string in a flow map')
+  parts.push(current)
+  return parts.filter(p => p.trim() !== '').map(p => {
+    const m = /^\s*([A-Za-z_][\w-]*):(\s+(.*))?$/.exec(p)
+    if (!m) throw new ParseError(line, `expected "key: value" in a flow map, got: ${p.trim().slice(0, 40)}`)
+    return [m[1] ?? '', parseScalar(m[3] ?? '', line)]
+  })
+}
+
 /** Splits `key: value` (value may be empty). */
 function keyValue(text: string, line: number): [string, string] {
   const m = /^([A-Za-z_][\w-]*):(\s+(.*))?$/.exec(text)
@@ -170,61 +211,97 @@ function keyValue(text: string, line: number): [string, string] {
  * Every item records the 1-based line it starts on: file order for ties, and a stable row key.
  */
 export function parseObligations(text: string): ParseResult {
+  const parsed = parseMapLists(text, OBLIGATIONS)
+  if (parsed.kind === 'error') return parsed
+  return {
+    kind: 'ok',
+    items: (parsed.lists.obligations ?? []).map(({ fields: f, line }) => ({
+      obligation: f.obligation ?? '',
+      actor: f.actor ?? '',
+      owed_to: f.owed_to ?? '',
+      since: f.since ?? '',
+      check: f.check ?? '',
+      expires: f.expires ?? '',
+      ref: f.ref ?? '',
+      line,
+    })),
+  }
+}
+
+const OBLIGATIONS: ListSpec = { tops: ['obligations'], keys: KEYS, required: REQUIRED, dates: ['since', 'expires'] }
+
+/**
+ * One tier file's shape for parseMapLists: its top-level keys, each holding a block list of
+ * flat maps (memory-kit/types/memory-*.ts), the keys an item may carry, those it must carry
+ * non-empty, and those that are ISO dates when set.
+ */
+export type ListSpec = {
+  tops: readonly string[]
+  keys: readonly string[]
+  required: readonly string[]
+  dates: readonly string[]
+}
+
+/** One parsed item: every key of its spec ('' when absent), and the 1-based line it starts on. */
+export type MapRow = { fields: Record<string, string>; line: number }
+
+export type ListsResult = { kind: 'ok'; lists: Record<string, MapRow[]> } | { kind: 'error'; line: number; message: string }
+
+/**
+ * Parses a tier file of the kit's one YAML shape: top-level keys, each a block list of flat maps
+ * (or `[]`), as parseObligations reads obligations.yaml (that is this, with its spec). Each top
+ * key may appear once, in any order; an absent one is an empty list. Anything outside the shape
+ * is an error with a line, never a guess.
+ */
+export function parseMapLists(text: string, spec: ListSpec): ListsResult {
   try {
-    return { kind: 'ok', items: parseOrThrow(text) }
+    return { kind: 'ok', lists: parseOrThrow(text, spec) }
   } catch (err) {
     if (err instanceof ParseError) return { kind: 'error', line: err.line, message: err.message }
     throw err
   }
 }
 
-function parseOrThrow(text: string): ObligationRow[] {
-  const lines = text.replace(/^﻿/, '').split(/\r?\n/)
-  const items: ObligationRow[] = []
-  let seenTop = false
+function parseOrThrow(text: string, spec: ListSpec): Record<string, MapRow[]> {
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/)
+  const lists: Record<string, MapRow[]> = Object.fromEntries(spec.tops.map(t => [t, []]))
+  const seen = new Set<string>()
+  let top: string | undefined
   let isEmptyList = false
   let itemIndent = -1
   let keyIndent = -1
-  let current: (Partial<Record<Key, string>> & { line: number }) | undefined
+  let current: MapRow | undefined
   // The key whose value is still open: continuation lines join it until the next key or item.
   let pending: { key: string; raw: string[]; line: number; blanks: number } | undefined
+  const firstTops = spec.tops.map(t => `"${t}:"`).join(' or ')
 
   const flush = () => {
     if (!pending) return
     const { key, raw, line } = pending
     pending = undefined
     if (!current) throw new ParseError(line, 'key outside a list item')
-    if (!(KEYS as readonly string[]).includes(key)) throw new ParseError(line, `unknown key "${key}"`)
-    if (current[key as Key] !== undefined) throw new ParseError(line, `duplicate key "${key}"`)
+    if (!spec.keys.includes(key)) throw new ParseError(line, `unknown key "${key}"`)
+    if (current.fields[key] !== undefined) throw new ParseError(line, `duplicate key "${key}"`)
     // A value that starts on the next line: the scalar is the continuation alone.
     const value = raw[0]?.trim() === '' && raw.length > 1 ? raw.slice(1) : raw
-    current[key as Key] = parseScalar(value.join('\n'), line)
+    current.fields[key] = parseScalar(value.join('\n'), line)
   }
 
   const close = () => {
     flush()
-    if (!current) return
-    for (const key of REQUIRED) {
-      if (current[key] === undefined || current[key] === '') {
+    if (!current || top === undefined) return
+    for (const key of spec.required) {
+      if (current.fields[key] === undefined || current.fields[key] === '') {
         throw new ParseError(current.line, `item is missing "${key}"`)
       }
     }
-    for (const key of ['since', 'expires'] as const) {
-      const v = current[key]
+    for (const key of spec.dates) {
+      const v = current.fields[key]
       if (v !== undefined && v !== '' && !ISO_DATE.test(v)) {
         throw new ParseError(current.line, `"${key}" is not an ISO date (YYYY-MM-DD): ${v}`)
       }
     }
-    items.push({
-      obligation: current.obligation ?? '',
-      actor: current.actor ?? '',
-      owed_to: current.owed_to ?? '',
-      since: current.since ?? '',
-      check: current.check ?? '',
-      expires: current.expires ?? '',
-      ref: current.ref ?? '',
-      line: current.line,
-    })
+    lists[top]?.push({ line: current.line, fields: Object.fromEntries(spec.keys.map(k => [k, current?.fields[k] ?? ''])) })
     current = undefined
   }
 
@@ -271,27 +348,43 @@ function parseOrThrow(text: string): ObligationRow[] {
     const body = raw.trim()
     const isItem = body.startsWith('- ') || body === '-'
 
-    if (indent === 0 && !(isItem && seenTop)) {
-      if (seenTop) throw new ParseError(line, `unexpected top-level line: ${body.slice(0, 40)}`)
-      if (isItem) throw new ParseError(line, 'expected "obligations:" first')
+    if (indent === 0 && !(isItem && top !== undefined && !isEmptyList)) {
+      if (isItem) {
+        if (top === undefined) throw new ParseError(line, `expected ${firstTops} first`)
+        throw new ParseError(line, `content after "${top}: []"`)
+      }
       const [key, value] = keyValue(body, line)
-      if (key !== 'obligations') throw new ParseError(line, `unknown top-level key "${key}"`)
-      seenTop = true
+      if (top !== undefined && (!spec.tops.includes(key) || seen.has(key))) throw new ParseError(line, `unexpected top-level line: ${body.slice(0, 40)}`)
+      if (!spec.tops.includes(key)) throw new ParseError(line, `unknown top-level key "${key}"`)
+      close()
+      top = key
+      seen.add(key)
+      itemIndent = -1
+      keyIndent = -1
       const v = plainScalar(value)
-      if (v === '[]') isEmptyList = true
-      else if (v !== '') throw new ParseError(line, '"obligations" must be a list')
+      isEmptyList = v === '[]'
+      if (!isEmptyList && v !== '') throw new ParseError(line, `"${key}" must be a list`)
       return
     }
-    if (!seenTop) throw new ParseError(line, 'expected "obligations:" first')
-    if (isEmptyList) throw new ParseError(line, 'content after "obligations: []"')
+    if (top === undefined) throw new ParseError(line, `expected ${firstTops} first`)
+    if (isEmptyList) throw new ParseError(line, `content after "${top}: []"`)
 
     if (isItem) {
       if (itemIndent === -1) itemIndent = indent
       if (indent !== itemIndent) throw new ParseError(line, 'list item at inconsistent indent')
       close()
-      current = { line }
+      current = { line, fields: {} }
       const rest = body.slice(1).trimStart()
       if (rest === '') return
+      if (rest.startsWith('{')) {
+        // One line holds the whole item; the next line starts another item or a top key.
+        for (const [key, value] of flowEntries(rest, line)) {
+          if (!spec.keys.includes(key)) throw new ParseError(line, `unknown key "${key}"`)
+          if (current.fields[key] !== undefined) throw new ParseError(line, `duplicate key "${key}"`)
+          current.fields[key] = value
+        }
+        return
+      }
       const firstKeyIndent = indent + (body.length - rest.length)
       if (keyIndent === -1) keyIndent = firstKeyIndent
       else if (firstKeyIndent !== keyIndent) throw new ParseError(line, 'key at inconsistent indent')
@@ -308,13 +401,13 @@ function parseOrThrow(text: string): ObligationRow[] {
     openKey(body, line)
   })
 
-  if (!seenTop) {
-    // A file holding only comments is an empty ledger, not an error.
-    if (lines.every(l => /^\s*(#.*)?$/.test(l))) return []
-    throw new ParseError(1, 'expected "obligations:"')
+  if (top === undefined) {
+    // A file holding only comments is an empty tier, not an error.
+    if (lines.every(l => /^\s*(#.*)?$/.test(l))) return lists
+    throw new ParseError(1, `expected ${firstTops}`)
   }
   close()
-  return items
+  return lists
 }
 
 /** A top-level `key: value` of a kit home's memory-kit.conf, unquoted; undefined when absent or empty. */
@@ -656,9 +749,14 @@ const URL_REF = /urls\/([a-z0-9][a-z0-9-]*)/g
 
 /** Every urls/<name> cited in a row's text, check or ref, each once, in order. */
 export function urlNamesOf(item: Pick<ObligationRow, 'obligation' | 'check' | 'ref'>): string[] {
+  return urlNamesIn([item.obligation, item.check, item.ref])
+}
+
+/** Every urls/<name> cited in these texts, each once, in order (a tab's lines, kit #43). */
+export function urlNamesIn(texts: readonly string[]): string[] {
   const names: string[] = []
-  for (const field of [item.obligation, item.check, item.ref]) {
-    for (const m of field.matchAll(URL_REF)) {
+  for (const text of texts) {
+    for (const m of text.matchAll(URL_REF)) {
       const name = m[1] ?? ''
       if (!names.includes(name)) names.push(name)
     }

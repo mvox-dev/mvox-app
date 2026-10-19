@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.1.0-alpha.19 -- 2026-10-19 -- the memory pane, and the home found from above
+
+Plugin versions this release: obligations-pane 0.7.0, watch 0.6.0, kit-update 0.3.2.
+
+No data step.
+
+- **The memory pane** (kit #43, designed by Mihkel and the desk): the obligations pane gets a tab
+  row, `[Obligations][N][C][R][L][F][K][S]`, one read-only tab per tier: Next (the scratchpad),
+  Commitments, Rules, Lessons (newest first, a link to each lesson's file, a filter chip row),
+  Facts (by subject, unverified for 91 days dim), Keys (a blank revoke is a finding) and Secrets
+  (the README's labelled lines and the encrypted files by name and date, never a byte of one; a
+  non-compliant home is a red banner). Obligations renders as before. The open tab is remembered
+  per home in the plugin's own store; the pane still writes nothing into the home. `/obligations`
+  opens the Obligations tab, `/memory-pane` the open one (`/memory` is Claude Code's built-in).
+  The plugin keeps its id, `obligations-pane@memory-kit`.
+- **A start folder without `memory-kit.conf` looks upward** (kit #42) for the nearest one, as git
+  finds `.git`: a session started in a subfolder or a git worktree of a home finds the home. The
+  plugins always do; the lint and the tools when no folder is named. The pane, `/watch` and
+  `/kit-update` say where they looked.
+- **The start folder is the session's root** (kit #45): an install or enable mid-session fired
+  `session.start` with the shell's folder after any `cd`, which became the home.
+- **One spool, one bookmark** (kit #46): the watch keys its bookkeeping by a normalized path
+  (Windows paths case-folded), so a file reached under two spellings rings once; the `home` option
+  is normalized as a pointer is.
+- **`watch_idle_repeat: true`** (kit #47): the idle report recurs after each further interval while
+  the session stays idle, a prompt-cache keep-alive; a human prompt still arms it first.
+- **Idle compaction** (adapters README): Claude Code 2.1.290+ compacts a conversation over 200k
+  tokens after about 54 idle minutes. A home that retires instead of compacting turns it off with
+  `"idleCompaction": false` in the user's settings; the README says how to tell one in a transcript.
+- watch: `plugin.json` and `spool-poll.py` name `watch_files`, not the retired `watch_sources` (kit #44).
+- **Checked:** 150 pane, 80 watch and 68 kit-update tests, 50 Python and 48 fixture checks; every
+  tab drawn live in a throwaway session on a scratch home.
+- **The household runs it first.**
+
 ## v0.1.0-alpha.18 -- 2026-10-18 -- the pane names its home and lists workflows
 
 Plugin versions this release: obligations-pane 0.6.0 (watch 0.5.0 and kit-update 0.3.1 unchanged).
