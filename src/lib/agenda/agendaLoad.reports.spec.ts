@@ -200,6 +200,22 @@ describe('agenda reads that fail are reported (#756)', () => {
 		expect(reportProblem).not.toHaveBeenCalled();
 	});
 
+	it('the prefetch promise waits for the parts read', async () => {
+		let release!: (results: unknown) => void;
+		Object.assign(wire, {
+			detail: () => Promise.resolve({}),
+			parts: () => new Promise((resolve) => (release = resolve))
+		});
+		let settled = false;
+		const load = prefetch(setup()).then(() => (settled = true));
+		await settle();
+		expect(settled).toBe(false);
+
+		release([]);
+		await load;
+		expect(settled).toBe(true);
+	});
+
 	it('a prefetch superseded by a newer load is not reported', async () => {
 		Object.assign(wire, { detail: fail, parts: fail });
 		const l = setup();
