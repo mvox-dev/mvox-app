@@ -36,10 +36,10 @@ const PRELOAD = 'preloading a part for the next rehearsal';
 const quota = () => Object.assign(new Error('the disk is full'), { name: 'QuotaExceededError' });
 const log = () => getProblemLog()!;
 const queue = () => getSavedFeedbackStore()!;
-const keptP = () => log().list('sampledb', 'person-p');
-const queuedP = () => queue().list('sampledb', 'person-p');
+const keptP = () => log().list({ db: 'sampledb', personId: 'person-p' });
+const queuedP = () => queue().list({ db: 'sampledb', personId: 'person-p' });
 const keep = (action = PRELOAD) =>
-	log().add('sampledb', 'person-p', { area: 'files', action, detail: 'QuotaExceededError: full' });
+	log().add({ db: 'sampledb', personId: 'person-p' }, { area: 'files', action, detail: 'QuotaExceededError: full' });
 
 const waitKept = (count: number) =>
 	vi.waitFor(async () => expect((await keptP()).length).toBe(count));

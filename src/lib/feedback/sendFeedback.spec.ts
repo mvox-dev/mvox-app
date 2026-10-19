@@ -164,7 +164,7 @@ describe('#611 send, online', () => {
 			['POST', `${API}sampledb/entity/fb-1`],
 			['PUT', UPLOAD_URL]
 		]);
-		expect(await store.list('sampledb', 'person-p')).toEqual([]);
+		expect(await store.list({ db: 'sampledb', personId: 'person-p' })).toEqual([]);
 	});
 
 	it('a send that loses the network on the way is saved on the device', async () => {
@@ -173,7 +173,7 @@ describe('#611 send, online', () => {
 
 		await expect(sendFeedback(draft(), { fetchImpl: entu.fetchImpl, store })).resolves.toBe('saved');
 
-		expect((await store.list('sampledb', 'person-p')).length).toBe(1);
+		expect((await store.list({ db: 'sampledb', personId: 'person-p' })).length).toBe(1);
 	});
 });
 
@@ -191,7 +191,7 @@ describe('#611 a send cut off part-way', () => {
 
 		expect([...entu.state.live]).toEqual(['fb-2']);
 		expect([...entu.state.shot]).toEqual(['fb-2']);
-		expect(await store.list('sampledb', 'person-p')).toEqual([]);
+		expect(await store.list({ db: 'sampledb', personId: 'person-p' })).toEqual([]);
 	});
 
 	it('cut off during the screenshot upload: the retry leaves one complete feedback', async () => {
@@ -211,12 +211,12 @@ describe('#611 a send cut off part-way', () => {
 		await saveOffline(entu);
 
 		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, store });
-		expect((await store.list('sampledb', 'person-p')).length).toBe(1);
+		expect((await store.list({ db: 'sampledb', personId: 'person-p' })).length).toBe(1);
 		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, store });
 
 		expect([...entu.state.live]).toEqual(['fb-2']);
 		expect([...entu.state.shot]).toEqual(['fb-2']);
-		expect(await store.list('sampledb', 'person-p')).toEqual([]);
+		expect(await store.list({ db: 'sampledb', personId: 'person-p' })).toEqual([]);
 	});
 
 	it('kept because a request got no answer, it is retried with no change in the signal', async () => {
@@ -229,7 +229,7 @@ describe('#611 a send cut off part-way', () => {
 		cut = false;
 		await vi.advanceTimersByTimeAsync(FIRST_RETRY_MS);
 
-		await vi.waitFor(async () => expect(await store.list('sampledb', 'person-p')).toEqual([]));
+		await vi.waitFor(async () => expect(await store.list({ db: 'sampledb', personId: 'person-p' })).toEqual([]));
 		expect([...entu.state.shot]).toEqual(['fb-1']);
 		expect(navigator.onLine).toBe(true);
 	});
@@ -244,7 +244,7 @@ describe('#611 send, offline', () => {
 		await expect(sendFeedback(draft(), { fetchImpl: entu.fetchImpl, store })).resolves.toBe('saved');
 
 		expect(entu.fetchImpl).not.toHaveBeenCalled();
-		const saved = await store.list('sampledb', 'person-p');
+		const saved = await store.list({ db: 'sampledb', personId: 'person-p' });
 		expect(saved.map((f) => [f.description, f.pagePath])).toEqual([['typed', '/roster']]);
 	});
 
@@ -257,7 +257,7 @@ describe('#611 send, offline', () => {
 		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, store });
 
 		expect(createBodies(entu.fetchImpl).map((b) => prop(b, '_parent'))).toEqual(['member-p']);
-		expect(await store.list('sampledb', 'person-p')).toEqual([]);
+		expect(await store.list({ db: 'sampledb', personId: 'person-p' })).toEqual([]);
 	});
 
 	it('two sends racing (two tabs coming back online) send it once', async () => {
@@ -297,7 +297,7 @@ describe('#611 saved feedback goes out only on its owner key', () => {
 		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, store });
 
 		expect(entu.fetchImpl).not.toHaveBeenCalled();
-		expect((await store.list('sampledb', 'person-p')).length).toBe(1);
+		expect((await store.list({ db: 'sampledb', personId: 'person-p' })).length).toBe(1);
 
 		signInP();
 		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, store });
@@ -318,7 +318,7 @@ describe('#611 saved feedback goes out only on its owner key', () => {
 		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, store });
 
 		expect(entu.fetchImpl).not.toHaveBeenCalled();
-		expect((await store.list('sampledb', 'person-p')).length).toBe(1);
+		expect((await store.list({ db: 'sampledb', personId: 'person-p' })).length).toBe(1);
 	});
 
 	it('an expired key keeps it to send after sign-in, without a request', async () => {
@@ -331,7 +331,7 @@ describe('#611 saved feedback goes out only on its owner key', () => {
 		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, store });
 
 		expect(entu.fetchImpl).not.toHaveBeenCalled();
-		expect((await store.list('sampledb', 'person-p')).length).toBe(1);
+		expect((await store.list({ db: 'sampledb', personId: 'person-p' })).length).toBe(1);
 	});
 
 	it('a stored key that is gone while the session still reads signed in keeps it, no request', async () => {
@@ -344,7 +344,7 @@ describe('#611 saved feedback goes out only on its owner key', () => {
 		);
 
 		expect(entu.fetchImpl).not.toHaveBeenCalled();
-		expect((await store.list('sampledb', 'person-p')).length).toBe(1);
+		expect((await store.list({ db: 'sampledb', personId: 'person-p' })).length).toBe(1);
 	});
 
 	it('a key Entu refuses keeps it to send after sign-in', async () => {
@@ -356,7 +356,7 @@ describe('#611 saved feedback goes out only on its owner key', () => {
 		);
 		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, store });
 
-		expect((await store.list('sampledb', 'person-p')).length).toBe(1);
+		expect((await store.list({ db: 'sampledb', personId: 'person-p' })).length).toBe(1);
 	});
 });
 

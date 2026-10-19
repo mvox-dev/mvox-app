@@ -109,7 +109,7 @@ describe('(i) the byte total is a running total, exact across put and evict', ()
 
 		let survivors = 0;
 		for (let i = 0; i < puts; i += 1) {
-			const entry = await readCacheGet(DB, PERSON, `entity/e${i}`);
+			const entry = await readCacheGet({ db: DB, personId: PERSON, pathAndQuery: `entity/e${i}` });
 			if (entry) survivors += entry.bytes;
 		}
 		const total = await readCacheTotalBytes();
@@ -145,7 +145,7 @@ describe('(i) the byte total is a running total, exact across put and evict', ()
 		await storeOnline('entity/next', { _id: 'next' });
 
 		for (const spy of walks) expect(spy).not.toHaveBeenCalled();
-		expect(await readCacheGet(DB, PERSON, 'entity/next')).toBeDefined();
+		expect(await readCacheGet({ db: DB, personId: PERSON, pathAndQuery: 'entity/next' })).toBeDefined();
 	});
 });
 

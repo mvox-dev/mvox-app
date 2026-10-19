@@ -81,7 +81,7 @@ describe('stored keys stay byte-identical', () => {
 		const factory = new IDBFactory();
 		setReadCacheFactory(factory);
 		try {
-			await readCachePut('sampledb', 'person-a', 'entity?limit=5', {
+			await readCachePut({ db: 'sampledb', personId: 'person-a', pathAndQuery: 'entity?limit=5' }, {
 				body: {},
 				readAt: '2026-01-01T00:00:00.000Z',
 				bytes: 2
@@ -96,7 +96,7 @@ describe('stored keys stay byte-identical', () => {
 
 	it('problem log: a two-part key ["db","person"]', async () => {
 		const factory = new IDBFactory();
-		await createProblemLog(factory).add('sampledb', 'person-a', {
+		await createProblemLog(factory).add({ db: 'sampledb', personId: 'person-a' }, {
 			area: 'a',
 			action: 'b',
 			detail: 'c'

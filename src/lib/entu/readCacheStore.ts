@@ -1,5 +1,6 @@
 // The read cache's IndexedDB store: connection, entries, and the byte budget.
 
+import type { CollectiveIdentity } from '$lib/collectives/store';
 import { compositeKey, reqToPromise } from '$lib/files/idb';
 
 export const READ_CACHE_DB_NAME = 'mvox-read-cache';
@@ -19,6 +20,8 @@ export const READ_CACHE_MAX_BYTES = 32 * 1024 * 1024;
 
 // One body over this many bytes is not stored, so it cannot evict a whole screen's reads.
 export const READ_CACHE_MAX_ENTRY_BYTES = 1024 * 1024;
+
+export type ReadCacheKey = CollectiveIdentity & { pathAndQuery: string };
 
 export interface ReadCacheEntry {
 	body: unknown;
@@ -117,11 +120,11 @@ function getDb(): Promise<IDBDatabase> | null {
 	return dbPromise;
 }
 
-export async function readCacheGet(
-	db: string,
-	personId: string,
-	pathAndQuery: string
-): Promise<ReadCacheEntry | undefined> {
+export async function readCacheGet({
+	db,
+	personId,
+	pathAndQuery
+}: ReadCacheKey): Promise<ReadCacheEntry | undefined> {
 	if (!personId) return undefined;
 	const generation = factoryGeneration;
 	const openPromise = getDb();
@@ -200,9 +203,7 @@ export async function readCacheTotalBytes(): Promise<number> {
 
 // One transaction over both stores, so an overwrite never double-counts the running total.
 export async function readCachePut(
-	db: string,
-	personId: string,
-	pathAndQuery: string,
+	{ db, personId, pathAndQuery }: ReadCacheKey,
 	entry: ReadCacheEntry
 ): Promise<void> {
 	const openPromise = getDb();

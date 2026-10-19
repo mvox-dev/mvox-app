@@ -95,7 +95,7 @@ describe('readCache — the database', () => {
 
 		await storeOnline(DB, PATH);
 
-		expect(await readCacheGet(DB, PERSON_A, PATH)).toEqual({
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: PATH })).toEqual({
 			body: BODY,
 			readAt: expect.any(String),
 			bytes: BODY_BYTES
@@ -112,7 +112,7 @@ describe('entuFetch GET — online stores the read', () => {
 
 		await storeOnline(DB, PATH);
 
-		expect(await readCacheGet(DB, PERSON_A, PATH)).toEqual({
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: PATH })).toEqual({
 			body: BODY,
 			readAt: '2026-09-28T10:15:00.000Z',
 			bytes: BODY_BYTES
@@ -137,7 +137,7 @@ describe('entuFetch GET — online stores the read', () => {
 		vi.setSystemTime(new Date('2026-09-28T11:00:00.000Z'));
 		await storeOnline(DB, PATH);
 
-		expect(await readCacheGet(DB, PERSON_A, PATH)).toEqual({
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: PATH })).toEqual({
 			body: BODY,
 			readAt: '2026-09-28T11:00:00.000Z',
 			bytes: BODY_BYTES
@@ -148,7 +148,7 @@ describe('entuFetch GET — online stores the read', () => {
 		const res = await entuFetch(DB, PATH, TOKEN, {}, online({ error: 'boom' }, 500), CACHED_READ);
 		expect(res.status).toBe(500);
 		await flushReadCache();
-		expect(await readCacheGet(DB, PERSON_A, PATH)).toBeUndefined();
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: PATH })).toBeUndefined();
 	});
 });
 
@@ -161,7 +161,7 @@ describe('entuFetch GET — CACHED_READ_STORE_ONLY stores without serving', () =
 		expect(await res.json()).toEqual(BODY);
 		await flushReadCache();
 
-		expect(await readCacheGet(DB, PERSON_A, PATH)).toEqual({
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: PATH })).toEqual({
 			body: BODY,
 			readAt: '2026-09-28T10:15:00.000Z',
 			bytes: BODY_BYTES
@@ -370,7 +370,7 @@ describe('reads only — a write never touches the cache', () => {
 		it(`an online ${method} writes nothing to the cache`, async () => {
 			await entuFetch(DB, PATH, TOKEN, { method, body: '[]' }, online({ ok: true }), CACHED_READ);
 			await flushReadCache();
-			expect(await readCacheGet(DB, PERSON_A, PATH)).toBeUndefined();
+			expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: PATH })).toBeUndefined();
 		});
 
 		it(`an online ${method} does not overwrite a cached GET for the same path`, async () => {
@@ -380,7 +380,7 @@ describe('reads only — a write never touches the cache', () => {
 			vi.setSystemTime(new Date('2026-09-28T11:00:00.000Z'));
 			await entuFetch(DB, PATH, TOKEN, { method, body: '[]' }, online({ written: true }), CACHED_READ);
 			await flushReadCache();
-			expect(await readCacheGet(DB, PERSON_A, PATH)).toEqual({
+			expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: PATH })).toEqual({
 				body: BODY,
 				readAt: '2026-09-28T10:15:00.000Z',
 				bytes: BODY_BYTES
@@ -400,13 +400,13 @@ describe('reads only — a write never touches the cache', () => {
 	it("method matching is case-insensitive: 'post' is a write too", async () => {
 		await entuFetch(DB, PATH, TOKEN, { method: 'post', body: '[]' }, online({ ok: true }), CACHED_READ);
 		await flushReadCache();
-		expect(await readCacheGet(DB, PERSON_A, PATH)).toBeUndefined();
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: PATH })).toBeUndefined();
 	});
 
 	it("an explicit method 'GET' is a read", async () => {
 		await entuFetch(DB, PATH, TOKEN, { method: 'GET' }, online(), CACHED_READ);
 		await flushReadCache();
-		expect(await readCacheGet(DB, PERSON_A, PATH)).toEqual({
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: PATH })).toEqual({
 			body: BODY,
 			readAt: expect.any(String),
 			bytes: BODY_BYTES
@@ -422,7 +422,7 @@ describe('partition — person and db', () => {
 		const err = new TypeError('Failed to fetch');
 		await expect(entuFetch(DB, PATH, TOKEN, {}, offline(err), CACHED_READ)).rejects.toBe(err);
 		expect(get(servedFromCache)).toBeNull();
-		expect(await readCacheGet(DB, PERSON_B, PATH)).toBeUndefined();
+		expect(await readCacheGet({ db: DB, personId: PERSON_B, pathAndQuery: PATH })).toBeUndefined();
 	});
 
 	it("db X's entry is never served for db Y (same person id, same path)", async () => {
@@ -432,18 +432,18 @@ describe('partition — person and db', () => {
 		const err = new TypeError('Failed to fetch');
 		await expect(entuFetch(OTHER_DB, PATH, TOKEN, {}, offline(err), CACHED_READ)).rejects.toBe(err);
 		expect(get(servedFromCache)).toBeNull();
-		expect(await readCacheGet(OTHER_DB, PERSON_A, PATH)).toBeUndefined();
+		expect(await readCacheGet({ db: OTHER_DB, personId: PERSON_A, pathAndQuery: PATH })).toBeUndefined();
 	});
 
 	it('the entry is written under the personId for THAT db', async () => {
 		signIn({ [DB]: PERSON_A, [OTHER_DB]: PERSON_B });
 		await storeOnline(OTHER_DB, PATH);
-		expect(await readCacheGet(OTHER_DB, PERSON_B, PATH)).toEqual({
+		expect(await readCacheGet({ db: OTHER_DB, personId: PERSON_B, pathAndQuery: PATH })).toEqual({
 			body: BODY,
 			readAt: expect.any(String),
 			bytes: BODY_BYTES
 		});
-		expect(await readCacheGet(OTHER_DB, PERSON_A, PATH)).toBeUndefined();
+		expect(await readCacheGet({ db: OTHER_DB, personId: PERSON_A, pathAndQuery: PATH })).toBeUndefined();
 	});
 });
 
@@ -456,14 +456,14 @@ describe('no personId — no cache', () => {
 		await expect(entuFetch(DB, PATH, TOKEN, {}, offline(err), CACHED_READ)).rejects.toBe(err);
 		expect(get(servedFromCache)).toBeNull();
 
-		expect(await readCacheGet(DB, '', PATH)).toBeUndefined();
-		expect(await readCacheGet(DB, 'undefined', PATH)).toBeUndefined();
+		expect(await readCacheGet({ db: DB, personId: '', pathAndQuery: PATH })).toBeUndefined();
+		expect(await readCacheGet({ db: DB, personId: 'undefined', pathAndQuery: PATH })).toBeUndefined();
 	});
 
 	it('signed in, but no account on THIS db: nothing stored, nothing served', async () => {
 		signIn({ [OTHER_DB]: PERSON_A });
 		await storeOnline(DB, PATH);
-		expect(await readCacheGet(DB, PERSON_A, PATH)).toBeUndefined();
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: PATH })).toBeUndefined();
 
 		const err = new TypeError('Failed to fetch');
 		await expect(entuFetch(DB, PATH, TOKEN, {}, offline(err), CACHED_READ)).rejects.toBe(err);
@@ -484,7 +484,7 @@ describe("nothing is cleared on logout or token expiry (#343's law)", () => {
 		await storeOnline(DB, PATH);
 
 		endSession({ preserveProvider: false });
-		expect(await readCacheGet(DB, PERSON_A, PATH)).toEqual({
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: PATH })).toEqual({
 			body: BODY,
 			readAt: expect.any(String),
 			bytes: BODY_BYTES
@@ -498,7 +498,7 @@ describe("nothing is cleared on logout or token expiry (#343's law)", () => {
 	it('the 401 teardown (endSession, provider kept) leaves the entry intact', async () => {
 		await storeOnline(DB, PATH);
 		endSession({ preserveProvider: true });
-		expect(await readCacheGet(DB, PERSON_A, PATH)).toEqual({
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: PATH })).toEqual({
 			body: BODY,
 			readAt: expect.any(String),
 			bytes: BODY_BYTES
@@ -508,7 +508,7 @@ describe("nothing is cleared on logout or token expiry (#343's law)", () => {
 	it('entries persist across a re-open of the database (a new app load)', async () => {
 		await storeOnline(DB, PATH);
 		setReadCacheFactory(factory); // drops the memoised connection
-		expect(await readCacheGet(DB, PERSON_A, PATH)).toEqual({
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: PATH })).toEqual({
 			body: BODY,
 			readAt: expect.any(String),
 			bytes: BODY_BYTES
@@ -573,7 +573,7 @@ describe('the cache is OPT IN — a GET reaches it only by asking (review findin
 		const res = await entuFetch(DB, PATH, TOKEN, {}, online());
 		expect(res.ok).toBe(true);
 		await flushReadCache();
-		expect(await readCacheGet(DB, PERSON_A, PATH)).toBeUndefined();
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: PATH })).toBeUndefined();
 	});
 
 	it('an uncached GET never even opens the database', async () => {
@@ -599,7 +599,7 @@ describe('a short-lived body is never cached: the 60s signed file url (finding 1
 	it('signFileUrl online stores nothing under its property path', async () => {
 		expect(await signFileUrl(cfg, FILE_ID, online({ url: SIGNED }))).toBe(SIGNED);
 		await flushReadCache();
-		expect(await readCacheGet(DB, PERSON_A, `property/${FILE_ID}`)).toBeUndefined();
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: `property/${FILE_ID}` })).toBeUndefined();
 	});
 
 	it('offline, signFileUrl REJECTS — an expired url is never handed back from a copy', async () => {
@@ -633,7 +633,7 @@ describe('a GET that is a STEP inside a write is never cache-served (finding 2)'
 	it("the write's lookup GET is not stored, even though it is a GET", async () => {
 		await replaceEntityProperty({ db: DB, token: TOKEN }, ENTITY, VALUE, liveWire() as never);
 		await flushReadCache();
-		expect(await readCacheGet(DB, PERSON_A, LOOKUP)).toBeUndefined();
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: LOOKUP })).toBeUndefined();
 	});
 
 	it('on a flapping connection the lookup rejects and NO mutation is sent', async () => {
@@ -676,15 +676,15 @@ describe('bounded: a byte budget, and oldest-readAt eviction on put (finding 3; 
 		await fillToBudget(base);
 
 		expect(await readCacheEntryCount()).toBe(FITS);
-		expect(await readCacheGet(DB, PERSON_A, 'entity/e0')).toBeDefined();
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: 'entity/e0' })).toBeDefined();
 
 		vi.setSystemTime(new Date(base + FITS * 60_000));
 		await storeOnline(DB, 'entity/overflow', big(999));
 
 		expect(await readCacheEntryCount()).toBe(FITS);
-		expect(await readCacheGet(DB, PERSON_A, 'entity/e0')).toBeUndefined();
-		expect(await readCacheGet(DB, PERSON_A, 'entity/e1')).toBeDefined();
-		expect(await readCacheGet(DB, PERSON_A, 'entity/overflow')).toBeDefined();
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: 'entity/e0' })).toBeUndefined();
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: 'entity/e1' })).toBeDefined();
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: 'entity/overflow' })).toBeDefined();
 	});
 
 	it('eviction follows readAt, not insertion order: a re-read is no longer the candidate', async () => {
@@ -698,8 +698,8 @@ describe('bounded: a byte budget, and oldest-readAt eviction on put (finding 3; 
 		vi.setSystemTime(new Date(base + 11 * 60 * 60_000));
 		await storeOnline(DB, 'entity/overflow', big(999));
 
-		expect(await readCacheGet(DB, PERSON_A, 'entity/e0')).toBeDefined();
-		expect(await readCacheGet(DB, PERSON_A, 'entity/e1')).toBeUndefined();
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: 'entity/e0' })).toBeDefined();
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: 'entity/e1' })).toBeUndefined();
 		expect(await readCacheEntryCount()).toBe(FITS);
 	});
 
@@ -713,8 +713,8 @@ describe('bounded: a byte budget, and oldest-readAt eviction on put (finding 3; 
 		await storeOnline(OTHER_DB, 'entity/other-person', big(999));
 
 		expect(await readCacheEntryCount()).toBe(FITS);
-		expect(await readCacheGet(OTHER_DB, PERSON_B, 'entity/other-person')).toBeDefined();
-		expect(await readCacheGet(DB, PERSON_A, 'entity/e0')).toBeUndefined();
+		expect(await readCacheGet({ db: OTHER_DB, personId: PERSON_B, pathAndQuery: 'entity/other-person' })).toBeDefined();
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: 'entity/e0' })).toBeUndefined();
 	});
 
 	it('a body over READ_CACHE_MAX_ENTRY_BYTES is not stored; the live body is untouched', async () => {
@@ -724,7 +724,7 @@ describe('bounded: a byte budget, and oldest-readAt eviction on put (finding 3; 
 
 		expect(await res.json()).toEqual(big);
 		await flushReadCache();
-		expect(await readCacheGet(DB, PERSON_A, PATH)).toBeUndefined();
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: PATH })).toBeUndefined();
 		expect(await readCacheEntryCount()).toBe(0);
 	});
 
@@ -738,7 +738,7 @@ describe('bounded: a byte budget, and oldest-readAt eviction on put (finding 3; 
 
 		expect(await res.json()).toEqual(body);
 		await flushReadCache();
-		expect(await readCacheGet(DB, PERSON_A, PATH)).toBeUndefined();
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: PATH })).toBeUndefined();
 		expect(await readCacheEntryCount()).toBe(0);
 	});
 });
@@ -777,7 +777,7 @@ describe('bounded by bytes: a real screen fan-out survives, the budget evicts ol
 
 		expect(await readCacheEntryCount()).toBe(paths.length);
 		for (const path of paths) {
-			expect(await readCacheGet(DB, PERSON_A, path), `evicted: ${path}`).toBeDefined();
+			expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: path }), `evicted: ${path}`).toBeDefined();
 		}
 	});
 
@@ -796,10 +796,10 @@ describe('bounded by bytes: a real screen fan-out survives, the budget evicts ol
 
 		expect(await readCacheEntryCount()).toBe(fits);
 		for (let i = 0; i < 3; i += 1) {
-			expect(await readCacheGet(DB, PERSON_A, `entity/e${i}`), `e${i} should be evicted`).toBeUndefined();
+			expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: `entity/e${i}` }), `e${i} should be evicted`).toBeUndefined();
 		}
 		for (let i = 3; i < total; i += 1) {
-			expect(await readCacheGet(DB, PERSON_A, `entity/e${i}`), `e${i} should be kept`).toBeDefined();
+			expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: `entity/e${i}` }), `e${i} should be kept`).toBeDefined();
 		}
 	});
 });
@@ -852,7 +852,7 @@ describe('pending cache writes drain themselves, with no flush (review round 2, 
 
 		await flushReadCache();
 
-		expect(await readCacheGet(DB, PERSON_A, PATH)).toBeDefined();
+		expect(await readCacheGet({ db: DB, personId: PERSON_A, pathAndQuery: PATH })).toBeDefined();
 		expect(pendingCacheWriteCount()).toBe(0);
 	});
 });

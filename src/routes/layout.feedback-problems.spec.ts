@@ -82,7 +82,7 @@ function rows() {
 
 async function kept(count: number) {
 	await vi.waitFor(async () =>
-		expect((await getProblemLog()!.list('sampledb', 'person-p')).length).toBe(count)
+		expect((await getProblemLog()!.list({ db: 'sampledb', personId: 'person-p' })).length).toBe(count)
 	);
 }
 
@@ -191,7 +191,7 @@ describe('#684 failures in the feedback editor', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
 		await vi.waitFor(() => expect(screen.getByText('The feedback could not be sent.')).toBeTruthy());
-		expect((await getProblemLog()!.list('sampledb', 'person-p')).length).toBe(1);
+		expect((await getProblemLog()!.list({ db: 'sampledb', personId: 'person-p' })).length).toBe(1);
 	});
 });
 

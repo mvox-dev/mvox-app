@@ -23,7 +23,7 @@ import { reportProblem } from './reportProblem';
 const P = { db: 'sampledb', name: 'Sampledb', personId: 'person-p' };
 const Q = { db: 'sampledb', name: 'Sampledb', personId: 'person-q' };
 
-const listP = () => getProblemLog()!.list('sampledb', 'person-p');
+const listP = () => getProblemLog()!.list({ db: 'sampledb', personId: 'person-p' });
 
 beforeEach(() => {
 	vi.stubGlobal('indexedDB', new IDBFactory());
@@ -94,13 +94,13 @@ describe('#684 reportProblem keeps each failure for feedback', () => {
 	it("keeps each person's failures apart", async () => {
 		signIn({ collectives: [Q] });
 		reportProblem({ area: 'library', action: 'load', error: new Error('q broke') });
-		await vi.waitFor(async () => expect((await getProblemLog()!.list('sampledb', 'person-q')).length).toBe(1));
+		await vi.waitFor(async () => expect((await getProblemLog()!.list({ db: 'sampledb', personId: 'person-q' })).length).toBe(1));
 
 		signIn({ collectives: [P] });
 		reportProblem({ area: 'roster', action: 'load', error: new Error('p broke') });
 
 		await vi.waitFor(async () => expect((await listP()).map((p) => p.detail)).toEqual(['Error: p broke']));
-		expect((await getProblemLog()!.list('sampledb', 'person-q')).map((p) => p.detail)).toEqual(['Error: q broke']);
+		expect((await getProblemLog()!.list({ db: 'sampledb', personId: 'person-q' })).map((p) => p.detail)).toEqual(['Error: q broke']);
 	});
 
 	it('nothing is kept while no collective is selected', async () => {
@@ -126,30 +126,30 @@ describe('#684 problem log', () => {
 
 	it(`keeps only the last ${KEPT_PROBLEMS}, oldest first`, async () => {
 		const log = createProblemLog(new IDBFactory());
-		for (let n = 1; n <= KEPT_PROBLEMS + 2; n++) await log.add('sampledb', 'person-p', entry(n));
+		for (let n = 1; n <= KEPT_PROBLEMS + 2; n++) await log.add({ db: 'sampledb', personId: 'person-p' }, entry(n));
 
-		const actions = (await log.list('sampledb', 'person-p')).map((p) => p.action);
+		const actions = (await log.list({ db: 'sampledb', personId: 'person-p' })).map((p) => p.action);
 		expect(actions).toEqual(Array.from({ length: KEPT_PROBLEMS }, (_, i) => `step ${i + 3}`));
 	});
 
 	it('remove drops only the named failures of that person', async () => {
 		const log = createProblemLog(new IDBFactory());
-		await log.add('sampledb', 'person-p', entry(1));
-		await log.add('sampledb', 'person-p', entry(2));
-		await log.add('sampledb', 'person-q', entry(3));
-		const [first] = await log.list('sampledb', 'person-p');
+		await log.add({ db: 'sampledb', personId: 'person-p' }, entry(1));
+		await log.add({ db: 'sampledb', personId: 'person-p' }, entry(2));
+		await log.add({ db: 'sampledb', personId: 'person-q' }, entry(3));
+		const [first] = await log.list({ db: 'sampledb', personId: 'person-p' });
 
-		await log.remove('sampledb', 'person-p', [first.id]);
+		await log.remove({ db: 'sampledb', personId: 'person-p' }, [first.id]);
 
-		expect((await log.list('sampledb', 'person-p')).map((p) => p.action)).toEqual(['step 2']);
-		expect((await log.list('sampledb', 'person-q')).map((p) => p.action)).toEqual(['step 3']);
+		expect((await log.list({ db: 'sampledb', personId: 'person-p' })).map((p) => p.action)).toEqual(['step 2']);
+		expect((await log.list({ db: 'sampledb', personId: 'person-q' })).map((p) => p.action)).toEqual(['step 3']);
 	});
 
 	it('survives a reopen of the device store', async () => {
 		const factory = new IDBFactory();
-		await createProblemLog(factory).add('sampledb', 'person-p', entry(1));
+		await createProblemLog(factory).add({ db: 'sampledb', personId: 'person-p' }, entry(1));
 
-		expect((await createProblemLog(factory).list('sampledb', 'person-p')).map((p) => p.action)).toEqual([
+		expect((await createProblemLog(factory).list({ db: 'sampledb', personId: 'person-p' })).map((p) => p.action)).toEqual([
 			'step 1'
 		]);
 	});

@@ -1,5 +1,6 @@
 // Feedback saved on the device until it reaches Entu, keyed (db, personId, id) like #343's parts.
 import type { StrokeData } from '$lib/strokes/strokes';
+import type { CollectiveIdentity } from '$lib/collectives/store';
 import { compositeKey, lazyDb, reqToPromise } from '$lib/files/idb';
 import type { SentProblem } from '$lib/problems/problemLog';
 import type { PageContext } from './pageMetadata';
@@ -22,10 +23,12 @@ export interface SavedFeedback {
 	reportIds?: string[];
 }
 
+export type SavedFeedbackKey = CollectiveIdentity & { id: string };
+
 export interface SavedFeedbackStore {
 	put(item: SavedFeedback): Promise<void>;
-	list(db: string, personId: string): Promise<SavedFeedback[]>;
-	delete(db: string, personId: string, id: string): Promise<void>;
+	list(identity: CollectiveIdentity): Promise<SavedFeedback[]>;
+	delete(key: SavedFeedbackKey): Promise<void>;
 }
 
 type Row = Omit<SavedFeedback, 'screenshot'> & { bytes?: ArrayBuffer; filetype?: string };
@@ -56,7 +59,7 @@ export function createSavedFeedbackStore(factory?: IDBFactory): SavedFeedbackSto
 			await reqToPromise(req);
 		},
 
-		async list(db, personId) {
+		async list({ db, personId }) {
 			const database = await getDb();
 			const rows = (await reqToPromise(
 				database.transaction(STORE, 'readonly').objectStore(STORE).getAll()
@@ -68,7 +71,7 @@ export function createSavedFeedbackStore(factory?: IDBFactory): SavedFeedbackSto
 				);
 		},
 
-		async delete(db, personId, id) {
+		async delete({ db, personId, id }) {
 			const database = await getDb();
 			const req = database
 				.transaction(STORE, 'readwrite')
