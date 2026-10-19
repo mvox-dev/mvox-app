@@ -6,8 +6,6 @@ import type { MyRsvp, RsvpEntry, RsvpStatus } from './rsvpData';
 // tap would write against the '__optimistic__' placeholder and 404 (AgendaList.spec.ts tests it).
 // Every callback is per-event, so a failed write never reverts another event.
 
-export type { RsvpEntry };
-
 export interface RsvpChangeCallbacks {
 	setOptimistic(eventId: string, entry: RsvpEntry | null): void;
 	setPending(eventId: string, pending: boolean): void;

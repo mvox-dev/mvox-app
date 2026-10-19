@@ -1,5 +1,6 @@
 import { createAttendanceWriteStatus } from '$lib/attendance/attendanceWriteStatus';
-import type { AttendanceChangeCallbacks, AttendanceEntry } from '$lib/attendance/attendanceChangeQueue';
+import type { AttendanceChangeCallbacks } from '$lib/attendance/attendanceChangeQueue';
+import type { AttendanceEntry } from '$lib/attendance/attendanceData';
 import type { AgendaLoadState } from '$lib/agenda/agendaLoad';
 import type { WriteTokens } from '$lib/net/writeTokens';
 import { withEntry, withItem, withItemIfPresent } from '$lib/collections/immutable';

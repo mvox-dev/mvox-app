@@ -1,7 +1,7 @@
 // The attendance panel load shared by the agenda and the event page.
 import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
 import { without } from '$lib/collections/immutable';
-import type { RsvpEntry } from '$lib/rsvp/rsvpChangeQueue';
+import type { RsvpEntry } from '$lib/rsvp/rsvpData';
 import type * as AttendanceData from '$lib/attendance/attendanceData';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { reportProblem } from '$lib/problems/reportProblem';

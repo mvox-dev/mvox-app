@@ -2,8 +2,6 @@
 import { applyAttendanceChange, type AttendanceChangeInput } from './attendanceOptimistic';
 import type { AttendanceEntry } from './attendanceData';
 
-export type { AttendanceEntry };
-
 export interface AttendanceChangeCallbacks {
 	/** Apply the optimistic value for exactly this event+member, synchronously. */
 	setOptimistic(eventId: string, memberId: string, entry: AttendanceEntry | null): void;
