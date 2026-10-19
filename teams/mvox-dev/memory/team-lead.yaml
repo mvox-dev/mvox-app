@@ -5,7 +5,7 @@
 
 current:
   - label: WIP
-    record: "Queue: #954 > #956 > #957 > epic #962 > epic #963 (#958, #959, #955 merged)"
+    record: "Queue: #957 > epic #962 > epic #963 (sweeps #958 #959 #955 #954 #956 merged)"
     ref: scratchpad/findings-session.md
   - label: WIP
     record: "GATE 3 done 2026-10-15: fallback deleted (git: fd701a4c); adoption closed"
