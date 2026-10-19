@@ -126,15 +126,16 @@ export async function sendSavedFeedback({
 		const token = liveToken();
 		if (auth.status !== 'authenticated' || !token) return;
 		for (const [db, personId] of Object.entries(auth.personIdByDb)) {
+			const identity = { db, personId };
 			// A half-done move holds back its report until a later run drops what is already queued.
 			let reportsHeld = false;
 			try {
-				if (log) await queueKeptProblems(db, personId, store, log);
+				if (log) await queueKeptProblems(identity, store, log);
 			} catch (e) {
 				console.error('queueing the kept failures failed; they wait in the log', e);
 				reportsHeld = true;
 			}
-			for (const item of await store.list(db, personId)) {
+			for (const item of await store.list(identity)) {
 				if (reportsHeld && item.reportIds) continue;
 				try {
 					await deliver(item, token, fetchImpl, (kept) => store.put(kept));
@@ -144,7 +145,7 @@ export async function sendSavedFeedback({
 					console.error('a saved feedback could not be sent; it stays on the device', e);
 					continue;
 				}
-				await store.delete(db, personId, item.id);
+				await store.delete({ ...identity, id: item.id });
 			}
 		}
 		if (!retryTimer) retryMs = FIRST_RETRY_MS;

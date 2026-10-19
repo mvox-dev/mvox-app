@@ -109,7 +109,7 @@ export function readThroughGet(
 							const bytes = encodedByteLength(text);
 							if (bytes > READ_CACHE_MAX_ENTRY_BYTES) return undefined;
 							const body = JSON.parse(text) as unknown;
-							return readCachePut(db, personId, pathAndQuery, { body, readAt, bytes });
+							return readCachePut({ db, personId, pathAndQuery }, { body, readAt, bytes });
 						})
 						.catch(() => undefined)
 				);
@@ -119,7 +119,7 @@ export function readThroughGet(
 		(err) => {
 			if (storeOnly || !personId) throw err;
 			if (generation !== currentFactoryGeneration()) throw err;
-			return readCacheGet(db, personId, pathAndQuery).then((cached) => {
+			return readCacheGet({ db, personId, pathAndQuery }).then((cached) => {
 				if (!cached) throw err;
 				if (epoch === loadEpoch) {
 					noteServedFromCache(cached.readAt);

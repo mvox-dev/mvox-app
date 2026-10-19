@@ -1,15 +1,10 @@
 // Her ink on a part, kept on the device per (db, personId, file, page) like #343's part files.
 // Strokes only add: an erase stores the stroke's id as a tombstone, so a later sync can union
 // two devices' logs (#333). Nothing clears it at sign-out or expiry (#434).
-import { compositeKey, lazyDb, reqToPromise } from '$lib/files/idb';
+import { compositeKey, lazyDb, type FileKey, reqToPromise } from '$lib/files/idb';
 import type { Stroke, StrokeData } from './strokes';
 
-export interface InkPage {
-	db: string;
-	personId: string;
-	fileId: string;
-	page: number;
-}
+export type InkPage = FileKey & { page: number };
 
 export interface InkLog {
 	v: 1;

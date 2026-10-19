@@ -65,7 +65,7 @@ async function openEditor(ttlMs?: number) {
 	await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'typed' } });
 }
 
-const saved = () => getSavedFeedbackStore()!.list('sampledb', 'person-p');
+const saved = () => getSavedFeedbackStore()!.list({ db: 'sampledb', personId: 'person-p' });
 
 let entu: ReturnType<typeof feedbackEntu>;
 beforeEach(() => {
@@ -82,7 +82,7 @@ beforeEach(() => {
 
 afterEach(async () => {
 	cleanup();
-	for (const f of await saved()) await getSavedFeedbackStore()!.delete('sampledb', 'person-p', f.id);
+	for (const f of await saved()) await getSavedFeedbackStore()!.delete({ db: 'sampledb', personId: 'person-p', id: f.id });
 	vi.clearAllMocks();
 	vi.unstubAllGlobals();
 	resetOnLine();

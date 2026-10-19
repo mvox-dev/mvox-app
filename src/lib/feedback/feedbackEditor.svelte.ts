@@ -73,7 +73,7 @@ export function createFeedbackEditor() {
 		problems = [];
 		if (problemOwner && log) {
 			try {
-				problems = await log.list(problemOwner.db, problemOwner.personId);
+				problems = await log.list(problemOwner);
 			} catch (e) {
 				console.error('reading the kept failures failed', e);
 			}
@@ -92,7 +92,7 @@ export function createFeedbackEditor() {
 		const log = getProblemLog();
 		if (!problemOwner || !log) return [];
 		try {
-			return await log.list(problemOwner.db, problemOwner.personId);
+			return await log.list(problemOwner);
 		} catch (e) {
 			console.error('reading the kept failures failed', e);
 			return [];
@@ -104,7 +104,7 @@ export function createFeedbackEditor() {
 		const log = getProblemLog();
 		if (!problemOwner || !log || ids.length === 0) return;
 		try {
-			await log.remove(problemOwner.db, problemOwner.personId, ids);
+			await log.remove(problemOwner, ids);
 		} catch (e) {
 			console.error('clearing the sent failures failed', e);
 		}

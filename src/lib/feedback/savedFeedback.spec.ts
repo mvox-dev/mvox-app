@@ -24,7 +24,7 @@ describe('#611 saved feedback store', () => {
 		const factory = new IDBFactory();
 		await createSavedFeedbackStore(factory).put(item());
 
-		const [read] = await createSavedFeedbackStore(factory).list('sampledb', 'person-p');
+		const [read] = await createSavedFeedbackStore(factory).list({ db: 'sampledb', personId: 'person-p' });
 		const { screenshot, ...rest } = read;
 		const { screenshot: _s, ...expected } = item();
 		expect(rest).toEqual(expected);
@@ -38,9 +38,9 @@ describe('#611 saved feedback store', () => {
 		await store.put(item({ id: 'local-2', personId: 'person-q' }));
 		await store.put(item({ id: 'local-3', db: 'otherdb' }));
 
-		expect((await store.list('sampledb', 'person-p')).map((f) => f.id)).toEqual(['local-1']);
-		expect((await store.list('sampledb', 'person-q')).map((f) => f.id)).toEqual(['local-2']);
-		expect((await store.list('otherdb', 'person-p')).map((f) => f.id)).toEqual(['local-3']);
+		expect((await store.list({ db: 'sampledb', personId: 'person-p' })).map((f) => f.id)).toEqual(['local-1']);
+		expect((await store.list({ db: 'sampledb', personId: 'person-q' })).map((f) => f.id)).toEqual(['local-2']);
+		expect((await store.list({ db: 'otherdb', personId: 'person-p' })).map((f) => f.id)).toEqual(['local-3']);
 	});
 
 	it('delete removes that one feedback and nothing else', async () => {
@@ -49,10 +49,10 @@ describe('#611 saved feedback store', () => {
 		await store.put(item({ id: 'local-2' }));
 		await store.put(item({ personId: 'person-q' }));
 
-		await store.delete('sampledb', 'person-p', 'local-1');
+		await store.delete({ db: 'sampledb', personId: 'person-p', id: 'local-1' });
 
-		expect((await store.list('sampledb', 'person-p')).map((f) => f.id)).toEqual(['local-2']);
-		expect((await store.list('sampledb', 'person-q')).map((f) => f.id)).toEqual(['local-1']);
+		expect((await store.list({ db: 'sampledb', personId: 'person-p' })).map((f) => f.id)).toEqual(['local-2']);
+		expect((await store.list({ db: 'sampledb', personId: 'person-q' })).map((f) => f.id)).toEqual(['local-1']);
 	});
 });
 

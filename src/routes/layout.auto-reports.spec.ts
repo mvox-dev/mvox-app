@@ -72,7 +72,7 @@ async function renderSignedIn() {
 
 async function kept(count: number) {
 	await vi.waitFor(async () =>
-		expect((await getProblemLog()!.list('sampledb', 'person-p')).length).toBe(count)
+		expect((await getProblemLog()!.list({ db: 'sampledb', personId: 'person-p' })).length).toBe(count)
 	);
 }
 

@@ -1,19 +1,18 @@
 // Her ink on one open part: every page read from the device before the part shows, each change
 // saved. Ink that could not be read is not drawable: a save would erase what is stored.
 import { reportProblem } from '$lib/problems/reportProblem';
-import { liveInk, type InkPage, type InkStore } from './inkStore';
+import type { FileKey } from '$lib/files/idb';
+import { liveInk, type InkStore } from './inkStore';
 import type { StrokeData } from './strokes';
-
-type InkPart = Omit<InkPage, 'page'>;
 
 export function createPartInk(store: InkStore | null) {
 	let marks = $state.raw<Record<number, StrokeData>>({});
 	let drawable = $state(true);
 	const hasMarks = $derived(Object.values(marks).some((page) => page.strokes.length > 0));
-	let part: InkPart | null = null;
+	let part: FileKey | null = null;
 	let opening = 0;
 
-	async function open(next: InkPart, pages: number): Promise<void> {
+	async function open(next: FileKey, pages: number): Promise<void> {
 		const run = ++opening;
 		part = null;
 		marks = {};

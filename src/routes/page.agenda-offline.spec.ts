@@ -298,7 +298,7 @@ describe('#434 slice 5 — one works read per agenda load, and it stores', () =>
 		// A serving reader answers each rejection from IndexedDB; this read queues behind those,
 		// so once it lands every fallback has too.
 		const base = `https://api.entu-test.invalid/${DB}/`;
-		await readCacheGet(DB, PERSON, [...worksUrls][0].slice(base.length));
+		await readCacheGet({ db: DB, personId: PERSON, pathAndQuery: [...worksUrls][0].slice(base.length) });
 		await tick();
 
 		expect(container.querySelector('[data-testid="agenda-as-of"]')).toBeNull();
@@ -335,7 +335,7 @@ describe('#434 slice 5 — one works read per agenda load, and it stores', () =>
 		// restorable offline.
 		const base = `https://api.entu-test.invalid/${DB}/`;
 		for (const url of counts.keys()) {
-			expect(await readCacheGet(DB, PERSON, url.slice(base.length)), `stored: ${url}`).toBeDefined();
+			expect(await readCacheGet({ db: DB, personId: PERSON, pathAndQuery: url.slice(base.length) }), `stored: ${url}`).toBeDefined();
 		}
 		expect(container.querySelector('[data-testid="agenda-as-of"]')).toBeNull();
 	});
