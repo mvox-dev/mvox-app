@@ -122,29 +122,29 @@ export function createLibrarianLoad(lib: LibraryState) {
 		lib.membersPartial = false;
 	}
 
-	function select(current: { db: string; personId: string } | null): void {
+	function select(current: { db: string; personId: string } | null): Promise<void> {
 		if (!current) {
 			++librarianGen;
 			resetLibraryEditRight();
 			resetLibrarianPickerPartial();
-			return;
+			return Promise.resolve();
 		}
 		resetLibraryEditRight();
 		resetLibrarianPickerPartial();
-		loadLibrarian(current);
+		return loadLibrarian(current);
 	}
 
-	function retryLibrarianLoad(current: { db: string; personId: string } | null): void {
-		if (!current) return;
+	function retryLibrarianLoad(current: { db: string; personId: string } | null): Promise<void> {
+		if (!current) return Promise.resolve();
 		resetLibrarianPickerPartial();
-		loadLibrarian(current);
+		return loadLibrarian(current);
 	}
 
-	function loadLibrarian(current: { db: string; personId: string }): void {
+	function loadLibrarian(current: { db: string; personId: string }): Promise<void> {
 		const g = ++librarianGen;
 		const token = getToken();
 		const cfg = { db: current.db, token: token ?? '' };
-		loadLibraryEditRight(cfg, current.personId).then(async (result) => {
+		return loadLibraryEditRight(cfg, current.personId).then(async (result) => {
 			if (g !== librarianGen) return;
 			if (result.state === 'editor') {
 				try {

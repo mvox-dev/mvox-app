@@ -49,7 +49,7 @@
 	$effect(() => {
 		const loans = myActiveLoans;
 		const g = ++copyNameGen;
-		resolveLocalFirst({
+		void resolveLocalFirst({
 			loans,
 			selected: () => selected,
 			allCopies: () => allCopies,
@@ -66,7 +66,7 @@
 	$effect(() => {
 		const loans = myActiveLoans;
 		const g = ++chainGen;
-		resolveLocalFirst<LoanChain>({
+		void resolveLocalFirst<LoanChain>({
 			loans,
 			selected: () => selected,
 			allCopies: () => allCopies,

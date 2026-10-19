@@ -15,18 +15,18 @@ export interface LocalFirst<T> {
 }
 
 // Getters, not values: run inside an effect, each branch tracks only what it reads.
-export function resolveLocalFirst<T>(o: LocalFirst<T>): void {
+export function resolveLocalFirst<T>(o: LocalFirst<T>): Promise<void> {
 	if (o.loans.length === 0) {
 		o.apply(new Map());
-		return;
+		return Promise.resolve();
 	}
 	const current = o.selected();
 	if (!current) {
 		o.apply(new Map());
-		return;
+		return Promise.resolve();
 	}
 	const token = getToken();
-	if (!token) return;
+	if (!token) return Promise.resolve();
 	const local = new Map<string, T>();
 	const unresolved: string[] = [];
 	const copies = o.allCopies();
@@ -39,11 +39,11 @@ export function resolveLocalFirst<T>(o: LocalFirst<T>): void {
 		}
 	}
 	if (unresolved.length === 0) {
-		if (!o.isCurrent()) return;
+		if (!o.isCurrent()) return Promise.resolve();
 		o.apply(local);
-		return;
+		return Promise.resolve();
 	}
-	o.fetch({ db: current.db, token }, unresolved)
+	return o.fetch({ db: current.db, token }, unresolved)
 		.then((resolved) => {
 			if (!o.isCurrent()) return;
 			for (const [id, value] of local) resolved.set(id, value);

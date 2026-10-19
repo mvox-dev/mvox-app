@@ -21,7 +21,6 @@ import { reportProblem } from '$lib/testing/mocks/session';
 
 const CFG = testCfg('sampledb', 'jwt-1');
 const boom = new Error('read broke');
-const settle = () => new Promise((r) => setTimeout(r, 0));
 
 beforeEach(() => {
 	reportProblem.mockReset();
@@ -54,7 +53,7 @@ describe('resolveManageRights reports a failed rights read', () => {
 type Site = {
 	name: string;
 	action: string;
-	run: (isCurrent: () => boolean) => void;
+	run: (isCurrent: () => boolean) => Promise<void>;
 };
 
 const SITES: Site[] = [
@@ -63,7 +62,7 @@ const SITES: Site[] = [
 		action: 're-reading the work rows',
 		run: (isCurrent) => {
 			wire.workRows = () => Promise.reject(boom);
-			refetchWorkRows(CFG, ['ev-1'], 'season-1', {
+			return refetchWorkRows(CFG, ['ev-1'], 'season-1', {
 				includeInactive: false,
 				isCurrent,
 				onRows: () => {}
@@ -86,14 +85,12 @@ const SITES: Site[] = [
 
 describe.each(SITES)('$name', ({ action, run }) => {
 	it('a failed read is reported', async () => {
-		run(() => true);
-		await settle();
+		await run(() => true);
 		expect(reportProblem.mock.calls).toEqual([[{ area: 'repertoire', action, error: boom }]]);
 	});
 
 	it('a superseded failed read is not reported', async () => {
-		run(() => false);
-		await settle();
+		await run(() => false);
 		expect(reportProblem).not.toHaveBeenCalled();
 	});
 });

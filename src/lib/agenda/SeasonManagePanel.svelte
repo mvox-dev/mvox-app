@@ -65,7 +65,7 @@
 		rosterPickerOptions: (excludeIds: readonly string[]) => Array<{ id: string; label: string }>;
 		pickerPromptText: (optionCount: number, addPrompt: string) => string;
 		loadForSelected: (opts?: { keepSeasonManage?: boolean }) => void;
-		loadPanelRepertoire: (cfg: EntuCfg, seasonId: string) => void;
+		loadPanelRepertoire: (cfg: EntuCfg, seasonId: string) => Promise<void>;
 		resetSeasonManage: () => void;
 		openEventCreateForm: () => void;
 		openSeriesCreateForm: () => void;
@@ -192,7 +192,7 @@
 			});
 		getSections(cfg).catch(alreadyReported);
 		loadSeriesList(cfg, seasonId, { opening: true });
-		loadPanelRepertoire(cfg, seasonId);
+		void loadPanelRepertoire(cfg, seasonId);
 	}
 
 	function openSeasonManagePanelFor(seasonId: string): void {
@@ -231,7 +231,7 @@
 	}
 
 	export function refreshSeasonManageLists(cfg: EntuCfg, seasonId: string): void {
-		loadPanelRepertoire(cfg, seasonId);
+		void loadPanelRepertoire(cfg, seasonId);
 		loadSeriesList(cfg, seasonId, { opening: false });
 	}
 

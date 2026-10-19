@@ -39,7 +39,7 @@ export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps:
 		ag.attendancePendingMemberIds = deps.pendingMembersForEvent(item.id);
 		ag.attendanceFailedMemberIds = failedMarksFor(ag.attendanceFailedByEvent, item.id);
 		ag.attendanceSavedMemberIds = new Set();
-		attendanceLoad.open(cfgFor(selected.db), item.id, {
+		void attendanceLoad.open(cfgFor(selected.db), item.id, {
 			isCurrent: () => true,
 			liveAttendance: () => ag.attendanceMap,
 			loaded(read) {
@@ -71,7 +71,7 @@ export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps:
 		}
 	}
 
-	function loadPanelRepertoire(cfg: EntuCfg, seasonId: string): void {
+	function loadPanelRepertoire(cfg: EntuCfg, seasonId: string): Promise<void> {
 		const thisRequest = seq.requestId;
 		const thisSwitch = deps.seasonManageSwitchGeneration();
 		const stale = () =>
@@ -86,7 +86,7 @@ export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps:
 		const maybeStopLoading = () => {
 			if (itemsSettled && sourcesSettled) ag.panelRepertoireLoading = false;
 		};
-		listRepertoireItems(cfg, seasonId)
+		const itemsChain = listRepertoireItems(cfg, seasonId)
 			.then((items) => {
 				if (stale()) return;
 				ag.panelRepertoire = items;
@@ -103,7 +103,7 @@ export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps:
 				itemsSettled = true;
 				maybeStopLoading();
 			});
-		Promise.all([listWorks(cfg), listAllEditions(cfg), listAllCopies(cfg)])
+		const sourcesChain = Promise.all([listWorks(cfg), listAllEditions(cfg), listAllCopies(cfg)])
 			.then(([worksRead, editionsRead, copiesRead]) => {
 				if (stale()) return;
 				ag.panelWorks = worksRead.items;
@@ -130,6 +130,7 @@ export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps:
 				sourcesSettled = true;
 				maybeStopLoading();
 			});
+		return Promise.all([itemsChain, sourcesChain]).then(() => {});
 	}
 
 	return {

@@ -40,8 +40,8 @@ beforeEach(() => {
 describe('resolveLocalFirst', () => {
 	it('resolves held copies locally and reads only the rest, merged', async () => {
 		const { opts, apply, fetch } = setup();
-		resolveLocalFirst(opts);
-		await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
+		await resolveLocalFirst(opts);
+		expect(apply).toHaveBeenCalledTimes(1);
 		expect(fetch).toHaveBeenCalledWith({ db: 'db1', token: 'jwt' }, ['c2']);
 		expect([...apply.mock.calls[0][0]]).toEqual([
 			['c2', 'fetched'],
@@ -80,9 +80,8 @@ describe('resolveLocalFirst', () => {
 		expect(local.apply).not.toHaveBeenCalled();
 
 		const fetched = setup({ isCurrent: () => false });
-		resolveLocalFirst(fetched.opts);
-		await vi.waitFor(() => expect(fetched.fetch).toHaveBeenCalled());
-		await Promise.resolve();
+		await resolveLocalFirst(fetched.opts);
+		expect(fetched.fetch).toHaveBeenCalled();
 		expect(fetched.apply).not.toHaveBeenCalled();
 	});
 
@@ -90,8 +89,8 @@ describe('resolveLocalFirst', () => {
 		const error = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const failure = new Error('boom');
 		const { opts, apply } = setup({ fetch: vi.fn(async () => Promise.reject(failure)) });
-		resolveLocalFirst(opts);
-		await vi.waitFor(() => expect(error).toHaveBeenCalled());
+		await resolveLocalFirst(opts);
+		expect(error).toHaveBeenCalled();
 		expect(error).toHaveBeenCalledWith('library: resolving the copy name failed', failure);
 		expect(apply).not.toHaveBeenCalled();
 		error.mockRestore();
@@ -101,9 +100,8 @@ describe('resolveLocalFirst', () => {
 		const error = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const fetch = vi.fn(async () => Promise.reject(new Error('boom')));
 		const { opts } = setup({ fetch, isCurrent: () => false });
-		resolveLocalFirst(opts);
-		await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
-		await new Promise((r) => setTimeout(r, 0));
+		await resolveLocalFirst(opts);
+		expect(fetch).toHaveBeenCalled();
 		expect(error).not.toHaveBeenCalled();
 		error.mockRestore();
 	});

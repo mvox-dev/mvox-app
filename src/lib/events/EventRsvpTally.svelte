@@ -48,8 +48,8 @@
 	let tallyCardNamesPartial = $state(false);
 	let tallyMembersPartial = $state(false);
 
-	function loadTally(cfg: EntuCfg, evId: string, g: number, past: boolean): void {
-		Promise.all([
+	function loadTally(cfg: EntuCfg, evId: string, g: number, past: boolean): Promise<void> {
+		return Promise.all([
 			actions.listAllRsvpsForEvent(cfg, evId),
 			past ? Promise.resolve<null>(null) : listActiveMembers(cfg)
 		])
@@ -102,7 +102,7 @@
 		const loaded = detail;
 		if (!current || !loaded) return;
 		tallyError = false;
-		loadTally(cfgFor(current.db), loaded.id, generation(), isPastDetail(loaded));
+		void loadTally(cfgFor(current.db), loaded.id, generation(), isPastDetail(loaded));
 	}
 
 	const showTallyCardToggle = $derived(
@@ -146,16 +146,16 @@
 		}
 	}
 
-	function loadTallyCardNames(): void {
+	function loadTallyCardNames(): Promise<void> {
 		const current = selected;
 		const loaded = detail;
-		if (!current || !loaded) return;
+		if (!current || !loaded) return Promise.resolve();
 		const g = generation();
 		const evId = loaded.id;
 		const cfg = cfgFor(current.db);
 		tallyCardNamesError = false;
 		const read = isPastDetail(loaded) ? actions.loadRosterIncludingArchived(cfg) : loadRoster(cfg);
-		read
+		return read
 			.then((rosterRead) => {
 				if (g !== generation() || detail?.id !== evId) return;
 				const names: Record<string, string> = {};
@@ -173,7 +173,7 @@
 	}
 
 	function retryTallyCardNames(): void {
-		loadTallyCardNames();
+		void loadTallyCardNames();
 	}
 
 	function toggleTallyCard(): void {
@@ -182,7 +182,7 @@
 			return;
 		}
 		tallyCardOpen = true;
-		loadTallyCardNames();
+		void loadTallyCardNames();
 	}
 
 
@@ -190,13 +190,13 @@
 		const current = selected;
 		const loaded = detail;
 		if (current && loaded) {
-			loadTally(cfgFor(current.db), loaded.id, generation(), isPastDetail(loaded));
+			void loadTally(cfgFor(current.db), loaded.id, generation(), isPastDetail(loaded));
 		}
 	}
 
 	untrack(() => {
 		if (!selected) return;
-		loadTally(cfgFor(selected.db), detail.id, generation(), isPastDetail(detail));
+		void loadTally(cfgFor(selected.db), detail.id, generation(), isPastDetail(detail));
 	});
 </script>
 

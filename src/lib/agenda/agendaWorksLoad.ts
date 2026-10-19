@@ -88,15 +88,15 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 		eventIds: string[],
 		seasonId: string | null,
 		thisRequest: number
-	) {
+	): Promise<void> {
 		const thisWorksLoad = ++seq.worksLoadId;
-		refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {
+		return refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {
 			includeInactive: ag.seasonManageRights === 'editor'
 		})
 			.then((byEvent) => {
 				if (thisRequest !== seq.requestId || thisWorksLoad !== seq.worksLoadId) return;
 				ag.worksByEventId = byEvent;
-				runPressureSweepThenPrefetch(cfg, thisRequest);
+				void runPressureSweepThenPrefetch(cfg, thisRequest);
 			})
 			.catch((e) => {
 				if (thisRequest !== seq.requestId || thisWorksLoad !== seq.worksLoadId) return;
@@ -105,10 +105,9 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 			});
 	}
 
-	function runPressureSweepThenPrefetch(cfg: { db: string; token: string }, thisRequest: number) {
+	function runPressureSweepThenPrefetch(cfg: { db: string; token: string }, thisRequest: number): Promise<void> {
 		if (seq.pressureSweepRanAtOpen) {
-			prefetchNextEventPartsAfterSettle(cfg, thisRequest);
-			return;
+			return prefetchNextEventPartsAfterSettle(cfg, thisRequest);
 		}
 		seq.pressureSweepRanAtOpen = true;
 		const identity = deps.collectiveIdentity();
@@ -116,29 +115,29 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 			seedRetentionKeys(identity, nextEventFileIds(ag.agendaItems, ag.worksByEventId));
 		}
 		const state = deps.collectivesState();
-		ensureRetentionSweep({
+		return ensureRetentionSweep({
 			token: cfg.token,
 			collectives: state.status === 'ready' ? state.collectives : [],
 			fetchImpl: fetch
 		}).finally(() => {
 			if (thisRequest !== seq.requestId) return;
-			prefetchNextEventPartsAfterSettle(cfg, thisRequest);
+			return prefetchNextEventPartsAfterSettle(cfg, thisRequest);
 		});
 	}
 
-	function prefetchNextEventPartsAfterSettle(cfg: { db: string; token: string }, thisRequest: number) {
+	function prefetchNextEventPartsAfterSettle(cfg: { db: string; token: string }, thisRequest: number): Promise<void> {
 		const nextEventId = ag.agendaItems[0]?.id;
-		if (nextEventId) {
-			refreshEventPageDetail(cfg, nextEventId, fetch).catch((e) => {
-				if (thisRequest !== seq.requestId) return;
-				reportProblem({ area: 'agenda', action: 'prefetching the next event', error: e });
-			});
-		}
+		const detailChain: Promise<unknown> = nextEventId
+			? refreshEventPageDetail(cfg, nextEventId, fetch).catch((e) => {
+					if (thisRequest !== seq.requestId) return;
+					reportProblem({ area: 'agenda', action: 'prefetching the next event', error: e });
+				})
+			: Promise.resolve();
 
 		const fileIds = nextEventFileIds(ag.agendaItems, ag.worksByEventId);
-		if (fileIds.length === 0) return;
+		if (fileIds.length === 0) return detailChain.then(() => {});
 		const identity = deps.collectiveIdentity();
-		prefetchNextEventParts(cfg, identity, fileIds, getAppByteStore(), fetch, () => thisRequest === seq.requestId)
+		const partsChain = prefetchNextEventParts(cfg, identity, fileIds, getAppByteStore(), fetch, () => thisRequest === seq.requestId)
 			.then((results) => {
 				if (thisRequest !== seq.requestId || !identity) return;
 				if (
@@ -151,11 +150,12 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 				if (thisRequest !== seq.requestId) return;
 				reportProblem({ area: 'agenda', action: 'prefetching the next event parts', error: e });
 			});
+		return Promise.all([detailChain, partsChain]).then(() => {});
 	}
 
-	function loadScheduleItems(cfg: EntuCfg, eventIds: string[], thisRequest: number) {
+	function loadScheduleItems(cfg: EntuCfg, eventIds: string[], thisRequest: number): Promise<void> {
 		const thisScheduleLoad = ++seq.scheduleLoadId;
-		listScheduleItemsByEventId(cfg, eventIds, fetch)
+		return listScheduleItemsByEventId(cfg, eventIds, fetch)
 			.then((byEvent) => {
 				if (thisRequest !== seq.requestId || thisScheduleLoad !== seq.scheduleLoadId) return;
 				ag.scheduleByEventId = byEvent;
@@ -176,16 +176,16 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 		return merged;
 	}
 
-	function refreshWorksAfterWrite() {
+	function refreshWorksAfterWrite(): Promise<void> {
 		const selected = deps.selected();
-		if (!selected) return;
+		if (!selected) return Promise.resolve();
 		const cfg = cfgFor(selected.db);
 		const eventIds = [...ag.agendaItems, ...ag.recentItems].map((item) => item.id);
 		const seasonId = ag.currentSeasonId;
 		const thisRequest = seq.requestId;
 		const thisWorksLoad = ++seq.worksLoadId;
 		const editor = ag.seasonManageRights === 'editor';
-		refetchWorkRows(cfg, eventIds, seasonId, worksRefetch(thisRequest, thisWorksLoad, editor));
+		return refetchWorkRows(cfg, eventIds, seasonId, worksRefetch(thisRequest, thisWorksLoad, editor));
 	}
 
 	return {

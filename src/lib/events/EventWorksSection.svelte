@@ -77,30 +77,35 @@
 		);
 	}
 
-	function refreshWorks(): void {
+	function refreshWorks(): Promise<void> {
 		const cfg = manageCfg();
-		if (!mounted || !cfg || !detail) return;
+		if (!mounted || !cfg || !detail) return Promise.resolve();
 		const evId = detail.id;
 		const seasonId = ev.seasonId;
 		const g = generation();
 		const isCurrent = () => g === generation();
-		refetchWorkRows(cfg, [evId], seasonId, {
-			includeInactive: ev.seasonManageRights === 'editor',
-			isCurrent,
-			onRows: (byEvent) => {
-				const isPending = (key: string) => repertoireQueue.isPending(key);
-				ev.workRows = mergePendingRows(byEvent[evId] ?? [], ev.workRows, isPending, evId);
-			}
-		});
-		if (seasonId !== null && ev.seasonManageRights === 'editor') {
-			refetchSeasonRepertoire(
-				cfg,
-				seasonId,
-				(c, s) => actions.listRepertoireItems(c, s),
+		const reads = [
+			refetchWorkRows(cfg, [evId], seasonId, {
+				includeInactive: ev.seasonManageRights === 'editor',
 				isCurrent,
-				(items) => (ev.seasonRepertoire = items)
+				onRows: (byEvent) => {
+					const isPending = (key: string) => repertoireQueue.isPending(key);
+					ev.workRows = mergePendingRows(byEvent[evId] ?? [], ev.workRows, isPending, evId);
+				}
+			})
+		];
+		if (seasonId !== null && ev.seasonManageRights === 'editor') {
+			reads.push(
+				refetchSeasonRepertoire(
+					cfg,
+					seasonId,
+					(c, s) => actions.listRepertoireItems(c, s),
+					isCurrent,
+					(items) => (ev.seasonRepertoire = items)
+				)
 			);
 		}
+		return Promise.all(reads).then(() => {});
 	}
 
 	const pendingMarks = createPendingMarks(() => (mounted ? generation() : -1));
@@ -116,13 +121,13 @@
 			},
 			reconcile(key) {
 				if (!pendingMarks.settle(key)) return;
-				if (key === ADD_WORK_KEY || key === ADD_PROGRAMME_KEY) refreshWorks();
+				if (key === ADD_WORK_KEY || key === ADD_PROGRAMME_KEY) void refreshWorks();
 				manageStatus = m.repertoire_manage_saved();
 			},
 			revert(key) {
 				console.error('event detail: repertoire write failed', key);
 				if (!pendingMarks.settle(key)) return;
-				refreshWorks();
+				void refreshWorks();
 				manageError = true;
 			}
 		})
@@ -179,7 +184,7 @@
 		const cfg = manageCfg();
 		if (!cfg) return;
 		const g = generation();
-		readScopedEditions(
+		void readScopedEditions(
 			workIds,
 			scopedEditionWorkIdsRequested,
 			(workId) => actions.listEditions(cfg, workId),
