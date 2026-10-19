@@ -103,7 +103,7 @@ export function createSelectedLoad(
 			deps.closeSeriesCreateForm();
 			return;
 		}
-		const thisRequest = ++seq.requestId;
+		const isRequestCurrent = seq.request.next();
 		closeAttendancePanel();
 		ag.agendaLoading = true;
 		ag.agendaError = false;
@@ -136,7 +136,7 @@ export function createSelectedLoad(
 					manageableSeasonOwners: mOwners,
 					manageableSeasonEditors: mEditors
 				}) => {
-					if (thisRequest !== seq.requestId) return;
+					if (!isRequestCurrent()) return;
 					ag.agendaItems = upcoming;
 					ag.agendaLoading = false;
 					ag.recentItems = recent;
@@ -191,9 +191,9 @@ export function createSelectedLoad(
 					ag.eventManageRights = Object.fromEntries(
 						events.map((item) => [item.id, manageRightsFrom(item.owners, item.editors, personId)])
 					);
-					void loadWorksAndManagement(worksCfg, eventIds, seasonId, thisRequest);
-					refreshPresence({ db: worksCfg.db, personId }, () => thisRequest === seq.requestId);
-					void loadScheduleItems(worksCfg, eventIds, thisRequest);
+					void loadWorksAndManagement(worksCfg, eventIds, seasonId, isRequestCurrent);
+					refreshPresence({ db: worksCfg.db, personId }, isRequestCurrent);
+					void loadScheduleItems(worksCfg, eventIds, isRequestCurrent);
 					const currentRightsInvisible =
 						seasonId !== null && seasonOwners.length === 0 && seasonEditors.length === 0;
 					const noSeasonToBorrowFrom = seasonId === null && fullSeasons.length === 0;
@@ -206,7 +206,7 @@ export function createSelectedLoad(
 						noSeasonToBorrowFrom
 					) {
 						loadDatabaseEntityRights(worksCfg, personId).then((state) => {
-							if (thisRequest !== seq.requestId) return;
+							if (!isRequestCurrent()) return;
 							if (state !== 'editor') return;
 							if (invisibleCandidateSeasons.length > 0) {
 								ag.manageableSeasonRightsById = {
@@ -233,7 +233,7 @@ export function createSelectedLoad(
 				}
 			)
 			.catch((err) => {
-				if (thisRequest !== seq.requestId) return;
+				if (!isRequestCurrent()) return;
 				ag.agendaLoading = false;
 				if (isAuthExpiredError(err)) {
 					ag.sessionExpired = true;
@@ -259,18 +259,18 @@ export function createSelectedLoad(
 
 		void loadMembership(
 			findMyMemberId(cfgFor(current.db), personId),
-			() => thisRequest === seq.requestId,
+			isRequestCurrent,
 			ag,
 			(id) => {
 				if (id) {
 					listMyAttendance(cfgFor(current.db), id)
 						.then((result) => {
-							if (thisRequest !== seq.requestId) return;
+							if (!isRequestCurrent()) return;
 							ag.myAttendance = result.items;
 							ag.attendancePartial = result.truncated;
 						})
 						.catch((e) => {
-							if (thisRequest !== seq.requestId) return;
+							if (!isRequestCurrent()) return;
 							reportProblem({ area: 'agenda', action: 'loading your attendance', error: e });
 							ag.myAttendance = [];
 							ag.attendancePartial = false;
@@ -284,12 +284,12 @@ export function createSelectedLoad(
 
 		listMyRsvps(cfgFor(current.db), personId)
 			.then((result) => {
-				if (thisRequest !== seq.requestId) return;
+				if (!isRequestCurrent()) return;
 				ag.rsvpByEventId = rsvpsByEventId(result.items);
 				ag.rsvpPartial = result.truncated;
 			})
 			.catch((e) => {
-				if (thisRequest !== seq.requestId) return;
+				if (!isRequestCurrent()) return;
 				reportProblem({ area: 'agenda', action: 'loading your answers', error: e });
 				ag.rsvpByEventId = {};
 				ag.rsvpPartial = false;

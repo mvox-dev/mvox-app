@@ -1,5 +1,6 @@
 <!-- Root layout: the app-wide effects (auth, collectives, gates, retention) around every route. -->
 <script module lang="ts">
+	import { createLatest } from '$lib/async/latest';
 	import { install401Recovery } from '$lib/auth/install-401-recovery';
 	import { startUpdateForcing } from '$lib/sw/swUpdate';
 	import { startSendingSavedFeedback } from '$lib/feedback/sendFeedback';
@@ -141,11 +142,11 @@
 	});
 
 	// Admin state for the nav, keyed on identity like the gate: a rename must not reset it.
-	let adminGen = 0;
+	const adminLoad = createLatest();
 	$effect(() => {
 		const auth = $authStore;
 		const selected = $selectedCollectiveIdentityStore;
-		const g = ++adminGen;
+		const isCurrent = adminLoad.next();
 		if (auth.status !== 'authenticated' || !selected) {
 			resetDbEditRight();
 			return;
@@ -153,16 +154,16 @@
 		resetDbEditRight();
 		const cfg = cfgFor(selected.db);
 		resolveDbEditRight(cfg, selected.personId).then((state) => {
-			if (g === adminGen) dbEditRight.set(state);
+			if (isCurrent()) dbEditRight.set(state);
 		});
 	});
 
 	// The app-wide "not active" notice, resolved once here and keyed on identity.
-	let membershipGen = 0;
+	const membershipLoad = createLatest();
 	$effect(() => {
 		const auth = $authStore;
 		const selected = $selectedCollectiveIdentityStore;
-		const g = ++membershipGen;
+		const isCurrent = membershipLoad.next();
 		if (auth.status !== 'authenticated' || !selected) {
 			resetMembership();
 			return;
@@ -170,7 +171,7 @@
 		resetMembership();
 		const cfg = cfgFor(selected.db);
 		resolveMembership(cfg, selected.personId).then((state) => {
-			if (g === membershipGen) membershipStore.set(state);
+			if (isCurrent()) membershipStore.set(state);
 		});
 	});
 </script>

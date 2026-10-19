@@ -73,10 +73,14 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 		return probe;
 	}
 
-	function worksRefetch(thisRequest: number, thisWorksLoad: number, includeInactive: boolean) {
+	function worksRefetch(
+		isRequestCurrent: () => boolean,
+		isWorksCurrent: () => boolean,
+		includeInactive: boolean
+	) {
 		return {
 			includeInactive,
-			isCurrent: () => thisRequest === seq.requestId && thisWorksLoad === seq.worksLoadId,
+			isCurrent: () => isRequestCurrent() && isWorksCurrent(),
 			onRows: (byEvent: Record<string, WorkRow[]>) => {
 				ag.worksByEventId = mergePendingRows(byEvent);
 			}
@@ -87,27 +91,27 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 		cfg: EntuCfg,
 		eventIds: string[],
 		seasonId: string | null,
-		thisRequest: number
+		isRequestCurrent: () => boolean
 	): Promise<void> {
-		const thisWorksLoad = ++seq.worksLoadId;
+		const isWorksCurrent = seq.worksLoad.next();
 		return refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {
 			includeInactive: ag.seasonManageRights === 'editor'
 		})
 			.then((byEvent) => {
-				if (thisRequest !== seq.requestId || thisWorksLoad !== seq.worksLoadId) return;
+				if (!isRequestCurrent() || !isWorksCurrent()) return;
 				ag.worksByEventId = byEvent;
-				void runPressureSweepThenPrefetch(cfg, thisRequest);
+				void runPressureSweepThenPrefetch(cfg, isRequestCurrent);
 			})
 			.catch((e) => {
-				if (thisRequest !== seq.requestId || thisWorksLoad !== seq.worksLoadId) return;
+				if (!isRequestCurrent() || !isWorksCurrent()) return;
 				reportProblem({ area: 'agenda', action: 'loading the work rows', error: e });
 				ag.worksByEventId = {};
 			});
 	}
 
-	function runPressureSweepThenPrefetch(cfg: { db: string; token: string }, thisRequest: number): Promise<void> {
+	function runPressureSweepThenPrefetch(cfg: { db: string; token: string }, isRequestCurrent: () => boolean): Promise<void> {
 		if (seq.pressureSweepRanAtOpen) {
-			return prefetchNextEventPartsAfterSettle(cfg, thisRequest);
+			return prefetchNextEventPartsAfterSettle(cfg, isRequestCurrent);
 		}
 		seq.pressureSweepRanAtOpen = true;
 		const identity = deps.collectiveIdentity();
@@ -120,16 +124,16 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 			collectives: state.status === 'ready' ? state.collectives : [],
 			fetchImpl: fetch
 		}).finally(() => {
-			if (thisRequest !== seq.requestId) return;
-			return prefetchNextEventPartsAfterSettle(cfg, thisRequest);
+			if (!isRequestCurrent()) return;
+			return prefetchNextEventPartsAfterSettle(cfg, isRequestCurrent);
 		});
 	}
 
-	function prefetchNextEventPartsAfterSettle(cfg: { db: string; token: string }, thisRequest: number): Promise<void> {
+	function prefetchNextEventPartsAfterSettle(cfg: { db: string; token: string }, isRequestCurrent: () => boolean): Promise<void> {
 		const nextEventId = ag.agendaItems[0]?.id;
 		const detailChain: Promise<unknown> = nextEventId
 			? refreshEventPageDetail(cfg, nextEventId, fetch).catch((e) => {
-					if (thisRequest !== seq.requestId) return;
+					if (!isRequestCurrent()) return;
 					reportProblem({ area: 'agenda', action: 'prefetching the next event', error: e });
 				})
 			: Promise.resolve();
@@ -137,31 +141,31 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 		const fileIds = nextEventFileIds(ag.agendaItems, ag.worksByEventId);
 		if (fileIds.length === 0) return detailChain.then(() => {});
 		const identity = deps.collectiveIdentity();
-		const partsChain = prefetchNextEventParts(cfg, identity, fileIds, getAppByteStore(), fetch, () => thisRequest === seq.requestId)
+		const partsChain = prefetchNextEventParts(cfg, identity, fileIds, getAppByteStore(), fetch, isRequestCurrent)
 			.then((results) => {
-				if (thisRequest !== seq.requestId || !identity) return;
+				if (!isRequestCurrent() || !identity) return;
 				if (
 					results.some((r) => r.outcome === 'network-stored' || r.outcome === 'network-uncached')
 				) {
-					refreshPresence(identity, () => thisRequest === seq.requestId);
+					refreshPresence(identity, isRequestCurrent);
 				}
 			})
 			.catch((e) => {
-				if (thisRequest !== seq.requestId) return;
+				if (!isRequestCurrent()) return;
 				reportProblem({ area: 'agenda', action: 'prefetching the next event parts', error: e });
 			});
 		return Promise.all([detailChain, partsChain]).then(() => {});
 	}
 
-	function loadScheduleItems(cfg: EntuCfg, eventIds: string[], thisRequest: number): Promise<void> {
-		const thisScheduleLoad = ++seq.scheduleLoadId;
+	function loadScheduleItems(cfg: EntuCfg, eventIds: string[], isRequestCurrent: () => boolean): Promise<void> {
+		const isScheduleCurrent = seq.scheduleLoad.next();
 		return listScheduleItemsByEventId(cfg, eventIds, fetch)
 			.then((byEvent) => {
-				if (thisRequest !== seq.requestId || thisScheduleLoad !== seq.scheduleLoadId) return;
+				if (!isRequestCurrent() || !isScheduleCurrent()) return;
 				ag.scheduleByEventId = byEvent;
 			})
 			.catch((e) => {
-				if (thisRequest !== seq.requestId || thisScheduleLoad !== seq.scheduleLoadId) return;
+				if (!isRequestCurrent() || !isScheduleCurrent()) return;
 				reportProblem({ area: 'agenda', action: 'loading the schedule items', error: e });
 				ag.scheduleByEventId = {};
 			});
@@ -182,10 +186,10 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 		const cfg = cfgFor(selected.db);
 		const eventIds = [...ag.agendaItems, ...ag.recentItems].map((item) => item.id);
 		const seasonId = ag.currentSeasonId;
-		const thisRequest = seq.requestId;
-		const thisWorksLoad = ++seq.worksLoadId;
+		const isRequestCurrent = seq.request.current();
+		const isWorksCurrent = seq.worksLoad.next();
 		const editor = ag.seasonManageRights === 'editor';
-		return refetchWorkRows(cfg, eventIds, seasonId, worksRefetch(thisRequest, thisWorksLoad, editor));
+		return refetchWorkRows(cfg, eventIds, seasonId, worksRefetch(isRequestCurrent, isWorksCurrent, editor));
 	}
 
 	return {

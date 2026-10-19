@@ -330,7 +330,7 @@
 							{apiCountSeasonScope}
 							{apiDeleteSeason}
 							{canDeleteSeries}
-							currentRequestId={() => seq.requestId}
+							currentRequest={seq.request.current}
 							switchGeneration={() => seasonManageSwitchGeneration}
 							{seriesRunUnfinished}
 							{createEntryPointsBlocked}

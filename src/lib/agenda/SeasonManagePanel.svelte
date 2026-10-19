@@ -58,7 +58,7 @@
 		panelRepertoireError: boolean;
 		panelManageError: boolean;
 		panelManageStatus: string;
-		currentRequestId: () => number;
+		currentRequest: () => () => boolean;
 		switchGeneration: () => number;
 		getRoster: (cfg: EntuCfg) => Promise<RosterRow[]>;
 		getSections: (cfg: EntuCfg) => Promise<SectionNode[]>;
@@ -118,7 +118,7 @@
 		panelRepertoireError,
 		panelManageError,
 		panelManageStatus,
-		currentRequestId,
+		currentRequest,
 		switchGeneration,
 		getRoster,
 		getSections,
@@ -181,13 +181,13 @@
 		}
 		const cfg = cfgFor(selected.db);
 		const seasonId = manageableSeasonId;
-		const thisRequest = currentRequestId();
+		const isRequestCurrent = currentRequest();
 		sm.seasonManageSeriesError = false;
 		sm.seasonManageRosterLoading = true;
 		getRoster(cfg)
 			.catch(alreadyReported)
 			.finally(() => {
-				if (thisRequest !== currentRequestId()) return;
+				if (!isRequestCurrent()) return;
 				sm.seasonManageRosterLoading = false;
 			});
 		getSections(cfg).catch(alreadyReported);
@@ -236,9 +236,9 @@
 	}
 
 	function loadSeriesList(cfg: EntuCfg, seasonId: string, { opening }: { opening: boolean }): void {
-		const thisRequest = currentRequestId();
+		const isRequestCurrent = currentRequest();
 		const thisSwitch = switchGeneration();
-		const stale = () => thisRequest !== currentRequestId() || thisSwitch !== switchGeneration();
+		const stale = () => !isRequestCurrent() || thisSwitch !== switchGeneration();
 		listEventSeriesForSeason(cfg, seasonId)
 			.then((result) => {
 				if (stale()) return;

@@ -59,7 +59,7 @@
 		apiCountSeasonScope,
 		apiDeleteSeason,
 		canDeleteSeries,
-		currentRequestId,
+		currentRequest,
 		switchGeneration,
 		seriesRunUnfinished,
 		createEntryPointsBlocked,
@@ -103,7 +103,7 @@
 		apiCountSeasonScope: Panel['apiCountSeasonScope'];
 		apiDeleteSeason: Panel['apiDeleteSeason'];
 		canDeleteSeries: Panel['canDeleteSeries'];
-		currentRequestId: Panel['currentRequestId'];
+		currentRequest: Panel['currentRequest'];
 		switchGeneration: Panel['switchGeneration'];
 		seriesRunUnfinished: boolean;
 		createEntryPointsBlocked: boolean;
@@ -168,7 +168,7 @@
 	panelRepertoireError={ag.panelRepertoireError}
 	panelManageError={panel.manageError}
 	panelManageStatus={panel.manageStatus}
-	{currentRequestId}
+	{currentRequest}
 	{switchGeneration}
 	{...seams}
 	{listEventSeriesForSeason}

@@ -121,17 +121,17 @@ export function createAgendaRepertoireQueues(
 		const cfg = manageCfg();
 		const seasonId = seq.panelRepertoireSeasonId;
 		if (!cfg || seasonId === null) return Promise.resolve();
-		const thisRequest = seq.requestId;
+		const isRequestCurrent = seq.request.current();
 		const thisSwitch = deps.switchGeneration();
 		return deps
 			.listRepertoireItems(cfg, seasonId)
 			.then((items) => {
-				if (isPanelReadStale(seq, thisRequest, thisSwitch, deps.switchGeneration())) return;
+				if (isPanelReadStale(isRequestCurrent, thisSwitch, deps.switchGeneration())) return;
 				ag.panelRepertoire = items;
 				ag.panelRepertoireItemsOk = true;
 			})
 			.catch((e) => {
-				if (isPanelReadStale(seq, thisRequest, thisSwitch, deps.switchGeneration())) return;
+				if (isPanelReadStale(isRequestCurrent, thisSwitch, deps.switchGeneration())) return;
 				const action = 're-reading the season-manage repertoire';
 				reportProblem({ area: 'agenda', action, error: e });
 			});
