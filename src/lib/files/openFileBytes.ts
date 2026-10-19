@@ -2,7 +2,7 @@
 
 import { signFileUrl } from '$lib/repertoire/fileUrls';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
-import type { CollectiveIdentity } from '$lib/collectives/store';
+import type { FileKey } from './idb';
 import { reportProblem } from '$lib/problems/reportProblem';
 import { BYTE_STORE_CAP_BYTES, type ByteStore } from './byteStore';
 
@@ -71,24 +71,24 @@ async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
 		.join('');
 }
 
-async function readStored(store: ByteStore, identity: CollectiveIdentity, fileId: string) {
+async function readStored(store: ByteStore, key: FileKey) {
 	try {
-		return await store.get(identity, fileId);
+		return await store.get(key);
 	} catch {
 		return undefined;
 	}
 }
 
-// `identity` is captured when the request is issued, never read from a global.
+// `key` is captured when the request is issued, never read from a global.
 /** The cache is never a gate: only a non-OK response or a failed sign throws. */
 export async function openFileBytes(
 	cfg: EntuCfg,
-	identity: CollectiveIdentity,
-	fileId: string,
+	key: FileKey,
 	store: ByteStore,
 	fetchImpl: typeof fetch = fetch
 ): Promise<OpenedFileBytes> {
-	const hit = await readStored(store, identity, fileId);
+	const { fileId } = key;
+	const hit = await readStored(store, key);
 	if (hit) {
 		return mint(fileId, new Blob([hit.bytes], { type: hit.filetype }), 'cache');
 	}
@@ -135,7 +135,7 @@ export async function openFileBytes(
 	let cause: NotStoredCause | undefined = sha256 === null ? { kind: 'no-digest' } : undefined;
 	if (sha256 !== null) {
 		try {
-			await store.put(identity, fileId, { bytes, filetype, sha256 });
+			await store.put(key, { bytes, filetype, sha256 });
 		} catch (error) {
 			reportProblem({ area: 'files', action: 'saving a part on this device', error });
 			cause = { kind: 'save-failed', error };

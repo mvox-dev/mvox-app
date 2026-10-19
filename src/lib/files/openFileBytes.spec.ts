@@ -48,8 +48,8 @@ describe('openFileBytes — read-through', () => {
 		signFileUrlMock.mockResolvedValue(SIGNED_URL);
 		const fetchImpl = vi.fn().mockResolvedValue(pdfResponse());
 
-		const first = await openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
-		const second = await openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
+		const first = await openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch);
+		const second = await openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(first.url).toMatch(/^blob:/);
 		expect(second.url).toMatch(/^blob:/);
@@ -61,7 +61,7 @@ describe('openFileBytes — read-through', () => {
 		signFileUrlMock.mockResolvedValue(SIGNED_URL);
 		const fetchImpl = vi.fn().mockResolvedValue(pdfResponse());
 
-		await openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
+		await openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(signFileUrlMock.mock.calls[0].slice(0, 2)).toEqual([CFG, 'file-1']);
 		expect(signFileUrlMock.mock.calls[0][2]).toBe(fetchImpl);
@@ -77,7 +77,7 @@ describe('openFileBytes — read-through', () => {
 		signFileUrlMock.mockRejectedValue(new Error('network down'));
 		const fetchImpl = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
 
-		const opened = await openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
+		const opened = await openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(opened.url).toMatch(/^blob:/);
 		expect(signFileUrlMock).not.toHaveBeenCalled();
@@ -88,7 +88,7 @@ describe('openFileBytes — read-through', () => {
 		signFileUrlMock.mockResolvedValue(SIGNED_URL);
 		const fetchImpl = vi.fn().mockResolvedValue(pdfResponse());
 
-		await openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
+		await openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(store.puts.length).toBe(1);
 		const put = store.puts[0];
@@ -104,7 +104,7 @@ describe('openFileBytes — read-through', () => {
 		signFileUrlMock.mockResolvedValue(SIGNED_URL);
 		const fetchImpl = vi.fn().mockResolvedValue(pdfResponse());
 
-		await openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
+		await openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(store.puts[0].data.sha256).toBe(await sha256Hex(PDF_BYTES));
 		expect(new Uint8Array(store.puts[0].data.bytes)).toEqual(PDF_BYTES);
@@ -115,11 +115,11 @@ describe('openFileBytes — read-through', () => {
 		signFileUrlMock.mockResolvedValueOnce('https://s3.example/signed-new?X-Amz-Expires=60');
 		const fetchImpl = vi.fn().mockResolvedValue(pdfResponse());
 
-		await openFileBytes(CFG, A, 'file-old', store, fetchImpl as unknown as typeof fetch);
+		await openFileBytes(CFG, { ...A, fileId: 'file-old' }, store, fetchImpl as unknown as typeof fetch);
 		fetchImpl.mockClear();
 		fetchImpl.mockResolvedValue(pdfResponse());
 
-		await openFileBytes(CFG, A, 'file-new', store, fetchImpl as unknown as typeof fetch);
+		await openFileBytes(CFG, { ...A, fileId: 'file-new' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(signFileUrlMock).toHaveBeenCalledTimes(2);
 		expect(signFileUrlMock.mock.calls[1].slice(0, 2)).toEqual([CFG, 'file-new']);
@@ -143,11 +143,11 @@ describe('openFileBytes — object-URL disposal', () => {
 	it('re-opening the SAME file revokes the URL the previous open handed out — one live blob per file, not per click', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(pdfResponse());
 
-		const first = await openFileBytes(CFG, A, 'file-same', store, fetchImpl as unknown as typeof fetch);
+		const first = await openFileBytes(CFG, { ...A, fileId: 'file-same' }, store, fetchImpl as unknown as typeof fetch);
 		expect(revokeSpy).not.toHaveBeenCalled();
 
 		fetchImpl.mockResolvedValue(pdfResponse());
-		const second = await openFileBytes(CFG, A, 'file-same', store, fetchImpl as unknown as typeof fetch);
+		const second = await openFileBytes(CFG, { ...A, fileId: 'file-same' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(revokeSpy.mock.calls).toEqual([[first.url]]);
 		expect(second.url).not.toBe(first.url);
@@ -156,9 +156,9 @@ describe('openFileBytes — object-URL disposal', () => {
 	it('opening DIFFERENT files revokes nothing — the bound is one live URL per distinct file', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(pdfResponse());
 
-		await openFileBytes(CFG, A, 'file-alto', store, fetchImpl as unknown as typeof fetch);
+		await openFileBytes(CFG, { ...A, fileId: 'file-alto' }, store, fetchImpl as unknown as typeof fetch);
 		fetchImpl.mockResolvedValue(pdfResponse());
-		await openFileBytes(CFG, A, 'file-tenor', store, fetchImpl as unknown as typeof fetch);
+		await openFileBytes(CFG, { ...A, fileId: 'file-tenor' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(revokeSpy).not.toHaveBeenCalled();
 	});
@@ -166,7 +166,7 @@ describe('openFileBytes — object-URL disposal', () => {
 	it('release() revokes the URL it came with — what a caller that will not hand the URL over must call', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(pdfResponse());
 
-		const opened = await openFileBytes(CFG, A, 'file-released', store, fetchImpl as unknown as typeof fetch);
+		const opened = await openFileBytes(CFG, { ...A, fileId: 'file-released' }, store, fetchImpl as unknown as typeof fetch);
 		opened.release();
 
 		expect(revokeSpy.mock.calls).toEqual([[opened.url]]);
@@ -175,12 +175,12 @@ describe('openFileBytes — object-URL disposal', () => {
 	it('releasing a SUPERSEDED open does not cost the current one its disposal — the newer URL is still revoked on the next open', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(pdfResponse());
 
-		const first = await openFileBytes(CFG, A, 'file-latch', store, fetchImpl as unknown as typeof fetch);
-		const second = await openFileBytes(CFG, A, 'file-latch', store, fetchImpl as unknown as typeof fetch);
+		const first = await openFileBytes(CFG, { ...A, fileId: 'file-latch' }, store, fetchImpl as unknown as typeof fetch);
+		const second = await openFileBytes(CFG, { ...A, fileId: 'file-latch' }, store, fetchImpl as unknown as typeof fetch);
 		first.release();
 		revokeSpy.mockClear();
 
-		await openFileBytes(CFG, A, 'file-latch', store, fetchImpl as unknown as typeof fetch);
+		await openFileBytes(CFG, { ...A, fileId: 'file-latch' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(revokeSpy.mock.calls).toEqual([[second.url]]);
 	});
@@ -192,7 +192,7 @@ describe('openFileBytes — identity discipline', () => {
 		let releaseFetch!: (r: Response) => void;
 		const fetchImpl = vi.fn().mockReturnValue(new Promise<Response>((r) => (releaseFetch = r)));
 
-		const inFlight = openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
+		const inFlight = openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch);
 		selectedCollectiveDbStore.set('crede');
 		releaseFetch(pdfResponse());
 		await inFlight;
@@ -212,7 +212,7 @@ describe('openFileBytes — failure surfaces (rendered by the pages, raised here
 			.mockResolvedValue(new Response('AccessDenied', { status: 403 }));
 
 		await expect(
-			openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch)
+			openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch)
 		).rejects.toThrow(/403/);
 		expect(store.puts).toEqual([]);
 	});
@@ -223,7 +223,7 @@ describe('openFileBytes — fetch-reject fallback (#343 fix-round, Gama 1(b))', 
 		signFileUrlMock.mockResolvedValue(SIGNED_URL);
 		const fetchImpl = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
 
-		const opened = await openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
+		const opened = await openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(opened.url).toBe(SIGNED_URL);
 		expect(opened.reason).toBe('fallback-navigation');
@@ -235,7 +235,7 @@ describe('openFileBytes — fetch-reject fallback (#343 fix-round, Gama 1(b))', 
 		const fetchImpl = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
 		const revokeSpy = vi.spyOn(URL, 'revokeObjectURL');
 
-		const opened = await openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
+		const opened = await openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch);
 		expect(() => opened.release()).not.toThrow();
 
 		expect(revokeSpy).not.toHaveBeenCalled();
@@ -254,7 +254,7 @@ describe('openFileBytes — cap decided before buffering (#343 fix-round, findin
 		const arrayBufferSpy = vi.spyOn(res, 'arrayBuffer');
 		const fetchImpl = vi.fn().mockResolvedValue(res);
 
-		const opened = await openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
+		const opened = await openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(arrayBufferSpy).not.toHaveBeenCalled();
 		expect(store.puts).toEqual([]);
@@ -271,7 +271,7 @@ describe('openFileBytes — cap decided before buffering (#343 fix-round, findin
 		});
 		const fetchImpl = vi.fn().mockResolvedValue(res);
 
-		const opened = await openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
+		const opened = await openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(opened.reason).toBe('network-stored');
 		expect(store.puts.length).toBe(1);
@@ -283,7 +283,7 @@ describe('openFileBytes — cap decided before buffering (#343 fix-round, findin
 		const overCap = new Error('byteStore: record exceeds the cap');
 		store.put = vi.fn().mockRejectedValue(overCap);
 
-		const opened = await openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
+		const opened = await openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(opened.url).toMatch(/^blob:/);
 		expect(opened.reason).toBe('network-uncached');
@@ -298,7 +298,7 @@ describe('openFileBytes — the cache is never a gate (#343 second review round)
 		store.get = vi.fn().mockRejectedValue(new DOMException('db blocked', 'VersionError'));
 		const fetchImpl = vi.fn().mockResolvedValue(pdfResponse());
 
-		const opened = await openFileBytes(CFG, A, 'file-deadread', store, fetchImpl as unknown as typeof fetch);
+		const opened = await openFileBytes(CFG, { ...A, fileId: 'file-deadread' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(opened.url).toMatch(/^blob:/);
 		expect(opened.reason).toBe('network-stored');
@@ -313,7 +313,7 @@ describe('openFileBytes — the cache is never a gate (#343 second review round)
 		store.put = vi.fn().mockRejectedValue(dead);
 		const fetchImpl = vi.fn().mockResolvedValue(pdfResponse());
 
-		const opened = await openFileBytes(CFG, A, 'file-deadstore', store, fetchImpl as unknown as typeof fetch);
+		const opened = await openFileBytes(CFG, { ...A, fileId: 'file-deadstore' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(opened.url).toMatch(/^blob:/);
 		expect(opened.reason).toBe('network-uncached');
@@ -328,7 +328,7 @@ describe('openFileBytes — the cache is never a gate (#343 second review round)
 		vi.stubGlobal('crypto', {});
 
 		try {
-			const opened = await openFileBytes(CFG, A, 'file-nosubtle', store, fetchImpl as unknown as typeof fetch);
+			const opened = await openFileBytes(CFG, { ...A, fileId: 'file-nosubtle' }, store, fetchImpl as unknown as typeof fetch);
 			expect(opened.url).toMatch(/^blob:/);
 			expect(opened.reason).toBe('network-uncached');
 		} finally {
@@ -345,7 +345,7 @@ describe('openFileBytes — the cache is never a gate (#343 second review round)
 		vi.spyOn(res, 'arrayBuffer').mockRejectedValue(new TypeError('network error'));
 		const fetchImpl = vi.fn().mockResolvedValue(res);
 
-		const opened = await openFileBytes(CFG, A, 'file-bodydrop', store, fetchImpl as unknown as typeof fetch);
+		const opened = await openFileBytes(CFG, { ...A, fileId: 'file-bodydrop' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(opened.url).toBe(SIGNED_URL);
 		expect(opened.reason).toBe('fallback-navigation');
@@ -374,7 +374,7 @@ describe('openFileBytes — passthrough freshness (#343 third round, finding 2)'
 			throw new TypeError('Failed to fetch');
 		});
 
-		const opened = await openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
+		const opened = await openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(opened.url).toBe(FRESH_URL);
 		expect(opened.url).not.toBe(SIGNED_URL);
@@ -390,7 +390,7 @@ describe('openFileBytes — passthrough freshness (#343 third round, finding 2)'
 			throw new TypeError('Failed to fetch');
 		});
 
-		const opened = await openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
+		const opened = await openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(opened.url).toBe(SIGNED_URL);
 		expect(signFileUrlMock).toHaveBeenCalledTimes(1);
@@ -405,7 +405,7 @@ describe('openFileBytes — passthrough freshness (#343 third round, finding 2)'
 		});
 		const fetchImpl = vi.fn().mockResolvedValue(res);
 
-		const opened = await openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
+		const opened = await openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(opened.url).toBe(FRESH_URL);
 		expect(opened.reason).toBe('fallback-navigation');
@@ -425,7 +425,7 @@ describe('openFileBytes — passthrough freshness (#343 third round, finding 2)'
 			});
 		});
 
-		const opened = await openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
+		const opened = await openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch);
 
 		expect(opened.url).toBe(FRESH_URL);
 		expect(opened.reason).toBe('network-uncached');
@@ -441,7 +441,7 @@ describe('openFileBytes — passthrough freshness (#343 third round, finding 2)'
 		});
 
 		await expect(
-			openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch)
+			openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch)
 		).rejects.toThrow(/signing failed/);
 		expect(store.puts).toEqual([]);
 	});
@@ -452,10 +452,10 @@ describe('openFileBytes — delivery reason on the happy paths (#343 fix-round, 
 		signFileUrlMock.mockResolvedValue(SIGNED_URL);
 		const fetchImpl = vi.fn().mockResolvedValue(pdfResponse());
 
-		const miss = await openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
+		const miss = await openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch);
 		expect(miss.reason).toBe('network-stored');
 
-		const hit = await openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
+		const hit = await openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch);
 		expect(hit.reason).toBe('cache');
 		expect(hit.reason).not.toBe(miss.reason);
 	});

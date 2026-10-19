@@ -10,7 +10,8 @@
 	import { authStore } from '$lib/auth/session';
 	import { getAppByteStore } from '$lib/files/appByteStore';
 	import { getAppLabelStore } from '$lib/files/appLabelStore';
-	import { deriveOfflineIdentities, type OfflineIdentity } from '$lib/collectives/offlineIdentity';
+	import { deriveOfflineIdentities } from '$lib/collectives/offlineIdentity';
+	import type { CollectiveIdentity } from '$lib/collectives/store';
 	import type { PartLabel } from '$lib/files/labelStore';
 
 	// Mirrors collectives/store.ts's `SELECTED_KEY`, read directly: that module's stores
@@ -18,7 +19,7 @@
 	const SELECTED_COLLECTIVE_KEY = 'mvox.selected_collective';
 
 	interface Row {
-		identity: OfflineIdentity;
+		identity: CollectiveIdentity;
 		fileId: string;
 		label: PartLabel | null;
 	}
@@ -37,8 +38,8 @@
 		const out: Row[] = [];
 		for (const identity of identities) {
 			const [heldIds, labels] = await Promise.all([
-				byteStore.heldFileIds(identity.db, identity.personId),
-				labelStore.labelsFor(identity.db, identity.personId)
+				byteStore.heldFileIds(identity),
+				labelStore.labelsFor(identity)
 			]);
 			for (const fileId of heldIds) {
 				out.push({ identity, fileId, label: labels.get(fileId) ?? null });
@@ -79,7 +80,7 @@
 
 	// The viewer owns the byte read and its failure notices. `?db=` names the partition
 	// the row was listed under, since this page holds several identities at once.
-	function handleOpen(identity: OfflineIdentity, fileId: string): void {
+	function handleOpen(identity: CollectiveIdentity, fileId: string): void {
 		void goto(`/part/${fileId}?db=${identity.db}`);
 	}
 </script>

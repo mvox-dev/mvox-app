@@ -38,10 +38,10 @@ let store: ByteStore;
 /** A holds 10+20, B holds 5, C holds 30 — every partition-vs-others split
  *  below is computable by hand from these four rows. */
 async function seedThreePartitions(): Promise<void> {
-	await adapter.put(A.db, A.personId, 'file-a1', seededRecord(10, 1000));
-	await adapter.put(A.db, A.personId, 'file-a2', seededRecord(20, 2000));
-	await adapter.put(B.db, B.personId, 'file-b1', seededRecord(5, 3000));
-	await adapter.put(C.db, C.personId, 'file-c1', seededRecord(30, 4000));
+	await adapter.put({ ...A, fileId: 'file-a1' }, seededRecord(10, 1000));
+	await adapter.put({ ...A, fileId: 'file-a2' }, seededRecord(20, 2000));
+	await adapter.put({ ...B, fileId: 'file-b1' }, seededRecord(5, 3000));
+	await adapter.put({ ...C, fileId: 'file-c1' }, seededRecord(30, 4000));
 }
 
 beforeEach(() => {
@@ -60,9 +60,9 @@ describe('#352 — scoped usage: one partition vs everything else (full-shape an
 		await seedThreePartitions();
 		// Full-shape toEqual — never a partial contains-check (the
 		// partial-assertions lesson).
-		expect(await store.usageForPartition(A.db, A.personId)).toEqual({ count: 2, size: 30 });
-		expect(await store.usageForPartition(B.db, B.personId)).toEqual({ count: 1, size: 5 });
-		expect(await store.usageForPartition(C.db, C.personId)).toEqual({ count: 1, size: 30 });
+		expect(await store.usageForPartition(A)).toEqual({ count: 2, size: 30 });
+		expect(await store.usageForPartition(B)).toEqual({ count: 1, size: 5 });
+		expect(await store.usageForPartition(C)).toEqual({ count: 1, size: 30 });
 	});
 
 	it('usageForOthers aggregates every OTHER partition — INCLUDING the same human in another collective (identity C)', async () => {
@@ -70,16 +70,16 @@ describe('#352 — scoped usage: one partition vs everything else (full-shape an
 		// Asked as A (the signed-in identity): others = B (5) + C (30). C is the
 		// SAME personId in a different db — it must land in the others bucket,
 		// because the partition key is the pair, not the person.
-		expect(await store.usageForOthers(A.db, A.personId)).toEqual({ count: 2, size: 35 });
+		expect(await store.usageForOthers(A)).toEqual({ count: 2, size: 35 });
 		// Asked as C: others = A (10+20) + B (5).
-		expect(await store.usageForOthers(C.db, C.personId)).toEqual({ count: 3, size: 35 });
+		expect(await store.usageForOthers(C)).toEqual({ count: 3, size: 35 });
 	});
 
 	it('an empty store and an unknown partition answer {count: 0, size: 0} — never throw, never undefined', async () => {
-		expect(await store.usageForPartition(A.db, A.personId)).toEqual({ count: 0, size: 0 });
-		expect(await store.usageForOthers(A.db, A.personId)).toEqual({ count: 0, size: 0 });
+		expect(await store.usageForPartition(A)).toEqual({ count: 0, size: 0 });
+		expect(await store.usageForOthers(A)).toEqual({ count: 0, size: 0 });
 		await seedThreePartitions();
-		expect(await store.usageForPartition('sampledb', 'person-nobody')).toEqual({
+		expect(await store.usageForPartition({ db: 'sampledb', personId: 'person-nobody' })).toEqual({
 			count: 0,
 			size: 0
 		});
@@ -87,8 +87,8 @@ describe('#352 — scoped usage: one partition vs everything else (full-shape an
 
 	it('partition + others always reconciles with the PINNED global usage() — no row counted twice, none dropped', async () => {
 		await seedThreePartitions();
-		const mine = await store.usageForPartition(A.db, A.personId);
-		const others = await store.usageForOthers(A.db, A.personId);
+		const mine = await store.usageForPartition(A);
+		const others = await store.usageForOthers(A);
 		expect(mine.size + others.size).toBe(await store.usage());
 		expect(mine.count + others.count).toBe((await adapter.listKeys()).length);
 	});
@@ -101,8 +101,8 @@ describe('#352 — scoped usage is NOT an open (#351 law: reads move no recency)
 
 		for (let i = 0; i < 5; i++) {
 			vi.advanceTimersByTime(1000); // time passes between renders
-			await store.usageForPartition(A.db, A.personId);
-			await store.usageForOthers(A.db, A.personId);
+			await store.usageForPartition(A);
+			await store.usageForOthers(A);
 		}
 
 		expect(adapter.touchLog).toEqual([]);
@@ -123,19 +123,19 @@ describe('#352 — remove-mine at the store level: clearPartition moves the numb
 		await seedThreePartitions();
 		expect(await store.usage()).toBe(65);
 
-		await store.clearPartition(A.db, A.personId);
+		await store.clearPartition(A);
 
 		expect(await store.usage()).toBe(35);
-		expect(await store.usageForPartition(A.db, A.personId)).toEqual({ count: 0, size: 0 });
+		expect(await store.usageForPartition(A)).toEqual({ count: 0, size: 0 });
 		// The others-aggregate FROM A's seat is untouched — nothing of B's or
 		// C's went with A's rows.
-		expect(await store.usageForOthers(A.db, A.personId)).toEqual({ count: 2, size: 35 });
+		expect(await store.usageForOthers(A)).toEqual({ count: 2, size: 35 });
 		// The next get() of a removed id MISSES — the refetch path at this
 		// level is exactly "undefined, go to the network".
-		expect(await store.get(A, 'file-a1')).toBeUndefined();
-		expect(await store.get(A, 'file-a2')).toBeUndefined();
-		expect(await store.get(B, 'file-b1')).toBeDefined();
-		expect(await store.get(C, 'file-c1')).toBeDefined();
+		expect(await store.get({ ...A, fileId: 'file-a1' })).toBeUndefined();
+		expect(await store.get({ ...A, fileId: 'file-a2' })).toBeUndefined();
+		expect(await store.get({ ...B, fileId: 'file-b1' })).toBeDefined();
+		expect(await store.get({ ...C, fileId: 'file-c1' })).toBeDefined();
 	});
 });
 
@@ -147,12 +147,12 @@ describe('#352 — clearAllPartitions: the device-wide wipe, signed-in or not', 
 
 		expect(adapter.rows()).toEqual([]);
 		expect(await store.usage()).toBe(0);
-		expect(await store.usageForPartition(A.db, A.personId)).toEqual({ count: 0, size: 0 });
-		expect(await store.usageForOthers(A.db, A.personId)).toEqual({ count: 0, size: 0 });
-		expect(await store.heldFileIds(B.db, B.personId)).toEqual([]);
-		expect(await store.get(A, 'file-a1')).toBeUndefined();
-		expect(await store.get(B, 'file-b1')).toBeUndefined();
-		expect(await store.get(C, 'file-c1')).toBeUndefined();
+		expect(await store.usageForPartition(A)).toEqual({ count: 0, size: 0 });
+		expect(await store.usageForOthers(A)).toEqual({ count: 0, size: 0 });
+		expect(await store.heldFileIds(B)).toEqual([]);
+		expect(await store.get({ ...A, fileId: 'file-a1' })).toBeUndefined();
+		expect(await store.get({ ...B, fileId: 'file-b1' })).toBeUndefined();
+		expect(await store.get({ ...C, fileId: 'file-c1' })).toBeUndefined();
 	});
 
 	it('works from KEYS alone — deleting bytes never needs to read them (#351 review finding 2, the clearPartition law)', async () => {
@@ -179,11 +179,11 @@ describe('#352 — the fake store implements the SAME members (reconciled, not a
 		fake.seed({ db: 'sampledb', personId: 'person-b' }, 'file-3', data(5));
 		fake.seed({ db: 'crede', personId: 'person-a' }, 'file-4', data(30));
 
-		expect(await fake.usageForPartition('sampledb', 'person-a')).toEqual({
+		expect(await fake.usageForPartition({ db: 'sampledb', personId: 'person-a' })).toEqual({
 			count: 2,
 			size: 30
 		});
-		expect(await fake.usageForOthers('sampledb', 'person-a')).toEqual({ count: 2, size: 35 });
+		expect(await fake.usageForOthers({ db: 'sampledb', personId: 'person-a' })).toEqual({ count: 2, size: 35 });
 	});
 
 	it('createFakeByteStore(): clearAllPartitions empties every partition', async () => {
@@ -205,8 +205,8 @@ describe('#352 review — every size sum reads METADATA, never payloads', () => 
 		const listSpy = vi.spyOn(adapter, 'list');
 		const listMetaSpy = vi.spyOn(adapter, 'listMeta');
 
-		expect(await store.usageForPartition(A.db, A.personId)).toEqual({ count: 2, size: 30 });
-		expect(await store.usageForOthers(A.db, A.personId)).toEqual({ count: 2, size: 35 });
+		expect(await store.usageForPartition(A)).toEqual({ count: 2, size: 30 });
+		expect(await store.usageForOthers(A)).toEqual({ count: 2, size: 35 });
 
 		expect(listSpy).not.toHaveBeenCalled();
 		expect(listMetaSpy).toHaveBeenCalledTimes(2);
@@ -228,7 +228,7 @@ describe('#352 review — every size sum reads METADATA, never payloads', () => 
 		// 65 + 50 > 100 → evicts globally-oldest (file-a1, stamp 1000) and, still
 		// over, file-a2 (2000). The eviction decision itself is the thing that
 		// must be reachable without the bytes.
-		await store.put(A, 'file-new', data(50));
+		await store.put({ ...A, fileId: 'file-new' }, data(50));
 
 		expect(listSpy).not.toHaveBeenCalled();
 		expect(
@@ -243,8 +243,8 @@ describe('#352 review — every size sum reads METADATA, never payloads', () => 
 	it('a profile load is survivable at the cap: the two usage reads deserialise NOT ONE stored ArrayBuffer', async () => {
 		// The failure this fix exists for, stated as bytes rather than as call
 		// counts: seed near the cap, then count what the reads actually pull.
-		await adapter.put(A.db, A.personId, 'file-big-a', seededRecord(40, 1000));
-		await adapter.put(B.db, B.personId, 'file-big-b', seededRecord(40, 2000));
+		await adapter.put({ ...A, fileId: 'file-big-a' }, seededRecord(40, 1000));
+		await adapter.put({ ...B, fileId: 'file-big-b' }, seededRecord(40, 2000));
 
 		let bytesRead = 0;
 		const realList = adapter.list.bind(adapter);
@@ -255,8 +255,8 @@ describe('#352 review — every size sum reads METADATA, never payloads', () => 
 		});
 
 		const [mine, others] = await Promise.all([
-			store.usageForPartition(A.db, A.personId),
-			store.usageForOthers(A.db, A.personId)
+			store.usageForPartition(A),
+			store.usageForOthers(A)
 		]);
 
 		expect(mine).toEqual({ count: 1, size: 40 });

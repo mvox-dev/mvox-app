@@ -26,7 +26,7 @@ async function storedKeys(factory: IDBFactory, dbName: string, store: string): P
 describe('stored keys stay byte-identical', () => {
 	it('byte store: payload and recency rows sit under ["db","person","file"]', async () => {
 		const factory = new IDBFactory();
-		await createIdbAdapter(factory).put('sampledb', 'person-a', 'file-1', {
+		await createIdbAdapter(factory).put({ db: 'sampledb', personId: 'person-a', fileId: 'file-1' }, {
 			bytes: new ArrayBuffer(4),
 			filetype: 'application/pdf',
 			sha256: 'sha',
@@ -40,7 +40,7 @@ describe('stored keys stay byte-identical', () => {
 
 	it('label index: ["db","person","file"]', async () => {
 		const factory = new IDBFactory();
-		await createLabelIdbAdapter(factory).put('sampledb', 'person-a', 'file-1', {
+		await createLabelIdbAdapter(factory).put({ db: 'sampledb', personId: 'person-a', fileId: 'file-1' }, {
 			work: 'w',
 			composer: 'c',
 			edition: 'e',

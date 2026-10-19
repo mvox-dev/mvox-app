@@ -192,7 +192,7 @@ export function createSelectedLoad(
 						events.map((item) => [item.id, manageRightsFrom(item.owners, item.editors, personId)])
 					);
 					loadWorksAndManagement(worksCfg, eventIds, seasonId, thisRequest);
-					refreshPresence(worksCfg.db, personId, () => thisRequest === seq.requestId);
+					refreshPresence({ db: worksCfg.db, personId }, () => thisRequest === seq.requestId);
 					loadScheduleItems(worksCfg, eventIds, thisRequest);
 					const currentRightsInvisible =
 						seasonId !== null && seasonOwners.length === 0 && seasonEditors.length === 0;

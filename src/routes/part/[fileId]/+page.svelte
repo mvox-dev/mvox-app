@@ -156,14 +156,10 @@
 			// deliveryFailed: did any partition refuse, as opposed to not holding the file?
 			let deliveryFailed = false;
 			for (const identity of deriveOfflineIdentities(auth.personIdByDb, dbParam)) {
+				const key = { ...identity, fileId };
 				let result: OpenedFileBytes;
 				try {
-					result = await openFileBytes(
-						{ db: identity.db, token },
-						identity,
-						fileId,
-						getAppByteStore()
-					);
+					result = await openFileBytes({ db: identity.db, token }, key, getAppByteStore());
 				} catch (error) {
 					if (!wireUnreachable(error)) {
 						deliveryFailed = true;
@@ -202,7 +198,7 @@
 					status = 'ready';
 					// The #353 label, written only for the deliveries that left a stored copy.
 					if (label) {
-						recordPartLabel(getAppLabelStore(), identity, fileId, label, result.reason);
+						recordPartLabel(getAppLabelStore(), key, label, result.reason);
 					}
 				} catch (error) {
 					if (!cancelled) reportProblem({ area: 'part', action: 'opening the part', error });

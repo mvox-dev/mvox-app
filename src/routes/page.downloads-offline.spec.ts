@@ -32,18 +32,20 @@ vi.mock('$lib/auth/storage', () => ({
 
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
 import type { PartLabel } from '$lib/files/labelStore';
+import type { FileKey } from '$lib/files/idb';
+import type { CollectiveIdentity } from '$lib/collectives/store';
 
 function createFakeLabelStore() {
 	const map = new Map<string, PartLabel>();
-	const key = (db: string, personId: string, fileId: string) => JSON.stringify([db, personId, fileId]);
+	const key = (k: FileKey) => JSON.stringify([k.db, k.personId, k.fileId]);
 	return {
-		seed(db: string, personId: string, fileId: string, label: PartLabel) {
-			map.set(key(db, personId, fileId), label);
+		seed(k: FileKey, label: PartLabel) {
+			map.set(key(k), label);
 		},
-		async putLabel(identity: { db: string; personId: string }, fileId: string, label: PartLabel) {
-			map.set(key(identity.db, identity.personId, fileId), label);
+		async putLabel(k: FileKey, label: PartLabel) {
+			map.set(key(k), label);
 		},
-		async labelsFor(db: string, personId: string) {
+		async labelsFor({ db, personId }: CollectiveIdentity) {
 			const out = new Map<string, PartLabel>();
 			for (const [k, label] of map) {
 				const [d, p, fileId] = JSON.parse(k) as [string, string, string];
@@ -51,8 +53,8 @@ function createFakeLabelStore() {
 			}
 			return out;
 		},
-		async remove(k: { db: string; personId: string; fileId: string }) {
-			map.delete(key(k.db, k.personId, k.fileId));
+		async remove(k: FileKey) {
+			map.delete(key(k));
 		}
 	};
 }
@@ -116,7 +118,7 @@ describe('#353 — /downloads lists held parts BY LABEL, with zero network', () 
 			throw new Error('#353: the offline view touched the network');
 		});
 		fakeByteStore.seed({ db: 'sampledb', personId: 'person-1' }, 'file-a', pdfBytes(1));
-		fakeLabelStore.seed('sampledb', 'person-1', 'file-a', LABEL);
+		fakeLabelStore.seed({ db: 'sampledb', personId: 'person-1', fileId: 'file-a' }, LABEL);
 
 		const { container } = await renderDownloadsPage();
 		await waitFor(() => {
@@ -142,8 +144,8 @@ describe('#353 — /downloads lists held parts BY LABEL, with zero network', () 
 
 	it('an orphan label (bytes evicted, name left behind) produces NO row — heldFileIds is the source of truth', async () => {
 		fakeByteStore.seed({ db: 'sampledb', personId: 'person-1' }, 'file-a', pdfBytes(1));
-		fakeLabelStore.seed('sampledb', 'person-1', 'file-a', LABEL);
-		fakeLabelStore.seed('sampledb', 'person-1', 'file-ghost', { ...LABEL, filename: 'ghost.pdf' });
+		fakeLabelStore.seed({ db: 'sampledb', personId: 'person-1', fileId: 'file-a' }, LABEL);
+		fakeLabelStore.seed({ db: 'sampledb', personId: 'person-1', fileId: 'file-ghost' }, { ...LABEL, filename: 'ghost.pdf' });
 
 		const { container } = await renderDownloadsPage();
 		await waitFor(() => {
@@ -163,7 +165,7 @@ describe('#353 — /downloads lists held parts BY LABEL, with zero network', () 
 
 	it('opens a part IN the app: an in-app navigation to the fullscreen viewer, carrying the row\'s own db', async () => {
 		fakeByteStore.seed({ db: 'sampledb', personId: 'person-1' }, 'file-a', pdfBytes(1));
-		fakeLabelStore.seed('sampledb', 'person-1', 'file-a', LABEL);
+		fakeLabelStore.seed({ db: 'sampledb', personId: 'person-1', fileId: 'file-a' }, LABEL);
 
 		const { container } = await renderDownloadsPage();
 		await waitFor(() => {
@@ -184,7 +186,7 @@ describe('#353 — /downloads lists held parts BY LABEL, with zero network', () 
 			expMs: Date.now() + 3_600_000
 		});
 		fakeByteStore.seed({ db: 'otherdb', personId: 'person-2' }, 'file-b', pdfBytes(2));
-		fakeLabelStore.seed('otherdb', 'person-2', 'file-b', LABEL);
+		fakeLabelStore.seed({ db: 'otherdb', personId: 'person-2', fileId: 'file-b' }, LABEL);
 
 		const { container } = await renderDownloadsPage();
 		await waitFor(() => {
@@ -200,7 +202,7 @@ describe('#353 — /downloads lists held parts BY LABEL, with zero network', () 
 	it('cold start: authStore begins at loading — the page waits, then renders the held part once auth resolves', async () => {
 		authStore.set({ status: 'loading' });
 		fakeByteStore.seed({ db: 'sampledb', personId: 'person-1' }, 'file-a', pdfBytes(1));
-		fakeLabelStore.seed('sampledb', 'person-1', 'file-a', LABEL);
+		fakeLabelStore.seed({ db: 'sampledb', personId: 'person-1', fileId: 'file-a' }, LABEL);
 
 		const { container } = await renderDownloadsPage();
 
@@ -250,8 +252,8 @@ describe('#353 — identity offline (spike 3a: the three derivation cases, throu
 		});
 		fakeByteStore.seed({ db: 'sampledb', personId: 'person-1' }, 'file-a', pdfBytes(1));
 		fakeByteStore.seed({ db: 'crede', personId: 'person-2' }, 'file-c', pdfBytes(3));
-		fakeLabelStore.seed('sampledb', 'person-1', 'file-a', LABEL);
-		fakeLabelStore.seed('crede', 'person-2', 'file-c', { ...LABEL, filename: 'crede-alt.pdf' });
+		fakeLabelStore.seed({ db: 'sampledb', personId: 'person-1', fileId: 'file-a' }, LABEL);
+		fakeLabelStore.seed({ db: 'crede', personId: 'person-2', fileId: 'file-c' }, { ...LABEL, filename: 'crede-alt.pdf' });
 
 		const { container } = await renderDownloadsPage();
 		await waitFor(() => {

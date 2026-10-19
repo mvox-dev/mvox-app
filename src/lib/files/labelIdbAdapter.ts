@@ -26,7 +26,7 @@ export function createLabelIdbAdapter(factory?: IDBFactory): LabelStoreAdapter {
 	});
 
 	return {
-		async get(db, personId, fileId) {
+		async get({ db, personId, fileId }) {
 			const database = await getDb();
 			const key = compositeKey(db, personId, fileId);
 			const tx = database.transaction(LABEL_STORE, 'readonly');
@@ -34,7 +34,7 @@ export function createLabelIdbAdapter(factory?: IDBFactory): LabelStoreAdapter {
 			return row?.label;
 		},
 
-		async put(db, personId, fileId, label) {
+		async put({ db, personId, fileId }, label) {
 			const database = await getDb();
 			const key = compositeKey(db, personId, fileId);
 			const row: LabelRow = { db, personId, fileId, label };
@@ -42,14 +42,14 @@ export function createLabelIdbAdapter(factory?: IDBFactory): LabelStoreAdapter {
 			await reqToPromise(tx.objectStore(LABEL_STORE).put(row, key));
 		},
 
-		async delete(db, personId, fileId) {
+		async delete({ db, personId, fileId }) {
 			const database = await getDb();
 			const key = compositeKey(db, personId, fileId);
 			const tx = database.transaction(LABEL_STORE, 'readwrite');
 			await reqToPromise(tx.objectStore(LABEL_STORE).delete(key));
 		},
 
-		async listFor(db, personId) {
+		async listFor({ db, personId }) {
 			const database = await getDb();
 			const tx = database.transaction(LABEL_STORE, 'readonly');
 			const rows = (await reqToPromise(tx.objectStore(LABEL_STORE).getAll())) as LabelRow[];

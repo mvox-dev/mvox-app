@@ -25,7 +25,7 @@
 	$effect(() => {
 		if (label) return;
 		let cancelled = false;
-		void storedPartLabel(getAppLabelStore(), db, personId, fileId).then((stored) => {
+		void storedPartLabel(getAppLabelStore(), { db, personId, fileId }).then((stored) => {
 			if (!cancelled) storedName = stored?.filename ?? '';
 		});
 		return () => {

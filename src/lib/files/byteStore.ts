@@ -5,6 +5,7 @@
 // No ETag check: a CORS fetch cannot read it. Records carry a SHA-256 for #333's hash pin.
 
 import type { CollectiveIdentity } from '$lib/collectives/store';
+import type { FileKey } from './idb';
 
 export { createByteStore } from './byteStoreCore';
 
@@ -16,50 +17,37 @@ export interface StoredFileRecord {
 	openedAt: number;
 }
 
-export interface ByteStoreRow {
-	db: string;
-	personId: string;
-	fileId: string;
+export interface ByteStoreRow extends FileKey {
 	record: StoredFileRecord;
 }
 
 export interface ByteStoreAdapter {
-	get(db: string, personId: string, fileId: string): Promise<StoredFileRecord | undefined>;
-	put(db: string, personId: string, fileId: string, record: StoredFileRecord): Promise<void>;
+	get(key: FileKey): Promise<StoredFileRecord | undefined>;
+	put(key: FileKey, record: StoredFileRecord): Promise<void>;
 	// Moves the recency stamp only; reopening a held score must not rewrite its bytes.
-	touch(db: string, personId: string, fileId: string, openedAt: number): Promise<void>;
-	delete(db: string, personId: string, fileId: string): Promise<void>;
+	touch(key: FileKey, openedAt: number): Promise<void>;
+	delete(key: FileKey): Promise<void>;
 	// Full rows, bytes and all: the policy core never calls it; listKeys and listMeta read no payload.
 	list(): Promise<ByteStoreRow[]>;
-	listKeys(): Promise<ByteStoreKey[]>;
+	listKeys(): Promise<FileKey[]>;
 	listMeta(): Promise<ByteStoreMeta[]>;
 }
 
-export interface ByteStoreKey {
-	db: string;
-	personId: string;
-	fileId: string;
-}
-
-export interface ByteStoreMeta extends ByteStoreKey {
+export interface ByteStoreMeta extends FileKey {
 	size: number;
 	openedAt: number;
 }
 
 export interface ByteStore {
-	get(identity: CollectiveIdentity, fileId: string): Promise<StoredFileRecord | undefined>;
-	put(
-		identity: CollectiveIdentity,
-		fileId: string,
-		data: { bytes: ArrayBuffer; filetype: string; sha256: string }
-	): Promise<void>;
-	evict(identity: CollectiveIdentity, fileId: string): Promise<void>;
-	clearPartition(db: string, personId: string): Promise<void>;
+	get(key: FileKey): Promise<StoredFileRecord | undefined>;
+	put(key: FileKey, data: { bytes: ArrayBuffer; filetype: string; sha256: string }): Promise<void>;
+	evict(key: FileKey): Promise<void>;
+	clearPartition(identity: CollectiveIdentity): Promise<void>;
 	usage(): Promise<number>;
 	// A presence query, NOT AN OPEN: no touch, so a render never reorders eviction.
-	heldFileIds(db: string, personId: string): Promise<string[]>;
-	usageForPartition(db: string, personId: string): Promise<{ count: number; size: number }>;
-	usageForOthers(db: string, personId: string): Promise<{ count: number; size: number }>;
+	heldFileIds(identity: CollectiveIdentity): Promise<string[]>;
+	usageForPartition(identity: CollectiveIdentity): Promise<{ count: number; size: number }>;
+	usageForOthers(identity: CollectiveIdentity): Promise<{ count: number; size: number }>;
 	clearAllPartitions(): Promise<void>;
 	relieve(): Promise<RelieveResult>;
 	setProtectedKeys(keys: ReadonlySet<string>): void;
@@ -71,4 +59,4 @@ export const PRESSURE_RATIO = 0.8;
 
 export type RelieveResult =
 	| { outcome: 'unsupported' }
-	| { outcome: 'swept'; before: number; after: number; removed: ByteStoreKey[] };
+	| { outcome: 'swept'; before: number; after: number; removed: FileKey[] };

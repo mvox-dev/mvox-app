@@ -45,7 +45,7 @@ export async function prefetchNextEventParts(
 	if (identity === null || fileIds.length === 0) return [];
 
 	// A get() counts as an open and would move recency.
-	const held = new Set(await store.heldFileIds(identity.db, identity.personId));
+	const held = new Set(await store.heldFileIds(identity));
 	const results: PrefetchPartResult[] = [];
 
 	for (const fileId of fileIds) {
@@ -57,7 +57,7 @@ export async function prefetchNextEventParts(
 		}
 
 		try {
-			const opened = await openFileBytes(cfg, identity, fileId, store, fetchImpl);
+			const opened = await openFileBytes(cfg, { ...identity, fileId }, store, fetchImpl);
 			opened.release();
 			const cause = opened.cause;
 			results.push({ fileId, outcome: opened.reason, ...(cause && { cause }) });

@@ -151,7 +151,7 @@
 				ev.workRows = [];
 			});
 
-		refreshPresence(cfg.db, personId, () => g === routeLoad.generation);
+		refreshPresence({ db: cfg.db, personId }, () => g === routeLoad.generation);
 
 		if (seasonRights === 'editor' || eventEditor) loadManagePickers(cfg, sid, g);
 

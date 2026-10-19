@@ -23,14 +23,14 @@ describe('createPresenceRefresh', () => {
 	it('shows the held ids', async () => {
 		store.heldFileIds.mockResolvedValue(['f-1']);
 		const onIds = vi.fn();
-		createPresenceRefresh('library', onIds)('db', 'p', () => true);
+		createPresenceRefresh('library', onIds)({ db: 'db', personId: 'p' }, () => true);
 		await settle();
 		expect(onIds.mock.calls).toEqual([[new Set(['f-1'])]]);
 	});
 
 	it('a failed read is reported', async () => {
 		store.heldFileIds.mockRejectedValue(boom);
-		createPresenceRefresh('library', vi.fn())('db', 'p', () => true);
+		createPresenceRefresh('library', vi.fn())({ db: 'db', personId: 'p' }, () => true);
 		await settle();
 		expect(reportProblem.mock.calls).toEqual([failed]);
 	});
@@ -39,7 +39,7 @@ describe('createPresenceRefresh', () => {
 		store.heldFileIds.mockImplementation(() => {
 			throw boom;
 		});
-		createPresenceRefresh('library', vi.fn())('db', 'p', () => true);
+		createPresenceRefresh('library', vi.fn())({ db: 'db', personId: 'p' }, () => true);
 		expect(reportProblem.mock.calls).toEqual([failed]);
 	});
 
@@ -50,8 +50,8 @@ describe('createPresenceRefresh', () => {
 			.mockResolvedValue(['f-2']);
 		const onIds = vi.fn();
 		const refresh = createPresenceRefresh('library', onIds);
-		refresh('db', 'p', () => true);
-		refresh('db', 'p', () => true);
+		refresh({ db: 'db', personId: 'p' }, () => true);
+		refresh({ db: 'db', personId: 'p' }, () => true);
 		rejectFirst(boom);
 		await settle();
 		expect(reportProblem).not.toHaveBeenCalled();

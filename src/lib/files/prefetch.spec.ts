@@ -119,14 +119,14 @@ describe('#409 — prefetchNextEventParts: missing parts are fetched and stored'
 describe('#409 — held parts are skipped, and a prefetch NEVER counts as an open', () => {
 	it('every part already held: heldFileIds read ONCE, no get(), no touch, no re-put, no stamp moved, no network (the presence-spec trap, mirrored)', async () => {
 		const adapter: FakeAdapter = createFakeAdapter();
-		await adapter.put(A.db, A.personId, 'file-1', {
+		await adapter.put({ ...A, fileId: 'file-1' }, {
 			bytes: PDF_BYTES.slice().buffer,
 			filetype: 'application/pdf',
 			sha256: 'sha-1',
 			size: 8,
 			openedAt: 1000
 		});
-		await adapter.put(A.db, A.personId, 'file-2', {
+		await adapter.put({ ...A, fileId: 'file-2' }, {
 			bytes: PDF_BYTES.slice().buffer,
 			filetype: 'application/pdf',
 			sha256: 'sha-2',
@@ -153,7 +153,7 @@ describe('#409 — held parts are skipped, and a prefetch NEVER counts as an ope
 			{ fileId: 'file-2', outcome: 'held' }
 		]);
 		expect(heldSpy).toHaveBeenCalledTimes(1);
-		expect(heldSpy).toHaveBeenCalledWith(A.db, A.personId);
+		expect(heldSpy).toHaveBeenCalledWith(A);
 		expect(getSpy).not.toHaveBeenCalled();
 		expect(adapter.touchLog).toEqual([]);
 		expect(adapter.putLog.length).toBe(putsAfterSeeding);
@@ -206,9 +206,9 @@ describe('#409 — sequential, never a parallel S3 storm', () => {
 			return pdfResponse();
 		});
 		const realPut = store.put.bind(store);
-		vi.spyOn(store, 'put').mockImplementation(async (identity, fileId, data) => {
-			await realPut(identity, fileId, data);
-			log.push(`put:${fileId}`);
+		vi.spyOn(store, 'put').mockImplementation(async (key, data) => {
+			await realPut(key, data);
+			log.push(`put:${key.fileId}`);
 		});
 
 		await prefetchNextEventParts(
@@ -239,8 +239,8 @@ describe('#409 — collective switch mid-prefetch', () => {
 		let current = true;
 		const fetchImpl = happySigning();
 		const realPut = store.put.bind(store);
-		vi.spyOn(store, 'put').mockImplementation(async (identity, fileId, data) => {
-			await realPut(identity, fileId, data);
+		vi.spyOn(store, 'put').mockImplementation(async (key, data) => {
+			await realPut(key, data);
 			current = false;
 		});
 		const createSpy = vi.spyOn(URL, 'createObjectURL');

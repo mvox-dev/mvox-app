@@ -245,7 +245,7 @@ describe("#409 — the next event's parts reach the device on app open", () => {
 				bytes: Array.from(pdfBytes)
 			}
 		]);
-		expect(getSpy.mock.calls.map((c) => c[1])).toEqual(['file-a2']);
+		expect(getSpy.mock.calls.map((c) => c[0].fileId)).toEqual(['file-a2']);
 	});
 
 	it('after the prefetch writes, presence is re-queried ONCE — no reload, no click', async () => {
@@ -280,7 +280,7 @@ describe("#409 — the next event's parts reach the device on app open", () => {
 			expect(heldSpy).toHaveBeenCalledTimes(3);
 		});
 		for (const call of heldSpy.mock.calls) {
-			expect(call.slice(0, 2)).toEqual(['sampledb', 'person-p']);
+			expect(call).toEqual([{ db: 'sampledb', personId: 'person-p' }]);
 		}
 	});
 
@@ -439,7 +439,7 @@ describe('#410 — the pressure sweep runs at app open, before the prefetch, sco
 				JSON.stringify(['sampledb', 'person-p', 'file-p1'])
 			].sort()
 		);
-		expect(getSpy.mock.calls.map((c) => c[1])).toEqual(['file-p1']);
+		expect(getSpy.mock.calls.map((c) => c[0].fileId)).toEqual(['file-p1']);
 		expect(signFileUrlMock.mock.calls.map((c) => c[1])).toEqual(['file-p1']);
 		expect(fakeByteStore.heldFor('crede', 'person-c')).toEqual([]);
 	});

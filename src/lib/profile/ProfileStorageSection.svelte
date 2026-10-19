@@ -60,9 +60,9 @@
 			// Inside the try: getAppByteStore() can throw synchronously (no IndexedDB).
 			const store = getAppByteStore();
 			const [mine, others, heldIds] = await Promise.all([
-				store.usageForPartition(identity.db, identity.personId),
-				store.usageForOthers(identity.db, identity.personId),
-				store.heldFileIds(identity.db, identity.personId)
+				store.usageForPartition(identity),
+				store.usageForOthers(identity),
+				store.heldFileIds(identity)
 			]);
 			if (g !== generation()) return;
 			storageMine = mine;
@@ -131,9 +131,10 @@
 		if (!ctx) return;
 		storageError = null;
 		storageRemoveMinePending = true;
+		const mine = { db: ctx.cfg.db, personId: ctx.personId };
 		try {
-			await getAppByteStore().clearPartition(ctx.cfg.db, ctx.personId);
-			await load(ctx.cfg, { db: ctx.cfg.db, personId: ctx.personId }, generation(), {
+			await getAppByteStore().clearPartition(mine);
+			await load(ctx.cfg, mine, generation(), {
 				joinNames: false
 			});
 		} catch (err) {
