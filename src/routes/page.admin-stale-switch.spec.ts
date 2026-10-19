@@ -56,6 +56,7 @@ import { collectiveState, selectedCollectiveDbStore, selectedCollectiveStore } f
 import {
 	listAdminsMock,
 	removeAdminMock,
+	resolveCollectiveNameMarkerMock,
 	listJoinStatesMock,
 	resolveDbRightMock,
 	updateCollectiveNameMock
@@ -63,6 +64,8 @@ import {
 import { ANNA, BELA, CFG, ROSTER, listing, loadOk } from '$lib/testing/pages/admin';
 import { cleanupClearReset, q } from '$lib/testing/pages/dom';
 import { renderReady } from '$lib/testing/pages/adminRolesRender';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { toListRead } from '$lib/testing/listReadFixtures';
 import { signIn } from '$lib/testing/session';
 
 listJoinStatesMock.mockResolvedValue({});
@@ -175,6 +178,26 @@ describe('/profile — a switch drops the old collective’s late answers', () =
 		await new Promise((r) => setTimeout(r, 0));
 
 		expect(q(container, 'admin-roles-status')?.textContent ?? '').not.toContain('admin_roles_saved');
+	});
+
+	it('a retry after a failed load: the failed load’s late roster read is not applied', async () => {
+		const late = deferred<ReturnType<typeof toListRead>>();
+		loadRosterMock.mockReturnValueOnce(late.promise);
+		resolveCollectiveNameMarkerMock.mockRejectedValueOnce(new Error('marker broke'));
+		const { container } = render(Page);
+		await waitFor(() => expect(q(container, 'admin-roles-retry-load')).not.toBeNull());
+
+		loadRosterMock.mockResolvedValue(toListRead(ROSTER.filter((r) => r.personId !== 'p-dora')));
+		await fireEvent.click(q<HTMLButtonElement>(container, 'admin-roles-retry-load')!);
+		await waitFor(() => expect(q(container, 'admin-roles-admins')).not.toBeNull());
+		late.resolve(toListRead(ROSTER));
+		await new Promise((r) => setTimeout(r, 0));
+
+		const options = Array.from(
+			q<HTMLSelectElement>(container, 'admin-add-admin-select')!.options
+		).map((o) => o.value);
+		expect(options).toContain('p-cilla');
+		expect(options).not.toContain('p-dora');
 	});
 });
 
