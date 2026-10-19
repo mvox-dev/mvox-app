@@ -1,0 +1,8 @@
+obligations:
+  - obligation: "Owed to the actor themself: a to-do, not an obligation."
+    actor: "Mihkel"
+    owed_to: " mihkel"
+    since: "2026-10-15"
+    check: "ask"
+    expires: "2099-01-01"
+    ref: "#29"

@@ -1,0 +1,6 @@
+lessons:
+  - slug: ticket-link
+    summary: "Link a ticket (issue"
+    learned: "2026-10-14"
+    ref: "#6"
+    enforcement: recognition
