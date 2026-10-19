@@ -1,5 +1,6 @@
 // The RSVP write-status reducer shared by the agenda and the event page.
-import type { RsvpChangeCallbacks, RsvpEntry } from '$lib/rsvp/rsvpChangeQueue';
+import type { RsvpChangeCallbacks } from '$lib/rsvp/rsvpChangeQueue';
+import type { RsvpEntry } from '$lib/rsvp/rsvpData';
 import type { WriteTokens } from '$lib/net/writeTokens';
 import type { MyRsvp } from '$lib/rsvp/rsvpData';
 

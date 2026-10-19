@@ -5,9 +5,8 @@
 	import { onMount, tick } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { AgendaItem } from '$lib/agenda/types';
-	import type { AttendanceStatus } from '$lib/attendance/attendanceData';
-	import type { AttendanceEntry } from '$lib/attendance/attendanceChangeQueue';
-	import type { RsvpEntry } from '$lib/rsvp/rsvpChangeQueue';
+	import type { AttendanceEntry, AttendanceStatus } from '$lib/attendance/attendanceData';
+	import type { RsvpEntry } from '$lib/rsvp/rsvpData';
 	import type { RosterRow } from '$lib/roster/rosterData';
 	import SegmentedPill from '$lib/components/SegmentedPill.svelte';
 	import PersonName from '$lib/components/PersonName.svelte';

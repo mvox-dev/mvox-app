@@ -1,17 +1,12 @@
-// #353 — the app-wide label store singleton (IndexedDB-backed, its own
-// 'mvox-label-index' database — see labelStore.ts / labelIdbAdapter.ts).
-//
-// Page handlers reach the label index ONLY through this seam, mirroring
-// appByteStore.ts, so page specs can substitute an in-memory store without
-// touching IndexedDB.
+// #353 — the app-wide label store: pages reach the label index only here, so specs can swap it.
 
-import { createLabelStore, type LabelStore } from './labelStore';
-import { createLabelIdbAdapter } from './labelIdbAdapter';
+import type { LabelStore } from './labelStore';
+import { createIdbLabelStore } from './labelIdbAdapter';
 
 let instance: LabelStore | null = null;
 
 export function getAppLabelStore(): LabelStore {
-	if (!instance) instance = createLabelStore(createLabelIdbAdapter());
+	if (!instance) instance = createIdbLabelStore();
 	return instance;
 }
 

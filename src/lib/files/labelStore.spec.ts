@@ -1,8 +1,8 @@
 // #353, #427: the part-label store, and the call sites that hand it a name.
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createLabelIdbAdapter, LABEL_DB_NAME } from './labelIdbAdapter';
-import { createLabelStore, recordPartLabel, type PartLabel } from './labelStore';
+import { createIdbLabelStore, LABEL_DB_NAME } from './labelIdbAdapter';
+import { recordPartLabel, type LabelStore, type PartLabel } from './labelStore';
 import { createByteStore } from './byteStore';
 import { createIdbAdapter } from './idbAdapter';
 import { createFakeAdapter } from '$lib/testing/byteStoreFakes';
@@ -40,7 +40,7 @@ describe('#353 — the label database is a SIBLING, never the byte store (the fl
 		const byteStore = createByteStore(createIdbAdapter(factory));
 		await byteStore.put({ ...IDENTITY, fileId: 'file-a' }, bytes(5));
 
-		const labels = createLabelStore(createLabelIdbAdapter(factory));
+		const labels = createIdbLabelStore(factory);
 		await labels.putLabel({ ...IDENTITY, fileId: 'file-a' }, LABEL);
 
 		expect(await byteStore.heldFileIds({ db: 'sampledb', personId: 'person-1' })).toEqual(['file-a']);
@@ -52,10 +52,10 @@ describe('#353 — the label database is a SIBLING, never the byte store (the fl
 describe('#353 — labels survive restart and read back with zero network', () => {
 	it('a label written through one connection reads back VERBATIM from a cold one (the restart seam)', async () => {
 		const factory = new IDBFactory();
-		const writer = createLabelStore(createLabelIdbAdapter(factory));
+		const writer = createIdbLabelStore(factory);
 		await writer.putLabel({ ...IDENTITY, fileId: 'file-a' }, LABEL);
 
-		const reader = createLabelStore(createLabelIdbAdapter(factory));
+		const reader = createIdbLabelStore(factory);
 		const held = await reader.labelsFor({ db: 'sampledb', personId: 'person-1' });
 		expect(held.get('file-a')).toEqual({
 			work: 'Bogoróditse Djévo',
@@ -71,7 +71,7 @@ describe('#353 — labels survive restart and read back with zero network', () =
 			throw new Error('#353: label read touched the network');
 		});
 		const factory = new IDBFactory();
-		const store = createLabelStore(createLabelIdbAdapter(factory));
+		const store = createIdbLabelStore(factory);
 		await store.putLabel({ ...IDENTITY, fileId: 'file-a' }, LABEL);
 		const held = await store.labelsFor({ db: 'sampledb', personId: 'person-1' });
 		expect(held.get('file-a')).toEqual(LABEL);
@@ -79,7 +79,7 @@ describe('#353 — labels survive restart and read back with zero network', () =
 
 	it('labels are partitioned by (db, personId) — one identity never reads another\'s names', async () => {
 		const factory = new IDBFactory();
-		const store = createLabelStore(createLabelIdbAdapter(factory));
+		const store = createIdbLabelStore(factory);
 		await store.putLabel({ ...IDENTITY, fileId: 'file-a' }, LABEL);
 		await store.putLabel({ db: 'crede', personId: 'person-2', fileId: 'file-b' }, {
 			work: 'Other',
@@ -95,7 +95,7 @@ describe('#353 — labels survive restart and read back with zero network', () =
 describe('#353 — recordPartLabel: the put-time write, gated on DELIVERY reason', () => {
 	it('writes for network-stored and cache; never for network-uncached or fallback-navigation', async () => {
 		const factory = new IDBFactory();
-		const store = createLabelStore(createLabelIdbAdapter(factory));
+		const store = createIdbLabelStore(factory);
 
 		await Promise.all([
 			recordPartLabel(store, { ...IDENTITY, fileId: 'file-uncached' }, { ...LABEL, filename: 'u.pdf' }, 'network-uncached'),
@@ -109,20 +109,17 @@ describe('#353 — recordPartLabel: the put-time write, gated on DELIVERY reason
 	});
 
 	it('never throws and never rejects into the caller — a label write failure cannot gate delivery (#343: the cache is never a gate)', async () => {
-		const store = createLabelStore({
-			async get() {
-				return undefined;
-			},
-			async put() {
+		const store: LabelStore = {
+			async putLabel() {
 				throw new Error('idb dead');
 			},
-			async delete() {
+			async remove() {
 				throw new Error('idb dead');
 			},
-			async listFor() {
-				return [];
+			async labelsFor() {
+				return new Map();
 			}
-		});
+		};
 		await expect(
 			recordPartLabel(store, { ...IDENTITY, fileId: 'file-a' }, LABEL, 'network-stored')
 		).resolves.toBeUndefined();

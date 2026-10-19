@@ -1,5 +1,6 @@
 // The attendance write-status reducer shared by the agenda panel and the event page.
-import type { AttendanceChangeCallbacks, AttendanceEntry } from '$lib/attendance/attendanceChangeQueue';
+import type { AttendanceChangeCallbacks } from '$lib/attendance/attendanceChangeQueue';
+import type { AttendanceEntry } from '$lib/attendance/attendanceData';
 import type { WriteTokens } from '$lib/net/writeTokens';
 import type { EventAttendance } from '$lib/attendance/attendanceData';
 

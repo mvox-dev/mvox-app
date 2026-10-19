@@ -5,7 +5,7 @@
 	import RsvpControl from '$lib/components/agenda/RsvpControl.svelte';
 	import RsvpNonMemberHint from '$lib/components/agenda/RsvpNonMemberHint.svelte';
 	import type { RsvpStatus } from '$lib/rsvp/rsvpData';
-	import type { RsvpEntry } from '$lib/rsvp/rsvpChangeQueue';
+	import type { RsvpEntry } from '$lib/rsvp/rsvpData';
 	import { createRsvpWriteStatus, existingRsvp } from '$lib/rsvp/rsvpWriteStatus';
 	import { createWriteTokens } from '$lib/net/writeTokens';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';

@@ -2,7 +2,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
 import { createIdbAdapter } from './idbAdapter';
-import { createLabelIdbAdapter } from './labelIdbAdapter';
+import { createIdbLabelStore } from './labelIdbAdapter';
 import { createInkStore } from '$lib/strokes/inkStore';
 import { createSavedFeedbackStore } from '$lib/feedback/savedFeedback';
 import { createProblemLog } from '$lib/problems/problemLog';
@@ -40,7 +40,7 @@ describe('stored keys stay byte-identical', () => {
 
 	it('label index: ["db","person","file"]', async () => {
 		const factory = new IDBFactory();
-		await createLabelIdbAdapter(factory).put({ db: 'sampledb', personId: 'person-a', fileId: 'file-1' }, {
+		await createIdbLabelStore(factory).putLabel({ db: 'sampledb', personId: 'person-a', fileId: 'file-1' }, {
 			work: 'w',
 			composer: 'c',
 			edition: 'e',
