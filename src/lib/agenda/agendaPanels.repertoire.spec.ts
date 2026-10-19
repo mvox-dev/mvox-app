@@ -25,15 +25,17 @@ const ITEM: RepertoireItem = {
 const WORK = { id: 'work-1' };
 
 
-function setup(fail: { items?: Error; sources?: Error } = {}) {
+function setup(fail: { items?: Error; sources?: Error; works?: Promise<unknown> } = {}) {
 	const ag = createAgendaLoadState();
 	const reject = (e: Error) => vi.fn().mockRejectedValue(e);
 	const deps = {
 		seasonManageSwitchGeneration: () => 0,
 		listRepertoireItems: fail.items ? reject(fail.items) : vi.fn().mockResolvedValue([ITEM]),
-		listWorks: fail.sources
-			? reject(fail.sources)
-			: vi.fn().mockResolvedValue({ items: [WORK], total: 1, truncated: false }),
+		listWorks: fail.works
+			? vi.fn().mockReturnValue(fail.works)
+			: fail.sources
+				? reject(fail.sources)
+				: vi.fn().mockResolvedValue({ items: [WORK], total: 1, truncated: false }),
 		listAllEditions: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 		listAllCopies: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false })
 	} as unknown as AgendaLoadDeps;
@@ -70,6 +72,21 @@ describe('season panel repertoire load', () => {
 		expect(reportProblem.mock.calls).toEqual([
 			[{ area: 'agenda', action: 'loading the season-manage repertoire sources', error: boom }]
 		]);
+	});
+
+	it('the returned promise waits for the sources read', async () => {
+		let release!: (read: unknown) => void;
+		const works = new Promise((resolve) => (release = resolve));
+		const { ag, loader } = setup({ works });
+
+		let settled = false;
+		const load = loader.loadPanelRepertoire(CFG, 'season-1').then(() => (settled = true));
+		await new Promise((r) => setTimeout(r, 0));
+		expect(settled).toBe(false);
+
+		release({ items: [WORK], total: 1, truncated: false });
+		await load;
+		expect(ag.panelWorks).toEqual([WORK]);
 	});
 });
 
