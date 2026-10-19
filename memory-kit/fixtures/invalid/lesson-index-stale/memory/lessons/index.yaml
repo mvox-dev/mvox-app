@@ -1,6 +1,0 @@
-lessons:
-  - slug: edited
-    summary: "The summary as it was before the lesson was edited."
-    learned: "2026-10-13"
-    ref: types/memory-lessons.ts
-    enforcement: recognition
