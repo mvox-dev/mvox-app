@@ -1,0 +1,6 @@
+commitments:
+  - trigger: "An email from the board arrives."
+    obligation: "Answer it. Gated whole: a new tier has no rows from before it."
+    actor: "Passepartout"
+    within: "3 days"
+    ref: "#30"
