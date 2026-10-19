@@ -208,12 +208,12 @@
 
 	const librarian = createLibrarianLoad(lib);
 	$effect(() => {
-		librarian.select(selected);
+		void librarian.select(selected);
 		return () => librarian.destroy();
 	});
 
 	function retryLibrarianLoad(): void {
-		librarian.retryLibrarianLoad(selected);
+		void librarian.retryLibrarianLoad(selected);
 	}
 
 	const treeActions: TreeActions = {

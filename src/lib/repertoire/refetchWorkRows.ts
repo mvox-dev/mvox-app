@@ -18,8 +18,8 @@ export function refetchWorkRows(
 	eventIds: string[],
 	seasonId: string | null,
 	options: RefetchWorkRowsOptions
-): void {
-	refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {
+): Promise<void> {
+	return refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {
 		includeInactive: options.includeInactive
 	})
 		.then((byEvent) => {
@@ -38,8 +38,8 @@ export function refetchSeasonRepertoire(
 	listRepertoireItems: (cfg: EntuCfg, seasonId: string) => Promise<RepertoireItem[]>,
 	isCurrent: () => boolean,
 	onItems: (items: RepertoireItem[]) => void
-): void {
-	listRepertoireItems(cfg, seasonId)
+): Promise<void> {
+	return listRepertoireItems(cfg, seasonId)
 		.then((items) => {
 			if (isCurrent()) onItems(items);
 		})

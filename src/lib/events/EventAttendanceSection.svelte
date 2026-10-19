@@ -108,7 +108,7 @@
 		attendancePendingMemberIds = attendanceQueue.pendingMembersForEvent(evId);
 		panelMarks = attendanceQueue.pendingEntriesForEvent(evId);
 		attendanceFailedMemberIds = failedMarksFor(failedByEvent, evId);
-		attendanceLoad.open(cfgFor(selected.db), evId, {
+		void attendanceLoad.open(cfgFor(selected.db), evId, {
 			isCurrent: () => g === generation() && detail?.id === evId,
 			liveAttendance: () => panelMarks,
 			loaded(read) {

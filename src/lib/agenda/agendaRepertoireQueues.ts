@@ -51,7 +51,7 @@ export interface AgendaRepertoireDeps {
 	selected: () => { db: string } | null | undefined;
 	isOffline: () => boolean;
 	switchGeneration: () => number;
-	refreshWorksAfterWrite: () => void;
+	refreshWorksAfterWrite: () => Promise<void>;
 	actions: Pick<
 		RepertoireRowActions,
 		'createRepertoireItem' | 'updateRepertoireStatus' | 'deleteRepertoireItem'
@@ -82,15 +82,15 @@ export function createAgendaRepertoireQueues(
 		},
 		reconcile(key) {
 			if (!repertoirePending.settle(key)) return;
-			refreshPanelRepertoire();
-			deps.refreshWorksAfterWrite();
+			void refreshPanelRepertoire();
+			void deps.refreshWorksAfterWrite();
 			panel.manageStatus = m.repertoire_manage_saved();
 		},
 		revert(key) {
 			if (!repertoirePending.settle(key)) return;
-			refreshPanelRepertoire();
+			void refreshPanelRepertoire();
 			panel.manageError = true;
-			deps.refreshWorksAfterWrite();
+			void deps.refreshWorksAfterWrite();
 		}
 	});
 
@@ -117,13 +117,13 @@ export function createAgendaRepertoireQueues(
 		return cfgFor(selected.db);
 	}
 
-	function refreshPanelRepertoire(): void {
+	function refreshPanelRepertoire(): Promise<void> {
 		const cfg = manageCfg();
 		const seasonId = seq.panelRepertoireSeasonId;
-		if (!cfg || seasonId === null) return;
+		if (!cfg || seasonId === null) return Promise.resolve();
 		const thisRequest = seq.requestId;
 		const thisSwitch = deps.switchGeneration();
-		deps
+		return deps
 			.listRepertoireItems(cfg, seasonId)
 			.then((items) => {
 				if (isPanelReadStale(seq, thisRequest, thisSwitch, deps.switchGeneration())) return;

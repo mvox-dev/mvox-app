@@ -24,7 +24,6 @@ const ITEM: RepertoireItem = {
 };
 const WORK = { id: 'work-1' };
 
-const settle = () => new Promise((r) => setTimeout(r, 0));
 
 function setup(fail: { items?: Error; sources?: Error } = {}) {
 	const ag = createAgendaLoadState();
@@ -50,8 +49,7 @@ describe('season panel repertoire load', () => {
 		const boom = new Error('items broke');
 		const { ag, loader } = setup({ items: boom });
 
-		loader.loadPanelRepertoire(CFG, 'season-1');
-		await settle();
+		await loader.loadPanelRepertoire(CFG, 'season-1');
 
 		expect(ag.panelWorks).toEqual([WORK]);
 		expect(ag.panelRepertoire).toEqual([]);
@@ -65,8 +63,7 @@ describe('season panel repertoire load', () => {
 		const boom = new Error('works broke');
 		const { ag, loader } = setup({ sources: boom });
 
-		loader.loadPanelRepertoire(CFG, 'season-1');
-		await settle();
+		await loader.loadPanelRepertoire(CFG, 'season-1');
 
 		expect(ag.panelRepertoire).toEqual([ITEM]);
 		expect(ag.panelWorks).toEqual([]);

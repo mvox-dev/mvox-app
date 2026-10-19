@@ -147,10 +147,10 @@
 		}
 	}
 
-	function loadSections(c: EntuCfg, isCurrent: () => boolean): void {
+	function loadSections(c: EntuCfg, isCurrent: () => boolean): Promise<void> {
 		sections = [];
 		sectionsError = false;
-		listSections(c)
+		return listSections(c)
 			.then((tree) => {
 				if (isCurrent()) sections = tree;
 			})
@@ -161,12 +161,12 @@
 			});
 	}
 
-	function loadMembers(c: EntuCfg, isCurrent: () => boolean): void {
+	function loadMembers(c: EntuCfg, isCurrent: () => boolean): Promise<void> {
 		roster = [];
 		rosterPartial = false;
 		rosterFailed = false;
 		rosterLoading = true;
-		loadRoster(c)
+		return loadRoster(c)
 			.then((read) => {
 				if (!isCurrent()) return;
 				roster = read.items;
@@ -198,8 +198,8 @@
 			if (!resolvedDbEntityId) throw new Error('admin roles: no database entity visible');
 			void rosterNames?.load(r.cfg, r.g, resolvedDbEntityId);
 			// Read alongside the blocking reads, never as one: a failure costs only the order.
-			loadSections(r.cfg, isCurrent);
-			loadMembers(r.cfg, isCurrent);
+			void loadSections(r.cfg, isCurrent);
+			void loadMembers(r.cfg, isCurrent);
 			const [libResult, resolvedNameMarker] = await Promise.all([
 				resolveLibraryEditRight(r.cfg, r.personId, undefined, resolvedDbEntityId),
 				// A failed marker read is a load-error, never "no name".

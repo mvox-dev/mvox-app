@@ -7,8 +7,8 @@ export function loadMembership(
 	isCurrent: () => boolean,
 	state: { memberId: string | null; membership: Membership },
 	onresolved?: (memberId: string | null) => void
-): void {
-	lookup
+): Promise<void> {
+	return lookup
 		.then((id) => {
 			if (!isCurrent()) return;
 			state.memberId = id;

@@ -103,7 +103,7 @@
 				if (!isCurrent()) return;
 				detail = loaded;
 				status = 'ready';
-				loadMembership(
+				void loadMembership(
 					findMyMemberId(cfg, current.personId),
 					() => g === routeLoad.generation,
 					ev

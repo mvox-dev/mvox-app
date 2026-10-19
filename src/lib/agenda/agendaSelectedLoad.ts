@@ -191,9 +191,9 @@ export function createSelectedLoad(
 					ag.eventManageRights = Object.fromEntries(
 						events.map((item) => [item.id, manageRightsFrom(item.owners, item.editors, personId)])
 					);
-					loadWorksAndManagement(worksCfg, eventIds, seasonId, thisRequest);
+					void loadWorksAndManagement(worksCfg, eventIds, seasonId, thisRequest);
 					refreshPresence({ db: worksCfg.db, personId }, () => thisRequest === seq.requestId);
-					loadScheduleItems(worksCfg, eventIds, thisRequest);
+					void loadScheduleItems(worksCfg, eventIds, thisRequest);
 					const currentRightsInvisible =
 						seasonId !== null && seasonOwners.length === 0 && seasonEditors.length === 0;
 					const noSeasonToBorrowFrom = seasonId === null && fullSeasons.length === 0;
@@ -257,7 +257,7 @@ export function createSelectedLoad(
 			});
 		}
 
-		loadMembership(
+		void loadMembership(
 			findMyMemberId(cfgFor(current.db), personId),
 			() => thisRequest === seq.requestId,
 			ag,

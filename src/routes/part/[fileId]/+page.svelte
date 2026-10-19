@@ -198,7 +198,7 @@
 					status = 'ready';
 					// The #353 label, written only for the deliveries that left a stored copy.
 					if (label) {
-						recordPartLabel(getAppLabelStore(), key, label, result.reason);
+						void recordPartLabel(getAppLabelStore(), key, label, result.reason);
 					}
 				} catch (error) {
 					if (!cancelled) reportProblem({ area: 'part', action: 'opening the part', error });

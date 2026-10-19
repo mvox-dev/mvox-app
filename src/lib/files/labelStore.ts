@@ -44,10 +44,10 @@ export function recordPartLabel(
 	key: FileKey,
 	label: PartLabel,
 	reason: FileBytesDeliveryReason
-): void {
-	if (reason !== 'network-stored' && reason !== 'cache') return;
+): Promise<void> {
+	if (reason !== 'network-stored' && reason !== 'cache') return Promise.resolve();
 	// A failed label write must never gate the open it names.
-	store.putLabel(key, label).catch(() => {});
+	return store.putLabel(key, label).catch(() => {});
 }
 
 export async function storedPartLabel(

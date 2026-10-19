@@ -74,10 +74,10 @@ export function failedMarksFor(byEvent: FailedByEvent, eventId: string): Set<str
 export function createAttendancePanelLoad(deps: AttendancePanelLoadDeps) {
 	let requestId = 0;
 
-	function open(cfg: EntuCfg, eventId: string, target: AttendancePanelTarget): void {
+	function open(cfg: EntuCfg, eventId: string, target: AttendancePanelTarget): Promise<void> {
 		const thisRequest = ++requestId;
 		const current = () => thisRequest === requestId && target.isCurrent();
-		Promise.all([
+		return Promise.all([
 			loadRoster(cfg),
 			deps.listAttendance(cfg, eventId),
 			deps.listAllRsvpsForEvent(cfg, eventId)

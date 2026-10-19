@@ -97,15 +97,15 @@ describe('#353 — recordPartLabel: the put-time write, gated on DELIVERY reason
 		const factory = new IDBFactory();
 		const store = createLabelStore(createLabelIdbAdapter(factory));
 
-		recordPartLabel(store, { ...IDENTITY, fileId: 'file-uncached' }, { ...LABEL, filename: 'u.pdf' }, 'network-uncached');
-		recordPartLabel(store, { ...IDENTITY, fileId: 'file-fallback' }, { ...LABEL, filename: 'f.pdf' }, 'fallback-navigation');
-		recordPartLabel(store, { ...IDENTITY, fileId: 'file-stored' }, { ...LABEL, filename: 's.pdf' }, 'network-stored');
-		recordPartLabel(store, { ...IDENTITY, fileId: 'file-cached' }, { ...LABEL, filename: 'c.pdf' }, 'cache');
+		await Promise.all([
+			recordPartLabel(store, { ...IDENTITY, fileId: 'file-uncached' }, { ...LABEL, filename: 'u.pdf' }, 'network-uncached'),
+			recordPartLabel(store, { ...IDENTITY, fileId: 'file-fallback' }, { ...LABEL, filename: 'f.pdf' }, 'fallback-navigation'),
+			recordPartLabel(store, { ...IDENTITY, fileId: 'file-stored' }, { ...LABEL, filename: 's.pdf' }, 'network-stored'),
+			recordPartLabel(store, { ...IDENTITY, fileId: 'file-cached' }, { ...LABEL, filename: 'c.pdf' }, 'cache')
+		]);
 
-		await vi.waitFor(async () => {
-			const held = await store.labelsFor({ db: 'sampledb', personId: 'person-1' });
-			expect([...held.keys()].sort()).toEqual(['file-cached', 'file-stored']);
-		});
+		const held = await store.labelsFor({ db: 'sampledb', personId: 'person-1' });
+		expect([...held.keys()].sort()).toEqual(['file-cached', 'file-stored']);
 	});
 
 	it('never throws and never rejects into the caller — a label write failure cannot gate delivery (#343: the cache is never a gate)', async () => {
@@ -123,9 +123,9 @@ describe('#353 — recordPartLabel: the put-time write, gated on DELIVERY reason
 				return [];
 			}
 		});
-		expect(() => recordPartLabel(store, { ...IDENTITY, fileId: 'file-a' }, LABEL, 'network-stored')).not.toThrow();
-		await new Promise((r) => setTimeout(r, 0));
-		await new Promise((r) => setTimeout(r, 0));
+		await expect(
+			recordPartLabel(store, { ...IDENTITY, fileId: 'file-a' }, LABEL, 'network-stored')
+		).resolves.toBeUndefined();
 	});
 });
 

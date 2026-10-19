@@ -187,16 +187,16 @@ describe('a failed store read is reported (#756)', () => {
 		},
 		{
 			read: 'the member names',
-			run: () => {
+			run: async () => {
 				page.names = fail;
-				librarian('names').select(SELECTED);
+				await librarian('names').select(SELECTED);
+				await settle();
 			},
 			area: 'library',
 			action: 'loading the member names'
 		}
 	])('a failed read of $read is reported', async ({ run, area, action }) => {
 		await run();
-		await settle();
 		expect(reportProblem.mock.calls).toEqual([[{ area, action, error: boom }]]);
 	});
 
@@ -204,17 +204,16 @@ describe('a failed store read is reported (#756)', () => {
 		let rejectPickers!: (e: unknown) => void;
 		const load = librarian('names');
 		page.pickers = () => new Promise((_, reject) => (rejectPickers = reject));
-		load.select(SELECTED);
+		void load.select(SELECTED);
 		await settle();
-		load.select(null);
+		void load.select(null);
 		rejectPickers(boom);
 		await settle();
 		expect(reportProblem).not.toHaveBeenCalled();
 	});
 
 	it('a failed librarian rights read is reported and the edit right ends as error', async () => {
-		librarian('rights').select(SELECTED);
-		await settle();
+		await librarian('rights').select(SELECTED);
 		expect(reportProblem.mock.calls).toEqual([
 			[{ area: 'library', action: 'reading the librarian rights', error: boom }]
 		]);
@@ -225,9 +224,9 @@ describe('a failed store read is reported (#756)', () => {
 		let rejectRights!: (e: unknown) => void;
 		const load = librarian('names');
 		page.state = () => new Promise((_, reject) => (rejectRights = reject));
-		load.select(SELECTED);
+		void load.select(SELECTED);
 		await settle();
-		load.select(null);
+		void load.select(null);
 		rejectRights(boom);
 		await settle();
 		expect(reportProblem).not.toHaveBeenCalled();
@@ -238,9 +237,9 @@ describe('a failed store read is reported (#756)', () => {
 		let rejectNames!: (e: unknown) => void;
 		page.names = () => new Promise((_, reject) => (rejectNames = reject));
 		const load = librarian('names');
-		load.select(SELECTED);
+		void load.select(SELECTED);
 		await settle();
-		load.select(null);
+		void load.select(null);
 		rejectNames(boom);
 		await settle();
 		expect(reportProblem).not.toHaveBeenCalled();

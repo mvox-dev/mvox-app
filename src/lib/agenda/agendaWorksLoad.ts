@@ -88,9 +88,9 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 		eventIds: string[],
 		seasonId: string | null,
 		thisRequest: number
-	) {
+	): Promise<void> {
 		const thisWorksLoad = ++seq.worksLoadId;
-		refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {
+		return refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {
 			includeInactive: ag.seasonManageRights === 'editor'
 		})
 			.then((byEvent) => {
@@ -153,9 +153,9 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 			});
 	}
 
-	function loadScheduleItems(cfg: EntuCfg, eventIds: string[], thisRequest: number) {
+	function loadScheduleItems(cfg: EntuCfg, eventIds: string[], thisRequest: number): Promise<void> {
 		const thisScheduleLoad = ++seq.scheduleLoadId;
-		listScheduleItemsByEventId(cfg, eventIds, fetch)
+		return listScheduleItemsByEventId(cfg, eventIds, fetch)
 			.then((byEvent) => {
 				if (thisRequest !== seq.requestId || thisScheduleLoad !== seq.scheduleLoadId) return;
 				ag.scheduleByEventId = byEvent;
@@ -176,16 +176,16 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 		return merged;
 	}
 
-	function refreshWorksAfterWrite() {
+	function refreshWorksAfterWrite(): Promise<void> {
 		const selected = deps.selected();
-		if (!selected) return;
+		if (!selected) return Promise.resolve();
 		const cfg = cfgFor(selected.db);
 		const eventIds = [...ag.agendaItems, ...ag.recentItems].map((item) => item.id);
 		const seasonId = ag.currentSeasonId;
 		const thisRequest = seq.requestId;
 		const thisWorksLoad = ++seq.worksLoadId;
 		const editor = ag.seasonManageRights === 'editor';
-		refetchWorkRows(cfg, eventIds, seasonId, worksRefetch(thisRequest, thisWorksLoad, editor));
+		return refetchWorkRows(cfg, eventIds, seasonId, worksRefetch(thisRequest, thisWorksLoad, editor));
 	}
 
 	return {

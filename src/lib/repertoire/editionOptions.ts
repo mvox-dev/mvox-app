@@ -66,11 +66,12 @@ export function readScopedEditions(
 	listEditions: (workId: string) => Promise<ListRead<Edition>>,
 	isCurrent: () => boolean,
 	onOptions: (workId: string, options: PickerOption[]) => void
-): void {
+): Promise<void> {
+	const chains: Promise<void>[] = [];
 	for (const workId of workIds) {
 		if (requested.has(workId)) continue;
 		requested.add(workId);
-		listEditions(workId)
+		const chain = listEditions(workId)
 			.then((read) => {
 				if (!isCurrent()) return;
 				if (read.truncated) return;
@@ -84,5 +85,7 @@ export function readScopedEditions(
 					reportProblem({ area: 'repertoire', action: 'loading the editions of a work', error: e });
 				}
 			});
+		chains.push(chain);
 	}
+	return Promise.all(chains).then(() => {});
 }
