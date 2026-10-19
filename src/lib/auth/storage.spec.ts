@@ -75,28 +75,28 @@ describe('#343 — auth teardown RETAINS the byte store', () => {
 
 	it('clearAll (logout AND expiry variants) leaves stored bytes retrievable under the same identity', async () => {
 		const store = (appBytes.store = createByteStore(createFakeAdapter()));
-		await store.put(A, 'file-1', pdf());
+		await store.put({ ...A, fileId: 'file-1' }, pdf());
 		setToken('jwt-abc');
 
 		clearAll({ preserveProvider: true }); // the expiry path's storage half
-		expect(await store.get(A, 'file-1')).toBeDefined();
+		expect(await store.get({ ...A, fileId: 'file-1' })).toBeDefined();
 
 		setToken('jwt-def');
 		clearAll({ preserveProvider: false }); // the explicit-logout path
-		expect(await store.get(A, 'file-1')).toBeDefined();
+		expect(await store.get({ ...A, fileId: 'file-1' })).toBeDefined();
 	});
 
 	it('endSession — the single teardown BOTH exit paths share — leaves stored bytes retrievable', async () => {
 		const store = (appBytes.store = createByteStore(createFakeAdapter()));
-		await store.put(A, 'file-1', pdf());
+		await store.put({ ...A, fileId: 'file-1' }, pdf());
 
 		setToken('jwt-abc');
 		endSession({ preserveProvider: true }); // 401-recovery (token expiry)
-		expect(await store.get(A, 'file-1')).toBeDefined();
+		expect(await store.get({ ...A, fileId: 'file-1' })).toBeDefined();
 
 		setToken('jwt-def');
 		endSession({ preserveProvider: false }); // explicit sign-out
-		const rec = await store.get(A, 'file-1');
+		const rec = await store.get({ ...A, fileId: 'file-1' });
 		expect(rec).toBeDefined();
 		expect(new Uint8Array(rec!.bytes)).toEqual(new Uint8Array([0x25, 0x50, 0x44, 0x46]));
 	});

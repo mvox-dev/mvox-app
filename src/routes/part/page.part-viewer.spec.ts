@@ -34,10 +34,11 @@ const storedLabels = vi.hoisted(() => new Map<string, unknown>());
 const labelRead = vi.hoisted(() => ({ throws: false }));
 vi.mock('$lib/files/appLabelStore', () => ({
 	getAppLabelStore: () => ({
-		putLabel: async (identity: unknown, fileId: string, label: unknown) => {
+		putLabel: async (key: { db: string; personId: string; fileId: string }, label: unknown) => {
+			const { fileId, ...identity } = key;
 			labelWrites.push({ identity, fileId, label });
 		},
-		labelsFor: async (db: string, personId: string) => {
+		labelsFor: async ({ db, personId }: { db: string; personId: string }) => {
 			if (labelRead.throws) throw new Error('label store unreadable');
 			return db === 'sampledb' && personId === 'person-p' ? new Map(storedLabels) : new Map();
 		},
@@ -1376,7 +1377,7 @@ describe('#616 — her ink stays on the device', () => {
 		]);
 		await saved(1, 9);
 
-		const held = await fakeByteStore.get({ db: 'sampledb', personId: 'person-p' }, 'file-score');
+		const held = await fakeByteStore.get({ db: 'sampledb', personId: 'person-p', fileId: 'file-score' });
 		expect(new Uint8Array(held?.bytes ?? new ArrayBuffer(0))).toEqual(PDF_BYTES);
 		expect(fakeByteStore.puts).toEqual([]);
 	});

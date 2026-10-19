@@ -114,7 +114,7 @@
 					if (isCurrent()) reportProblem({ area: 'library', action: 'finding your member record', error: e });
 				});
 
-			refreshPresence(cfg.db, current.personId, isCurrent);
+			refreshPresence({ db: cfg.db, personId: current.personId }, isCurrent);
 
 			// #92 — repertoire badges for the current season only; supplementary, so a failure reports.
 			listSeasons(cfg)

@@ -118,7 +118,7 @@ export interface AgendaLoadDeps {
 	closeEventCreateForm: () => void;
 	closeSeriesCreateForm: () => void;
 	restoreSeriesCreateRun: () => void;
-	refreshPresence: (db: string, personId: string, isCurrent: () => boolean) => void;
+	refreshPresence: (identity: CollectiveIdentity, isCurrent: () => boolean) => void;
 	findMyMemberId: typeof RsvpData.findMyMemberId;
 	listMyRsvps: typeof RsvpData.listMyRsvps;
 	rsvpsByEventId: typeof RsvpData.rsvpsByEventId;

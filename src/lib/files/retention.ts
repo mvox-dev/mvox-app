@@ -2,10 +2,12 @@
 import { listFullAgenda } from '$lib/agenda/agendaData';
 import { loadWorksByEventId } from '$lib/repertoire/workRows';
 import { nextEventFileIds } from '$lib/agenda/nextEventFileIds';
+import type { CollectiveIdentity } from '$lib/collectives/store';
+import type { FileKey } from '$lib/files/idb';
 import { getAppByteStore } from '$lib/files/appByteStore';
 import { reportProblem } from '$lib/problems/reportProblem';
 
-export type RetentionCollective = { db: string; personId: string };
+export type RetentionCollective = CollectiveIdentity;
 
 // Split by db so a fresher in-memory answer replaces one db's keys alone.
 const keysByDb = new Map<string, Set<string>>();
@@ -13,8 +15,8 @@ const keysByDb = new Map<string, Set<string>>();
 let sweep: Promise<void> | null = null;
 let sweepSettled = false;
 
-function protectedKey(db: string, personId: string, fileId: string): string {
-	return JSON.stringify([db, personId, fileId]);
+function protectedKey(key: FileKey): string {
+	return JSON.stringify([key.db, key.personId, key.fileId]);
 }
 
 // Never throws: with no IndexedDB there is nothing to protect, and a throw blanks the works.
@@ -31,8 +33,8 @@ function publish(): void {
 }
 
 // Optional: the agenda's in-memory answer for one db saves the build reading it again.
-export function seedRetentionKeys(db: string, personId: string, fileIds: string[]): void {
-	keysByDb.set(db, new Set(fileIds.map((fileId) => protectedKey(db, personId, fileId))));
+export function seedRetentionKeys(identity: CollectiveIdentity, fileIds: string[]): void {
+	keysByDb.set(identity.db, new Set(fileIds.map((fileId) => protectedKey({ ...identity, fileId }))));
 	if (sweepSettled) publish();
 }
 
@@ -80,7 +82,7 @@ async function runRetentionSweep({
 				collective.db,
 				new Set(
 					nextEventFileIds([next], byEvent).map((fileId) =>
-						protectedKey(collective.db, collective.personId, fileId)
+						protectedKey({ ...collective, fileId })
 					)
 				)
 			);

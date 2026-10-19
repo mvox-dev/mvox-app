@@ -4,14 +4,14 @@
 import type {
 	ByteStore,
 	ByteStoreAdapter,
-	ByteStoreKey,
 	ByteStoreRow,
 	StoredFileRecord
 } from '$lib/files/byteStore';
 import type { CollectiveIdentity } from '$lib/collectives/store';
+import type { FileKey } from '$lib/files/idb';
 
 // Keyed as the real adapter keys (idbAdapter.ts): a JSON triple, so no separator can collide.
-function key(db: string, personId: string, fileId: string): string {
+function key({ db, personId, fileId }: FileKey): string {
 	return JSON.stringify([db, personId, fileId]);
 }
 
@@ -36,16 +36,18 @@ export function createFakeAdapter(): FakeAdapter {
 	return {
 		putLog,
 		touchLog,
-		async get(db, personId, fileId) {
-			return map.get(key(db, personId, fileId))?.record;
+		async get(at) {
+			return map.get(key(at))?.record;
 		},
-		async put(db, personId, fileId, record) {
+		async put(at, record) {
+			const { db, personId, fileId } = at;
 			putLog.push({ db, personId, fileId, record });
-			map.set(key(db, personId, fileId), { db, personId, fileId, record });
-			meta.set(key(db, personId, fileId), { size: record.size, openedAt: record.openedAt });
+			map.set(key(at), { db, personId, fileId, record });
+			meta.set(key(at), { size: record.size, openedAt: record.openedAt });
 		},
-		async touch(db, personId, fileId, openedAt) {
-			const k = key(db, personId, fileId);
+		async touch(at, openedAt) {
+			const { db, personId, fileId } = at;
+			const k = key(at);
 			const held = map.get(k);
 			// Recency without a payload is not a row (the adapter contract).
 			if (!held) return;
@@ -54,9 +56,9 @@ export function createFakeAdapter(): FakeAdapter {
 			// The stamp moves in both halves, so the metadata never drifts from the row.
 			meta.set(k, { size: held.record.size, openedAt });
 		},
-		async delete(db, personId, fileId) {
-			map.delete(key(db, personId, fileId));
-			meta.delete(key(db, personId, fileId));
+		async delete(at) {
+			map.delete(key(at));
+			meta.delete(key(at));
 		},
 		async list() {
 			return Array.from(map.values());
@@ -96,7 +98,7 @@ export interface FakeByteStore extends ByteStore {
 	/** #410: lets page specs spy call order (setProtectedKeys, relieve, prefetch). */
 	relieve(): Promise<
 		| { outcome: 'unsupported' }
-		| { outcome: 'swept'; before: number; after: number; removed: ByteStoreKey[] }
+		| { outcome: 'swept'; before: number; after: number; removed: FileKey[] }
 	>;
 }
 
@@ -121,7 +123,7 @@ export function createFakeByteStore(): FakeByteStore {
 			return { outcome: 'unsupported' as const };
 		},
 		seed(identity, fileId, data) {
-			map.set(key(identity.db, identity.personId, fileId), toRecord(data));
+			map.set(key({ ...identity, fileId }), toRecord(data));
 		},
 		heldFor(db, personId) {
 			return Array.from(map.keys())
@@ -129,20 +131,20 @@ export function createFakeByteStore(): FakeByteStore {
 				.filter(([d, p]) => d === db && p === personId)
 				.map(([, , fileId]) => fileId);
 		},
-		async get(id, fileId) {
-			return map.get(key(id.db, id.personId, fileId));
+		async get(at) {
+			return map.get(key(at));
 		},
-		async put(id, fileId, data) {
-			puts.push({ identity: id, fileId, data });
-			map.set(key(id.db, id.personId, fileId), toRecord(data));
+		async put(at, data) {
+			puts.push({ identity: { db: at.db, personId: at.personId }, fileId: at.fileId, data });
+			map.set(key(at), toRecord(data));
 		},
-		async evict(identity, fileId) {
-			map.delete(key(identity.db, identity.personId, fileId));
+		async evict(at) {
+			map.delete(key(at));
 		},
-		async clearPartition(db, personId) {
+		async clearPartition(identity) {
 			for (const k of Array.from(map.keys())) {
 				const [d, p] = triple(k);
-				if (d === db && p === personId) map.delete(k);
+				if (d === identity.db && p === identity.personId) map.delete(k);
 			}
 		},
 		async usage() {
@@ -150,19 +152,19 @@ export function createFakeByteStore(): FakeByteStore {
 			for (const r of map.values()) total += r.size;
 			return total;
 		},
-		async heldFileIds(db, personId) {
+		async heldFileIds(identity) {
 			// Delegates to heldFor: one implementation, not a divergent double (#351).
-			return this.heldFor(db, personId);
+			return this.heldFor(identity.db, identity.personId);
 		},
 
-		async usageForPartition(db, personId) {
+		async usageForPartition({ db, personId }) {
 			const mine = Array.from(map.entries())
 				.map(([k, record]) => ({ triple: triple(k), record }))
 				.filter(({ triple: [d, p] }) => d === db && p === personId);
 			return { count: mine.length, size: mine.reduce((sum, { record }) => sum + record.size, 0) };
 		},
 
-		async usageForOthers(db, personId) {
+		async usageForOthers({ db, personId }) {
 			const others = Array.from(map.entries())
 				.map(([k, record]) => ({ triple: triple(k), record }))
 				.filter(({ triple: [d, p] }) => !(d === db && p === personId));

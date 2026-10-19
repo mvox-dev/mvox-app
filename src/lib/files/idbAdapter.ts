@@ -5,12 +5,11 @@
 
 import type {
 	ByteStoreAdapter,
-	ByteStoreKey,
 	ByteStoreMeta,
 	ByteStoreRow,
 	StoredFileRecord
 } from './byteStore';
-import { compositeKey, lazyDb, reqToPromise } from './idb';
+import { compositeKey, type FileKey, lazyDb, reqToPromise } from './idb';
 
 const DB_NAME = 'mvox-byte-store';
 // Each bump is a cache flush, not a migration: everything here is re-downloadable.
@@ -44,7 +43,7 @@ export function createIdbAdapter(factory?: IDBFactory): ByteStoreAdapter {
 	});
 
 	return {
-		async get(db, personId, fileId) {
+		async get({ db, personId, fileId }) {
 			const database = await getDb();
 			const key = compositeKey(db, personId, fileId);
 			const tx = database.transaction([PAYLOAD_STORE, RECENCY_STORE], 'readonly');
@@ -60,7 +59,7 @@ export function createIdbAdapter(factory?: IDBFactory): ByteStoreAdapter {
 			return { ...row.record, size: meta?.size ?? row.record.size, openedAt: meta?.openedAt ?? 0 };
 		},
 
-		async put(db, personId, fileId, record: StoredFileRecord) {
+		async put({ db, personId, fileId }, record: StoredFileRecord) {
 			const database = await getDb();
 			const key = compositeKey(db, personId, fileId);
 			const { openedAt, ...payload } = record;
@@ -72,7 +71,7 @@ export function createIdbAdapter(factory?: IDBFactory): ByteStoreAdapter {
 			await Promise.all([reqToPromise(payloadReq), reqToPromise(recencyReq)]);
 		},
 
-		async touch(db, personId, fileId, openedAt) {
+		async touch({ db, personId, fileId }, openedAt) {
 			const database = await getDb();
 			const key = compositeKey(db, personId, fileId);
 			// The metadata row is the existence check and carries `size` forward; no bytes are read.
@@ -83,7 +82,7 @@ export function createIdbAdapter(factory?: IDBFactory): ByteStoreAdapter {
 			await reqToPromise(store.put({ openedAt, size: held.size }, key));
 		},
 
-		async delete(db, personId, fileId) {
+		async delete({ db, personId, fileId }) {
 			const database = await getDb();
 			const key = compositeKey(db, personId, fileId);
 			const tx = database.transaction([PAYLOAD_STORE, RECENCY_STORE], 'readwrite');
@@ -126,7 +125,7 @@ export function createIdbAdapter(factory?: IDBFactory): ByteStoreAdapter {
 			// The payload keys are the triple, so no row is read; a recency row alone is no held file.
 			const tx = database.transaction(PAYLOAD_STORE, 'readonly');
 			const keys = await reqToPromise(tx.objectStore(PAYLOAD_STORE).getAllKeys());
-			return keys.map((key): ByteStoreKey => {
+			return keys.map((key): FileKey => {
 				const [db, personId, fileId] = JSON.parse(String(key)) as [string, string, string];
 				return { db, personId, fileId };
 			});

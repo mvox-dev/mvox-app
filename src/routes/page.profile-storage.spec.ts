@@ -128,8 +128,10 @@ function installStorageControls(): StorageControls {
 		};
 	}
 	const controls: StorageControls = {
-		usageForPartition: vi.fn(async (db: string, personId: string) => usageOf(db, personId)),
-		usageForOthers: vi.fn(async (db: string, personId: string) => {
+		usageForPartition: vi.fn(async ({ db, personId }: { db: string; personId: string }) =>
+			usageOf(db, personId)
+		),
+		usageForOthers: vi.fn(async ({ db, personId }: { db: string; personId: string }) => {
 			let count = 0;
 			let size = 0;
 			for (const id of ALL_IDENTITIES) {
@@ -146,7 +148,7 @@ function installStorageControls(): StorageControls {
 		clearAllPartitions: vi.fn(async () => {
 			for (const id of ALL_IDENTITIES) {
 				for (const fileId of fakeByteStore.heldFor(id.db, id.personId)) {
-					await fakeByteStore.evict(id as never, fileId);
+					await fakeByteStore.evict({ ...id, fileId });
 				}
 			}
 		})
@@ -263,12 +265,12 @@ describe('/profile — storage section: this account on this device', () => {
 		const { container, controls } = await renderStorageReady();
 		expect(q(container, 'profile-storage-others')).not.toBeNull();
 
-		expect(controls.usageForPartition).toHaveBeenCalledWith('sampledb', 'person-p');
-		expect(controls.usageForOthers).toHaveBeenCalledWith('sampledb', 'person-p');
+		expect(controls.usageForPartition).toHaveBeenCalledWith({ db: 'sampledb', personId: 'person-p' });
+		expect(controls.usageForOthers).toHaveBeenCalledWith({ db: 'sampledb', personId: 'person-p' });
 		// Never scoped queries FOR another identity — the others answer is the
 		// aggregate member's job, not a per-partition sweep from page code.
 		for (const call of controls.usageForPartition.mock.calls) {
-			expect(call).toEqual(['sampledb', 'person-p']);
+			expect(call).toEqual([{ db: 'sampledb', personId: 'person-p' }]);
 		}
 		// THE #351 TRAP: get() is an open. Rendering this section reads
 		// presence + usage, never bytes.
@@ -302,7 +304,7 @@ describe('/profile — storage section: this account on this device', () => {
 			await armMine(container);
 			await fireEvent.click(q(container, 'profile-storage-remove-mine-confirm') as Element);
 			await waitFor(() => {
-				expect(clearPartitionSpy).toHaveBeenCalledWith('sampledb', 'person-p');
+				expect(clearPartitionSpy).toHaveBeenCalledWith({ db: 'sampledb', personId: 'person-p' });
 			});
 		} finally {
 			consoleError.mockRestore();
@@ -410,7 +412,7 @@ describe('/profile — "Remove downloaded parts from this device" is a two-step 
 
 		await waitFor(() => {
 			expect(clearPartitionSpy).toHaveBeenCalledTimes(1);
-			expect(clearPartitionSpy).toHaveBeenCalledWith('sampledb', 'person-p');
+			expect(clearPartitionSpy).toHaveBeenCalledWith({ db: 'sampledb', personId: 'person-p' });
 		});
 		// The mine action never reaches for the device-wide member.
 		expect(controls.clearAllPartitions).not.toHaveBeenCalled();
@@ -421,7 +423,7 @@ describe('/profile — "Remove downloaded parts from this device" is a two-step 
 		// usage() dropped by exactly the removed 64 bytes.
 		expect(await fakeByteStore.usage()).toBe(40);
 		// The next open of a removed id MISSES — that miss IS the refetch path.
-		expect(await fakeByteStore.get(P, MINE_FILE_1)).toBeUndefined();
+		expect(await fakeByteStore.get({ ...P, fileId: MINE_FILE_1 })).toBeUndefined();
 
 		// The page tells the new truth: mine at zero, names gone, others as before.
 		await waitFor(() => {

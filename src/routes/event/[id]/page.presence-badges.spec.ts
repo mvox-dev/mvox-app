@@ -51,11 +51,11 @@ import { workRow } from '$lib/testing/pages/eventFixtures';
 
 let fakeByteStore: FakeByteStore;
 
-type PresenceQuery = (db: string, personId: string) => Promise<string[]>;
+type PresenceQuery = (identity: { db: string; personId: string }) => Promise<string[]>;
 
 function installPresence(impl?: PresenceQuery) {
 	const spy = vi.fn<PresenceQuery>(
-		impl ?? (async (db, personId) => fakeByteStore.heldFor(db, personId))
+		impl ?? (async ({ db, personId }) => fakeByteStore.heldFor(db, personId))
 	);
 	fakeByteStore.heldFileIds = spy;
 	return spy;
@@ -175,7 +175,7 @@ describe('#351 — event detail: presence badges on part rows (integration)', ()
 			expect(container.querySelector('[data-testid="file-presence-file-held"]')).not.toBeNull();
 		});
 
-		expect(presenceSpy.mock.calls).toEqual([['sampledb', 'person-p']]);
+		expect(presenceSpy.mock.calls).toEqual([[{ db: 'sampledb', personId: 'person-p' }]]);
 		expect(getSpy).not.toHaveBeenCalled();
 	});
 

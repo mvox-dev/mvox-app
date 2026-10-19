@@ -1,4 +1,8 @@
 // IndexedDB helpers shared by the byte store, the label index and the read cache.
+import type { CollectiveIdentity } from '$lib/collectives/store';
+
+/** One file held for one person in one db: the key of the byte store and the label index. */
+export type FileKey = CollectiveIdentity & { fileId: string };
 
 // A JSON triple, not a delimited string: no part controls its shape enough to avoid a separator.
 export function compositeKey(db: string, personId: string, third: string): string {

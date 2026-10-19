@@ -54,7 +54,7 @@ export async function downloadNextEventParts(
 		return null;
 	});
 	if (!isCurrent()) return null;
-	refreshPresence(identity.db, identity.personId, isCurrent);
+	refreshPresence(identity, isCurrent);
 	return { failure: results === null ? 'not-downloaded' : failureOf(results, !get(online)) };
 }
 

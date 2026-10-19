@@ -38,13 +38,13 @@ describe('#353 — the label database is a SIBLING, never the byte store (the fl
 	it('opening and writing the label DB leaves the byte store untouched (spike probe C)', async () => {
 		const factory = new IDBFactory();
 		const byteStore = createByteStore(createIdbAdapter(factory));
-		await byteStore.put(IDENTITY, 'file-a', bytes(5));
+		await byteStore.put({ ...IDENTITY, fileId: 'file-a' }, bytes(5));
 
 		const labels = createLabelStore(createLabelIdbAdapter(factory));
-		await labels.putLabel(IDENTITY, 'file-a', LABEL);
+		await labels.putLabel({ ...IDENTITY, fileId: 'file-a' }, LABEL);
 
-		expect(await byteStore.heldFileIds('sampledb', 'person-1')).toEqual(['file-a']);
-		const record = await byteStore.get(IDENTITY, 'file-a');
+		expect(await byteStore.heldFileIds({ db: 'sampledb', personId: 'person-1' })).toEqual(['file-a']);
+		const record = await byteStore.get({ ...IDENTITY, fileId: 'file-a' });
 		expect(Array.from(new Uint8Array(record!.bytes))).toEqual(new Array(16).fill(5));
 	});
 });
@@ -53,10 +53,10 @@ describe('#353 — labels survive restart and read back with zero network', () =
 	it('a label written through one connection reads back VERBATIM from a cold one (the restart seam)', async () => {
 		const factory = new IDBFactory();
 		const writer = createLabelStore(createLabelIdbAdapter(factory));
-		await writer.putLabel(IDENTITY, 'file-a', LABEL);
+		await writer.putLabel({ ...IDENTITY, fileId: 'file-a' }, LABEL);
 
 		const reader = createLabelStore(createLabelIdbAdapter(factory));
-		const held = await reader.labelsFor('sampledb', 'person-1');
+		const held = await reader.labelsFor({ db: 'sampledb', personId: 'person-1' });
 		expect(held.get('file-a')).toEqual({
 			work: 'Bogoróditse Djévo',
 			composer: 'Arvo Pärt',
@@ -72,22 +72,22 @@ describe('#353 — labels survive restart and read back with zero network', () =
 		});
 		const factory = new IDBFactory();
 		const store = createLabelStore(createLabelIdbAdapter(factory));
-		await store.putLabel(IDENTITY, 'file-a', LABEL);
-		const held = await store.labelsFor('sampledb', 'person-1');
+		await store.putLabel({ ...IDENTITY, fileId: 'file-a' }, LABEL);
+		const held = await store.labelsFor({ db: 'sampledb', personId: 'person-1' });
 		expect(held.get('file-a')).toEqual(LABEL);
 	});
 
 	it('labels are partitioned by (db, personId) — one identity never reads another\'s names', async () => {
 		const factory = new IDBFactory();
 		const store = createLabelStore(createLabelIdbAdapter(factory));
-		await store.putLabel(IDENTITY, 'file-a', LABEL);
-		await store.putLabel({ db: 'crede', personId: 'person-2' }, 'file-b', {
+		await store.putLabel({ ...IDENTITY, fileId: 'file-a' }, LABEL);
+		await store.putLabel({ db: 'crede', personId: 'person-2', fileId: 'file-b' }, {
 			work: 'Other',
 			composer: 'Other',
 			edition: '',
 			filename: 'other.pdf'
 		});
-		const held = await store.labelsFor('sampledb', 'person-1');
+		const held = await store.labelsFor({ db: 'sampledb', personId: 'person-1' });
 		expect([...held.keys()]).toEqual(['file-a']);
 	});
 });
@@ -97,13 +97,13 @@ describe('#353 — recordPartLabel: the put-time write, gated on DELIVERY reason
 		const factory = new IDBFactory();
 		const store = createLabelStore(createLabelIdbAdapter(factory));
 
-		recordPartLabel(store, IDENTITY, 'file-uncached', { ...LABEL, filename: 'u.pdf' }, 'network-uncached');
-		recordPartLabel(store, IDENTITY, 'file-fallback', { ...LABEL, filename: 'f.pdf' }, 'fallback-navigation');
-		recordPartLabel(store, IDENTITY, 'file-stored', { ...LABEL, filename: 's.pdf' }, 'network-stored');
-		recordPartLabel(store, IDENTITY, 'file-cached', { ...LABEL, filename: 'c.pdf' }, 'cache');
+		recordPartLabel(store, { ...IDENTITY, fileId: 'file-uncached' }, { ...LABEL, filename: 'u.pdf' }, 'network-uncached');
+		recordPartLabel(store, { ...IDENTITY, fileId: 'file-fallback' }, { ...LABEL, filename: 'f.pdf' }, 'fallback-navigation');
+		recordPartLabel(store, { ...IDENTITY, fileId: 'file-stored' }, { ...LABEL, filename: 's.pdf' }, 'network-stored');
+		recordPartLabel(store, { ...IDENTITY, fileId: 'file-cached' }, { ...LABEL, filename: 'c.pdf' }, 'cache');
 
 		await vi.waitFor(async () => {
-			const held = await store.labelsFor('sampledb', 'person-1');
+			const held = await store.labelsFor({ db: 'sampledb', personId: 'person-1' });
 			expect([...held.keys()].sort()).toEqual(['file-cached', 'file-stored']);
 		});
 	});
@@ -123,7 +123,7 @@ describe('#353 — recordPartLabel: the put-time write, gated on DELIVERY reason
 				return [];
 			}
 		});
-		expect(() => recordPartLabel(store, IDENTITY, 'file-a', LABEL, 'network-stored')).not.toThrow();
+		expect(() => recordPartLabel(store, { ...IDENTITY, fileId: 'file-a' }, LABEL, 'network-stored')).not.toThrow();
 		await new Promise((r) => setTimeout(r, 0));
 		await new Promise((r) => setTimeout(r, 0));
 	});
@@ -133,8 +133,8 @@ describe('#353 — eager label removal rides the byte-row lifecycle (opts.onRowR
 	it('evict reports the removed key', async () => {
 		const onRowRemoved = vi.fn();
 		const store = createByteStore(createFakeAdapter(), { onRowRemoved });
-		await store.put(IDENTITY, 'file-a', bytes(1));
-		await store.evict(IDENTITY, 'file-a');
+		await store.put({ ...IDENTITY, fileId: 'file-a' }, bytes(1));
+		await store.evict({ ...IDENTITY, fileId: 'file-a' });
 		expect(onRowRemoved.mock.calls).toEqual([
 			[{ db: 'sampledb', personId: 'person-1', fileId: 'file-a' }]
 		]);
@@ -143,10 +143,10 @@ describe('#353 — eager label removal rides the byte-row lifecycle (opts.onRowR
 	it('clearPartition reports each removed key of THAT partition and no other', async () => {
 		const onRowRemoved = vi.fn();
 		const store = createByteStore(createFakeAdapter(), { onRowRemoved });
-		await store.put(IDENTITY, 'file-a', bytes(1));
-		await store.put(IDENTITY, 'file-b', bytes(2));
-		await store.put({ db: 'crede', personId: 'person-2' }, 'file-c', bytes(3));
-		await store.clearPartition('sampledb', 'person-1');
+		await store.put({ ...IDENTITY, fileId: 'file-a' }, bytes(1));
+		await store.put({ ...IDENTITY, fileId: 'file-b' }, bytes(2));
+		await store.put({ db: 'crede', personId: 'person-2', fileId: 'file-c' }, bytes(3));
+		await store.clearPartition({ db: 'sampledb', personId: 'person-1' });
 		expect(onRowRemoved.mock.calls.map(([key]) => key).sort((a, b) => a.fileId.localeCompare(b.fileId))).toEqual([
 			{ db: 'sampledb', personId: 'person-1', fileId: 'file-a' },
 			{ db: 'sampledb', personId: 'person-1', fileId: 'file-b' }
@@ -156,8 +156,8 @@ describe('#353 — eager label removal rides the byte-row lifecycle (opts.onRowR
 	it('clearAllPartitions reports every key on the device', async () => {
 		const onRowRemoved = vi.fn();
 		const store = createByteStore(createFakeAdapter(), { onRowRemoved });
-		await store.put(IDENTITY, 'file-a', bytes(1));
-		await store.put({ db: 'crede', personId: 'person-2' }, 'file-c', bytes(3));
+		await store.put({ ...IDENTITY, fileId: 'file-a' }, bytes(1));
+		await store.put({ db: 'crede', personId: 'person-2', fileId: 'file-c' }, bytes(3));
 		await store.clearAllPartitions();
 		expect(onRowRemoved.mock.calls.map(([key]) => key).sort((a, b) => a.fileId.localeCompare(b.fileId))).toEqual([
 			{ db: 'sampledb', personId: 'person-1', fileId: 'file-a' },
@@ -170,9 +170,9 @@ describe('#353 — eager label removal rides the byte-row lifecycle (opts.onRowR
 		const onRowRemoved = vi.fn();
 		const store = createByteStore(createFakeAdapter(), { capBytes: 100, onRowRemoved });
 		vi.setSystemTime(1_000);
-		await store.put(IDENTITY, 'file-old', bytes(1, 60));
+		await store.put({ ...IDENTITY, fileId: 'file-old' }, bytes(1, 60));
 		vi.setSystemTime(2_000);
-		await store.put(IDENTITY, 'file-new', bytes(2, 60));
+		await store.put({ ...IDENTITY, fileId: 'file-new' }, bytes(2, 60));
 		expect(onRowRemoved.mock.calls).toEqual([
 			[{ db: 'sampledb', personId: 'person-1', fileId: 'file-old' }]
 		]);
@@ -186,7 +186,7 @@ describe('#353 — StoredFileRecord is UNCHANGED: no title, no label, byteStore.
 		const adapter = createFakeAdapter();
 		const store = createByteStore(adapter);
 		const payload = new Uint8Array(16).fill(7).buffer;
-		await store.put(IDENTITY, 'file-a', { bytes: payload, filetype: 'application/pdf', sha256: 'sha-7' });
+		await store.put({ ...IDENTITY, fileId: 'file-a' }, { bytes: payload, filetype: 'application/pdf', sha256: 'sha-7' });
 
 		expect(adapter.putLog).toHaveLength(1);
 		expect(adapter.putLog[0].record).toEqual({
@@ -212,16 +212,16 @@ describe('#353 — composition: the app byte store removes the label when it rem
 		vi.resetModules();
 		const { getAppByteStore } = await import('./appByteStore');
 		const { getAppLabelStore } = await import('./appLabelStore');
-		await getAppByteStore().put(IDENTITY, 'file-a', bytes(5));
-		await getAppLabelStore().putLabel(IDENTITY, 'file-a', LABEL);
-		expect(await getAppLabelStore().labelsFor('sampledb', 'person-1')).toEqual(
+		await getAppByteStore().put({ ...IDENTITY, fileId: 'file-a' }, bytes(5));
+		await getAppLabelStore().putLabel({ ...IDENTITY, fileId: 'file-a' }, LABEL);
+		expect(await getAppLabelStore().labelsFor({ db: 'sampledb', personId: 'person-1' })).toEqual(
 			new Map([['file-a', LABEL]])
 		);
 
-		await getAppByteStore().clearPartition('sampledb', 'person-1');
+		await getAppByteStore().clearPartition({ db: 'sampledb', personId: 'person-1' });
 
 		await vi.waitFor(async () =>
-			expect(await getAppLabelStore().labelsFor('sampledb', 'person-1')).toEqual(new Map())
+			expect(await getAppLabelStore().labelsFor({ db: 'sampledb', personId: 'person-1' })).toEqual(new Map())
 		);
 	});
 });

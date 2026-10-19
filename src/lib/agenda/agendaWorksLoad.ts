@@ -113,7 +113,7 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 		seq.pressureSweepRanAtOpen = true;
 		const identity = deps.collectiveIdentity();
 		if (identity && identity.db === cfg.db) {
-			seedRetentionKeys(identity.db, identity.personId, nextEventFileIds(ag.agendaItems, ag.worksByEventId));
+			seedRetentionKeys(identity, nextEventFileIds(ag.agendaItems, ag.worksByEventId));
 		}
 		const state = deps.collectivesState();
 		ensureRetentionSweep({
@@ -144,7 +144,7 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 				if (
 					results.some((r) => r.outcome === 'network-stored' || r.outcome === 'network-uncached')
 				) {
-					refreshPresence(identity.db, identity.personId, () => thisRequest === seq.requestId);
+					refreshPresence(identity, () => thisRequest === seq.requestId);
 				}
 			})
 			.catch((e) => {

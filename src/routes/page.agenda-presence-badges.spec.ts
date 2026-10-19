@@ -106,10 +106,10 @@ import { pdfData } from '$lib/testing/pages/event';
 
 let fakeByteStore: FakeByteStore;
 
-type PresenceQuery = (db: string, personId: string) => Promise<string[]>;
+type PresenceQuery = (identity: { db: string; personId: string }) => Promise<string[]>;
 function installPresence(impl?: PresenceQuery) {
 	const spy = vi.fn<PresenceQuery>(
-		impl ?? (async (db, personId) => fakeByteStore.heldFor(db, personId))
+		impl ?? (async ({ db, personId }) => fakeByteStore.heldFor(db, personId))
 	);
 	fakeByteStore.heldFileIds = spy;
 	return spy;
@@ -242,7 +242,7 @@ describe('#367 — the season-manage repertoire panel carries the presence badge
 			'[file_presence_on_device]'
 		);
 
-		expect(presenceSpy.mock.calls).toEqual([['sampledb', 'person-p']]);
+		expect(presenceSpy.mock.calls).toEqual([[{ db: 'sampledb', personId: 'person-p' }]]);
 		expect(getSpy).not.toHaveBeenCalled();
 	});
 });
