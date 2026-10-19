@@ -106,7 +106,7 @@ describe('/profile — a switch drops the old collective’s late answers', () =
 		expect(q(container, 'admin-entry-p-bela')).not.toBeNull();
 	});
 
-	it('a role write settling after the switch announces nothing on the new collective', async () => {
+	it('a role write settling after the switch does not re-read the old collective’s roles', async () => {
 		const write = deferred<undefined>();
 		removeAdminMock.mockReturnValue(write.promise);
 		const { container } = await renderReady();
@@ -115,10 +115,12 @@ describe('/profile — a switch drops the old collective’s late answers', () =
 		await waitFor(() => expect(removeAdminMock).toHaveBeenCalledTimes(1));
 		selectedCollectiveDbStore.set('otherdb');
 		await waitFor(() => expect(listAdminsMock.mock.calls.length).toBeGreaterThan(1));
+		await new Promise((r) => setTimeout(r, 0));
+		const readsBefore = listAdminsMock.mock.calls.length;
 		write.resolve(undefined);
 		await new Promise((r) => setTimeout(r, 0));
 
-		expect(q(container, 'admin-roles-status')?.textContent ?? '').not.toContain('admin_roles_saved');
+		expect(listAdminsMock.mock.calls.length).toBe(readsBefore);
 	});
 
 	it('a name write settling after the switch does not rename the collective in the store', async () => {
