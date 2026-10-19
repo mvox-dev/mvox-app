@@ -102,9 +102,7 @@
 			class="flex w-full items-center justify-between text-left text-sm font-medium"
 			aria-expanded={expanded}
 			aria-controls={expanded ? 'my-loans-list' : undefined}
-			onclick={() => {
-				expanded = !expanded;
-			}}
+			onclick={() => (expanded = !expanded)}
 		>
 			<span id="my-loans-heading">{m.library_my_loans_title({ count: myActiveLoans.length })}</span>
 			<span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
