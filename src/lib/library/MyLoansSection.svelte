@@ -2,6 +2,7 @@
 	lookups run whether or not the section shows. -->
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
+	import { copyLabel, isActiveLending } from '$lib/library/libraryData';
 	import type { Copy, Edition, Lending, LoanChain, Work } from '$lib/library/libraryData';
 	import { formatDate, isOverdue } from '$lib/library/lendingView';
 	import { resolveLocalFirst } from '$lib/library/resolveLocalFirst';
@@ -40,7 +41,7 @@
 	let copyChains = $state<Map<string, LoanChain>>(new Map());
 
 	const myActiveLoans = $derived(
-		myMemberId ? lendings.filter((l) => l.memberId === myMemberId && l.returnedAt === '') : []
+		myMemberId ? lendings.filter((l) => l.memberId === myMemberId && isActiveLending(l)) : []
 	);
 
 	// Copy names, so a loan never renders a raw entity id. A librarian already holds every
@@ -53,7 +54,7 @@
 			loans,
 			selected: () => selected,
 			allCopies: () => allCopies,
-			local: (copy) => copy.name || (copy.copyNumber ? `#${copy.copyNumber}` : ''),
+			local: copyLabel,
 			fetch: (cfg, ids) => loadCopyNames(cfg, ids),
 			isCurrent: () => g === copyNameGen,
 			apply: (names) => (copyNames = names),
@@ -94,25 +95,23 @@
 </script>
 
 {#if myActiveLoans.length > 0}
-	<section data-testid="my-loans" class="rounded-md border border-ink-5 px-4 py-3">
+	<section data-testid="my-loans" aria-labelledby="my-loans-heading" class="rounded-md border border-ink-5 px-4 py-3">
 		<button
 			type="button"
 			data-testid="my-loans-toggle"
 			class="flex w-full items-center justify-between text-left text-sm font-medium"
 			aria-expanded={expanded}
 			aria-controls={expanded ? 'my-loans-list' : undefined}
-			onclick={() => {
-				expanded = !expanded;
-			}}
+			onclick={() => (expanded = !expanded)}
 		>
-			<span>{m.library_my_loans_title({ count: myActiveLoans.length })}</span>
+			<span id="my-loans-heading">{m.library_my_loans_title({ count: myActiveLoans.length })}</span>
 			<span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
 		</button>
 		{#if expanded}
 			<ul id="my-loans-list" class="mt-2 flex flex-col gap-1">
 				{#each myActiveLoans as loan (loan.id)}
 					<li data-testid="my-loans-item-{loan.id}" class="flex items-center justify-between text-xs">
-						<span>{m.library_my_loans_copy_label({ copyName: loanLabel(loan.copyId) })}</span>
+						<span>{loanLabel(loan.copyId)}</span>
 						<span class="text-ink-2">
 							{formatDate(loan.assignedAt)}{#if loan.assignedUntil} – {formatDate(loan.assignedUntil)}{/if}
 						</span>

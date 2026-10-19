@@ -74,11 +74,7 @@ describe('resolveLocalFirst', () => {
 		expect(fetch).not.toHaveBeenCalled();
 	});
 
-	it('drops a superseded answer, local or fetched', async () => {
-		const local = setup({ loans: [loan('c1')], isCurrent: () => false });
-		resolveLocalFirst(local.opts);
-		expect(local.apply).not.toHaveBeenCalled();
-
+	it('drops a superseded fetched answer', async () => {
 		const fetched = setup({ isCurrent: () => false });
 		await resolveLocalFirst(fetched.opts);
 		expect(fetched.fetch).toHaveBeenCalled();

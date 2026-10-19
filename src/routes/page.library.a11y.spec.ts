@@ -141,6 +141,29 @@ describe('#75 — a11y: my-loans section', () => {
 		const controlledEl = container.querySelector(`#${controlsId}`);
 		expect(controlledEl).not.toBeNull();
 	});
+
+	it('the my-loans section is named by its title', async () => {
+		listWorksMock.mockResolvedValue(toListRead([]));
+		listLendingsMock.mockResolvedValue(toListRead([
+			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
+		]));
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		resolveCopyNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		findMyMemberIdMock.mockResolvedValue('member-mine');
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="my-loans"]')).not.toBeNull();
+		});
+		const section = container.querySelector('[data-testid="my-loans"]') as HTMLElement;
+		const title = section.querySelector('[data-testid="my-loans-toggle"] span')?.textContent?.trim();
+		const labelId = section.getAttribute('aria-labelledby');
+		expect(title).toBeTruthy();
+		expect(labelId).toBeTruthy();
+		expect(container.querySelector(`#${labelId}`)?.textContent?.trim()).toBe(title);
+	});
 });
 
 // ---------------------------------------------------------------------------

@@ -23,7 +23,6 @@ export const LIBRARY_COPY = {
 	library_librarian_load_error: () => 'Could not check librarian access.',
 	library_librarian_retry: () => 'Retry',
 	library_my_loans_title: (p: { count: number }) => `My loans (${p.count})`,
-	library_my_loans_copy_label: (p: { copyName: string }) => `${p.copyName}`,
 	library_my_loans_overdue: () => 'Overdue',
 	library_checkout_submit: () => 'Checkout',
 	library_return: () => 'Return',

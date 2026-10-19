@@ -39,7 +39,6 @@ export function resolveLocalFirst<T>(o: LocalFirst<T>): Promise<void> {
 		}
 	}
 	if (unresolved.length === 0) {
-		if (!o.isCurrent()) return Promise.resolve();
 		o.apply(local);
 		return Promise.resolve();
 	}

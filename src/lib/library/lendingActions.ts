@@ -1,10 +1,9 @@
 import { entuFetch } from '$lib/entu/request';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 import type { Lending } from './libraryData';
-import { listCopies } from './libraryData';
+import { isActiveLending, listCopies } from './libraryData';
 
-// T6.4/#73 — the library WRITE path (lending operations). Separated from
-// libraryData.ts which is explicitly read-only (see its module header).
+// The library write path (lending operations); libraryData.ts is read-only.
 
 export interface CreateLendingPayload {
 	copyId: string;
@@ -13,19 +12,8 @@ export interface CreateLendingPayload {
 	assignedUntil?: string;
 }
 
-/**
- * Create a new lending entity under the library. Resolves the `lending` type-def
- * id, then POSTs the entity with copy/member references and assigned_at date.
- * Returns the created Lending mapped from the payload + response.
- *
- * #133: NO explicit `_sharing` — the LIBRARY entity named in `_parent` carries
- * its own materialized `_sharing: domain` (1/1 live: 6a12036c4ff8277cd4306b26
- * 'EPCC Library'), so Entu's create-time copy (utils/entity.js:296-327) lands
- * `domain` on the lending. That copy reads ONLY the `private._sharing` of the
- * entities named in the create body's `_parent` props — there is no ancestor
- * walk, so the org's tier is provenance (the library materialized `domain` from
- * it at ITS create), not what makes this create safe.
- */
+// Safe without setting `_sharing` (#133): Entu does not walk up the tree; it copies `_sharing`
+// only from the parent named in the create request, here the library.
 export async function createLending(
 	cfg: EntuCfg,
 	libraryId: string,
@@ -114,13 +102,7 @@ export interface BulkResult {
 	failed: Array<{ copyId: string; error: string }>;
 }
 
-/**
- * Check out copies of a single edition to multiple members. Resolves copies
- * for the chosen edition internally, filters out copies already on loan
- * (cross-checked against `activeLendings`), then creates one lending per
- * ticked member. Uses Promise.allSettled so partial failures don't abort the
- * whole operation.
- */
+// allSettled: a partial failure must not abort the other checkouts.
 export async function bulkCheckout(
 	cfg: EntuCfg,
 	libraryId: string,
@@ -133,18 +115,14 @@ export async function bulkCheckout(
 	const allCopies = await resolveCopies(cfg, payload.editionId, fetchImpl);
 	const editionCopyIds = new Set(allCopies.map((c) => c.id));
 	const lentCopyIds = new Set(
-		activeLendings.filter((l) => l.returnedAt === '').map((l) => l.copyId)
+		activeLendings.filter(isActiveLending).map((l) => l.copyId)
 	);
 	const copies = allCopies.filter((c) => !lentCopyIds.has(c.id));
 
-	// Step 1b: drop members who already hold an active lending for this edition
-	// (server-side enforcement of the no-double-lending rule — the view layer
-	// guards via checkbox suppression, but a stale snapshot could let a duplicate
-	// through without this check). Dropped members are reported in `failed` so
-	// the caller can surface feedback (finding 1 fix — fail loudly, don't drop).
+	// Step 1b: a stale snapshot could double-lend; drop holders and report them in `failed`.
 	const membersAlreadyHolding = new Set(
 		activeLendings
-			.filter((l) => l.returnedAt === '' && editionCopyIds.has(l.copyId))
+			.filter((l) => isActiveLending(l) && editionCopyIds.has(l.copyId))
 			.map((l) => l.memberId)
 	);
 	const eligibleMembers = payload.memberIds.filter((id) => !membersAlreadyHolding.has(id));

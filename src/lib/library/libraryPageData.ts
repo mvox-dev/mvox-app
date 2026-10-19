@@ -10,6 +10,7 @@ import {
 	resolveBorrowerNames,
 	resolveCopyNames,
 	resolveCopyChains,
+	isActiveLending,
 	type Work,
 	type Edition,
 	type Copy,
@@ -29,7 +30,7 @@ export interface LibraryListing {
 }
 
 function activeMemberIds(lendings: Lending[]): string[] {
-	return lendings.filter((l) => l.returnedAt === '').map((l) => l.memberId);
+	return lendings.filter(isActiveLending).map((l) => l.memberId);
 }
 
 export async function loadLibraryListing(

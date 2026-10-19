@@ -211,9 +211,6 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/lib/library/EditionRow.svelte': {
 		'edition.name': 'a catalogue edition'
 	},
-	'src/lib/library/CopyRow.svelte': {
-		'copy.name': 'a catalogue copy'
-	},
 	'src/lib/library/EditionFiles.svelte': {
 		'file.filename': 'an uploaded score file',
 		'broken.filename': 'an uploaded score file',

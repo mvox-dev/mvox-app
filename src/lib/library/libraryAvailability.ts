@@ -1,4 +1,5 @@
 // Library availability and the name lookups behind lent copies and my-loans rows.
+import { m } from '$lib/paraglide/messages.js';
 import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { listMyProfiles } from '$lib/profile/profileData';
@@ -11,7 +12,7 @@ export type CopyAvailability =
 
 // Two active lendings on one copy is bad data: warn and take the newest rather than break the page.
 export function deriveCopyAvailability(copyId: string, lendings: Lending[]): CopyAvailability {
-	const active = lendings.filter((l) => l.copyId === copyId && l.returnedAt === '');
+	const active = lendings.filter((l) => l.copyId === copyId && isActiveLending(l));
 	if (active.length === 0) return { status: 'available' };
 	if (active.length > 1) {
 		console.warn(
@@ -126,10 +127,14 @@ export function deriveWorkAvailability(
 	const editionIds = new Set(editions.filter((e) => e.workId === workId).map((e) => e.id));
 	const workCopies = copies.filter((c) => editionIds.has(c.editionId));
 	const activeLentCopyIds = new Set(
-		lendings.filter((l) => l.returnedAt === '').map((l) => l.copyId)
+		lendings.filter(isActiveLending).map((l) => l.copyId)
 	);
 	const lent = workCopies.filter((c) => activeLentCopyIds.has(c.id)).length;
 	return { available: workCopies.length - lent, total: workCopies.length };
+}
+
+export function isActiveLending(l: Lending): boolean {
+	return l.returnedAt === '';
 }
 
 export function activeLendingForMemberInEdition(
@@ -138,7 +143,7 @@ export function activeLendingForMemberInEdition(
 	lendings: Lending[]
 ): Lending | undefined {
 	return lendings.find(
-		(l) => l.memberId === memberId && editionCopyIds.has(l.copyId) && l.returnedAt === ''
+		(l) => l.memberId === memberId && editionCopyIds.has(l.copyId) && isActiveLending(l)
 	);
 }
 
@@ -146,6 +151,10 @@ export interface LoanChain {
 	copyNumber: number;
 	workName: string;
 	editionName: string;
+}
+
+export function copyLabel(copy: Copy): string {
+	return copy.name || (copy.copyNumber ? `#${copy.copyNumber}` : m.library_copy_name_unknown());
 }
 
 export function formatLoanChainLabel(chain: LoanChain): string {
