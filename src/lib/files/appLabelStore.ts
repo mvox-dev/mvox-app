@@ -1,7 +1,7 @@
 // #353 — the app-wide label store: pages reach the label index only here, so specs can swap it.
 
 import type { LabelStore } from './labelStore';
-import { createIdbLabelStore } from './labelIdbAdapter';
+import { createIdbLabelStore } from './labelIdbStore';
 
 let instance: LabelStore | null = null;
 

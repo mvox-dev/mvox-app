@@ -2,7 +2,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
 import { createIdbAdapter } from './idbAdapter';
-import { createIdbLabelStore } from './labelIdbAdapter';
+import { createIdbLabelStore } from './labelIdbStore';
 import { createInkStore } from '$lib/strokes/inkStore';
 import { createSavedFeedbackStore } from '$lib/feedback/savedFeedback';
 import { createProblemLog } from '$lib/problems/problemLog';

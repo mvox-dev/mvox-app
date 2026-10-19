@@ -1,7 +1,7 @@
 // #353, #427: the part-label store, and the call sites that hand it a name.
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createIdbLabelStore, LABEL_DB_NAME } from './labelIdbAdapter';
+import { createIdbLabelStore, LABEL_DB_NAME } from './labelIdbStore';
 import { recordPartLabel, type LabelStore, type PartLabel } from './labelStore';
 import { createByteStore } from './byteStore';
 import { createIdbAdapter } from './idbAdapter';
@@ -87,6 +87,22 @@ describe('#353 — labels survive restart and read back with zero network', () =
 			edition: '',
 			filename: 'other.pdf'
 		});
+		const held = await store.labelsFor({ db: 'sampledb', personId: 'person-1' });
+		expect([...held.keys()]).toEqual(['file-a']);
+	});
+
+	it('a second person in the same db is excluded', async () => {
+		const store = createIdbLabelStore(new IDBFactory());
+		await store.putLabel({ ...IDENTITY, fileId: 'file-a' }, LABEL);
+		await store.putLabel({ db: 'sampledb', personId: 'person-2', fileId: 'file-b' }, LABEL);
+		const held = await store.labelsFor({ db: 'sampledb', personId: 'person-1' });
+		expect([...held.keys()]).toEqual(['file-a']);
+	});
+
+	it('the same person in another db is excluded', async () => {
+		const store = createIdbLabelStore(new IDBFactory());
+		await store.putLabel({ ...IDENTITY, fileId: 'file-a' }, LABEL);
+		await store.putLabel({ db: 'crede', personId: 'person-1', fileId: 'file-c' }, LABEL);
 		const held = await store.labelsFor({ db: 'sampledb', personId: 'person-1' });
 		expect([...held.keys()]).toEqual(['file-a']);
 	});
