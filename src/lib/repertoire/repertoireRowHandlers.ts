@@ -156,9 +156,8 @@ export function createRepertoireRowHandlers(deps: RepertoireRowDeps) {
 			key,
 			items.map((item) => item.id)
 		);
-		const before = new Map(
-			plan.map((entry) => [entry.id, items.find((i) => i.id === entry.id)?.ordinal ?? 0])
-		);
+		const ordinalById = new Map(items.map((i) => [i.id, i.ordinal]));
+		const before = new Map(plan.map((entry) => [entry.id, ordinalById.get(entry.id) ?? 0]));
 		const after = new Map(plan.map((entry) => [entry.id, entry.ordinal]));
 		request(
 			key,

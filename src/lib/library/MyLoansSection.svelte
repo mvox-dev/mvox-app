@@ -63,6 +63,9 @@
 		});
 	});
 
+	const editionById = $derived(new Map(allEditions.map((e) => [e.id, e])));
+	const workById = $derived(new Map(works.map((w) => [w.id, w])));
+
 	// #129 — copy, edition and work for each loan's label; same local-first split.
 	const chainLoad = createLatest();
 	$effect(() => {
@@ -73,8 +76,8 @@
 			selected: () => selected,
 			allCopies: () => allCopies,
 			local: (copy) => {
-				const edition = allEditions.find((e) => e.id === copy.editionId);
-				const work = edition ? works.find((w) => w.id === edition.workId) : undefined;
+				const edition = editionById.get(copy.editionId);
+				const work = edition ? workById.get(edition.workId ?? '') : undefined;
 				return {
 					copyNumber: copy.copyNumber,
 					workName: work?.name ?? '',
