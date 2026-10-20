@@ -1,14 +1,6 @@
 <script lang="ts">
-	// T4.5 (#31) — the unauthed invite landing (allowlisted at src/lib/auth/
-	// guard.ts:43; the bare /invite without a token stays protected). The token is a
-	// BEARER SECRET: never logged, never written to storage by this page — it only
-	// moves into hrefs built by buildInviteProviderHref, riding the localStorage
-	// OAuth-state blob (single-use-consumed at the callback), never oauth.ee.
-	//
-	// States: ?outcome= (post-exchange, takes precedence) → dead / conflict /
-	// unexpected / error; otherwise fresh parse → valid / invalid / client-expired.
-	// A client-clock "expired" KEEPS the CTAs — the server is the authority; truly
-	// dead invites come back as outcome=dead.
+	// Unauthed invite landing. The token is a bearer secret: never logged or stored by this page.
+	// ?outcome= takes precedence over the fresh parse; a client-clock expiry keeps the CTAs.
 	// Contract: src/routes/page.invite-landing.spec.ts.
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
@@ -18,26 +10,19 @@
 	import { parseInviteToken } from '$lib/invite/parse-invite-token';
 	import { isoDateFormatter } from '$lib/preferences/timeFormat';
 
-	// Stale-blob hygiene: an ABANDONED OAuth initiation (CTA clicked, provider
-	// never completed) leaves the state blob — for invite intent including the
-	// up-to-7-day bearer token — in localStorage, where the callback's single-use
-	// consume never reaches it. Any blob present when this landing renders is by
-	// definition stale: a completed flow was already consumed at the callback
-	// before redirecting back here, and a fresh CTA click writes a fresh blob.
-	// Clearing it caps the bearer token's storage lifetime on shared machines.
+	// An abandoned OAuth start leaves a state blob holding the bearer token; any blob here is stale,
+	// so clear it to cap the token's storage lifetime.
 	localStorage.removeItem(OAUTH_STATE_KEY);
 
 	const token = $derived(page.params.token ?? '');
 	const outcome = $derived(page.url.searchParams.get('outcome'));
 	const parsed = $derived(parseInviteToken(token, Date.now()));
-	// #207 rule 7 (PO standing rule, Gama's 2026-09-02 rulings) — numeric date
-	// text renders as the ISO calendar date, `YYYY-MM-DD` (en-CA gives ISO date
-	// format), never a browser-locale rendering.
+	// Numeric dates render as ISO `YYYY-MM-DD` (en-CA), never browser-locale (#207 rule 7).
 	const expiryDateFmt = isoDateFormatter();
 	const expiryDate = $derived(
 		parsed.status === 'invalid' ? '' : expiryDateFmt.format(new Date(parsed.expMs))
 	);
-	/** Fresh-start href: the same landing without ?outcome — a new CTA click mints a fresh single-use session key. */
+	/** Same landing without ?outcome: a new CTA click mints a fresh single-use session key. */
 	const retryHref = $derived(`/invite/${encodeURIComponent(token)}`);
 </script>
 
@@ -89,7 +74,7 @@
 			<p class="text-sm">{m.invite_landing_intro({ db: parsed.db })}</p>
 			<p class="text-sm">{m.invite_landing_expires({ date: expiryDate })}</p>
 			{#if parsed.status === 'expired'}
-				<p class="text-sm text-red-700" role="alert">
+				<p class="text-sm text-danger" role="alert">
 					{m.invite_landing_expired_warning({ date: expiryDate })}
 				</p>
 			{/if}

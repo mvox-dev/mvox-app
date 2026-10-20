@@ -76,7 +76,7 @@
 	<p
 		data-testid="section-parent-damaged-{row.id}"
 		role="alert"
-		class="text-sm text-red-700 {arrangeIndentClass(row.depth)}"
+		class="text-sm text-danger {arrangeIndentClass(row.depth)}"
 	>
 		{m.roster_section_parent_damaged({ name: row.name })}
 	</p>

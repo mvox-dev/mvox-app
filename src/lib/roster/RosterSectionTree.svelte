@@ -75,7 +75,7 @@
 			</button>
 		</div>
 		{#if node.parentDamaged}
-			<p data-testid="section-parent-damaged-{node.id}" role="alert" class="text-sm text-red-700">
+			<p data-testid="section-parent-damaged-{node.id}" role="alert" class="text-sm text-danger">
 				{m.roster_section_parent_damaged({ name: node.name })}
 			</p>
 		{/if}

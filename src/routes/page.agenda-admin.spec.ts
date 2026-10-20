@@ -435,7 +435,7 @@ describe('agenda admin — #238: the season trashcan is an icon-only button (SVG
 		).toBe('true');
 		expect(
 			svg.outerHTML,
-			'the SVG must draw with currentColor so text-red-700 tints it'
+			'the SVG must draw with currentColor so text-danger tints it'
 		).toContain('currentColor');
 		expect(svg.outerHTML, 'no hard-coded fill/stroke colours').not.toMatch(/#[0-9a-fA-F]{3,8}/);
 

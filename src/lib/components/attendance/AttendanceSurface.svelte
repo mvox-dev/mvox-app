@@ -143,7 +143,7 @@
 			{/each}
 		</div>
 	{:else if error}
-		<p data-testid="attendance-panel-error" class="text-sm text-red-700" role="alert">{m.attendance_load_error()}</p>
+		<p data-testid="attendance-panel-error" class="text-sm text-danger" role="alert">{m.attendance_load_error()}</p>
 	{:else}
 		<div class="flex flex-col gap-2">
 			{#if membersPartial}

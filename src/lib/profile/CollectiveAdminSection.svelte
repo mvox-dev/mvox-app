@@ -253,7 +253,7 @@
 			<!-- The page's notice covers it. -->
 		{:else if status === 'load-error'}
 			<div data-testid="admin-roles-load-error" class="flex flex-col gap-2" role="alert">
-				<p class="text-sm text-red-700">{m.admin_roles_load_error()}</p>
+				<p class="text-sm text-danger">{m.admin_roles_load_error()}</p>
 				<button
 					type="button"
 					data-testid="admin-roles-retry-load"

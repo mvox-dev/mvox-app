@@ -177,7 +177,7 @@ describe('event detail — #203 delete button visibility', () => {
 		expect(svg, 'TrashIcon must render inside the trigger').not.toBeNull();
 		expect(svg!.getAttribute('aria-hidden')).toBe('true');
 		expect(btn.textContent ?? '').not.toMatch(/[×✕]/);
-		for (const cls of ['text-red-700', 'hover:text-red-800', 'min-h-11', 'min-w-11']) {
+		for (const cls of ['text-danger', 'hover:text-danger-strong', 'min-h-11', 'min-w-11']) {
 			expect(btn.classList.contains(cls), `${cls} missing on the trigger`).toBe(true);
 		}
 	});

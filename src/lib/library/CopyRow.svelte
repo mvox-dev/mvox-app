@@ -79,7 +79,7 @@
 							{/if}
 						</select>
 						{#if checkoutError}
-							<span data-testid="inline-checkout-error-{copy.id}" class="text-xs text-red-700" role="alert">{checkoutError}</span>
+							<span data-testid="inline-checkout-error-{copy.id}" class="text-xs text-danger" role="alert">{checkoutError}</span>
 						{/if}
 					</span>
 				{:else}

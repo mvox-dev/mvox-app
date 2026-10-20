@@ -1,4 +1,4 @@
-// #237 — the red-trashcan sweep, source-scanned: hover:text-red-800 lives in
+// #237 — the red-trashcan sweep, source-scanned: hover:text-danger-strong lives in
 // ONE file, every Table-A route imports it, Table-B chips keep their × and
 // muted tone (WHY stated in markup too). (*MVOX:Palestrina*)
 import { describe, expect, it } from 'vitest';
@@ -35,9 +35,9 @@ const SHARED_UNIT = 'lib/components/DeleteTrigger.svelte';
 // ── 1. one definition ───────────────────────────────────────────────────────────
 
 describe('#237 — the destructive trigger treatment is defined ONCE', () => {
-	it(`\`hover:text-red-800\` lives in exactly one .svelte file: ${SHARED_UNIT}`, () => {
+	it(`\`hover:text-danger-strong\` lives in exactly one .svelte file: ${SHARED_UNIT}`, () => {
 		const holders = svelteFiles()
-			.filter((f) => /hover:text-red-800/.test(markupOf(f)))
+			.filter((f) => /hover:text-danger-strong/.test(markupOf(f)))
 			.map(rel)
 			.sort();
 		expect(
@@ -91,8 +91,8 @@ describe('#237 — Table B keeps the × (PO ruling: a red trashcan on an unlink 
 			expect(block, 'the muted tone must stay').toContain('text-ink-2');
 			expect(block).not.toContain('TrashIcon');
 			expect(block).not.toContain('DeleteTrigger');
-			expect(block).not.toContain('text-red-700');
-			expect(block).not.toContain('hover:text-red-800');
+			expect(block).not.toContain('text-danger');
+			expect(block).not.toContain('hover:text-danger-strong');
 		});
 	}
 

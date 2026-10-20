@@ -1,16 +1,6 @@
-// #151 — the type scale, made enforceable.
+// #151 — the type scale, made enforceable: the scale lives in docs/design/typography.md.
 //
-// The original #151 pass fixed three heading inversions but left the thing the
-// issue actually named untouched: after #130 raised every form control to 16px,
-// nothing in the app rendered at 16px (`text-base` appeared zero times), so any
-// display text a control REPLACES or sits beside changed size on entering edit
-// mode. Fixing the sites without recording the resulting scale would leave the
-// next slice free to re-diverge, so the scale lives in docs/design/typography.md
-// and the two rules that are mechanically checkable are asserted here.
-//
-// Scanning real sources (rather than rendering) follows the ios-form-zoom.spec /
-// page.sections-a11y precedent: a component nothing mounts cannot hide a
-// violation, and the check costs nothing at runtime.
+// Real sources are scanned rather than rendered: an unmounted component cannot hide a violation.
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
@@ -50,12 +40,6 @@ const VOID_ELEMENTS = new Set([
 	'wbr'
 ]);
 
-/**
- * Every tag in the source — opening AND closing — tolerating `>` inside
- * {expression} attributes and quoted strings (same extractor shape as
- * ios-form-zoom.spec.ts). Scanning resumes AFTER each tag's `>` so a `<` inside
- * an attribute expression cannot be mistaken for the start of a tag.
- */
 function scanTags(source: string): Tag[] {
 	const out: Tag[] = [];
 	const re = /<(\/?)([a-zA-Z][-\w.]*)/g;
@@ -91,25 +75,11 @@ function scanTags(source: string): Tag[] {
 	return out;
 }
 
-/**
- * Each opening tag paired with its ancestor chain, nearest first, INCLUDING
- * itself at index 0.
- *
- * Why the chain and not the tag alone: presentation classes are routinely
- * authored on a WRAPPER while the semantic role (`role="alert"`, an
- * `error`/`failed` test id) rides an inner element — that is exactly how the
- * RSVP save-failed line kept a stamp-tier size and the bare destructive-action
- * red through a pass meant to remove both. A tag-local check has a hole the
- * shape of every wrapper in the app; resolving the chain closes it.
- */
 function taggedWithAncestors(source: string): { tag: Tag; chain: Tag[] }[] {
 	const out: { tag: Tag; chain: Tag[] }[] = [];
 	const stack: Tag[] = [];
 	for (const t of scanTags(source)) {
 		if (t.closing) {
-			// Pop to the nearest matching open. Unbalanced markup (a tag opened in
-			// one `{#if}` branch and closed in another) just truncates the stack
-			// rather than derailing the rest of the file.
 			for (let i = stack.length - 1; i >= 0; i--) {
 				if (stack[i].name === t.name) {
 					stack.length = i;
@@ -124,13 +94,6 @@ function taggedWithAncestors(source: string): { tag: Tag; chain: Tag[] }[] {
 	return out;
 }
 
-/**
- * The sanctioned scale. Named steps carry the body/heading tiers; the two
- * arbitrary values are the "stamp" tier — font-mono uppercase tracking-wide
- * chips, badges and timestamps — which is a deliberate design layer, not drift.
- * Anything else is a new step nobody agreed to; add it here on purpose or not
- * at all. See docs/design/typography.md.
- */
 const SANCTIONED_STEPS = new Set([
 	'text-xs',
 	'text-sm',
@@ -145,7 +108,7 @@ const SANCTIONED_STEPS = new Set([
 /** The stamp tier — chips and badges. Never a sentence, so never an error. */
 const STAMP_STEPS = new Set(['text-[9px]', 'text-[10px]']);
 
-/** Font-size utilities only — `text-ink-2`, `text-red-700` etc. are colours. */
+/** Font-size utilities only — `text-ink-2`, `text-danger` etc. are colours. */
 const SIZE_TOKEN =
 	/(?:^|[^-\w])((?:[-\w]+:)*text-(?:xs|sm|base|lg|[2-9]?xl|\[[\d.]+(?:px|rem|em)\]))(?![-\w])/g;
 
@@ -167,15 +130,12 @@ function ownSizeStep(tag: string): string | null {
 
 /** The red this tag sets on itself: the bare theme token, the error colour, or none. */
 function ownRed(tag: string): 'bare' | 'error' | null {
-	if (/(?:^|[^-\w])text-red-700(?![-\w])/.test(tag)) return 'error';
+	if (/(?:^|[^-\w])text-danger(?![-\w])/.test(tag)) return 'error';
 	if (/(?:^|[^-\w])text-red(?![-\w])/.test(tag)) return 'bare';
 	return null;
 }
 
-/**
- * An error SITE: the element announces itself as an error, whether through the
- * live-region role or through the test id the specs address it by.
- */
+/** An error site: the live-region role, or a test id naming an error or failure. */
 function isErrorRole(tag: string): boolean {
 	return /role=["']alert["']/.test(tag) || /data-testid="[^"]*(?:error|failed)/.test(tag);
 }
@@ -226,13 +186,9 @@ describe('#151 typography — one scale, no ad-hoc steps', () => {
 		).toEqual([]);
 	});
 
-	// The app carries TWO reds: the paper-palette theme token `--color-red`
-	// (`text-red`) and Tailwind's default `text-red-700`. Error copy settled on
-	// text-red-700 (~50 sites across every route); the bare token is the
-	// destructive-ACTION affordance (the repertoire "remove" link). Mixing them
-	// per-component is what made the same error role look different on sibling
-	// surfaces, so the split is pinned here.
-	it('error copy uses text-red-700, not the bare text-red destructive-action token', () => {
+	// Two reds: bare `text-red` is the destructive-action token, `text-danger` is error copy;
+	// mixing them made one error role look different across sibling surfaces.
+	it('error copy uses text-danger, not the bare text-red destructive-action token', () => {
 		const offenders: string[] = [];
 		for (const file of files) {
 			for (const { tag, chain } of taggedWithAncestors(readFileSync(file, 'utf-8'))) {
@@ -244,15 +200,11 @@ describe('#151 typography — one scale, no ad-hoc steps', () => {
 		}
 		expect(
 			offenders,
-			`error text using the bare \`text-red\` token instead of the shared \`text-red-700\` error colour:\n${offenders.join('\n')}`
+			`error text using the bare \`text-red\` token instead of the shared \`text-danger\` error colour:\n${offenders.join('\n')}`
 		).toEqual([]);
 	});
 
-	// docs/design/typography.md: "An error message is never rendered at the stamp
-	// tier — a stamp is a chip or a badge, an error is a sentence." Two sibling
-	// surfaces (attendance rows, RSVP rows) had each drifted their error line down
-	// to 9px to fit the dense row, which is how the same role ended up looking
-	// like two different things.
+	// docs/design/typography.md: an error is a sentence, so never at the stamp tier.
 	it('no error message renders at the stamp tier', () => {
 		const offenders: string[] = [];
 		for (const file of files) {

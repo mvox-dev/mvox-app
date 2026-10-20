@@ -1,16 +1,6 @@
 <script lang="ts">
-	// #238 — the app's FIRST reusable inline-SVG icon component, and the #237
-	// trial instance (one definition here; the #237 sweep spends it).
-	//
-	// WHY: emoji glyphs (🗑, ⚙, …) resolve to the platform's colour-emoji font,
-	// whose glyphs carry a baked-in palette and IGNORE the CSS `color`
-	// property — so #236's "red trashcan" shipped grey on real screens. An
-	// inline SVG drawn with `currentColor` inherits the parent's text colour,
-	// so the existing text-red-700/hover:text-red-800 utilities finally tint
-	// it — no new palette entry, no per-site colour authoring.
-	//
-	// Decorative ALWAYS (aria-hidden): the accessible name belongs to the
-	// wrapping control (the trashcan button's aria-label), never to the icon.
+	// Inline SVG on currentColor so text-danger tints it; emoji glyphs ignore CSS color.
+	// Decorative always: the accessible name belongs to the wrapping control.
 	let { class: className = undefined }: { class?: string | undefined } = $props();
 </script>
 

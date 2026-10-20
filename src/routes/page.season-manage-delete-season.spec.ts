@@ -210,7 +210,7 @@ describe("agenda — #261 the SEASON's delete control lives on the OPENED title 
 		expect(label).toContain('season_manage_season_delete');
 		expect(label).toContain('Season 2026');
 		// #236 — a red TRASHCAN, not the old ×.
-		expect(Array.from(btn.classList), '#236 — red from text-red-700').toContain('text-red-700');
+		expect(Array.from(btn.classList), '#236 — red from text-danger').toContain('text-danger');
 		expect(btn.textContent ?? '', '#236 — the × glyph is retired').not.toContain('×');
 		// The panel's own header row stays gone: no <h2> left inside it.
 		expect(panel.querySelector('h2'), '#236 — the panel h2 row is deleted').toBeNull();

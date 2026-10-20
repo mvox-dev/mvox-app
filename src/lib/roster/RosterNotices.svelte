@@ -18,16 +18,16 @@
 {/if}
 {#if roster.sectionsError}
 	<div data-testid="roster-sections-load-error" class="flex flex-col gap-1" role="alert">
-		<p class="text-sm text-red-700">{m.roster_sections_load_error()}</p>
+		<p class="text-sm text-danger">{m.roster_sections_load_error()}</p>
 	</div>
 {/if}
 {#if arrange.reorderError}
-	<p data-testid="section-reorder-error" role="alert" class="text-sm text-red-700">
+	<p data-testid="section-reorder-error" role="alert" class="text-sm text-danger">
 		{arrange.reparentPartial ? m.roster_section_reparent_partial() : m.roster_section_reorder_failed()}
 	</p>
 {/if}
 {#if arrange.removeError}
-	<p data-testid="section-remove-error" role="alert" class="text-sm text-red-700">
+	<p data-testid="section-remove-error" role="alert" class="text-sm text-danger">
 		{arrange.removeError.kind === 'not-empty'
 			? m.roster_section_remove_not_empty({ name: arrange.removeError.name })
 			: m.roster_section_remove_failed({ name: arrange.removeError.name })}

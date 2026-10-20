@@ -250,7 +250,7 @@
 		<SessionExpiredNotice />
 	{:else if status === 'load-error'}
 		<div data-testid="invite-admin-load-error" class="flex flex-col gap-2" role="alert">
-			<p class="text-sm text-red-700">{m.admin_invite_load_error()}</p>
+			<p class="text-sm text-danger">{m.admin_invite_load_error()}</p>
 			<button
 				type="button"
 				data-testid="invite-admin-retry-load"
@@ -280,9 +280,9 @@
 				{#if copied}{m.admin_invite_copied()}{/if}
 			</p>
 			{#if copyFailed}
-				<p class="text-sm text-red-700" role="alert">{m.admin_invite_copy_error()}</p>
+				<p class="text-sm text-danger" role="alert">{m.admin_invite_copy_error()}</p>
 			{/if}
-			<p data-testid="invite-bearer-warning" class="text-sm text-red-700">
+			<p data-testid="invite-bearer-warning" class="text-sm text-danger">
 				{m.admin_invite_bearer_warning()}
 				{m.admin_invite_show_once({ date: inviteExpiryDate })}
 			</p>
@@ -297,11 +297,11 @@
 	{:else}
 		{#if createError}
 			<div data-testid="invite-admin-error" class="flex flex-col gap-1" role="alert">
-				<p class="text-sm text-red-700">
+				<p class="text-sm text-danger">
 					{m.admin_invite_error()}
 				</p>
 				{#if createError.personId}
-					<p data-testid="invite-partial-failure" class="text-sm text-red-700">
+					<p data-testid="invite-partial-failure" class="text-sm text-danger">
 						{m.admin_invite_partial_failure({ personId: createError.personId })}
 					</p>
 				{/if}
@@ -309,7 +309,7 @@
 		{/if}
 		{#if personMintError}
 			<div data-testid="invite-mint-error" class="flex flex-col gap-1" role="alert">
-				<p class="text-sm text-red-700">
+				<p class="text-sm text-danger">
 					<RedactedText
 						>{personMintError.ownerOnly
 							? m.admin_invite_mint_owner_only()
@@ -341,7 +341,7 @@
 				</label>
 			{/if}
 			{#if personListError}
-				<p data-testid="invite-person-list-error" class="text-sm text-red-700" role="alert">
+				<p data-testid="invite-person-list-error" class="text-sm text-danger" role="alert">
 					{m.admin_invite_person_list_error()}
 				</p>
 			{:else if showPersonSelect}

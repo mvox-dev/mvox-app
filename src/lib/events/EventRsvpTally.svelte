@@ -252,7 +252,7 @@
 					<p
 						data-testid="event-detail-tally-card-names-error"
 						role="status"
-						class="flex flex-wrap items-baseline gap-2 text-red-700"
+						class="flex flex-wrap items-baseline gap-2 text-danger"
 					>
 						<span>{m.event_detail_tally_names_error()}</span>
 						<button
@@ -314,7 +314,7 @@
 	<p
 		data-testid="event-detail-tally-error"
 		role="status"
-		class="flex flex-wrap items-baseline gap-2 text-xs text-red-700"
+		class="flex flex-wrap items-baseline gap-2 text-xs text-danger"
 	>
 		<span>{m.event_detail_tally_error()}</span>
 		<button

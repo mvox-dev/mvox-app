@@ -281,7 +281,7 @@
 					</section>
 				{:else if $libraryEditRight === 'error'}
 					<div data-testid="librarian-load-error" class="flex items-center gap-2" role="alert">
-						<p class="text-xs text-red-700">{m.library_librarian_load_error()}</p>
+						<p class="text-xs text-danger">{m.library_librarian_load_error()}</p>
 						<button
 							type="button"
 							data-testid="librarian-retry-load"
@@ -329,7 +329,7 @@
 					<SessionExpiredNotice />
 				{:else if status === 'load-error'}
 					<div data-testid="library-load-error" class="flex flex-col gap-2" role="alert">
-						<p class="text-sm text-red-700">{m.library_load_error()}</p>
+						<p class="text-sm text-danger">{m.library_load_error()}</p>
 						<button
 							type="button"
 							data-testid="library-retry-load"

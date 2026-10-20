@@ -679,7 +679,7 @@ describe('#262 — remove flow (two-step confirm, TrashIcon trigger)', () => {
 		const ariaLabel = btn.getAttribute('aria-label') ?? '';
 		expect(ariaLabel).toContain('[event_schedule_remove_aria_label');
 		expect(ariaLabel).toContain('kogunemine');
-		expect(btn.className).toMatch(/text-red-700/);
+		expect(btn.className).toMatch(/text-danger/);
 		expect(btn.textContent).not.toContain('×');
 	});
 

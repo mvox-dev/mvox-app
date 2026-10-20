@@ -172,7 +172,7 @@
 </script>
 
 {#if actionError}
-	<p data-testid="admin-roles-action-error" role="alert" class="text-sm text-red-700">
+	<p data-testid="admin-roles-action-error" role="alert" class="text-sm text-danger">
 		{m.admin_roles_action_error()}
 	</p>
 {/if}

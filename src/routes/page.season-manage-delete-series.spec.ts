@@ -595,7 +595,7 @@ describe('agenda — #237 the series delete triggers render the shared red trash
 			expect(btn.textContent ?? '').not.toMatch(/[×✕]/);
 
 			// Red treatment + 44px BY CONSTRUCTION (the Henry-relayed PO ruling).
-			for (const cls of ['text-red-700', 'hover:text-red-800', 'min-h-11', 'min-w-11']) {
+			for (const cls of ['text-danger', 'hover:text-danger-strong', 'min-h-11', 'min-w-11']) {
 				expect(btn.classList.contains(cls), `${testid}: ${cls} missing`).toBe(true);
 			}
 			// The old muted tone is not merely supplemented — it LEAVES.
@@ -653,7 +653,7 @@ describe('agenda — #237 the series delete triggers render the shared red trash
 		expect(chip.querySelector('svg[data-icon="trash"]'), 'a trashcan on an unlink').toBeNull();
 		expect(chip.textContent ?? '').toContain('×');
 		expect(chip.classList.contains('text-ink-2')).toBe(true);
-		expect(chip.classList.contains('text-red-700')).toBe(false);
+		expect(chip.classList.contains('text-danger')).toBe(false);
 	});
 });
 

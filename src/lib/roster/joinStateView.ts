@@ -16,7 +16,7 @@ export const JOIN_STATE_LABEL: Record<JoinDisplayState, (params: { date: string 
 export const JOIN_STATE_BADGE_CLASS: Record<JoinDisplayState, string> = {
 	joined: 'border-emerald-700 text-emerald-700',
 	invited: 'border-amber-700 text-amber-700',
-	expired: 'border-red-700 text-red-700',
+	expired: 'border-danger text-danger',
 	absent: 'border-ink-4 text-ink-2'
 };
 

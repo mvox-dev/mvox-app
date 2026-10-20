@@ -2,15 +2,9 @@
 	import { page } from '$app/state';
 	import { canPersistLocally, getLastProvider } from '$lib/auth/storage';
 	import { safeRedirectTarget } from '$lib/auth/redirect';
-	// Provider list shared with the invite landing (T4.5) — extracted verbatim to
-	// $lib/auth/providers.
 	import { AUTH_PROVIDERS } from '$lib/auth/providers';
-	// #218 — the whole sign-in surface resolves through Paraglide: the heading,
-	// EVERY error branch, the '· last used' marker and the provider labels all
-	// come from the four locale files. `session_expired` is the one branch that
-	// does not use a `login_error_*` key: it rides `m.session_expired_message`
-	// (#107 review F4) because that copy is the DURABLE surface shared with the
-	// guard's own notice, so a second key would only invite drift.
+	// Every sign-in string resolves through Paraglide; `session_expired` rides
+	// `m.session_expired_message`, the copy shared with the guard's own notice.
 	import { m } from '$lib/paraglide/messages.js';
 
 	const error = $derived(page.url.searchParams.get('error'));
@@ -21,8 +15,7 @@
 		)
 	);
 	const lastProvider = $state(typeof window !== 'undefined' ? getLastProvider() : null);
-	// #442 — proactive storage self-test. Defaults true (no warning) when there's
-	// no window yet (SSR/prerender); the real check runs client-side on mount.
+	// Storage self-test: true (no warning) without a window, checked on mount otherwise.
 	const canPersist = $state(typeof window !== 'undefined' ? canPersistLocally() : true);
 
 	function providerHref(id: string, intent: 'login' | 'reauth'): string {
@@ -34,7 +27,7 @@
 	<h1 class="font-display text-2xl">{m.login_heading()}</h1>
 
 	{#if error}
-		<p class="text-sm text-red-700" role="alert">
+		<p class="text-sm text-danger" role="alert">
 			{#if error === 'csrf_mismatch'}{m.login_error_csrf_mismatch()}
 			{:else if error === 'missing_session_token'}{m.login_error_missing_session_token()}
 			{:else if error === 'session_expired'}{m.session_expired_message()}
@@ -43,7 +36,7 @@
 	{/if}
 
 	{#if !canPersist}
-		<p class="text-sm text-red-700" role="alert" data-testid="login-storage-warning">
+		<p class="text-sm text-danger" role="alert" data-testid="login-storage-warning">
 			{m.login_storage_warning()}
 		</p>
 	{/if}

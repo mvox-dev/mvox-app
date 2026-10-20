@@ -200,7 +200,7 @@
 				</li>
 			{/each}
 			{#if series.armedTarget.id === '' && detail.inheritedFields.includes('name')}
-				<li class="text-red-700">
+				<li class="text-danger">
 					{m.event_detail_series_unassign_name_empty()}
 				</li>
 			{/if}
