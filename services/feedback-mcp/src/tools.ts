@@ -183,6 +183,7 @@ async function getFeedback(ctx: Ctx, args: Record<string, unknown>): Promise<Too
 	} catch (err) {
 		const message = err instanceof Error ? err.message : `${err}`;
 		result.content.push({ type: 'text', text: `screenshot not returned: ${message}` });
+		result.isError = true;
 	}
 	return result;
 }

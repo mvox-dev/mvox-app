@@ -27,6 +27,7 @@ type World = {
 	b?: Record<string, unknown>[];
 	shot?: Uint8Array<ArrayBuffer>;
 	failB?: boolean;
+	shotStatus?: number;
 };
 
 function ctx(
@@ -45,7 +46,9 @@ function ctx(
 		const one = list.find((e) => url.includes(`/entity/${String(e._id)}`));
 		if (one) return json({ entity: one });
 		if (url.includes(`/property/${SHOT}`)) return json({ url: 'https://files.example/shot' });
-		if (url === 'https://files.example/shot') return new Response(world.shot ?? new Uint8Array());
+		if (url === 'https://files.example/shot') {
+			return new Response(world.shot ?? new Uint8Array(), { status: world.shotStatus ?? 200 });
+		}
 		return new Response('{}', { status: 404 });
 	}) as typeof fetch;
 	const lines: string[] = [];
@@ -139,16 +142,34 @@ describe('callTool', () => {
 		expect(res.content[1]).toMatchObject({ type: 'image', data });
 	});
 
-	it('a screenshot that cannot be read still returns the report', async () => {
+	it('a screenshot that cannot be shrunk returns the report, a note and isError', async () => {
 		const shot = new Uint8Array(1048577);
 		const resize = vi.fn(async () => {
 			throw new Error('sharp missing');
 		});
 		const { c } = ctx({ a: [entity(ID_A, { screenshot: [{ _id: SHOT }] })], shot }, resize);
 		const res = await callTool(c, 'get_feedback', { db: 'mvox_a', id: ID_A });
-		expect(res.isError).toBeUndefined();
+		expect(res.isError).toBe(true);
 		expect(res.content).toHaveLength(2);
+		expect(textOf(res).id).toBe(ID_A);
 		expect(res.content[1]).toEqual({ type: 'text', text: 'screenshot not returned: sharp missing' });
+	});
+
+	it('a screenshot that cannot be fetched returns the report, a note and isError', async () => {
+		const { c, resize } = ctx({
+			a: [entity(ID_A, { screenshot: [{ _id: SHOT }] })],
+			shot: new Uint8Array([1]),
+			shotStatus: 403
+		});
+		const res = await callTool(c, 'get_feedback', { db: 'mvox_a', id: ID_A });
+		expect(res.isError).toBe(true);
+		expect(res.content).toHaveLength(2);
+		expect(textOf(res).id).toBe(ID_A);
+		expect(res.content[1]).toEqual({
+			type: 'text',
+			text: 'screenshot not returned: fetchBytes: HTTP 403'
+		});
+		expect(resize).not.toHaveBeenCalled();
 	});
 
 	it('description over 10000 chars is truncated with marker', async () => {

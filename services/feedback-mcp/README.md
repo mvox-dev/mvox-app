@@ -37,7 +37,7 @@ pnpm exec tsx services/feedback-mcp/src/main.ts --team mvox --config <config.jso
 
 Or build first with `pnpm exec tsc -p services/feedback-mcp/tsconfig.build.json` and run
 `node services/feedback-mcp/dist/main.js` with the same flags. It reads newline-delimited JSON-RPC
-on stdin. `sharp` isn't installed in the repo, so a screenshot over 1 MB comes back as a note
+on stdin. `sharp` isn't installed in the repo, so a screenshot over 1 MB comes back as a note (`isError`)
 instead of an image there.
 
 ## Config
