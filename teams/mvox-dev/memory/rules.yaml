@@ -22,8 +22,8 @@ rules:
     ref: teams/mvox-dev/prompts/bentham.md
   - rule: "New entity types, shapes or rights need a PO ruling on the issue + a PO-Approved: trailer."
     ref: mihkel:2026-09-06
-  - rule: "polyphony db is frozen history. Every live crede op needs its own authorization."
-    ref: mihkel:2026-09-18
+  - rule: "polyphony is frozen. Each live crede op needs its own go, except feedback reads (2026-10-20)."
+    ref: docs/superpowers/specs/2026-10-20-feedback-mcp-design.md
   - rule: "Live writes run only on team-lead's 'I authorize this run'; dry-run or review GREEN is not it."
     ref: teams/mvox-dev/prompts/perotin.md
   - rule: "Tag claims not checked this turn: [unverified] if checkable, [speculative] if inferred."
