@@ -1,0 +1,21 @@
+# Inside the container only; the host publishes it on the tailnet address alone.
+Port 2223
+ListenAddress 0.0.0.0
+HostKey /etc/feedback-mcp/host-keys/ssh_host_ed25519_key
+
+AllowUsers feedback
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+UsePAM no
+AuthorizedKeysFile /etc/feedback-mcp/authorized_keys
+PermitUserEnvironment no
+
+PermitTTY no
+AllowTcpForwarding no
+AllowStreamLocalForwarding no
+AllowAgentForwarding no
+X11Forwarding no
+PermitTunnel no
+GatewayPorts no
