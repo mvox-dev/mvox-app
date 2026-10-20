@@ -118,6 +118,19 @@ describe('#948 a kept report goes by itself', () => {
 		expect(await keptP()).toEqual([]);
 	});
 
+	it("the report's metadata carries the browser's user-agent (#1006)", async () => {
+		signIn({ token: 'jwt-p', collectives: [P] });
+		await start();
+
+		reportProblem({ area: 'files', action: PRELOAD, error: quota() });
+		await waitKept(1);
+		await vi.advanceTimersByTimeAsync(REPORT_DELAY_MS);
+
+		await vi.waitFor(async () => expect(createBodies(entu.fetchImpl).length).toBe(1));
+		expect(navigator.userAgent).not.toBe('');
+		expect(JSON.parse(prop(createBodies(entu.fetchImpl)[0], 'metadata')!).userAgent).toBe(navigator.userAgent);
+	});
+
 	it('a burst goes in one feedback that names each report in log order', async () => {
 		signIn({ token: 'jwt-p', collectives: [P] });
 		await start();
