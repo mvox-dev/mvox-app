@@ -5,6 +5,15 @@ services:
     image: mvox-feedback-mcp
     # unless-stopped: Docker can't bind the tailnet IP before tailscaled is up after a reboot.
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # Not yet tested: Docker isn't available in the mvox container. Confirmed at the host apply.
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID # privsep child and session drop to their users; sshd reads authorized_keys as feedback
+      - SETGID # same drops, plus setgroups and initgroups
+      - SYS_CHROOT # the privsep child chroots into /run/sshd before auth
     ports:
       - '100.103.189.3:2223:2223'
     volumes:

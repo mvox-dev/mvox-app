@@ -9,10 +9,10 @@ RUN apt-get update \
 	&& mkdir -p /run/sshd /etc/feedback-mcp/host-keys /var/log/feedback-mcp
 
 WORKDIR /opt/feedback-mcp
-COPY package.json tsconfig.json tsconfig.build.json ./
+COPY package.json pnpm-lock.yaml tsconfig.json tsconfig.build.json ./
 COPY src ./src
 RUN corepack enable \
-	&& pnpm install --no-frozen-lockfile \
+	&& pnpm install --frozen-lockfile \
 	&& pnpm build \
 	&& pnpm prune --prod \
 	&& chmod 755 dist/main.js \
