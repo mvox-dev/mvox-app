@@ -6,7 +6,7 @@ import { parseArgs } from 'node:util';
 import { loadConfig } from './config.ts';
 import { EntuReader } from './entu.ts';
 import { downscaleToFit } from './image.ts';
-import { handleMessage } from './protocol.ts';
+import { answerLine } from './stdio.ts';
 import type { Ctx } from './tools.ts';
 
 const { values } = parseArgs({
@@ -41,22 +41,12 @@ const ctx: Ctx = {
 	resize: downscaleToFit
 };
 
-async function answer(line: string): Promise<void> {
-	if (line.trim() === '') return;
-	let msg: unknown;
-	try {
-		msg = JSON.parse(line);
-	} catch {
-		const error = { code: -32700, message: 'Parse error' };
-		process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: null, error })}\n`);
-		return;
-	}
-	const res = await handleMessage(ctx, msg);
-	if (res) process.stdout.write(`${JSON.stringify(res)}\n`);
-}
-
 let queue = Promise.resolve();
 const lines = createInterface({ input: process.stdin });
 lines.on('line', (line) => {
-	queue = queue.then(() => answer(line));
+	queue = queue
+		.then(() => answerLine(ctx, line))
+		.then((out) => {
+			if (out !== null) process.stdout.write(`${out}\n`);
+		});
 });
