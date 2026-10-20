@@ -11,5 +11,9 @@
 	},
 	"dependencies": {
 		"sharp": "^0.34.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.0.0",
+		"typescript": "^6.0.2"
 	}
 }

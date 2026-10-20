@@ -1,6 +1,6 @@
 // The Entu client only reads: every request is a GET, and a revoked key fails one db, not all.
 import { describe, expect, it } from 'vitest';
-import { EntuReader } from './src/entu';
+import { EntuReader } from './src/entu.ts';
 
 const ID = '0123456789abcdef01234567';
 const FILE_ID = 'abcdefabcdefabcdefabcdef';

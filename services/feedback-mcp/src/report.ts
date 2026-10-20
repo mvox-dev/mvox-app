@@ -1,4 +1,4 @@
-import type { RawEntity } from './entu';
+import type { RawEntity } from './entu.ts';
 
 export type Report = {
 	db: string;

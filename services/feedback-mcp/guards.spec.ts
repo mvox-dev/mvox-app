@@ -1,6 +1,6 @@
 // Every db and id is checked before it goes into a URL.
 import { describe, expect, it } from 'vitest';
-import { assertDb, assertId } from './src/guards';
+import { assertDb, assertId } from './src/guards.ts';
 
 const dbs = [{ db: 'mvox_alpha', label: 'Alpha', key: 'k-alpha' }];
 

@@ -1,6 +1,6 @@
 // Read-only Entu client: request() is the one fetch call site, and it sends no method or body.
-import type { DbEntry } from './config';
-import { assertDb, assertId } from './guards';
+import type { DbEntry } from './config.ts';
+import { assertDb, assertId } from './guards.ts';
 
 export type RawEntity = Record<string, unknown> & { _id: string };
 

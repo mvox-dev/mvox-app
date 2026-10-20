@@ -1,5 +1,5 @@
 // Tool args come from a model reading untrusted text, so nothing unchecked reaches a URL.
-import type { DbEntry } from './config';
+import type { DbEntry } from './config.ts';
 
 const ENTU_ID = /^[0-9a-f]{24}$/;
 

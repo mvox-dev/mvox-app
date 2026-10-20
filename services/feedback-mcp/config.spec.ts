@@ -1,6 +1,6 @@
 // The config file lists every db the server reads, each with its key.
 import { describe, expect, it } from 'vitest';
-import { loadConfig } from './src/config';
+import { loadConfig } from './src/config.ts';
 
 const reader = (text: string) => (path: string) => {
 	if (path !== '/etc/fb.json') throw new Error(`unexpected path ${path}`);

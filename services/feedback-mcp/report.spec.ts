@@ -1,7 +1,7 @@
 // Turning raw feedback entities into reports, then filtering and counting them.
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { RawEntity } from './src/entu';
-import { countBy, matches, toReport, type Report } from './src/report';
+import type { RawEntity } from './src/entu.ts';
+import { countBy, matches, toReport, type Report } from './src/report.ts';
 
 const str = (s: string) => [{ _id: 'p'.repeat(24), string: s }];
 
