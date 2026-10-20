@@ -1,4 +1,5 @@
-// The page metadata a feedback carries (#611): nothing personal, only where and when it was given.
+// The page metadata a feedback carries (#611): nothing personal, only where, when and on what
+// browser (#1006) it was given.
 import { getLocale } from '$lib/paraglide/runtime';
 import type { SentProblem } from '$lib/problems/problemLog';
 
@@ -7,6 +8,8 @@ export interface PageContext {
 	time: string;
 	locale: string;
 	viewport: string;
+	// Optional: a feedback saved on the device before #1006 has none.
+	userAgent?: string;
 }
 
 /** The #350 build stamp; both are null on a build outside Cloudflare Pages. */
@@ -20,7 +23,8 @@ export function capturePage(route: string): PageContext {
 		route,
 		time: new Date().toISOString(),
 		locale: getLocale(),
-		viewport: `${window.innerWidth}x${window.innerHeight}`
+		viewport: `${window.innerWidth}x${window.innerHeight}`,
+		userAgent: navigator.userAgent
 	};
 }
 
@@ -46,6 +50,7 @@ export function feedbackMetadata(
 		version: { branch: version.branch, commit: version.commit },
 		locale: page.locale,
 		viewport: page.viewport,
+		userAgent: page.userAgent,
 		problems
 	});
 }

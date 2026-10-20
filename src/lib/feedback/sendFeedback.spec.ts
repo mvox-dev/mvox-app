@@ -99,7 +99,7 @@ describe('#611 send, online', () => {
 		}
 	});
 
-	it('metadata is the route path, time, app version, locale, viewport and failures sent, and nothing personal', async () => {
+	it('metadata is the route path, time, app version, locale, viewport, user-agent and failures sent (#1006)', async () => {
 		signInP();
 		const entu = feedbackEntu();
 
@@ -112,6 +112,7 @@ describe('#611 send, online', () => {
 			version: { branch: 'main', commit: COMMIT },
 			locale: 'en',
 			viewport: '390x844',
+			userAgent: navigator.userAgent,
 			problems: []
 		});
 	});
@@ -151,6 +152,23 @@ describe('#611 send, online', () => {
 		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, store });
 
 		expect(JSON.parse(prop(createBodies(entu.fetchImpl)[0], 'metadata')!).problems).toEqual([]);
+	});
+
+	it('a feedback saved before the user-agent travelled with it is sent without one (#1006)', async () => {
+		signInP();
+		const entu = feedbackEntu();
+		await store.put({
+			id: 'older-2',
+			...P,
+			...draft(),
+			page: { route: '/roster', time: '2026-10-04T08:00:00.000Z', locale: 'en', viewport: '390x844' }
+		});
+
+		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, store });
+
+		const metadata = JSON.parse(prop(createBodies(entu.fetchImpl)[0], 'metadata')!);
+		expect(metadata.route).toBe('/roster');
+		expect('userAgent' in metadata).toBe(false);
 	});
 
 	it("writes nothing but the feedback's own create, screenshot property and upload", async () => {

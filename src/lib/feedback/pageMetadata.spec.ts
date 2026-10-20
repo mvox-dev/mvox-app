@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-// The page metadata a feedback carries: route, time, app version, locale, viewport, nothing else.
+// The page metadata a feedback carries: route, time, app version, locale, viewport, user-agent,
+// nothing else.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 import { setLocale } from '$lib/paraglide/runtime';
@@ -20,7 +21,7 @@ afterEach(() => {
 });
 
 describe('#611 page metadata', () => {
-	it('carries exactly the route path, time, app version, locale, viewport and the failures sent', () => {
+	it('carries exactly the route path, time, app version, locale, viewport, user-agent and the failures sent', () => {
 		setLocale('et', { reload: false });
 		const problem = { area: 'event', action: 'load', time: '2026-10-05T08:29:00.000Z', detail: 'Error: HTTP 500' };
 		const metadata = feedbackMetadata(capturePage('/event/abc'), { branch: 'main', commit: COMMIT }, [problem]);
@@ -31,6 +32,7 @@ describe('#611 page metadata', () => {
 			version: { branch: 'main', commit: COMMIT },
 			locale: 'et',
 			viewport: '390x844',
+			userAgent: navigator.userAgent,
 			problems: [problem]
 		});
 	});
