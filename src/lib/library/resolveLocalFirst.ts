@@ -1,3 +1,4 @@
+import { firstById } from '$lib/collections/firstById';
 import { getToken } from '$lib/auth/storage';
 import type { Copy, Lending } from '$lib/library/libraryData';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
@@ -29,9 +30,9 @@ export function resolveLocalFirst<T>(o: LocalFirst<T>): Promise<void> {
 	if (!token) return Promise.resolve();
 	const local = new Map<string, T>();
 	const unresolved: string[] = [];
-	const copies = o.allCopies();
+	const copies = firstById(o.allCopies());
 	for (const id of o.loans.map((l) => l.copyId)) {
-		const cached = copies.find((c) => c.id === id);
+		const cached = copies.get(id);
 		if (cached) {
 			local.set(id, o.local(cached));
 		} else {
