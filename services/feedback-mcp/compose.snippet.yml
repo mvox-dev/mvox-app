@@ -1,0 +1,17 @@
+# Merge into shipyard's compose file. Host paths under /srv/feedback-mcp are the deployer's choice.
+services:
+  feedback-mcp:
+    build: ./services/feedback-mcp
+    image: mvox-feedback-mcp
+    # unless-stopped: Docker can't bind the tailnet IP before tailscaled is up after a reboot.
+    restart: unless-stopped
+    ports:
+      - '100.103.189.3:2223:2223'
+    volumes:
+      - /srv/feedback-mcp/config.json:/etc/feedback-mcp/config.json:ro
+      - /srv/feedback-mcp/authorized_keys:/etc/feedback-mcp/authorized_keys:ro
+      - /srv/feedback-mcp/host-keys:/etc/feedback-mcp/host-keys:ro
+      - feedback-mcp-logs:/var/log/feedback-mcp
+
+volumes:
+  feedback-mcp-logs:
