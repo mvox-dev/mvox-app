@@ -5,11 +5,11 @@
 
 current:
   - label: WIP
-    record: "#966 part 1 merged (PR #1001); part 2 = the season-manage relay, not started"
-    ref: scratchpad/brief-966.md
-  - label: WIP
-    record: "Epic #962 left: #966 part 2, #971 (cfgFor, EntuCfg into $lib/entu), #969 last; then #963"
+    record: "Epic #962 left: #971 (cfgFor, EntuCfg into $lib/entu), #969 last; then #963"
     ref: scratchpad/findings-session.md
+  - label: LEARNED
+    record: "#434 write gate: a .svelte importing a writer must render the offline reason; writers stay props"
+    ref: src/write-gate-coverage.spec.ts
   - label: WIP
     record: "#998 (routeLoad generation) is drafted by Gama; waits for Mihkel's release"
     ref: scratchpad/findings-session.md
