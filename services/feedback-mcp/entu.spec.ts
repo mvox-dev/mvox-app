@@ -80,7 +80,9 @@ describe('EntuReader', () => {
 	});
 
 	it('401 re-auths once', async () => {
-		const once = recorder((url, n) => (url.includes('/entity?') && n === 2 ? json({}, 401) : undefined));
+		const once = recorder((url, n) =>
+			url.includes('/entity?') && n === 2 ? json({}, 401) : undefined
+		);
 		const list = await new EntuReader(dbs, once.fetchImpl).listFeedback('mvox_a');
 		expect(list).toHaveLength(2);
 		expect(once.auths()).toHaveLength(2);

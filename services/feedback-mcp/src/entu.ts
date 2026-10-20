@@ -60,7 +60,7 @@ export class EntuReader {
 		settled.forEach((s, i) => {
 			const db = this.dbs[i].db;
 			if (s.status === 'fulfilled') results.push({ db, entities: s.value });
-			else errors.push({ db, message: s.reason instanceof Error ? s.reason.message : String(s.reason) });
+			else errors.push({ db, message: s.reason instanceof Error ? s.reason.message : `${s.reason}` });
 		});
 		return { results, errors };
 	}
