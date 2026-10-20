@@ -264,14 +264,14 @@
 			{/if}
 
 			{#if reorderError}
-				<p data-testid="links-reorder-error" role="alert" class="text-sm text-red-700">
+				<p data-testid="links-reorder-error" role="alert" class="text-sm text-danger">
 					{reorderError === 'stale' ? m.links_reorder_failed_stale() : m.links_reorder_failed()}
 				</p>
 			{/if}
 
 			{#if writeError}
 				<!-- Failure only: for explicit-submit forms success is self-evident. -->
-				<p data-testid="links-write-error" role="alert" class="text-sm text-red-700">
+				<p data-testid="links-write-error" role="alert" class="text-sm text-danger">
 					{writeError === 'create'
 						? m.links_create_failed()
 						: writeError === 'update'
@@ -305,7 +305,7 @@
 				<SessionExpiredNotice />
 			{:else if status === 'load-error'}
 				<div data-testid="links-load-error" role="alert" class="flex flex-col gap-2">
-					<p class="text-sm text-red-700">{m.links_load_error()}</p>
+					<p class="text-sm text-danger">{m.links_load_error()}</p>
 					<button
 						type="button"
 						data-testid="links-retry-load"

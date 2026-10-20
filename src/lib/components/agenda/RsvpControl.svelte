@@ -56,7 +56,7 @@
 	<p
 		data-testid="rsvp-msg-line"
 		class="min-h-[16px] text-xs leading-[16px]"
-		class:text-red-700={saveFailed}
+		class:text-danger={saveFailed}
 	>
 		{#if saveFailed}
 			<span data-testid="rsvp-save-failed" role="alert">{m.rsvp_save_failed()}</span>

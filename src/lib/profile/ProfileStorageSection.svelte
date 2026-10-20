@@ -221,7 +221,7 @@
 						data-testid="profile-storage-remove-mine-confirm"
 						disabled={storageRemoveMinePending}
 						aria-busy={storageRemoveMinePending}
-						class="rounded-md border border-red-700 px-4 py-2 text-sm text-red-700 hover:bg-red-700 hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
+						class="rounded-md border border-danger px-4 py-2 text-sm text-danger hover:bg-danger hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
 						onclick={confirmStorageRemoveMine}
 					>
 						{m.profile_storage_remove_mine_confirm()}
@@ -267,7 +267,7 @@
 						data-testid="profile-storage-remove-all-confirm"
 						disabled={storageRemoveAllPending}
 						aria-busy={storageRemoveAllPending}
-						class="rounded-md border border-red-700 px-4 py-2 text-sm text-red-700 hover:bg-red-700 hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
+						class="rounded-md border border-danger px-4 py-2 text-sm text-danger hover:bg-danger hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
 						onclick={confirmStorageRemoveAll}
 					>
 						{m.profile_storage_remove_all_confirm()}

@@ -677,7 +677,7 @@ describe('/roster — #237 the section-remove trigger renders the shared red tra
 
 		expect(btn.textContent ?? '').not.toMatch(/[×✕]/);
 
-		for (const cls of ['min-h-11', 'min-w-11', 'text-red-700', 'hover:text-red-800']) {
+		for (const cls of ['min-h-11', 'min-w-11', 'text-danger', 'hover:text-danger-strong']) {
 			expect(btn.classList.contains(cls), `${cls} missing on the trigger`).toBe(true);
 		}
 		expect(btn.classList.contains('text-ink-2'), 'muted tone must go').toBe(false);

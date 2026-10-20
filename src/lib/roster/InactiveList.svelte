@@ -25,7 +25,7 @@
 {#if roster.showInactive}
 	<div class="flex flex-col gap-2 border-t border-dashed border-ink-5 pt-3">
 		{#if roster.inactiveLoadError}
-			<p data-testid="roster-inactive-load-error" role="alert" class="text-sm text-red-700">
+			<p data-testid="roster-inactive-load-error" role="alert" class="text-sm text-danger">
 				{m.roster_inactive_load_error()}
 			</p>
 		{:else if roster.inactiveRows.length === 0}

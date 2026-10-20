@@ -54,7 +54,7 @@
 				<p data-testid="season-rates-loading" class="text-xs text-ink-3">{m.attendance_season_loading()}</p>
 			{:else if error}
 				<!-- role="alert" matches AttendanceSurface's panel error. -->
-				<p data-testid="season-rates-error" class="text-sm text-red-700" role="alert">{m.attendance_season_load_error()}</p>
+				<p data-testid="season-rates-error" class="text-sm text-danger" role="alert">{m.attendance_season_load_error()}</p>
 			{:else}
 				<!-- Above the rows so it is read first; absent once both member reads complete. -->
 				{#if membersPartial}

@@ -9,4 +9,4 @@
 	}: HTMLAttributes<HTMLParagraphElement> & { class?: string; children: Snippet } = $props();
 </script>
 
-<p role="alert" class={[className, 'text-xs text-red-700']} {...rest}>{@render children()}</p>
+<p role="alert" class={[className, 'text-xs text-danger']} {...rest}>{@render children()}</p>

@@ -539,8 +539,8 @@ describe('season card #261 — the opened card’s title row', () => {
 		expect(svgs[0].outerHTML).toContain('currentColor');
 		expect((trashcan.textContent ?? '').trim(), 'icon-only').toBe('');
 		const classes = Array.from(trashcan.classList);
-		expect(classes).toContain('text-red-700');
-		expect(classes).toContain('hover:text-red-800');
+		expect(classes).toContain('text-danger');
+		expect(classes).toContain('hover:text-danger-strong');
 		expect(classes).toContain('min-h-11');
 		expect(classes).toContain('min-w-11');
 		expect(trashcan.getAttribute('aria-label')).toContain('season_manage_season_delete');

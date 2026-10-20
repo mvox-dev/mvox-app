@@ -60,7 +60,7 @@
 		{#each files.broken.get(edition.id) ?? [] as broken (broken.propertyId)}
 			<div
 				data-testid="library-edition-file-broken-{broken.propertyId}"
-				class="break-words text-xs text-red-700"
+				class="break-words text-xs text-danger"
 			>
 				{m.library_edition_file_broken({ filename: broken.filename })}
 			</div>
@@ -98,7 +98,7 @@
 			<div
 				data-testid="library-edition-files-error-{edition.id}"
 				role="alert"
-				class="flex flex-col gap-0.5 break-words text-xs text-red-700"
+				class="flex flex-col gap-0.5 break-words text-xs text-danger"
 			>
 				{#if files.batchError.has(edition.id)}
 					<span>{m.library_edition_file_error()}</span>

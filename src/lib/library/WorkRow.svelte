@@ -91,7 +91,7 @@
 				<div class="h-2.5 w-1/3 animate-pulse rounded bg-ink-5"></div>
 			{:else if lib.editionNodeStatus.get(work.id) === 'error'}
 				<div class="flex items-center gap-2" role="alert">
-					<p class="text-xs text-red-700">{m.library_node_load_error()}</p>
+					<p class="text-xs text-danger">{m.library_node_load_error()}</p>
 					<button
 						type="button"
 						class="text-xs underline"

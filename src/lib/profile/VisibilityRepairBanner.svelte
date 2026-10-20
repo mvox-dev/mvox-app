@@ -46,7 +46,7 @@
 <div
 	data-testid="profile-visibility-repair-{field}"
 	role="alert"
-	class="flex flex-col gap-2 rounded-lg border border-red-500 bg-red-50 p-3 text-sm text-red-900"
+	class="flex flex-col gap-2 rounded-lg border border-danger bg-danger-soft p-3 text-sm text-danger-strong"
 >
 	<strong class="font-medium">{m.profile_repair_title()}</strong>
 	<p>{body}</p>
@@ -55,7 +55,7 @@
 		data-testid="profile-visibility-repair-{field}-fix"
 		disabled={working}
 		aria-busy={working ? 'true' : undefined}
-		class="self-start rounded-md border border-red-600 px-3 py-1 text-xs text-red-800 hover:bg-red-600 hover:text-paper disabled:opacity-50"
+		class="self-start rounded-md border border-danger px-3 py-1 text-xs text-danger-strong hover:bg-danger hover:text-paper disabled:opacity-50"
 		onclick={() => onrepair?.(field)}
 	>
 		{working ? m.profile_repair_working() : m.profile_repair_action()}

@@ -12,6 +12,9 @@
   --color-ink-5: #c9bfa9;
 
   --color-red: #b54a3a;
+  --color-danger: oklch(50.5% 0.213 27.518);
+  --color-danger-strong: oklch(44.4% 0.177 26.899);
+  --color-danger-soft: oklch(97.1% 0.013 17.38);
   --color-green: #5f7a3b;
   --color-amber: #b67a1e;
   --color-indigo: #4f46e5;

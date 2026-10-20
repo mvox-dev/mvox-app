@@ -194,7 +194,7 @@
 
 	function tierClass(level: Level, s: TierState): string {
 		if (namePrivateDisabled && level === 'private') return 'opacity-50';
-		if (s === 'leak') return 'text-red-700';
+		if (s === 'leak') return 'text-danger';
 		if (s === 'conflict') return 'text-amber-700';
 		if (s !== 'inactive') return '';
 		return movable && !disabled ? 'hover:bg-ink hover:text-paper' : 'opacity-50';
@@ -315,7 +315,7 @@
 		{/snippet}
 	</SegmentedPill>
 
-	<p class="min-h-[16px] text-xs leading-4 text-red-700">
+	<p class="min-h-[16px] text-xs leading-4 text-danger">
 		{#if saveFailed}
 			<span data-testid="profile-{field}-error" role="alert">{m.profile_save_error()}</span>
 		{:else if moveFailed}

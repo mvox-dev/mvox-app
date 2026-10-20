@@ -30,7 +30,7 @@
 			data-testid="member-deactivate-confirm-{row.memberId}"
 			disabled={memberOps.deactivatePending || isOffline}
 			aria-busy={memberOps.deactivatePending}
-			class="rounded-md border border-red-700 px-2 py-1 text-xs text-red-700 hover:bg-red-700 hover:text-paper disabled:opacity-50"
+			class="rounded-md border border-danger px-2 py-1 text-xs text-danger hover:bg-danger hover:text-paper disabled:opacity-50"
 			onclick={() => ops.handleDeactivateConfirm(row)}
 		>
 			{m.roster_member_deactivate_confirm()}

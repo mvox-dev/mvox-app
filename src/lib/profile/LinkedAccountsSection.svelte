@@ -230,7 +230,7 @@
 				role="alert"
 				class="flex flex-col items-start gap-2"
 			>
-				<p class="text-sm text-red-700">
+				<p class="text-sm text-danger">
 					{m.profile_link_error_step({ step: IDENTITY_READ_STEP })}
 				</p>
 				<button
@@ -282,7 +282,7 @@
 		{/if}
 
 		{#if shownLinkError}
-			<p data-testid="profile-link-error" role="alert" class="text-sm text-red-700">
+			<p data-testid="profile-link-error" role="alert" class="text-sm text-danger">
 				{shownLinkError}
 			</p>
 		{:else if linkSucceeded}

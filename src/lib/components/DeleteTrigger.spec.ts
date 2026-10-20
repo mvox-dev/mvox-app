@@ -86,7 +86,7 @@ describe('DeleteTrigger — the ONE shared delete affordance (#237)', () => {
 			props: { 'aria-label': 'Remove section X', disabled: true, class: 'ml-auto p-1 text-xs' }
 		});
 		const btn = button(container);
-		for (const cls of ['disabled:cursor-default', 'disabled:opacity-60', 'disabled:hover:text-red-700']) {
+		for (const cls of ['disabled:cursor-default', 'disabled:opacity-60', 'disabled:hover:text-danger']) {
 			expect(btn.classList.contains(cls), `disabled face ${cls} missing`).toBe(true);
 		}
 	});

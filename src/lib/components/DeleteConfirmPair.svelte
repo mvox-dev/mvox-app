@@ -47,7 +47,7 @@
 		confirmClass,
 		'flex min-h-11 items-center',
 		className,
-		'px-1 text-xs text-red-700 underline disabled:opacity-50'
+		'px-1 text-xs text-danger underline disabled:opacity-50'
 	)}
 	onclick={onconfirm}
 	{onkeydown}

@@ -271,7 +271,7 @@
 			<SessionExpiredNotice />
 		{:else if status === 'load-error'}
 			<div data-testid="event-detail-load-error" role="alert" class="flex flex-col gap-2">
-				<p class="text-sm text-red-700">{m.event_detail_load_error()}</p>
+				<p class="text-sm text-danger">{m.event_detail_load_error()}</p>
 				<button
 					type="button"
 					data-testid="event-detail-retry"

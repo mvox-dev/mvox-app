@@ -156,7 +156,7 @@
 			</div>
 		{/if}
 		{#if nameError}
-			<p data-testid="admin-collective-name-error" role="alert" class="text-sm text-red-700">
+			<p data-testid="admin-collective-name-error" role="alert" class="text-sm text-danger">
 				{m.admin_collective_name_save_error()}
 			</p>
 		{/if}

@@ -121,7 +121,7 @@
 							{formatDate(loan.assignedAt)}{#if loan.assignedUntil} – {formatDate(loan.assignedUntil)}{/if}
 						</span>
 						{#if isOverdue(loan.assignedUntil)}
-							<span data-testid="my-loans-overdue-{loan.id}" class="text-red-700">{m.library_my_loans_overdue()}</span>
+							<span data-testid="my-loans-overdue-{loan.id}" class="text-danger">{m.library_my_loans_overdue()}</span>
 						{/if}
 					</li>
 				{/each}
