@@ -4,11 +4,11 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import { firstById } from '$lib/collections/firstById';
 	import { createLatest } from '$lib/async/latest';
-	import { copyLabel, isActiveLending } from '$lib/library/libraryData';
+	import { copyLabel, formatLoanChainLabel, isActiveLending } from '$lib/library/libraryData';
+	import { loadMyLoanCopyNames, loadMyLoanCopyChains } from '$lib/library/libraryPageData';
 	import type { Copy, Edition, Lending, LoanChain, Work } from '$lib/library/libraryData';
 	import { formatDate, isOverdue } from '$lib/library/lendingView';
 	import { resolveLocalFirst } from '$lib/library/resolveLocalFirst';
-	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	interface Props {
 		selected: { db: string } | null;
@@ -17,13 +17,6 @@
 		works: Work[];
 		allCopies: Copy[];
 		allEditions: Edition[];
-		loadCopyNames: (cfg: EntuCfg, copyIds: string[]) => Promise<Map<string, string>>;
-		loadCopyChains: (
-			cfg: EntuCfg,
-			copyIds: string[],
-			works: Work[]
-		) => Promise<Map<string, LoanChain>>;
-		chainLabel: (chain: LoanChain) => string;
 	}
 
 	let {
@@ -32,10 +25,7 @@
 		myMemberId,
 		works,
 		allCopies,
-		allEditions,
-		loadCopyNames,
-		loadCopyChains,
-		chainLabel
+		allEditions
 	}: Props = $props();
 
 	let expanded = $state(false);
@@ -57,7 +47,7 @@
 			selected: () => selected,
 			allCopies: () => allCopies,
 			local: copyLabel,
-			fetch: (cfg, ids) => loadCopyNames(cfg, ids),
+			fetch: (cfg, ids) => loadMyLoanCopyNames(cfg, ids),
 			isCurrent,
 			apply: (names) => (copyNames = names),
 			what: 'name'
@@ -85,7 +75,7 @@
 					editionName: edition?.name ?? ''
 				};
 			},
-			fetch: (cfg, ids) => loadCopyChains(cfg, ids, works),
+			fetch: (cfg, ids) => loadMyLoanCopyChains(cfg, ids, works),
 			isCurrent,
 			apply: (chains) => (copyChains = chains),
 			what: 'chain'
@@ -94,7 +84,7 @@
 
 	function loanLabel(copyId: string): string {
 		const chain = copyChains.get(copyId);
-		if (chain) return chainLabel(chain);
+		if (chain) return formatLoanChainLabel(chain);
 		return copyNames.get(copyId) || m.library_copy_name_unknown();
 	}
 </script>

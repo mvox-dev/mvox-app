@@ -6,7 +6,7 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import { getAppByteStore } from '$lib/files/appByteStore';
 	import { formatFileSize } from '$lib/files/fileSize';
-	import type * as LibraryData from '$lib/library/libraryData';
+	import { listAllEditions } from '$lib/library/libraryData';
 	import { focusTestIdAfterRender } from '$lib/a11y/focusable';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
@@ -14,10 +14,9 @@
 		ready: boolean;
 		generation: () => number;
 		activeContext: () => { cfg: EntuCfg; personId: string } | null;
-		listAllEditions: typeof LibraryData.listAllEditions;
 	}
 
-	let { ready, generation, activeContext, listAllEditions }: Props = $props();
+	let { ready, generation, activeContext }: Props = $props();
 
 	// null = not answered yet, so no section renders; never a made-up {count: 0, size: 0}.
 	let storageMine = $state<{ count: number; size: number } | null>(null);

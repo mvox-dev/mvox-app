@@ -16,7 +16,7 @@
 	} from '$lib/agenda/seriesCreateResume';
 	import { focusAfterRender } from '$lib/a11y/focusable';
 	import { formKeydown } from '$lib/a11y/formKeys';
-	import { createSeriesCreateDateGrid, seriesCreateIsoDay } from '$lib/agenda/seriesCreateDateGrid.svelte';
+	import { createSeriesCreateDateGrid } from '$lib/agenda/seriesCreateDateGrid.svelte';
 	import { runSeriesCreate } from '$lib/agenda/seriesCreateSubmit';
 	import SeriesCreateGeneralFields from '$lib/agenda/SeriesCreateGeneralFields.svelte';
 	import SeriesCreateLocationFields from '$lib/agenda/SeriesCreateLocationFields.svelte';
@@ -230,7 +230,6 @@
 		{submitting}
 		nothingToSubmit={grid.nothingToSubmit}
 		{isOffline}
-		isoDay={seriesCreateIsoDay}
 		ontoggleskip={toggleSeriesCreateSkipDate}
 		onrevealnext={grid.revealNext}
 		onrevealall={grid.revealAll}

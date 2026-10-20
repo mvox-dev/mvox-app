@@ -8,14 +8,9 @@
 	import { openPart } from '$lib/parts/openPart';
 	import { m } from '$lib/paraglide/messages.js';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
-	import { formatLoanChainLabel, type Edition, type Work } from '$lib/library/libraryData';
+	import type { Edition, Work } from '$lib/library/libraryData';
 	// #434 — the library's own cache-backed entry points; the shared readers stay unused here.
-	import {
-		loadLibraryListing,
-		loadMyMemberId,
-		loadMyLoanCopyNames,
-		loadMyLoanCopyChains
-	} from '$lib/library/libraryPageData';
+	import { loadLibraryListing, loadMyMemberId } from '$lib/library/libraryPageData';
 	import { createLibraryTreeLoads, createLibrarianLoad } from '$lib/library/libraryPageLoads';
 	import { createLibraryWrites } from '$lib/library/libraryPageWrites';
 	import AsOfLine from '$lib/components/offline/AsOfLine.svelte';
@@ -304,9 +299,6 @@
 					works={lib.works}
 					allCopies={lib.allCopies}
 					allEditions={lib.allEditions}
-					loadCopyNames={(...a) => loadMyLoanCopyNames(...a)}
-					loadCopyChains={(...a) => loadMyLoanCopyChains(...a)}
-					chainLabel={(chain) => formatLoanChainLabel(chain)}
 				/>
 
 				<!-- #434 — set to the oldest readAt of any read this load served from the cache. -->
