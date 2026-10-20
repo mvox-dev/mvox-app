@@ -2,6 +2,7 @@
 	lookups run whether or not the section shows. -->
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
+	import { firstById } from '$lib/collections/firstById';
 	import { createLatest } from '$lib/async/latest';
 	import { copyLabel, isActiveLending } from '$lib/library/libraryData';
 	import type { Copy, Edition, Lending, LoanChain, Work } from '$lib/library/libraryData';
@@ -63,8 +64,8 @@
 		});
 	});
 
-	const editionById = $derived(new Map(allEditions.map((e) => [e.id, e])));
-	const workById = $derived(new Map(works.map((w) => [w.id, w])));
+	const editionById = $derived(firstById(allEditions));
+	const workById = $derived(firstById(works));
 
 	// #129 — copy, edition and work for each loan's label; same local-first split.
 	const chainLoad = createLatest();

@@ -3,6 +3,7 @@ import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { Edition } from '$lib/library/libraryData';
 import type { RepertoireItem } from '$lib/repertoire/repertoireData';
 import type { RepertoireStatus, WorkRow } from '$lib/repertoire/types';
+import { firstById } from '$lib/collections/firstById';
 import { reorderKey } from '$lib/repertoire/workRowOps';
 import type { PendingMarks } from '$lib/repertoire/repertoirePending';
 import {
@@ -156,8 +157,8 @@ export function createRepertoireRowHandlers(deps: RepertoireRowDeps) {
 			key,
 			items.map((item) => item.id)
 		);
-		const ordinalById = new Map(items.map((i) => [i.id, i.ordinal]));
-		const before = new Map(plan.map((entry) => [entry.id, ordinalById.get(entry.id) ?? 0]));
+		const itemById = firstById(items);
+		const before = new Map(plan.map((entry) => [entry.id, itemById.get(entry.id)?.ordinal ?? 0]));
 		const after = new Map(plan.map((entry) => [entry.id, entry.ordinal]));
 		request(
 			key,
