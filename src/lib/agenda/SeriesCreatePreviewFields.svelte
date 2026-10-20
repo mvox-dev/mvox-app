@@ -4,6 +4,7 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import FormActions from '$lib/components/FormActions.svelte';
 	import { monthLabel } from '$lib/preferences/timeFormat';
+	import { seriesCreateIsoDay } from '$lib/agenda/seriesCreateDateGrid.svelte';
 	import type { SeriesResumeEntry } from '$lib/agenda/seriesCreateResume';
 
 	interface Props {
@@ -20,7 +21,6 @@
 		submitting: boolean;
 		nothingToSubmit: boolean;
 		isOffline: boolean;
-		isoDay: (date: string) => string;
 		ontoggleskip: (iso: string) => void;
 		onrevealnext: () => void;
 		onrevealall: () => void;
@@ -42,7 +42,6 @@
 		submitting,
 		nothingToSubmit,
 		isOffline,
-		isoDay,
 		ontoggleskip,
 		onrevealnext,
 		onrevealall,
@@ -80,7 +79,7 @@
 						</h4>
 						<div class="flex flex-wrap gap-1.5">
 							{#each group.items as date (date)}
-								{@const iso = isoDay(date)}
+								{@const iso = seriesCreateIsoDay(date)}
 								{@const skipped = !resume && skipDates.includes(iso)}
 								<button
 									type="button"

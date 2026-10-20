@@ -28,7 +28,6 @@
 	// sits in `onAutosave` and `handleValueChange` as well as on the controls.
 	import { writesAvailable } from '$lib/net/online';
 	import { mintSelfLinkInvite, SelfLinkMintError } from '$lib/invite/inviteData';
-	import { listAllEditions } from '$lib/library/libraryData';
 	import ProfileChrome from '$lib/profile/ProfileChrome.svelte';
 	import LinkedAccountsSection from '$lib/profile/LinkedAccountsSection.svelte';
 	import ProfileStorageSection from '$lib/profile/ProfileStorageSection.svelte';
@@ -308,7 +307,6 @@
 			ready={status === 'ready'}
 			generation={() => routeLoad.generation}
 			{activeContext}
-			listAllEditions={(...a) => listAllEditions(...a)}
 		/>
 
 		<CollectiveAdminSection
