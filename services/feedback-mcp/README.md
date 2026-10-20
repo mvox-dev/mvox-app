@@ -70,9 +70,11 @@ Docker isn't available in the mvox container, so these run on shipyard.
 ### Capabilities
 
 The container drops every capability and sets `no-new-privileges`. It adds back only `SETUID`,
-`SETGID` and `SYS_CHROOT`, which OpenSSH privilege separation uses. `CHOWN` and `AUDIT_WRITE` are
-left out because sshd needs them only for a PTY login, and `PermitTTY no` rules those out. Port 2223
-needs no `NET_BIND_SERVICE`. This list is not yet tested and is confirmed at deploy.
+`SETGID` and `SYS_CHROOT`, which OpenSSH privilege separation uses. `CHOWN` is left out because
+sshd uses it only to give a PTY to the user, and `PermitTTY no` rules that out. `AUDIT_WRITE` is
+left out because only PAM (`UsePAM no` here) or an sshd built with linux-audit uses it, and the
+linux-audit write that can block a login runs only on the PTY path. Port 2223 needs no
+`NET_BIND_SERVICE`. This list is not yet tested and is confirmed at deploy.
 
 Without `DAC_OVERRIDE`, root in the container can't read a file it doesn't own. The host key under
 `/srv/feedback-mcp/host-keys/` must be owned by root (uid 0), so run step 2 as root.
