@@ -108,15 +108,16 @@ describe('package.json: at most a generator scripts entry', () => {
 		}
 	});
 
-	// Additions beyond the generator: check:workers, check:sw (#353), test:roadmap (#413)
-	// and test:changed (#504), each commissioned outside this slice.
-	it('every baseline script survives unchanged in name, and additions are exactly the bundle generator + the workers typecheck gate + the service-worker typecheck gate + the roadmap deploy gate + the related-spec iteration run', () => {
+	// Additions beyond the generator: check:workers, check:sw (#353), test:roadmap (#413),
+	// test:changed (#504) and check:services (#1009), each commissioned outside this slice.
+	it('every baseline script survives unchanged in name, and additions are exactly the bundle generator + the workers typecheck gate + the service-worker typecheck gate + the roadmap deploy gate + the related-spec iteration run + the services typecheck gate', () => {
 		const keys = Object.keys(pkg().scripts);
 		for (const k of BASELINE_SCRIPTS) {
 			expect(keys, `baseline script "${k}" was removed or renamed`).toContain(k);
 		}
 		const added = keys.filter((k) => !BASELINE_SCRIPTS.includes(k));
 		expect(added.sort(), `added scripts: ${added.join(', ')}`).toEqual([
+			'check:services',
 			'check:sw',
 			'check:workers',
 			'mcp:bundle',

@@ -1,0 +1,14 @@
+{
+	"compilerOptions": {
+		"strict": true,
+		"target": "esnext",
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"resolveJsonModule": true,
+		"lib": ["esnext", "dom"],
+		"types": ["node"],
+		"noEmit": true,
+		"skipLibCheck": true
+	},
+	"include": ["**/*.ts"]
+}

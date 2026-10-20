@@ -45,3 +45,6 @@ scripts/migrations/seed-results/crede-instance/
 # docs/architecture/entu-rights-and-visibility-model.md, never a second home
 # for a rule; a committed copy would be exactly the drift #318 exists to stop.
 workers/entu-rights-mcp/generated/
+
+# #1009 feedback-mcp build output
+services/feedback-mcp/dist/
