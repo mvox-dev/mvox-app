@@ -10,7 +10,6 @@
 	import SeasonManageSeries from '$lib/agenda/SeasonManageSeries.svelte';
 	import type { RosterRow } from '$lib/roster/rosterData';
 	import type { ManageRightsState } from '$lib/repertoire/types';
-	import type * as RepertoireActions from '$lib/repertoire/repertoireActions';
 	import type { SeriesResumeEntry } from '$lib/agenda/seriesCreateResume';
 	import type * as SeasonManage from '$lib/seasons/seasonManage';
 	import type { SeasonManageDeleteSlot } from '$lib/agenda/seasonManageDelete';
@@ -67,8 +66,6 @@
 		addSeasonConductor: typeof SeasonManage.addSeasonConductor;
 		apiRemoveSeasonConductor: typeof SeasonManage.removeSeasonConductor;
 		apiDeleteEventSeries: typeof SeasonManage.deleteEventSeries;
-		apiCountSeriesOccurrences: typeof SeasonManage.countSeriesOccurrences;
-		canDeleteSeries: typeof RepertoireActions.canDeleteSeries;
 	}
 
 	let {
@@ -118,9 +115,7 @@
 		updateSeasonField,
 		addSeasonConductor,
 		apiRemoveSeasonConductor,
-		apiDeleteEventSeries,
-		apiCountSeriesOccurrences,
-		canDeleteSeries
+		apiDeleteEventSeries
 	}: Props = $props();
 </script>
 
@@ -205,8 +200,6 @@
 		{loadForSelected}
 		{refreshSeasonManageLists}
 		{apiDeleteEventSeries}
-		{apiCountSeriesOccurrences}
-		{canDeleteSeries}
 	/>
 
 	{#if !eventCreateOpen}

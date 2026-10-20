@@ -10,6 +10,7 @@
 	import DeleteConfirmPair from '$lib/components/DeleteConfirmPair.svelte';
 	import type { Season } from '$lib/seasons/types';
 	import type * as SeasonManage from '$lib/seasons/seasonManage';
+	import { countSeasonScope as apiCountSeasonScope } from '$lib/seasons/seasonManage';
 	import {
 		isSeasonDeletePending,
 		runSeasonManageDelete,
@@ -38,7 +39,6 @@
 		armSeasonManageDelete: (rowId: string, confirmTestid: string) => Promise<void>;
 		disarmSeasonManageDelete: (disarmTestid: string) => Promise<void>;
 		loadForSelected: (opts?: { keepSeasonManage?: boolean }) => void;
-		apiCountSeasonScope: typeof SeasonManage.countSeasonScope;
 		apiDeleteSeason: typeof SeasonManage.deleteSeason;
 	}
 
@@ -61,7 +61,6 @@
 		armSeasonManageDelete,
 		disarmSeasonManageDelete,
 		loadForSelected,
-		apiCountSeasonScope,
 		apiDeleteSeason
 	}: Props = $props();
 
