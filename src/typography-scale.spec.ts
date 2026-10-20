@@ -75,6 +75,7 @@ function scanTags(source: string): Tag[] {
 	return out;
 }
 
+// Walk the chain: classes sit on a wrapper while role="alert" rides an inner element.
 function taggedWithAncestors(source: string): { tag: Tag; chain: Tag[] }[] {
 	const out: { tag: Tag; chain: Tag[] }[] = [];
 	const stack: Tag[] = [];

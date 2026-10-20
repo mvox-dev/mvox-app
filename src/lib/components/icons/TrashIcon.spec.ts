@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 // Contract: one aria-hidden <svg> with a viewBox, painted only in currentColor, optional class.
+// U+FE0E (text presentation) is no fix for the emoji: platform support is inconsistent.
 
 import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, describe, expect, it } from 'vitest';

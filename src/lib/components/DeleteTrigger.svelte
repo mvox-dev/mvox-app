@@ -1,6 +1,6 @@
 <script lang="ts">
-	// Shared delete trigger, 44px touch minimum by construction: `class` appends, never strips.
-	// `hover:text-danger-strong` lives only here (trashcan-sweep.spec.ts); so does the disabled face.
+	// Disabled face is in the unit: :hover matches disabled buttons; opacity 30 was too faint (#252)
+	// 44px minimum by construction; hover:text-danger-strong lives only here (trashcan-sweep.spec.ts).
 	import type { Snippet } from 'svelte';
 	import type { HTMLButtonAttributes } from 'svelte/elements';
 	import TrashIcon from './icons/TrashIcon.svelte';
