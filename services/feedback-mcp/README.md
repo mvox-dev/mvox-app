@@ -67,6 +67,32 @@ Docker isn't available in the mvox container, so these run on shipyard.
    send `{"jsonrpc":"2.0","id":1,"method":"tools/list"}` over the connect line's ssh command and
    look for three tools.
 
+### Capabilities
+
+The container drops every capability and sets `no-new-privileges`. It adds back only `SETUID`,
+`SETGID` and `SYS_CHROOT`, which OpenSSH privilege separation uses. `CHOWN` is left out because
+sshd uses it only to give a PTY to the user, and `PermitTTY no` rules that out. `AUDIT_WRITE` is
+left out because only PAM (`UsePAM no` here) or an sshd built with linux-audit uses it, and the
+linux-audit write that can block a login runs only on the PTY path. Port 2223 needs no
+`NET_BIND_SERVICE`. This list is not yet tested and is confirmed at deploy.
+
+Without `DAC_OVERRIDE`, root in the container can't read a file it doesn't own. The host key under
+`/srv/feedback-mcp/host-keys/` must be owned by root (uid 0), so run step 2 as root.
+
+If sshd won't start or logins fail, read `docker compose logs feedback-mcp` and add back the
+capability its error names:
+
+| Log line | Add |
+|---|---|
+| `chroot("/run/sshd"): Operation not permitted` | `SYS_CHROOT` |
+| `setgroups`, `setgid` or `setresgid` ... `Operation not permitted` | `SETGID` |
+| `setuid`, `setresuid` or `permanently_set_uid` ... `Operation not permitted` | `SETUID` |
+| `linux_audit_write_entry failed: Operation not permitted` | `AUDIT_WRITE` |
+| `Could not load host key` or `Permission denied` on the host key | `chown root` the key, not a cap |
+| `kill(<pid>): Operation not permitted` (cleanup after a failed login, harmless) | `KILL` |
+
+Add a capability under `cap_add` in the compose file, then `docker compose up -d feedback-mcp`.
+
 The `feedback` login has no Docker rights; Docker group membership is root on the host. sshd runs
 inside this sidecar, never through `docker exec` from the host. The port is published on the
 tailnet address only, because Docker's published ports bypass ufw.
