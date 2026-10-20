@@ -50,15 +50,11 @@
 		panel,
 		view,
 		seams,
-		listEventSeriesForSeason,
 		updateSeasonField,
 		addSeasonConductor,
 		apiRemoveSeasonConductor,
 		apiDeleteEventSeries,
-		apiCountSeriesOccurrences,
-		apiCountSeasonScope,
 		apiDeleteSeason,
-		canDeleteSeries,
 		currentRequest,
 		switchCurrent,
 		seriesRunUnfinished,
@@ -94,15 +90,11 @@
 		panel: AgendaPanelState;
 		view: AgendaPageView;
 		seams: Seams;
-		listEventSeriesForSeason: Panel['listEventSeriesForSeason'];
 		updateSeasonField: Panel['updateSeasonField'];
 		addSeasonConductor: Panel['addSeasonConductor'];
 		apiRemoveSeasonConductor: Panel['apiRemoveSeasonConductor'];
 		apiDeleteEventSeries: Panel['apiDeleteEventSeries'];
-		apiCountSeriesOccurrences: Panel['apiCountSeriesOccurrences'];
-		apiCountSeasonScope: Panel['apiCountSeasonScope'];
 		apiDeleteSeason: Panel['apiDeleteSeason'];
-		canDeleteSeries: Panel['canDeleteSeries'];
 		currentRequest: Panel['currentRequest'];
 		switchCurrent: Panel['switchCurrent'];
 		seriesRunUnfinished: boolean;
@@ -171,15 +163,11 @@
 	{currentRequest}
 	{switchCurrent}
 	{...seams}
-	{listEventSeriesForSeason}
 	{updateSeasonField}
 	{addSeasonConductor}
 	{apiRemoveSeasonConductor}
 	{apiDeleteEventSeries}
-	{apiCountSeriesOccurrences}
-	{apiCountSeasonScope}
 	{apiDeleteSeason}
-	{canDeleteSeries}
 	{isOffline}
 	{writeUnavailableText}
 />

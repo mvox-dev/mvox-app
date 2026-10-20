@@ -8,10 +8,13 @@
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
 	import DeleteConfirmPair from '$lib/components/DeleteConfirmPair.svelte';
 	import SeriesCreateForm from '$lib/agenda/SeriesCreateForm.svelte';
-	import type * as RepertoireActions from '$lib/repertoire/repertoireActions';
+	import { canDeleteSeries } from '$lib/repertoire/repertoireActions';
 	import type { SeriesResumeEntry } from '$lib/agenda/seriesCreateResume';
 	import type * as SeasonManage from '$lib/seasons/seasonManage';
-	import type { SeriesListItem } from '$lib/seasons/seasonManage';
+	import {
+		countSeriesOccurrences as apiCountSeriesOccurrences,
+		type SeriesListItem
+	} from '$lib/seasons/seasonManage';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 	import {
 		runSeasonManageDelete,
@@ -48,8 +51,6 @@
 		loadForSelected: (opts?: { keepSeasonManage?: boolean }) => void;
 		refreshSeasonManageLists: (cfg: EntuCfg, seasonId: string) => void;
 		apiDeleteEventSeries: typeof SeasonManage.deleteEventSeries;
-		apiCountSeriesOccurrences: typeof SeasonManage.countSeriesOccurrences;
-		canDeleteSeries: typeof RepertoireActions.canDeleteSeries;
 	}
 
 	let {
@@ -79,9 +80,7 @@
 		openSeriesCreateForm,
 		loadForSelected,
 		refreshSeasonManageLists,
-		apiDeleteEventSeries,
-		apiCountSeriesOccurrences,
-		canDeleteSeries
+		apiDeleteEventSeries
 	}: Props = $props();
 
 	async function armSeasonManageSeriesDelete(series: SeriesListItem): Promise<void> {

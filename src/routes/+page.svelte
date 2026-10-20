@@ -9,7 +9,6 @@
 		pickerModeStore,
 		selectCollective
 	} from '$lib/collectives/store';
-	import { canDeleteSeries } from '$lib/repertoire/repertoireActions';
 	import type SeasonManagePanel from '$lib/agenda/SeasonManagePanel.svelte';
 	import { createAgendaCreateFlows, createCreateFlowState } from '$lib/agenda/agendaCreateFlows';
 	import ListOfStuff from '$lib/components/ListOfStuff.svelte';
@@ -31,13 +30,10 @@
 	import { agendaLoaderReads, agendaRepertoireSeams } from '$lib/agenda/agendaPageSeams';
 	import { createAgendaPageView } from '$lib/agenda/agendaPageView.svelte';
 	import {
-		listEventSeriesForSeason,
 		updateSeasonField,
 		addSeasonConductor,
 		removeSeasonConductor as apiRemoveSeasonConductor,
 		deleteEventSeries as apiDeleteEventSeries,
-		countSeriesOccurrences as apiCountSeriesOccurrences,
-		countSeasonScope as apiCountSeasonScope,
 		deleteSeason as apiDeleteSeason
 	} from '$lib/seasons/seasonManage';
 	import { writesAvailable } from '$lib/net/online';
@@ -322,15 +318,11 @@
 								handlePanelStatusChange,
 								handlePanelRemoveItem
 							}}
-							{listEventSeriesForSeason}
 							{updateSeasonField}
 							{addSeasonConductor}
 							{apiRemoveSeasonConductor}
 							{apiDeleteEventSeries}
-							{apiCountSeriesOccurrences}
-							{apiCountSeasonScope}
 							{apiDeleteSeason}
-							{canDeleteSeries}
 							currentRequest={seq.request.whileCurrent}
 							switchCurrent={seasonManageSwitch.whileCurrent}
 							{seriesRunUnfinished}

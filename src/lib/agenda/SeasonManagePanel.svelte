@@ -13,9 +13,9 @@
 	import type { SectionNode } from '$lib/sections/sectionData';
 	import type { Season } from '$lib/seasons/types';
 	import type { ManageRightsState } from '$lib/repertoire/types';
-	import type * as RepertoireActions from '$lib/repertoire/repertoireActions';
 	import type { SeriesResumeEntry } from '$lib/agenda/seriesCreateResume';
 	import type * as SeasonManage from '$lib/seasons/seasonManage';
+	import { listEventSeriesForSeason } from '$lib/seasons/seasonManage';
 	import {
 		createSeasonManagePanelState,
 		resetSeasonManagePanelState,
@@ -75,15 +75,11 @@
 		handlePanelRemoveItem: (itemId: string) => void;
 		isOffline: boolean;
 		writeUnavailableText: string;
-		listEventSeriesForSeason: typeof SeasonManage.listEventSeriesForSeason;
 		updateSeasonField: typeof SeasonManage.updateSeasonField;
 		addSeasonConductor: typeof SeasonManage.addSeasonConductor;
 		apiRemoveSeasonConductor: typeof SeasonManage.removeSeasonConductor;
 		apiDeleteEventSeries: typeof SeasonManage.deleteEventSeries;
-		apiCountSeriesOccurrences: typeof SeasonManage.countSeriesOccurrences;
-		apiCountSeasonScope: typeof SeasonManage.countSeasonScope;
 		apiDeleteSeason: typeof SeasonManage.deleteSeason;
-		canDeleteSeries: typeof RepertoireActions.canDeleteSeries;
 	}
 
 	let {
@@ -135,15 +131,11 @@
 		handlePanelRemoveItem,
 		isOffline,
 		writeUnavailableText,
-		listEventSeriesForSeason,
 		updateSeasonField,
 		addSeasonConductor,
 		apiRemoveSeasonConductor,
 		apiDeleteEventSeries,
-		apiCountSeriesOccurrences,
-		apiCountSeasonScope,
-		apiDeleteSeason,
-		canDeleteSeries
+		apiDeleteSeason
 	}: Props = $props();
 
 	const manageableSeasonEntries = $derived(
@@ -295,7 +287,6 @@
 			{armSeasonManageDelete}
 			{disarmSeasonManageDelete}
 			{loadForSelected}
-			{apiCountSeasonScope}
 			{apiDeleteSeason}
 		/>
 		{#if seasonManageOpen}
@@ -347,8 +338,6 @@
 				{addSeasonConductor}
 				{apiRemoveSeasonConductor}
 				{apiDeleteEventSeries}
-				{apiCountSeriesOccurrences}
-				{canDeleteSeries}
 			/>
 		{/if}
 	</div>
