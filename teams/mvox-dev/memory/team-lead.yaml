@@ -5,8 +5,23 @@
 
 current:
   - label: WIP
-    record: "Queue: #957 > epic #962 > epic #963 (sweeps #958 #959 #955 #954 #956 merged)"
+    record: "#966 part 1 merged (PR #1001); part 2 = the season-manage relay, not started"
+    ref: scratchpad/brief-966.md
+  - label: WIP
+    record: "Epic #962 left: #966 part 2, #971 (cfgFor, EntuCfg into $lib/entu), #969 last; then #963"
     ref: scratchpad/findings-session.md
+  - label: WIP
+    record: "#998 (routeLoad generation) is drafted by Gama; waits for Mihkel's release"
+    ref: scratchpad/findings-session.md
+  - label: WIP
+    record: "Valdur: send-invite sent 2026-10-20; he redeems within 24h (record PR #1002)"
+    ref: scripts/migrations/seed-crede-valdur-second-signin-2026-10-20.ts
+  - label: WIP
+    record: "Roster admin invite broken: Entu returns the token only to self; told Gama 2026-10-20"
+    ref: src/lib/roster/MemberInvite.svelte
+  - label: WIP
+    record: "josquin.md:86 says .svelte is Byrd's; stale since the 2026-09-30 chain ruling"
+    ref: teams/mvox-dev/prompts/josquin.md
   - label: WIP
     record: "GATE 3 done 2026-10-15: fallback deleted (git: fd701a4c); adoption closed"
     ref: teams/mvox-dev/memory-adoption/05-debt.md
@@ -33,6 +48,15 @@ current:
     ref: src/lib/agenda/SeasonCardHeader.svelte
 
 staging:
+  - label: LEARNED
+    record: "Never squash-merge a memory-kit PR: it drops the subtree marker (#986)"
+    ref: memory-kit/UPGRADE.md
+  - label: LEARNED
+    record: "Full vitest runs ~11 min, past the cap; run it in 3 foreground parts"
+    ref: scratchpad/findings-session.md
+  - label: LEARNED
+    record: "Entu: an admin mint gets invite:true; send-invite emails person.email; 24h life"
+    ref: src/lib/invite/inviteSelfLink.ts
   - label: LEARNED
     record: "Passepartout's hub address is passepartout (household was rejected)"
     ref: "2026-10-14"
