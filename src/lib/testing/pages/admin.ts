@@ -27,7 +27,8 @@ import { signIn } from '$lib/testing/session';
 
 export const CFG = testCfg('sampledb', 'jwt-admin');
 
-export const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // the database entity: THE collective (#161)
+// The database entity stands for the collective; there is no organization entity (#161).
+export const DB_ENTITY = '69c7f8688489bfcb0e81aff1';
 
 export const ANNA = {
 	id: 'p-anna',

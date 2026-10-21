@@ -66,7 +66,7 @@ export function createFeedbackEditor() {
 		open = true;
 	}
 
-	// Every unsent failure starts ticked (#684).
+	// Every unsent failure starts ticked: one feedback sends them all unless unticked (#684).
 	async function loadProblems(): Promise<void> {
 		problemOwner = get(selectedCollectiveIdentityStore);
 		const log = getProblemLog();

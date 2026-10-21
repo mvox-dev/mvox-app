@@ -91,9 +91,9 @@ export interface FakeByteStore extends ByteStore {
 	}>;
 	seed(identity: CollectiveIdentity, fileId: string, data: { bytes: ArrayBuffer; filetype: string; sha256: string }): void;
 	heldFor(db: string, personId: string): string[];
-	/** #410: every setProtectedKeys() set, in order. */
+	/** Every setProtectedKeys() set, in order: the files eviction must keep (#410). */
 	protectedLog: Array<ReadonlySet<string>>;
-	/** #410: records only; the fake runs no eviction. */
+	/** Records the keys only: the fake has no quota, so it never evicts by itself (#410). */
 	setProtectedKeys(keys: ReadonlySet<string>): void;
 	/** #410: lets page specs spy call order (setProtectedKeys, relieve, prefetch). */
 	relieve(): Promise<

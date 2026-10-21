@@ -121,7 +121,7 @@
 		if (!currentCfg) return;
 		const cfg = cfgFor(currentCfg.db);
 		const name = addName.trim();
-		// Non-empty is the only validation (#256 ruling).
+		// Non-empty is the only check: a stricter URL rule would refuse valid share links (#256).
 		if (!name || !/\S/.test(addUrl)) return;
 		const description = addDescription.trim() ? addDescription : null;
 		const maxOrder = rows.reduce((max, r) => Math.max(max, r.displayOrder ?? 0), 0);
