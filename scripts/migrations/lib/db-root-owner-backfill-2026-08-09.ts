@@ -1,5 +1,6 @@
 // #68: add db-root as `_owner` on the 72 entities the Phase-1 probe flagged.
 
+// Mihkel's ruling on #68: "all objects must be under dev team's control" (sandbox db for now).
 // Add-only: POST appends to a reference property, so existing owners and `_sharing` stay.
 
 import { readFileSync } from 'node:fs';

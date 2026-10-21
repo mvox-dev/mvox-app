@@ -1,6 +1,9 @@
 // Restricts the 3 empty-shell menu entries to admin-only by deleting each row's `_sharing` (#47).
 // Member-seat visibility is computed, not observed: no member credential is available locally.
 
+// The 2026-08-07 walkthrough saw 11 member-visible entries against 22 of 23 computed; that gap is
+// parked for Mihkel to check in a real browser.
+
 import { entuFetch } from '$lib/entu/request';
 import { type EntuCfg } from '$lib/entu/cfg';
 

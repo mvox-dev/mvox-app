@@ -1,5 +1,6 @@
 // #233 S1: adds the `event_name` prop-def to crede's `event` type; schema only, no instance data.
 // Its sharing mirrors the live `event.name` prop-def and its ordinal sits right after it.
+// PO-Approved: #233 estate ruling (Mihkel 2026-09-18, via Gama comment 5728594975), crede only.
 
 // Dry-run first: node --import tsx --import ./scripts/migrations/lib/register-loader.mjs <file>
 // Live: DRY_RUN=false, only on team-lead's "I authorize this run" (crede holds real PII).

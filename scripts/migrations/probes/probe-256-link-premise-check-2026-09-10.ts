@@ -1,4 +1,5 @@
-// Read-only probe for #256: is `organization` live, and what _sharing do the parent types carry?
+// Read-only probe for #256 (2026-09-10), before the `link` type was defined: is `organization`
+// still live, and what _sharing do the section and repertoire_item type-defs carry?
 
 import { loadCfg } from '../lib/creds';
 import { loadCredeCfg } from '../lib/script-runner';

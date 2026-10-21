@@ -2,6 +2,9 @@
 // buckets are write-time snapshots, so the prop-def change alone fixes no instance.
 // Runs as db-root, which always reads the private bucket; a non-owner read must confirm.
 
+// Authorized by Gama on #37 (2026-08-08 06:56). Canary first, per Gama's dispatch: db-root's
+// own person 69bcfd8e9c031ab8e6ce8079, then the key must still authenticate a read.
+
 import { entuFetch } from '$lib/entu/request';
 import { type EntuCfg } from '$lib/entu/cfg';
 

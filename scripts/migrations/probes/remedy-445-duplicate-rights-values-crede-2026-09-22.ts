@@ -1,4 +1,5 @@
-// #445 remedy: delete a newer duplicate `_sharing`/`_inheritrights` pair, keep the older one.
+// #445 remedy on crede (2026-09-22): delete a newer duplicate `_sharing`/`_inheritrights` pair.
+// Keeps the older pair. Authorized by Mihkel, "go for cleanup" (via team-lead/Gama, 5775480675).
 // Step 1 aborts unless the entity holds exactly the four value ids `target` names.
 
 // Dry-run first: node --import tsx --import ./scripts/migrations/lib/register-loader.mjs <file>

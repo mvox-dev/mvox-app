@@ -2,6 +2,9 @@
 // by name AND section, C narrows the rest to private. No twin row carries a section today,
 // so B's delete set is empty by the criterion as written, not by a loosened one.
 
+// Gama's guard: the delete set falls out mechanically from the criterion, no judgment calls.
+// No twin carried a section when verified live on 2026-08-08.
+
 import { entuFetch } from '$lib/entu/request';
 import { type EntuCfg } from '$lib/entu/cfg';
 

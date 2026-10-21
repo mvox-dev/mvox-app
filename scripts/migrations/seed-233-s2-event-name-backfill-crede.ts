@@ -1,5 +1,6 @@
 // #233 S2: copies every crede event's `name` into `event_name` before S4 makes `name` a formula.
 // A formula overwrites the stored value on every save, so a name not copied first is gone.
+// PO-Approved: #233 estate ruling (Mihkel 2026-09-18, via Gama comment 5728594975), crede only.
 
 // Dry-run first: node --import tsx --import ./scripts/migrations/lib/register-loader.mjs <file>
 // Live: DRY_RUN=false AUTHORIZED_BY='...', only after a verified dry run and authorization.

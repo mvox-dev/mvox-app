@@ -1,4 +1,4 @@
-// #30 migration core: move real persons' name/email values into `profile` entities.
+// T4.10 (#30, epic #21) core: move real persons' name/email values into `profile` entities.
 
 // Creates go through the real profileData helpers, never a hand-rolled POST; the funnel
 // spec proves it at runtime.

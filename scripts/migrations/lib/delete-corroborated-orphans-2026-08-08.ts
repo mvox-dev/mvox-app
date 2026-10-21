@@ -1,5 +1,6 @@
 // #53: delete the 7 orphan member entities corroborated by name and section parent (#46).
 
+// Authorized by Gama on #37 (2026-08-08 07:33); the set falls out of the recorded criterion.
 // Each target is re-verified live first; the committed artifact alone could be stale.
 
 import { readFileSync } from 'node:fs';

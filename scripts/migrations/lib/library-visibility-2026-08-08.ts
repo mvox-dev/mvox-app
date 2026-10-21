@@ -2,6 +2,9 @@
 // then 586 instances are touch-saved to re-aggregate, gated on all 12 writes and a canary per type.
 // All 586 were db-root-owned when scanned, so no rights gap; Step 0 re-checks that live.
 
+// Scope per Gama's 2026-08-08 rulings on #54, from Pérotin's #55 grooming pass.
+// edition.cost: Mihkel's PO ruling, 2026-08-08: "acquisition cost is bookkeeping, not browse data".
+
 import { entuFetch } from '$lib/entu/request';
 import { type EntuCfg } from '$lib/entu/cfg';
 

@@ -1,4 +1,4 @@
-// #70: restrict the Entities, Menu and Plugins Configuration menu rows to admin-only.
+// #70 (2026-08-09): restrict the Entities, Menu and Plugins Configuration menu rows to admin-only.
 
 // Admin-only means no `_sharing` value at all, as on "Billing"; menu rows are db-root-owned,
 // so deleting their `_sharing` value is allowed.

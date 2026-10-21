@@ -1,7 +1,8 @@
 // #445: every crede `person` and `rsvp` gets `_sharing: domain` and `_inheritrights: true`.
+// Authorized by Mihkel's ruling, 2026-09-22 10:14 UTC (team console, confirmed on #445).
 // Censuses are flat, never walking children, so profiles (`_inheritrights: false`) stay private.
-// Writing a rights-type property needs `_owner`, so the rights preflight checks `_owner` only.
 
+// Writing a rights-type property needs `_owner`, so the rights preflight checks `_owner` only.
 // A prior value is DELETEd by `_id` before the POST: these properties replace, not append.
 // The run stops, dry run too, unless the moving set is exactly one person and their rsvps.
 

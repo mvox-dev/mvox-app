@@ -1,4 +1,5 @@
-// #17: give each synthetic singer a domain profile, then move her member to the domain tier.
+// T3.1 (#17): give the 128 synthetic singers domain profiles, then move members to domain.
+// Authorized on #17 (§8.6 chain recorded there); owner Pérotin.
 
 // Bundle 2 runs only after Bundle 1 fully succeeds: a domain member without a verified
 // profile shows as an unnamed member, worse than leaving her private.

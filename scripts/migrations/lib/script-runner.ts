@@ -1,4 +1,4 @@
-// Shared runner for migration scripts: dry-run by default, crede key exchange, main wrapper.
+// #274 shared runner for migration scripts: dry-run by default, mvox_crede key exchange.
 
 import type { EntuCfg } from '$lib/entu/cfg';
 

@@ -2,6 +2,7 @@
 
 // A create-time grant goes to the creator, not the person; skipping this step left 19 crede
 // members unable to RSVP (#369). Every bulk-person script calls it right after person-create.
+// Forward-only: remedy-369 fixed the live crede population on 2026-09-15.
 
 // A caller that logs what this reads must strip `.string` first: references carry name and email.
 

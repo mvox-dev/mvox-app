@@ -1,4 +1,7 @@
-// Migration credentials: exchanges the local Entu API key for a JWT (read-only auth GET).
+// T4.10 migration credentials (#30): exchanges the local Entu API key for a JWT.
+
+// The key is db-root's (person …8079, Mihkel). Read-only auth GET; live runs need
+// team-lead's per-run go on #30 and Perotin.
 
 import type { EntuCfg } from '$lib/entu/cfg';
 

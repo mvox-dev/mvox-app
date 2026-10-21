@@ -1,4 +1,6 @@
 // #20 follow-up: give member.person/section prop-defs domain sharing, then re-aggregate.
+// Touch-saves the 245 domain members of 2026-08-07, the 115 legacy orphans included:
+// that scope is Gama's ruling (#20 comment, 18:11). Runs under ENTU_API_KEY (PO/db-root).
 
 // Buckets are write-time snapshots, so Bundle B touch-saves each domain member (atomic
 // `_sharing` replace, no duplicate value). Runs as db-root, which reads the private bucket:

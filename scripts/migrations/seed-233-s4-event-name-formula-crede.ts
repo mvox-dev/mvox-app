@@ -2,9 +2,9 @@
 // A formula overwrites the stored name on every save, so any event with a name but no event_name
 // copy stops the run before the POST.
 
+// PO-Approved: #233 estate ruling (Mihkel 2026-09-18, Gama 5728594975); live needs #421's own go.
 // Dry-run first: node --import tsx --import ./scripts/migrations/lib/register-loader.mjs <file>
-// Live: DRY_RUN=false AUTHORIZED_BY='...'; add RESUME_TOUCH_SAVES=true to finish a run that died
-// after the formula POST.
+// Live: DRY_RUN=false AUTHORIZED_BY='...'; RESUME_TOUCH_SAVES=true finishes a run cut after POST.
 
 import { pathToFileURL } from 'node:url';
 import { entuFetch } from '$lib/entu/request';
@@ -17,7 +17,8 @@ import { writeLedger as writeLedgerShared, assertLiveRunAuthorized } from './lib
 // Mihkel set the live formula by hand on 2026-09-21 with a REGEX date; this constant stays as
 // what the script wrote, and a re-run aborts on the existing formula.
 
-// Full ISO timestamp in the formula, no platform-side way to shorten it (re-verify if Entu ships SUBSTRING).
+// Full ISO timestamp in the formula, no platform-side way to shorten it
+// (re-verify if Entu ships SUBSTRING).
 export const FORMULA = "start_datetime event_type event_name ' — ' CONCAT_WS";
 
 /** The dry ledger's plain statement that the overwrite cannot be previewed. */

@@ -2,6 +2,9 @@
 // Step 1 deletes the Applications menu `_sharing` value (reversible) rather than the entry;
 // step 3 is gated on zero live application instances, so no instance is orphaned.
 
+// Retiring apply-to-join follows Mihkel's invite-only ruling; each step is its own §8.6 gate.
+// Specimen 6a2fdac64cd971291c5d5e79 expired 2026-07-15; this ran 2026-08-08.
+
 import { entuFetch } from '$lib/entu/request';
 import { type EntuCfg } from '$lib/entu/cfg';
 

@@ -1,7 +1,8 @@
 // #57: widen the 586 library instances' own `_sharing` from private to domain.
 
 // Member read needs prop-def, type and instance tiers all open, narrowest wins; #56's touch-save
-// left the instance tier private, so nothing became member-readable.
+// left the instance tier private, so nothing became member-readable. Gama stopped T6.2 on
+// 2026-08-08 11:00 and asked for the type-tier check first.
 
 import { entuFetch } from '$lib/entu/request';
 import { type EntuCfg } from '$lib/entu/cfg';

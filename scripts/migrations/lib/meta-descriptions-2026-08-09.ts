@@ -1,5 +1,6 @@
 // Fills EN+ET `description` on all 20 type-defs and 140 prop-defs (#48).
 // Cosmetic tier: no rights or data change, so drafts ship without pre-review.
+// Mihkel corrects drafts afterwards with ordinary small writes.
 
 import { readFileSync } from 'node:fs';
 import { entuFetch } from '$lib/entu/request';
