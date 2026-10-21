@@ -80,7 +80,7 @@ export async function returnLending(
 	if (!res.ok) throw new Error(`returnLending failed: ${res.status}`);
 }
 
-// ── #74 bulk checkout + return ──────────────────────────────────────────────
+// ── Bulk checkout: one lending per ticked member; each one fails on its own (#74) ──
 
 /** Default copy resolver for bulkCheckout — fetches copies under the given edition. */
 async function defaultResolveCopies(
