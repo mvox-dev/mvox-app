@@ -14,7 +14,7 @@ export function createLatest() {
 			++gen;
 		},
 		get epoch(): number {
-			throw new Error('not implemented: epoch');
+			return gen;
 		}
 	};
 }
