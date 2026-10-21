@@ -1,36 +1,12 @@
-// #46 (#37-P3.4) — orphan-115 disposition. Three phases:
-//
-//   Phase A (read-only): expand #41's exact-match partition (18/97) via loose
-//   matching (case/diacritics/whitespace normalization). Output the full
-//   partition with entity ids — this is pure computation over live-read data,
-//   no writes, and re-runs identically every time (deterministic).
-//
-//   Phase B (mutation, GATED, `PHASE=B`): DELETE orphan member rows whose twin
-//   match is CORROBORATED — name match (exact or loose) AND section
-//   consistency with the twin's linked member row. Per Gama's guard, the
-//   delete set falls out MECHANICALLY from this recorded criterion — no
-//   judgment calls. Any orphan with an ambiguous match (>1 twin), a twin with
-//   no linked member row, or a twin's linked member carrying no section data
-//   to compare against, is NOT a delete candidate — it hides instead.
-//
-//   Phase C (mutation, GATED, `PHASE=C`): every orphan NOT deleted in Phase B
-//   gets its OWN `_sharing` narrowed from `domain` to `private` (atomic
-//   replace-by-`_id`, same mechanic as #44). History preserved, reversible.
-//
-// STRUCTURAL FINDING (verified live 2026-08-08, before writing this file):
-// NONE of the 131 linked ("twin") member rows carry a `section` OR
-// `current_section` value — both are 0/131. Every one of the 115 orphans DOES
-// carry a `section` value (115/115). This means the section-consistency gate
-// cannot be satisfied by ANY orphan under the literal criterion — Phase B's
-// delete set is mechanically EMPTY today, not because of a matching failure
-// but because the comparison's other side has no data. This is reported
-// explicitly rather than silently producing an empty list — Gama's "falls out
-// mechanically" guard is satisfied precisely BECAUSE the criterion, applied
-// honestly, yields zero, not because the criterion was loosened to produce a
-// result.
+// Orphan-115 disposition (#46): A partitions read-only, B deletes orphans whose twin matches
+// by name AND section, C narrows the rest to private. No twin row carries a section today,
+// so B's delete set is empty by the criterion as written, not by a loosened one.
+
+// Gama's guard: the delete set falls out mechanically from the criterion, no judgment calls.
+// No twin carried a section when verified live on 2026-08-08.
 
 import { entuFetch } from '$lib/entu/request';
-import { type EntuCfg } from '$lib/seasons/entuSeasons';
+import { type EntuCfg } from '$lib/entu/cfg';
 
 export const MEMBER_TYPE_ID = '69c7ea4a8489bfcb0e819edd';
 export const PERSON_TYPE_ID = '69bcfd8e9c031ab8e6ce805f';
@@ -60,10 +36,8 @@ export type EnumeratedData = {
 	linkedMembers: LinkedMemberRow[];
 };
 
-/** Step-0 enumeration (READ-ONLY). Re-reads everything live — no cached ids
- * trusted from #41/#43 memory. HALTs on population drift from the expected
- * counts (115 orphans, 132 persons, 131 linked members) so a live population
- * change surfaces loudly instead of silently mutating a stale set. */
+/** Re-reads everything live and HALTs on drift from 115 orphans, 132 persons, 131 members,
+ * so a changed population is never mutated as a stale set. */
 export async function enumerateAll(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<EnumeratedData> {
 	const memberRes = await entuFetch(cfg.db, `entity?_type.reference=${MEMBER_TYPE_ID}&props=_id,person,section,current_section,_sharing&limit=1000`, cfg.token, {}, fetchImpl);
 	if (!memberRes.ok) throw new Error(`enumerateAll: member census GET failed: ${memberRes.status}`);
@@ -80,8 +54,6 @@ export async function enumerateAll(cfg: EntuCfg, fetchImpl: typeof fetch = fetch
 		throw new Error(`enumerateAll: member census truncated — count=${memberBody.count} entities=${memberBody.entities.length}`);
 	}
 
-	// Need `name` too for orphans (residual, no prop-def) — separate targeted fetch since the
-	// bulk query above didn't request it (keeping it lean); re-request with name included.
 	const memberWithNameRes = await entuFetch(cfg.db, `entity?_type.reference=${MEMBER_TYPE_ID}&props=_id,name&limit=1000`, cfg.token, {}, fetchImpl);
 	if (!memberWithNameRes.ok) throw new Error(`enumerateAll: member-name census GET failed: ${memberWithNameRes.status}`);
 	const memberNameBody = (await memberWithNameRes.json()) as { entities: Array<{ _id: string; name?: Array<{ string: string }> }> };

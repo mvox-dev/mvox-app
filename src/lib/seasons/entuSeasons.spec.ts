@@ -1,6 +1,7 @@
 // The season, series and event reads behind the agenda.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { listSeasons, listEvents, resolveTypeId, resetTypeIdCache, type EntuCfg } from './entuSeasons';
+import { listSeasons, listEvents, resolveTypeId, resetTypeIdCache } from './entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 const cfg = testCfg('sampledb');

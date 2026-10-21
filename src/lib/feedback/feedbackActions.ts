@@ -1,7 +1,8 @@
 // createFeedback: one feedback entity plus its screenshot, when it has one; any failed step
 // deletes it and rejects.
 import { entuFetch } from '$lib/entu/request';
-import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resolveTypeId } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { serialize, type StrokeData } from '$lib/strokes/strokes';
 import { deletePhantomProperty, putUploadBytes, type UploadObject } from '$lib/files/entuUpload';
 

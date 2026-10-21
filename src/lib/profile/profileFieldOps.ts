@@ -12,7 +12,7 @@ import { createProfileEditQueue } from '$lib/profile/profileEditQueue';
 import { createAutosave } from '$lib/profile/autosave';
 import { withItem } from '$lib/collections/immutable';
 import type { FieldResolution, Level, MyProfile } from '$lib/profile/profileData';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 
 export const FIELDS: readonly FieldKey[] = ['name', 'email'];
 const otherField = (f: FieldKey): FieldKey => (f === 'name' ? 'email' : 'name');

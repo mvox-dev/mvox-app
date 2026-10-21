@@ -1,5 +1,5 @@
 import { applyRsvpChange } from './rsvpOptimistic';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { MyRsvp, RsvpEntry, RsvpStatus } from './rsvpData';
 
 // One RSVP write per event (#15). The caller disables the event's control in flight: a second

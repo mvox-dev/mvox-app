@@ -1,58 +1,13 @@
-// mvox-app#233 S2 / mvox-app#419 — copy every crede event's `name` value
-// into `event_name`. Crede only, one script. Must finish before S4 turns
-// `name` into a formula: a formula overwrites the stored value on every
-// save, so any name not copied first is gone.
-//
-// Contract — `runSeed233S2(cfg, dryRun, fetchImpl, authorizedBy?)`, pinned
-// by seed-233-s2-event-name-backfill-crede.spec.ts, which carries the
-// rationale (review history on #419). Side-effect-free on import; #417's
-// `assertLiveRunAuthorized` is the first statement. One db-wide census GET
-// (`_type.string=event&props=name,event_name,_owner,_editor`), no `_parent`
-// scoping, hard-throw when the reported `count` disagrees with the entity
-// count. Classification then stops the whole run — dry and live alike, no
-// request beyond the census, one ledger, throw — on any of four surprises:
-// more than one `name` or `event_name` value (`multiValue`), a present but
-// blank `event_name` (`blankEventName`), an `event_name` differing from a
-// non-empty `name` (`eventNameDiffers`), and a would-be-written event whose
-// `_owner`/`_editor` lack `cfg.userId` (`noRights`; the references ride on
-// the census, so the check costs no round-trip — references only, `.string`
-// bakes the person's name). Otherwise: an event_name PRESENT at all is
-// never written to — POST appends, so presence, not emptiness, is the test
-// — and counts as 'already-migrated'; `name` absent or blank -> 'no-name',
-// an empty value is never written; else POST
-// `[{ type: 'event_name', string: <name> }]` and verify three things: the
-// POST response carries the new property _id, a re-GET reads back the
-// source value, and exactly one value is stored. Any check failing records
-// the event as failed in the ledger, then throws — never a false 'migrated'.
-//
-// Re-run rules. This script is re-run immediately before S4 as the closing
-// sweep, so a run that writes zero and skips all must read as healthy:
-// `rerun: true` only when `migrated === 0`, `failed === 0` and `total > 0`
-// — the `failed === 0` term keeps a crashed run (which also wrote nothing)
-// from carrying the healthy flag, and an aborted run never carries it
-// either. A dry run and any aborted run key the plan `wouldMigrate` /
-// `wouldMigrateIds`, never `migrated`, so no artefact names writes that
-// never happened. Every step commits a ledger through #402's writer with
-// `sensitive: true`: the instance file is gitignored, the committed twin is
-// built from COMMITTED_ALLOW — `name` is a redact field, and the abort
-// lists' value keys (nameValue/storedValue) stay out of it.
-//
-// Authorization: PO-Approved via the #233 estate ruling (Mihkel,
-// 2026-09-18, Gama comment 5728594975) for definition and scope; #417's
-// gate requires a recorded AUTHORIZED_BY for DRY_RUN=false separately.
-//
-// Run (standalone node, outside Vite — needs the $env shim via loader.mjs):
-//   cd ~/workspace-app
-//   set -a; . ~/.config/mvox/credentials.env; set +a
-//   node --import tsx --import ./scripts/migrations/lib/register-loader.mjs \
-//     ./scripts/migrations/seed-233-s2-event-name-backfill-crede.ts        # DRY_RUN=true default
-//   DRY_RUN=false AUTHORIZED_BY='...' node --import tsx \
-//     --import ./scripts/migrations/lib/register-loader.mjs \
-//     ./scripts/migrations/seed-233-s2-event-name-backfill-crede.ts        # ONLY after dry-run verified + authorization
+// #233 S2: copies every crede event's `name` into `event_name` before S4 makes `name` a formula.
+// A formula overwrites the stored value on every save, so a name not copied first is gone.
+// PO-Approved: #233 estate ruling (Mihkel 2026-09-18, via Gama comment 5728594975), crede only.
+
+// Dry-run first: node --import tsx --import ./scripts/migrations/lib/register-loader.mjs <file>
+// Live: DRY_RUN=false AUTHORIZED_BY='...', only after a verified dry run and authorization.
 
 import { pathToFileURL } from 'node:url';
 import { entuFetch } from '$lib/entu/request';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { readDryRun, loadCredeCfg, readAuthorizedBy } from './lib/script-runner';
 import { writeLedger as writeLedgerShared, assertLiveRunAuthorized } from './lib/ledger-writer';
 
@@ -62,18 +17,16 @@ interface CensusEvent {
 	_id: string;
 	name?: Array<{ _id: string; string?: string }>;
 	event_name?: Array<{ _id: string; string?: string }>;
-	// Rights references ride along on the census — the preflight reads
-	// `reference` only; `.string` on these is the person's baked name and
-	// never leaves this module.
+	// Rights references ride on the census; `.string` here is a person's name and never leaves.
 	_owner?: Array<{ reference?: string }>;
 	_editor?: Array<{ reference?: string }>;
 }
 
 export interface RunSeed233S2Counts {
 	total: number;
-	/** LIVE runs only — events written and read-back-verified. Absent on a dry run or an aborted run. */
+	/** Live runs only: events written and verified. Absent on a dry or aborted run. */
 	migrated?: number;
-	/** DRY runs, and any aborted run (nothing was written). Absent when `migrated` is present. */
+	/** Dry runs and aborted runs (nothing written). Absent when `migrated` is present. */
 	wouldMigrate?: number;
 	alreadyMigrated: number;
 	noName: number;
@@ -87,13 +40,9 @@ export interface RunSeed233S2Result {
 	ledgerPath: string;
 }
 
-// The exact allowlist the committed twin is built from — ids, counts and
-// outcomes only; no DEFAULT_REDACT_FIELDS member, no `string`, and not the
-// abort lists' value keys (nameValue/storedValue stay in the gitignored
-// instance file — `eventId` is the only key that survives inside them).
-// 'authorizedBy' is deliberately absent: writeLedger injects it into the
-// committed envelope itself, and the fence
-// (lib/liveRunAuthorization.guard.spec.ts) rejects an allow entry for it.
+// The committed twin's allowlist: ids, counts and outcomes only, no redact field or `string`.
+// 'authorizedBy' is absent: writeLedger adds it itself, and the liveRunAuthorization guard
+// spec rejects an allow entry for it.
 const COMMITTED_ALLOW = [
 	'dryRun',
 	'rerun',
@@ -113,8 +62,7 @@ const COMMITTED_ALLOW = [
 	'eventId',
 	'eventNameDiffers',
 	'noRights',
-	// multi-value and blank-event_name abort lists: ids and counts only, no
-	// value ever — the two lists that survive into the committed twin intact.
+	// Abort lists: ids and counts only, never a value.
 	'multiValue',
 	'blankEventName',
 	'nameCount',
@@ -153,10 +101,7 @@ export async function runSeed233S2(
 
 	const total = censusBody.entities.length;
 	const outcomes: Array<{ eventId: string; outcome: Outcome }> = [];
-	// Events classified as needing a write. On a dry run, or an aborted run,
-	// this IS the plan (`wouldMigrateIds`). On a completed live run, the
-	// events actually written land in `migratedIds` instead — a subset when
-	// a canary failure stopped the loop partway through.
+	// The plan on a dry or aborted run; on a live run the written ones land in `migratedIds`.
 	const toWriteIds: string[] = [];
 	const nameById = new Map<string, string>();
 	const alreadyMigratedIds: string[] = [];
@@ -166,8 +111,7 @@ export async function runSeed233S2(
 	const eventNameDiffers: Array<{ eventId: string; nameValue: string; storedValue: string }> = [];
 	const blankEventName: Array<{ eventId: string }> = [];
 	const multiValue: Array<{ eventId: string; nameCount: number; eventNameCount: number }> = [];
-	// Rights references, straight off the census — the preflight below reads
-	// these instead of issuing a GET per would-write event.
+	// Off the census, so the rights preflight needs no GET per event.
 	const eventById = new Map<string, CensusEvent>();
 
 	for (const event of censusBody.entities) {
@@ -190,10 +134,7 @@ export async function runSeed233S2(
 		// must never be POSTed to, whatever that property's value is.
 		if (eventNameCount === 1) {
 			if (!isNonEmpty(eventNameValue)) {
-				// A blank value (whitespace-only, or a value document with no
-				// `string` at all). Nothing writes `event_name` today, so it is
-				// a surprise a human decides on — writing would append a second
-				// value and leave the event holding two.
+				// A blank value is for a human to decide: writing would append a second value.
 				blankEventName.push({ eventId: event._id });
 				continue;
 			}
@@ -277,10 +218,7 @@ export async function runSeed233S2(
 		);
 	}
 
-	// mvox-app#419 rights preflight — the whole list is built before any
-	// write is allowed to happen, on the dry run too. The references come off
-	// the census (zero extra round-trips); an event the runner holds no
-	// rights on returns without `_owner`/`_editor` either way.
+	// #419 rights preflight: the whole list is built before any write, dry run included.
 	const noRights: Array<{ eventId: string; nameValue: string }> = [];
 	for (const eventId of toWriteIds) {
 		const event = eventById.get(eventId) as CensusEvent;

@@ -1,146 +1,24 @@
-// mvox-app#233 S4 / mvox-app#421 — crede's event `name` becomes a formula of
-// date + type + event_name, then every event is touch-saved so the formula
-// recomputes. This is the LAST step of the #233 ordering fence carried by
-// event_name's own def (mvox-schema-extensions.ts): S1 (#418, the
-// event_name prop-def) -> S2 (#419, backfill every name into event_name) ->
-// S3 (#420, move every app read/write off `name`) -> S4 (this script, only
-// now PATCH `name` into a formula). A formula overwrites the stored value
-// on every save and has NO non-destructive mode — that is why S2/S3 must be
-// fully live first, and why the pairing preflight below is a hard STOP, not
-// a count to proceed past: it is the only thing standing between a
-// straggler (an event holding a `name` no `event_name` copy exists for) and
-// a destroyed name. No further app-code change lands with this script —
-// #420 already absorbed S4's consequence (eventDetail.ts reads
-// `event_name`, never `name`).
-//
-// Contract — `runSeed233S4(cfg, dryRun, fetchImpl, authorizedBy?)`, pinned
-// by seed-233-s4-event-name-formula-crede.spec.ts. Side-effect-free on
-// import; #417's `assertLiveRunAuthorized` is the first statement, before
-// the census GET. Flow:
-//
-// 1. CENSUS — S2's query shape, with the three formula-source props riding
-//    along: one db-wide GET
-//    `entity?_type.string=event&props=name,event_name,start_datetime,event_type&limit=10000`,
-//    hard-throw when the reported `count` disagrees with the entity count
-//    (a truncated census would leave events outside the pairing check for
-//    the formula to blank).
-//
-// 2. PROP-DEF + RIGHTS + IDEMPOTENCE PREFLIGHT — resolve the event type's
-//    existing `name` prop-def by S1's exact query shape (meta-type ids +
-//    event type id via the same lib/ensure-schema-type helpers S1 uses),
-//    then a plain GET for `_owner`/`_editor`/`formula`. Rights first:
-//    abort when `cfg.userId` is absent from the prop-def's own
-//    `_owner`/`_editor` references (`.reference` only — `.string` bakes
-//    the person's name). Then idempotence: abort when the prop-def already
-//    carries a formula value — a re-run after success reports and stops
-//    without writing. All four are read-only GETs, and they run BEFORE the
-//    census verdicts below for one reason: once the formula has landed,
-//    every nameless event carries a computed `name` with no `event_name`
-//    beside it — the straggler shape exactly — so a re-run judged on the
-//    census first would abort 'aborted-pairing' and announce 36 names
-//    about to be destroyed, when the step in fact already succeeded and
-//    only the touch-saves remain.
-//
-// 3. MULTI-VALUE stops the step ahead of pairing (S2 precedent: a doubled
-//    value is not classifiable at all): any event holding more than one
-//    `name` or `event_name` value aborts the whole run.
-//
-// 4. PAIRING PREFLIGHT — the go/no-go (#421 body): any event with a
-//    non-empty `name` and an empty/absent `event_name` is a straggler the
-//    formula would destroy. Found even one -> abort ledger, throw, zero
-//    POSTs, zero aggregate GETs. Classification for counts: `paired` =
-//    non-empty `event_name` (whatever `name` holds); `nameless` = neither
-//    non-empty. A total would be wrong (#421 body) — it moves as the app
-//    writes new events.
-//
-// 5. EMPTY-OPERAND STOP — an event whose three formula sources are ALL
-//    empty/absent computes to nothing at all: CONCAT_WS with no input
-//    writes no value (entu-www src/api/formulas/index.md, "Empty Input
-//    Behaviour": "no value (property not written)"), so that event would
-//    come out of the formula with no `name` whatsoever. The census already
-//    carries both formula sources, so this is checkable BEFORE the
-//    irreversible POST — without it the read-back is the first to notice,
-//    which is a mismatch throw over events that in fact lost nothing.
-//
-// 6. DRY RUN (the default) — zero POSTs, zero aggregate GETs. The ledger
-//    carries the exact formula string, the counts, the prop-def id, the
-//    rights result, and says plainly that the overwrite cannot be
-//    previewed (a formula has no non-destructive mode).
-//
-// 7. LIVE — exactly ONE POST, `entity/{namePropDefId}` with body
-//    `[{type:'formula', string: FORMULA}]`
-//    (probe-233-formula-name-overwrite-2026-09-03.ts's proven wire shape —
-//    no DELETE first: `formula` behaved as a settable single value). Then
-//    touch-save EVERY crede event via `GET entity/{id}/aggregate` — the
-//    documented mechanic (api/best-practices: "fresh formula values after
-//    external changes"); read-only, so no per-event write rights are
-//    needed, unlike S2's write path. The formula POST strictly precedes
-//    every aggregate GET. EVERY failure from the POST onwards writes a
-//    ledger (`completed-with-error`, with the ids touch-saved so far)
-//    BEFORE it rethrows: a 5xx does not prove the write did not apply, so
-//    past this line a bare throw would leave a live formula and a
-//    half-refreshed estate recorded nowhere but a console line.
-//
-//    RESUME (`resumeTouchSaves`, CLI `RESUME_TOUCH_SAVES=true`) is the way
-//    back from exactly that state: it requires the prop-def to already
-//    carry this FORMULA, issues NO POST, and runs the touch-saves and the
-//    read-back alone. It skips the pairing verdict because under a live
-//    formula the census cannot be read straight (a computed `name` beside
-//    no `event_name` wears the straggler shape) — safe only because the
-//    formula is already in force: `name` is no longer a storable property,
-//    so no new straggler can have appeared since the POST.
-//
-// 8. READ-BACK — one re-GET of `props=name,event_name` for the census set,
-//    asserting per event: exactly one `name` value, non-empty; where
-//    `event_name` was non-empty the new `name` CONTAINS it; where absent,
-//    the new `name` is still non-empty (date — type). Any mismatch ->
-//    ledger outcome `completed-with-mismatch` with `mismatchIds`, then
-//    THROW — the overwrite cannot be undone, so a silent partial is worse
-//    than a loud one.
-//
-// 9. LEDGER through #402's committed-allowlist writer: `sensitive: true`,
-//    `committed.allow` keyed by ids/outcome/counts only — never a field
-//    named `name` (DEFAULT_REDACT_FIELDS) and never `authorizedBy` in
-//    `allow` (the writer owns that envelope key; the #417 fence rejects an
-//    allow entry for it).
-//
-// Authorization: PO-Approved via the #233 estate ruling (Mihkel,
-// 2026-09-18, Gama comment 5728594975) for definition and scope; #417's
-// gate requires a recorded AUTHORIZED_BY for DRY_RUN=false separately, and
-// this run needs its OWN #421-specific authorization (S2's re-run
-// immediately before this preflight, and Mihkel's live-run go-ahead, are
-// both separate, manual steps — never part of this script).
-//
-// Run (standalone node, outside Vite — needs the $env shim via loader.mjs):
-//   cd ~/workspace-app
-//   set -a; . ~/.config/mvox/credentials.env; set +a
-//   node --import tsx --import ./scripts/migrations/lib/register-loader.mjs \
-//     ./scripts/migrations/seed-233-s4-event-name-formula-crede.ts        # DRY_RUN=true default
-//   DRY_RUN=false AUTHORIZED_BY='...' node --import tsx \
-//     --import ./scripts/migrations/lib/register-loader.mjs \
-//     ./scripts/migrations/seed-233-s4-event-name-formula-crede.ts        # ONLY after dry-run verified + authorization
-//   DRY_RUN=false RESUME_TOUCH_SAVES=true AUTHORIZED_BY='...' node --import tsx \
-//     --import ./scripts/migrations/lib/register-loader.mjs \
-//     ./scripts/migrations/seed-233-s4-event-name-formula-crede.ts        # ONLY to finish a run that died after the formula POST
+// #233 S4: turns crede's event `name` into a formula of date + type + event_name, then touch-saves.
+// A formula overwrites the stored name on every save, so any event with a name but no event_name
+// copy stops the run before the POST.
+
+// PO-Approved: #233 estate ruling (Mihkel 2026-09-18, Gama 5728594975); live needs #421's own go.
+// Dry-run first: node --import tsx --import ./scripts/migrations/lib/register-loader.mjs <file>
+// Live: DRY_RUN=false AUTHORIZED_BY='...'; RESUME_TOUCH_SAVES=true finishes a run cut after POST.
 
 import { pathToFileURL } from 'node:url';
 import { entuFetch } from '$lib/entu/request';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { resolveMetaTypeIds, resolveTypeIdByName } from './lib/ensure-schema-type';
 import { event_name } from './lib/mvox-schema-extensions';
 import { readDryRun, loadCredeCfg, readAuthorizedBy } from './lib/script-runner';
 import { writeLedger as writeLedgerShared, assertLiveRunAuthorized } from './lib/ledger-writer';
 
-// The exact RPN formula string the ONE live POST carries — #421's whole
-// point. `CONCAT_WS` drops absent operands, so the 36 nameless events
-// render `date — type` with no stray separator (entu-www formula syntax:
-// the last stack value is the separator, the rest are joined with it).
-//
-// Full ISO timestamp in the formula, no platform-side way to shorten it (re-verify if Entu ships SUBSTRING).
-// Re-verified 2026-09-21: Entu documented REGEX (entu/www bc86660); Mihkel then set the live formula by hand to
-//   start_datetime '^(\d{4}-\d{2}-\d{2}).*$' '$1' REGEX event_type event_name ' -- ' CONCAT_WS
-// (#421 comment, 2026-09-21). The constant below is what this script wrote and stays as history;
-// a re-run aborts on the existing formula.
+// Mihkel set the live formula by hand on 2026-09-21 with a REGEX date; this constant stays as
+// what the script wrote, and a re-run aborts on the existing formula.
+
+// Full ISO timestamp in the formula, no platform-side way to shorten it
+// (re-verify if Entu ships SUBSTRING).
 export const FORMULA = "start_datetime event_type event_name ' — ' CONCAT_WS";
 
 /** The dry ledger's plain statement that the overwrite cannot be previewed. */
@@ -150,11 +28,7 @@ const OVERWRITE_PREVIEW =
 /** The mismatch ledger's plain statement that the overwrite cannot be undone. */
 const MISMATCH_NOTE = 'the formula overwrite cannot be undone — the mismatched events need manual review';
 
-/**
- * The post-write failure ledger's plain statement. Fixed text, no error
- * message folded in: the ledger's committed twin is built from the payload,
- * and an upstream message is not a value this script controls.
- */
+/** Fixed text: an upstream error message is not a value this script controls. */
 const POST_WRITE_ERROR_NOTE =
 	'the run failed at or after the formula POST — the formula may already be in force and the touch-saves are partial; aggregatedIds lists what was refreshed, and a RESUME_TOUCH_SAVES=true run finishes the rest';
 
@@ -193,11 +67,8 @@ export interface RunSeed233S4Result {
 	ledgerPath: string;
 }
 
-// The exact allowlist the committed twin is built from — ids, counts and
-// outcomes only; no DEFAULT_REDACT_FIELDS member, no `string`, and no
-// `authorizedBy` (writeLedger injects it into the committed envelope
-// itself; the fence, lib/liveRunAuthorization.guard.spec.ts, rejects an
-// allow entry for it).
+// The committed twin's allowlist: ids, counts and outcomes only. 'authorizedBy' is absent:
+// writeLedger adds it itself, and the liveRunAuthorization guard spec rejects it in `allow`.
 const COMMITTED_ALLOW = [
 	'dryRun',
 	'outcome',
@@ -240,9 +111,8 @@ export async function runSeed233S4(
 	// mvox-app#417 — before the census GET, before any request leaves the script.
 	assertLiveRunAuthorized(dryRun, authorizedBy);
 
-	// The recovery path for a run that died after the formula POST: no POST,
-	// touch-saves and read-back only. See the header's RESUME paragraph for
-	// why it is allowed to skip the pairing verdict.
+	// Resume finishes a run that died after the formula POST: touch-saves and read-back only.
+	// It may skip the pairing verdict: under a live formula, no new straggler can appear.
 	const resumeTouchSaves = options.resumeTouchSaves === true;
 
 	function writeS4Ledger(outcome: RunSeed233S4Outcome, extra: Record<string, unknown>): string {
@@ -278,13 +148,11 @@ export async function runSeed233S4(
 	const total = censusBody.entities.length;
 	const multiValue: Array<{ eventId: string; nameCount: number; eventNameCount: number }> = [];
 	const pairingStragglers: Array<{ eventId: string }> = [];
-	// Events with no non-empty formula source at all: CONCAT_WS would write
-	// them no `name` value whatsoever.
+	// No non-empty formula source at all: CONCAT_WS would write these no `name` value.
 	const emptyOperands: Array<{ eventId: string }> = [];
 	const pairedIds: string[] = [];
 	const namelessIds: string[] = [];
-	// The one value the read-back needs per paired event — never the `name`
-	// value itself, which never leaves the census loop.
+	// Per paired event the read-back needs only event_name; `name` never leaves the census loop.
 	const eventNameById = new Map<string, string>();
 
 	for (const event of censusBody.entities) {
@@ -299,9 +167,7 @@ export async function runSeed233S4(
 		const nameValue = event.name?.[0]?.string;
 		const eventNameValue = event.event_name?.[0]?.string;
 
-		// Judged for every classifiable event, before the paired/nameless
-		// split: all three formula sources empty means the formula computes
-		// nothing and the event ends up with no `name` at all.
+		// All three formula sources empty: the formula computes nothing and the event loses `name`.
 		if (
 			!isNonEmpty(event.start_datetime?.[0]?.datetime) &&
 			!isNonEmpty(event.event_type?.[0]?.string) &&
@@ -316,8 +182,7 @@ export async function runSeed233S4(
 			continue;
 		}
 		if (isNonEmpty(nameValue)) {
-			// A straggler: a name with no event_name copy — the formula would
-			// destroy it. This is the go/no-go, not a count to proceed past.
+			// A straggler: the formula would destroy its name. This is the go/no-go, not a count.
 			pairingStragglers.push({ eventId: event._id });
 			continue;
 		}
@@ -328,14 +193,9 @@ export async function runSeed233S4(
 		return { total, paired: pairedIds.length, nameless: namelessIds.length };
 	}
 
-	// 2. PROP-DEF + RIGHTS + IDEMPOTENCE PREFLIGHT — S1's exact resolution
-	// shape, and it runs AHEAD of the multi-value/pairing blocks: all four
-	// checks here are read-only GETs, and until the script knows whether the
-	// formula already landed it cannot read the census straight. After a
-	// successful run every nameless event carries a formula-computed `name`
-	// and still has no `event_name`, which is exactly the straggler shape —
-	// so a re-run classified first would abort 'aborted-pairing' and report
-	// names about to be destroyed when in truth the step already succeeded.
+	// 2. Prop-def, rights, idempotence: read-only, and ahead of pairing, because once the formula
+	// has landed every nameless event looks like a straggler; a re-run judged on the census
+	// first would wrongly report names about to be destroyed.
 	const { entityMetaTypeId, propertyMetaTypeId } = await resolveMetaTypeIds(cfg, fetchImpl);
 	const typeId = await resolveTypeIdByName(cfg, entityMetaTypeId, event_name.onType, fetchImpl);
 
@@ -376,16 +236,11 @@ export async function runSeed233S4(
 		);
 	}
 
-	// Idempotence, checked only once rights are confirmed: a re-run after
-	// success reports and stops without writing. The counts riding along are
-	// the census read under a formula already in force — `nameless` reads 0
-	// there, since those events now hold a computed `name`; the outcome, not
-	// the split, is what this ledger is for.
+	// Idempotence, after rights: a re-run after success reports and stops without writing.
+	// Its counts are read under the live formula, so `nameless` reads 0.
 	const existingFormula = propDefEntity.formula?.[0]?.string;
 	if (resumeTouchSaves) {
-		// A resume run is the mirror image: it EXPECTS this exact formula to
-		// be in force already. Anything else (no formula at all, or someone
-		// else's) means the estate is not the one this run is finishing.
+		// A resume expects this exact formula in force; anything else is not the run it finishes.
 		if (existingFormula !== FORMULA) {
 			writeS4Ledger('aborted-resume-precondition', {
 				counts: baseCounts(),
@@ -412,8 +267,7 @@ export async function runSeed233S4(
 		);
 	}
 
-	// 3. MULTI-VALUE stops the step ahead of pairing (S2 precedent: a doubled
-	// value is not classifiable at all).
+	// 3. Multi-value stops the step ahead of pairing: a doubled value is not classifiable.
 	if (multiValue.length > 0) {
 		writeS4Ledger('aborted-multi-value', { counts: baseCounts(), multiValue });
 		throw new Error(
@@ -422,9 +276,8 @@ export async function runSeed233S4(
 		);
 	}
 
-	// 4. PAIRING PREFLIGHT — the go/no-go. Reached only once the prop-def is
-	// known to carry no formula, so a non-empty `name` here is a real stored
-	// value, never one the formula computed.
+	// 4. Pairing preflight, the go/no-go. The prop-def carries no formula here, so a non-empty
+	// `name` is a real stored value.
 	if (!resumeTouchSaves && pairingStragglers.length > 0) {
 		writeS4Ledger('aborted-pairing', { counts: baseCounts(), pairingStragglers });
 		throw new Error(
@@ -434,10 +287,7 @@ export async function runSeed233S4(
 		);
 	}
 
-	// 5. EMPTY-OPERAND STOP — all three formula sources empty computes to no
-	// value at all (entu-www src/api/formulas/index.md, "Empty Input
-	// Behaviour"), so the formula would leave the event with no `name`.
-	// Caught here, before the POST, not by the read-back after it.
+	// 5. Empty-operand stop: all sources empty computes no `name`; caught before the POST.
 	if (emptyOperands.length > 0) {
 		writeS4Ledger('aborted-empty-operands', { counts: baseCounts(), emptyOperands });
 		throw new Error(
@@ -465,18 +315,9 @@ export async function runSeed233S4(
 		};
 	}
 
-	// 7. LIVE — the ONE formula POST, no DELETE first
-	// (probe-233-formula-name-overwrite-2026-09-03.ts's proven wire shape),
-	// then the touch-saves and the read-back GET.
-	//
-	// Everything from the POST onwards runs inside one try/catch, and the
-	// catch writes the ledger BEFORE it rethrows: from here on a failure is
-	// never proof that nothing happened. A 5xx on the POST does not say the
-	// write did not apply, and a failure mid-touch-save leaves the formula
-	// live over a part-refreshed estate. The same stance the mismatch branch
-	// below states outright — the overwrite cannot be undone, so a silent
-	// partial is worse than a loud one — and Done-when box 4 wants the run's
-	// ledger committed either way.
+	// 7. Live: one formula POST (no DELETE first), touch-saves, read-back. From the POST on, the
+	// catch writes the ledger before rethrowing: a 5xx does not prove the write did not apply,
+	// and the overwrite cannot be undone.
 	let aggregated = 0;
 	const aggregatedIds: string[] = [];
 	let readbackBody: { count: number; entities: ReadbackEvent[] };
@@ -500,9 +341,8 @@ export async function runSeed233S4(
 			}
 		}
 
-		// Touch-save EVERY event, in census order — the documented, read-only
-		// mechanic (api/best-practices: "fresh formula values after external
-		// changes"). No per-event write rights are needed.
+		// Touch-save every event: GET aggregate is the documented, read-only way to refresh
+		// formula values, so no per-event write rights are needed.
 		for (const event of censusBody.entities) {
 			const aggregateRes = await entuFetch(cfg.db, `entity/${event._id}/aggregate`, cfg.token, {}, fetchImpl);
 			if (!aggregateRes.ok) {
@@ -513,7 +353,7 @@ export async function runSeed233S4(
 			aggregatedIds.push(event._id);
 		}
 
-		// 8. READ-BACK — proves Done-when box 2 ("no event lost its name").
+		// 8. Read-back: no event lost its name.
 		const readbackRes = await entuFetch(
 			cfg.db,
 			'entity?_type.string=event&props=name,event_name&limit=10000',
@@ -537,9 +377,7 @@ export async function runSeed233S4(
 		throw err;
 	}
 
-	// The read-back verdict itself cannot fail on the wire, so it sits
-	// outside the try: its own ledger (completed-with-mismatch) is the
-	// record of this path, and one run writes exactly one ledger.
+	// The verdict cannot fail on the wire, so it sits outside the try; one run writes one ledger.
 	const readbackById = new Map(readbackBody.entities.map((e) => [e._id, e]));
 
 	let readBackOk = 0;
@@ -598,8 +436,7 @@ export async function runSeed233S4(
 async function main(): Promise<void> {
 	const DRY_RUN = readDryRun();
 	const AUTHORIZED_BY = readAuthorizedBy();
-	// Opt-in only, and only literally 'true' — the recovery path for a run
-	// that died after the formula POST.
+	// Opt-in only, and only literally 'true'.
 	const RESUME_TOUCH_SAVES = process.env.RESUME_TOUCH_SAVES?.trim().toLowerCase() === 'true';
 	const cfg = await loadCredeCfg();
 	console.log(

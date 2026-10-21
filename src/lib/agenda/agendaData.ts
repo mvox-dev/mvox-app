@@ -1,55 +1,25 @@
 import { get } from 'svelte/store';
 import { getToken } from '$lib/auth/storage';
 import { selectedCollectiveStore } from '$lib/collectives/store';
-// From the dependency-free sibling, not `$lib/entu/request`: this module is
-// pure orchestration and must not inherit request.ts's `$env` chain
-// (fetchOptions.ts's header, and agendaData.spec.ts's own mocking note).
+// fetchOptions, not request.ts: keeps this module off request.ts's $env import chain.
 import { CACHED_READ, type EntuFetchOptions } from '$lib/entu/fetchOptions';
-import { listSeasons, listEvents, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { listSeasons, listEvents } from '$lib/seasons/entuSeasons';
+import { cfgFor, type EntuCfg } from '$lib/entu/cfg';
 import { currentSeason, manageableSeason, recentEvents } from '$lib/attendance/conductorLogic';
 import type { AgendaItem } from './types';
 import type { Season } from '$lib/seasons/types';
 
-// ── Combined load: upcoming + recent + conductor data in ONE fetch pass ────
-
 export interface FullAgendaResult {
 	upcoming: AgendaItem[];
-	/** ALL past events of the CURRENT season, reverse-chronological. */
 	recent: AgendaItem[];
-	/** The current season's entity id (null if no season is current). */
 	seasonId: string | null;
-	/** The current season's conductor person refs (for conductor-name display
-	 *  via `conductorLogic.resolveConductors`; not a rights signal). */
 	seasonConductors: string[];
-	/** #91 — the current season's `_owner`/`_editor` refs as VISIBLE to this
-	 *  caller (private bucket: no grant → empty). Repertoire management gates on
-	 *  these; carrying them here means the page derives its rights from the season
-	 *  read that already happened instead of firing a separate rights probe. */
 	seasonOwners: string[];
 	seasonEditors: string[];
-	/**
-	 * #132/T2 — the FULL season list `listSeasons` already fetched, thrown away
-	 * after picking the current one. Feeds SEVERAL page-level gates at zero
-	 * extra fetch cost — not an exhaustive list, but as of #261: the
-	 * event-create season `<select>`, the zero-season onboarding banner gate
-	 * (`seasons.length === 0` — the first-run surface, invisible to anyone
-	 * testing with data), the manageable-season field lookups, and
-	 * `deriveSeasonCreateRights`'s lapsed / no-current-season fallback. Check
-	 * the consumers before trimming this field.
-	 */
+	// Feeds several page gates (create-event select, zero-season banner); check them before trimming.
 	seasons: Season[];
-	/**
-	 * #167 — the ADMIN's season pick (`manageableSeason`): the current season
-	 * when one runs and has not lapsed, else the soonest NOT-YET-STARTED season
-	 * -- a season is manageable regardless of its dates. `null` only when there
-	 * are no seasons at all. These MIRROR seasonId/seasonOwners/seasonEditors
-	 * whenever a live season is current; they diverge in the future-only case
-	 * and in the lapsed-season case (review F1), which is exactly what lets the
-	 * page's event/series creation controls survive creating a season that has
-	 * not started yet. The VIEWER fields above
-	 * (seasonId/seasonOwners/seasonEditors/recent) keep their existing
-	 * semantics untouched.
-	 */
+	// The admin's pick: the current season, else the soonest not-yet-started one. Differs from
+	// seasonId when the current season has lapsed or only future seasons exist.
 	manageableSeasonId: string | null;
 	manageableSeasonOwners: string[];
 	manageableSeasonEditors: string[];
@@ -62,21 +32,8 @@ const NO_MANAGEABLE_SEASON = {
 	manageableSeasonEditors: []
 };
 
-/**
- * #83 fix (F1+F2) -- combined load that fetches seasons + rehearsals ONCE (the
- * same reads listAgenda already does), then splits the result into upcoming +
- * recent items and carries the season's conductor data along. This eliminates:
- *   - the duplicate listSeasons + listEvents calls that loadRecentEvents made
- *   - the N+1 entity/{id}?props=conductor requests that resolveConductorEventIds
- *     fired (conductor refs are now on the already-fetched AgendaItem/Season)
- *
- * #434 slice 2/6 — `opts` (`entuFetch`'s own `EntuFetchOptions`) rides down onto
- * both reads, DEFAULT OFF. `loadFullAgenda` below — the agenda page's own entry
- * point, and its only caller besides retention.ts — passes `CACHED_READ`.
- * retention.ts deliberately does NOT (review round finding 2): its fan-out runs
- * from the ROOT LAYOUT on every route, so a cache-served retention read would
- * set `servedFromCache` and put an "as of" line over fully live agenda rows.
- */
+// retention.ts calls this without CACHED_READ: it runs on every route, and a cached read
+// would put an "as of" line over live agenda rows.
 export async function listFullAgenda(
 	cfg: EntuCfg,
 	now: Date,
@@ -86,9 +43,6 @@ export async function listFullAgenda(
 	const nowIso = now.toISOString();
 	const seasons = await listSeasons(cfg, fetchImpl, opts);
 
-	// Fetch events (ALL types, #194/#202) for ALL seasons, paired with season id
-	// so we can isolate the current season's events for the Recent section
-	// without re-fetching.
 	const paired = await Promise.all(
 		seasons.map(async (s) => ({
 			seasonId: s.id,
@@ -128,18 +82,7 @@ export async function listFullAgenda(
 	};
 }
 
-/**
- * Convenience for callers: resolve db + token from T4's stores, then delegate to
- * listFullAgenda.
- *
- * #161 review fix round 2 — the whole resolve is db-scoped, so `personId` is NOT
- * threaded anywhere: `listSeasons` dropped it and `listFullAgenda` never read it.
- *
- * #434 slice 2/6 — THIS is the agenda's read-cache opt-in, and the only one for
- * the season/event readers: the agenda page (`src/routes/+page.svelte`) is this
- * function's sole caller, and it is the screen that renders the "as of <time>"
- * line the flag owes its reader. Pinned in readCache.optin-fence.spec.ts.
- */
+// The agenda page's read-cache opt-in; pinned in readCache.optin-fence.spec.ts.
 export async function loadFullAgenda(
 	now: Date = new Date(),
 	fetchImpl: typeof fetch = fetch
@@ -148,7 +91,7 @@ export async function loadFullAgenda(
 	const token = getToken();
 	if (!collective || !token)
 		return { upcoming: [], recent: [], seasons: [], ...NO_SEASON, ...NO_MANAGEABLE_SEASON };
-	return listFullAgenda({ db: collective.db, token }, now, fetchImpl, CACHED_READ);
+	return listFullAgenda(cfgFor(collective.db), now, fetchImpl, CACHED_READ);
 }
 
 // (*MVOX:Josquin*)

@@ -1,54 +1,13 @@
-// mvox-app#233 S1 — `event_name` prop-def on the EXISTING canonical `event`
-// type, crede ONLY. The estate ruling (Mihkel 2026-09-18, folded into the
-// #233 body) ends the per-collective twin-script pattern that every earlier
-// schema change used (seed-246, seed-256, seed-265, seed-282): ONE script
-// per step, crede only — no other collective receives this or any further
-// schema change.
-//
-// SHARING + ORDINAL ARE NOT KNOWN from any committed artefact — this script
-// reads the live `event.name` prop-def FIRST and DERIVES event_name's
-// posture from it: `_sharing` MIRRORS event.name's, `ordinal` sits ADJACENT
-// (name's ordinal + 1). Nothing hardcoded, nothing omit-and-inherited (the
-// #265 inherit-from-parent trap) — the prop-def's identity (name, wire type,
-// descriptions) is sourced from the schema of record, `event_name` in
-// `lib/mvox-schema-extensions.ts`, not inlined here.
-//
-// `runSeed233S1(cfg, dryRun, fetchImpl)` is the whole contract, pinned by
-// `seed-233-s1-event-name-propdef-crede.spec.ts`: side-effect-free on import
-// (no top-level network call — `main()` below only runs when this file is
-// executed directly, guarded by the `isMainModule` check at the bottom, same
-// pattern as scripts/roadmap/render.ts), so importing it from a test never
-// attempts `loadCredeCfg` or a live fetch — the network guard would fail the
-// suite loudly if it did.
-//
-// EMPTY STRUCTURE ONLY. mvox_crede is a real-life pilot holding real
-// people's personal data — this script adds one prop-def to the schema; it
-// creates zero instance data (S2, a separate script, does the backfill).
-//
-// Ledger: every live step on the real-personal-data pilot commits a result
-// ledger through #402's committed-allowlist writer — `sensitive: true`
-// routes the instance file to gitignored crede-instance/, `committed.allow`
-// builds the tracked twin by allowlist. `name` is a DEFAULT_REDACT_FIELDS
-// member, so the payload is keyed by typeId/propDefId/outcome/sharing/
-// ordinal/dryRun — never a key named `name`.
-//
-// Authorization: PO-Approved via the #233 estate ruling (Mihkel, 2026-09-18,
-// via Gama comment 5728594975) for the definition and scope; team-lead's
-// explicit "I authorize this run" gates DRY_RUN=false separately, per the
-// standing two-step gate (crede is real PII — routine pre-authorization
-// covers synthetic-db work only).
-//
-// Run (standalone node, outside Vite — needs the $env shim via loader.mjs):
-//   cd ~/workspace-app
-//   set -a; . ~/.config/mvox/credentials.env; set +a
-//   node --import tsx --import ./scripts/migrations/lib/register-loader.mjs \
-//     ./scripts/migrations/seed-233-s1-event-name-propdef-crede.ts        # DRY_RUN=true default
-//   DRY_RUN=false node --import tsx --import ./scripts/migrations/lib/register-loader.mjs \
-//     ./scripts/migrations/seed-233-s1-event-name-propdef-crede.ts        # ONLY after dry-run verified + authorization
+// #233 S1: adds the `event_name` prop-def to crede's `event` type; schema only, no instance data.
+// Its sharing mirrors the live `event.name` prop-def and its ordinal sits right after it.
+// PO-Approved: #233 estate ruling (Mihkel 2026-09-18, via Gama comment 5728594975), crede only.
+
+// Dry-run first: node --import tsx --import ./scripts/migrations/lib/register-loader.mjs <file>
+// Live: DRY_RUN=false, only on team-lead's "I authorize this run" (crede holds real PII).
 
 import { pathToFileURL } from 'node:url';
 import { entuFetch } from '$lib/entu/request';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import {
 	resolveMetaTypeIds,
 	resolveTypeIdByName,
@@ -83,9 +42,8 @@ export async function runSeed233S1(
 	const { entityMetaTypeId, propertyMetaTypeId } = await resolveMetaTypeIds(cfg, fetchImpl);
 	const typeId = await resolveTypeIdByName(cfg, entityMetaTypeId, event_name.onType, fetchImpl);
 
-	// Live posture of the EXISTING `name` prop-def — the ONLY source
-	// event_name's sharing/ordinal may be derived from (never hardcoded,
-	// never omitted — the #265 inherit-from-parent trap).
+	// The only source for event_name's sharing/ordinal: never hardcoded, never omitted,
+	// since an omitted one inherits from the parent.
 	const nameRes = await entuFetch(
 		cfg.db,
 		`entity?_type.reference=${propertyMetaTypeId}&_parent.reference=${typeId}&name.string=name&props=_sharing,ordinal&limit=1`,

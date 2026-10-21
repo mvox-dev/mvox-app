@@ -1,64 +1,20 @@
-// mvox-app#274 — shared script-safety runner. Extracted from 10+ crede/
-// migration scripts that each hand-rolled the same two pieces: the
-// DRY_RUN-default flag parse, and the mvox_crede API-key -> JWT exchange.
-// Before this file existed, 3 of the 8 original crede-instance scripts
-// (seed-184, seed-187, seed-188) had NO DRY_RUN guard at all — a copy-paste
-// of one of them was a live mutation with no opt-out. Centralizing here
-// means every future script gets dry-run-by-default BY CONSTRUCTION: it has
-// to import `readDryRun`/`loadCredeCfg` from somewhere, and this is the
-// only somewhere.
-//
-// Scope note: this does NOT touch `./creds.ts` (Josquin's T4.10 dev/test-db
-// loader, `ENTU_API_URL`/`ENTU_API_KEY`/`ENTU_DATABASE` + the frozen-host
-// verification dance) — dev/test-db scripts keep using `loadCfg` from there.
-// `loadCredeCfg` below is the crede-side analog for `MVOX_CREDE_DB`/
-// `MVOX_CREDE_API_KEY`, which never needed the same frozen-host check:
-// crede scripts hardcode `https://api.entu.app` for the token exchange,
-// which is also entu-config.ts's own PUBLIC_ENTU_API_BASE fallback — so the
-// mismatch `loadCfg` guards against (a deliberately non-default
-// ENTU_API_URL with an unexported PUBLIC_ENTU_API_BASE) cannot occur on the
-// crede path, since crede scripts never read ENTU_API_URL in the first
-// place. Verified against src/lib/entu-config.ts before writing this.
+// #274 shared runner for migration scripts: dry-run by default, mvox_crede key exchange.
 
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 
-/**
- * DRY_RUN is true unless the env var is literally the string 'false'
- * (case-insensitive) — same semantics every migrated script already used,
- * kept byte-identical so no run's observable behavior changes from the
- * refactor alone. Safe by default: an unset or misspelled value stays dry.
- */
+/** Only the literal 'false' (any case) runs live; unset or misspelled stays dry. */
 export function readDryRun(): boolean {
 	return (process.env.DRY_RUN ?? 'true').toLowerCase() !== 'false';
 }
 
-/**
- * mvox-app#417 — reads the live-run authorizer (who authorized the run, the
- * channel it came through, and a link to where the authorization is written
- * when there is one) from env `AUTHORIZED_BY`. Unset or blank (whitespace-only) reads as `undefined` —
- * a blank record is no record — so the caller's `assertLiveRunAuthorized`
- * preflight, not this reader, decides whether that is fatal.
- */
+// Blank reads as undefined; the caller's assertLiveRunAuthorized decides if that is fatal.
 export function readAuthorizedBy(): string | undefined {
 	const value = process.env.AUTHORIZED_BY?.trim();
 	return value ? value : undefined;
 }
 
-/**
- * Exchange the mvox_crede permanent API key for a 48h JWT, same wire shape
- * every crede-touching script duplicated inline (`GET /auth?db=<db>` with
- * the api-key as Bearer). Fails loud on a missing key, a non-2xx exchange,
- * or a 2xx body with no `token` (the apparent-success trap already named in
- * the individual scripts this replaces).
- *
- * mvox-app#419 — also surfaces the runner identity as `userId`: the
- * exchange's `accounts` array carries one entry per db the key can reach,
- * each with a `user._id`; the entry matching the TARGET db (not whichever
- * comes first) is the id a per-event rights preflight checks against
- * `_owner`/`_editor` references. Fails loud when the exchange reports none
- * for this db — a silent gap here would otherwise surface much later as
- * every event failing the rights preflight.
- */
+// userId is the accounts entry for THIS db, not the first one: rights preflights check it
+// against _owner/_editor. A missing token or user id fails loud.
 export async function loadCredeCfg(
 	dbEnvVar = 'MVOX_CREDE_DB',
 	keyEnvVar = 'MVOX_CREDE_API_KEY',
@@ -82,18 +38,10 @@ export async function loadCredeCfg(
 	return { db, token: body.token, userId };
 }
 
-/** Common error-to-string, unifies the `errMsg` helper duplicated across scripts. */
 export function errMsg(err: unknown): string {
 	return err instanceof Error ? err.message : String(err);
 }
 
-/**
- * Standard `main().catch()` wrapper: runs `fn`, prints a uniform ABORTED
- * line with the script name on any throw, and exits 1. Callers still own
- * their own success/failure exit code inside `fn` (returned as `false` on
- * "ran but had failures", consistent with the ledger-driven failure counts
- * every migrated script already reports).
- */
 export function runScript(name: string, fn: () => Promise<boolean>): void {
 	fn()
 		.then((ok) => process.exit(ok ? 0 : 1))

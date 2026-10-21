@@ -1,40 +1,13 @@
-// mvox-app#445 — REMEDY. Mihkel, verbatim via team-lead/Gama, comment
-// 5775480675: "go for cleanup" then "resume on 38", in that order —
-// covers cleanup of every row this shape turns up on, not only the first.
-//
-// GENERALISED (2nd round): `runRemedyDuplicateRights(cfg, dryRun,
-// target, ...)` takes the entity id and both value pairs as an explicit
-// `target` parameter — nothing about a specific row is hardcoded in the
-// engine. `main()` below still targets ONE row per invocation (edit
-// `TARGET` and re-run for the next one) — see its own comment for the
-// current target and the diagnosis it's based on.
-//
-// SHAPE this remedies (seen twice: 6a9c3d37...292, 6a9c3d38...729b): an
-// entity holds TWO values each for `_sharing` and `_inheritrights` — an
-// OLDER pair from the first live run, and a NEWER pair from a later
-// resume run whose own POST/read-back never saw the older pair (every
-// read from the first run's write until the resume's own write showed it
-// absent). Both pairs read identically (`domain` / `true`); this remedy
-// keeps the OLDER pair and deletes the newer, matching the "one value per
-// rights-type property" shape every other row on this job already holds.
-//
-// SAFETY: step 1 reads the entity fresh and asserts its `_sharing`/
-// `_inheritrights` value ids are EXACTLY the four ids `target` names —
-// the two to keep AND the two to delete, nothing more, nothing less,
-// nothing renamed. Any other observed state aborts before any write.
-//
-// Run (dry-run first, always):
-//   cd ~/workspace-app
-//   set -a; . ~/.config/mvox/credentials.env; set +a
-//   node --import tsx --import ./scripts/migrations/lib/register-loader.mjs \
-//     ./scripts/migrations/probes/remedy-445-duplicate-rights-values-crede-2026-09-22.ts        # DRY_RUN=true default, targets TARGET below
-//   DRY_RUN=false AUTHORIZED_BY='...' node --import tsx \
-//     --import ./scripts/migrations/lib/register-loader.mjs \
-//     ./scripts/migrations/probes/remedy-445-duplicate-rights-values-crede-2026-09-22.ts        # ONLY after dry-run verified + authorization
+// #445 remedy on crede (2026-09-22): delete a newer duplicate `_sharing`/`_inheritrights` pair.
+// Keeps the older pair. Authorized by Mihkel, "go for cleanup" (via team-lead/Gama, 5775480675).
+// Step 1 aborts unless the entity holds exactly the four value ids `target` names.
+
+// Dry-run first: node --import tsx --import ./scripts/migrations/lib/register-loader.mjs <file>
+// Live: DRY_RUN=false AUTHORIZED_BY='...', only after a verified dry run and authorization.
 
 import { pathToFileURL } from 'node:url';
 import { entuFetch } from '$lib/entu/request';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { loadCredeCfg, readDryRun, readAuthorizedBy } from '../lib/script-runner';
 import { writeLedger, assertLiveRunAuthorized } from '../lib/ledger-writer';
 
@@ -46,10 +19,8 @@ export interface RemedyTarget {
 	deleteInheritId: string;
 }
 
-// Read-only diagnosis (2026-09-22 11:2xZ), evidence relayed to team-lead:
-// entity 6a9c3d38ca67df980f41729b holds a 10:42:54Z pair (first live run)
-// and an 11:27:1xZ pair (the aborted resume). Edit this constant and
-// re-run for the NEXT row this shape turns up on.
+// Diagnosed 2026-09-22: this entity holds the first live run's pair and the resume's pair.
+// Edit this constant and re-run for the next row with the same shape.
 export const TARGET: RemedyTarget = {
 	entityId: '6a9c3d38ca67df980f41729b',
 	keepSharingId: '6ab25bae5685992c758ad3d5',
@@ -72,13 +43,8 @@ export const COMMITTED_ALLOW = [
 	'_sharing',
 	'_inheritrights',
 	'_id',
-	// 'string' is deliberately absent — writeLedger's own blanket rule
-	// excludes it from every committed.allow regardless of content (rights-
-	// tier text, not PII, but the writer refuses the combination outright;
-	// see seed-445-person-rsvp-domain-inherit-crede.ts's identical note).
-	// The tier VALUE ('domain') is stripped from the committed twin; the
-	// value's _id, and 'cleaned'/'aborted-*' outcome, are what the audit
-	// trail needs. Full detail survives in the gitignored instance ledger.
+	// 'string' is absent: writeLedger refuses it in every committed.allow. The tier value is
+	// stripped from the committed twin; full detail stays in the gitignored instance ledger.
 	'boolean',
 	'postRunRecheck',
 	'stillCorrect'

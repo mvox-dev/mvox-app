@@ -8,7 +8,7 @@
 	import { formatFileSize } from '$lib/files/fileSize';
 	import { listAllEditions } from '$lib/library/libraryData';
 	import { focusTestIdAfterRender } from '$lib/a11y/focusable';
-	import type { EntuCfg } from '$lib/seasons/entuSeasons';
+	import type { EntuCfg } from '$lib/entu/cfg';
 
 	interface Props {
 		ready: boolean;

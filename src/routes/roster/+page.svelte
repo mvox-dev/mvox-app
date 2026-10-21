@@ -11,9 +11,8 @@
 	import { loadActiveAndArchivedRosters } from '$lib/roster/memberLifecycle';
 	import { listSections, groupBySection } from '$lib/sections/sectionData';
 	import { dbEditRight } from '$lib/nav/dbRights';
-	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 	import { isAuthExpiredError } from '$lib/entu/request';
-	import { cfgFor } from '$lib/entu/cfg';
+	import { cfgFor, type EntuCfg } from '$lib/entu/cfg';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
 	// The write gate: every write here (member lifecycle, record, invites, section tree)

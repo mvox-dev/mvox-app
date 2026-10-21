@@ -34,7 +34,7 @@
 	import AdminRoles from '$lib/admin/AdminRoles.svelte';
 	import CollectiveNameEditor from '$lib/admin/CollectiveNameEditor.svelte';
 	import RosterNamesToggle from '$lib/profile/RosterNamesToggle.svelte';
-	import type { EntuCfg } from '$lib/seasons/entuSeasons';
+	import type { EntuCfg } from '$lib/entu/cfg';
 
 	interface Props {
 		generation: () => number;

@@ -1,6 +1,6 @@
 // The collective display name lives on the mvox_collective marker entity, not the database.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
 import { resolveCollectiveNameMarker, updateCollectiveName } from './collectiveName';
 

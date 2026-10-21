@@ -4,7 +4,7 @@
 	import PartialNotice from '$lib/components/PartialNotice.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
-	import { cfgFor } from '$lib/entu/cfg';
+	import { cfgFor, type EntuCfg } from '$lib/entu/cfg';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
 	import DeleteConfirmPair from '$lib/components/DeleteConfirmPair.svelte';
 	import SeriesCreateForm from '$lib/agenda/SeriesCreateForm.svelte';
@@ -15,7 +15,6 @@
 		countSeriesOccurrences as apiCountSeriesOccurrences,
 		type SeriesListItem
 	} from '$lib/seasons/seasonManage';
-	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 	import {
 		runSeasonManageDelete,
 		seasonManageDeleteErrorText,

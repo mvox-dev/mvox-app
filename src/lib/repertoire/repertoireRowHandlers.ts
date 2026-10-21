@@ -1,5 +1,5 @@
 // The repertoire row handlers shared by the agenda and the event page's works section.
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { Edition } from '$lib/library/libraryData';
 import type { RepertoireItem } from '$lib/repertoire/repertoireData';
 import type { RepertoireStatus, WorkRow } from '$lib/repertoire/types';

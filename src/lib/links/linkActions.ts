@@ -1,7 +1,8 @@
 // Link collection writes (#256); linkActions.spec.ts pins the full contract.
 import { entuFetch } from '$lib/entu/request';
 import { overwriteEntityValues, type OverwriteEntry } from '$lib/entu/replaceProperty';
-import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resolveTypeId } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { postEntity } from '$lib/entity/entityCreateShared';
 
 export { renumberDisplayOrder as reorderLinks } from '$lib/sections/sectionTreeWrites';

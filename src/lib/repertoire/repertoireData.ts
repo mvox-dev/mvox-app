@@ -1,25 +1,11 @@
+// Repertoire reads: an event's program_items, else its season's repertoire_items.
 import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
-
-// #90 TR.2 GREEN — the repertoire READ data layer. Read-only throughout: no
-// entuFetch(..., { method: 'POST' | 'DELETE' }) anywhere in this module. Schema
-// anchors (entu/research schema.ts):
-//   repertoire_item — child of season; props: name (formula from work), work
-//     (ref, required), edition (ref, optional pinned edition), status
-//     ('learning | active | retired | dropped; default `active`').
-//   program_item — child of event; props: name (formula via edition→work),
-//     edition (ref, required), ordinal (number, required, concert position),
-//     notes (text).
-// Source hierarchy (#90): an event WITH program_items uses those (ordinal
-// order); an event WITHOUT falls back to the season's repertoire_items,
-// filtered to active/learning — retired/dropped never reach a member's view.
+import type { EntuCfg } from '$lib/entu/cfg';
 
 export interface RepertoireItem {
 	id: string;
 	workId: string;
-	/** Pinned edition ref; '' = no pinned edition. */
 	editionId: string;
-	/** 'learning | active | retired | dropped'; defaults to 'active' (schema default). */
 	status: string;
 	name: string;
 }
@@ -28,7 +14,6 @@ export interface ProgramItem {
 	id: string;
 	editionId: string;
 	ordinal: number;
-	/** Soloists, dedications; '' = absent. */
 	notes: string;
 	name: string;
 }
@@ -51,16 +36,6 @@ export async function listRepertoireItems(
 	fetchImpl: typeof fetch = fetch,
 	opts: EntuFetchOptions = {}
 ): Promise<RepertoireItem[]> {
-	// #321 class (1) — ONE season's repertoire, `_parent`-scoped to that season:
-	// the works the collective is rehearsing this year, a programme a conductor
-	// maintains by hand (tens of rows; the panel renders one flat list). NOT the
-	// library — the collective-lifetime catalogue is `listWorks` (libraryData.ts),
-	// which is class (2) and reports `truncated`. limit=500 is an explicit, ample
-	// bound.
-	//
-	// #434 slice 5 — `opts` threads straight into the one `entuFetch` call,
-	// default off (SHARED reader — resolveEventWorksBatch's own callers decide,
-	// never hard-wired here).
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=repertoire_item&_parent.reference=${encodeURIComponent(seasonId)}&props=name,work,edition,status&limit=500`,
@@ -74,9 +49,7 @@ export async function listRepertoireItems(
 	const rows: RepertoireItem[] = [];
 	for (const raw of body.entities ?? []) {
 		const workId = raw.work?.[0]?.reference;
-		// A repertoire_item with no readable work reference is broken data — drop
-		// it rather than fabricating workId '' (which would silently point every
-		// caller resolving work details at nothing).
+		// No readable work reference is broken data: drop it, never fake workId ''.
 		if (!workId) continue;
 		rows.push({
 			id: raw._id,
@@ -103,12 +76,6 @@ export async function listProgramItems(
 	fetchImpl: typeof fetch = fetch,
 	opts: EntuFetchOptions = {}
 ): Promise<ProgramItem[]> {
-	// #321 class (1) — ONE event's programme, `_parent`-scoped to that event: the
-	// pieces sung at a single concert, in `ordinal` order. A concert programme runs
-	// to tens of items; limit=500 is an explicit, ample bound.
-	//
-	// #434 slice 5 — `opts` threads straight into the one `entuFetch` call, same
-	// reasoning as `listRepertoireItems` above.
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=program_item&_parent.reference=${encodeURIComponent(eventId)}&props=name,edition,ordinal,notes&limit=500`,
@@ -131,37 +98,13 @@ export async function listProgramItems(
 
 const ACTIVE_STATUSES = new Set(['active', 'learning']);
 
-/**
- * #91 TR.3 — read mode.
- *
- * `includeInactive: true` keeps retired/dropped repertoire_items in the
- * fallback. It exists because the member-facing filter made the status toggle
- * ONE-WAY: the instant an editor set a work to retired the row vanished from
- * the only surface carrying the toggle, and `pickableWorks` deliberately
- * refuses to re-offer a work that already HAS a repertoire_item — so the work
- * became permanently unmanageable. A rights-holder therefore reads the
- * UNFILTERED repertoire; every other reader keeps the AC-8 filter.
- */
-// #434 slice 5 — extends `EntuFetchOptions` so the read-cache opt-in threads
-// down alongside `includeInactive`, all the way to `listProgramItems`'s /
-// `listRepertoireItems`'s own `entuFetch` calls above. Still a SHARED reader's
-// options bag: nothing in this file names `CACHED_READ` itself — the
-// allowlisted screen entry points do (readCache.optin-fence.spec.ts).
+// includeInactive is for rights-holders: hiding retired works there would make the status
+// toggle one-way, since a work with a repertoire_item is never offered again.
 export interface RepertoireReadOptions extends EntuFetchOptions {
-	/** Keep retired/dropped repertoire_items in the fallback (management read). */
 	includeInactive?: boolean;
 }
 
-/**
- * The source hierarchy (#90): an event WITH program_items uses those
- * (concert-ordinal order) and never touches the season's repertoire — a
- * programmed concert must not silently gain unrelated season rep. An event
- * WITHOUT program_items falls back to the CURRENT season's repertoire_items,
- * filtered to active/learning (retired/dropped never reach a member, AC-8)
- * unless `options.includeInactive` says otherwise (see RepertoireReadOptions).
- * `seasonId === null` (no current season) short-circuits the fallback to an
- * empty repertoire WITHOUT a second fetch — there is nothing to query.
- */
+// A programmed event never falls back to season repertoire; seasonId null skips the read.
 export async function resolveEventWorks(
 	cfg: EntuCfg,
 	eventId: string,
@@ -173,21 +116,7 @@ export async function resolveEventWorks(
 	return byEvent[eventId];
 }
 
-/**
- * The whole agenda's worth of works in ONE pass — what the page actually calls
- * (the agenda renders every event at once, so the single-event resolver above
- * would re-read the SAME season repertoire once per unprogrammed event: an N+1
- * against a list that is identical for all of them).
- *
- * Same hierarchy as resolveEventWorks, and the same two economies:
- *   - the season repertoire is read AT MOST ONCE, and only if at least one
- *     event actually falls back to it (a fully programmed agenda never touches
- *     it — same rule as the single-event path: a programmed event must not
- *     silently gain unrelated season rep);
- *   - `seasonId === null` short-circuits the fallback with NO fetch.
- * Fails loud as a whole: one rejected program_item read rejects the batch
- * rather than silently showing some events as work-free.
- */
+// Reads the season repertoire at most once for the whole agenda; one failed read rejects all.
 export async function resolveEventWorksBatch(
 	cfg: EntuCfg,
 	eventIds: string[],
@@ -196,8 +125,6 @@ export async function resolveEventWorksBatch(
 	options: RepertoireReadOptions = {}
 ): Promise<Record<string, EventWorks>> {
 	const uniqueIds = [...new Set(eventIds)];
-	// #434 slice 5 — `options` (RepertoireReadOptions extends EntuFetchOptions)
-	// threads to both reads, same as every other shared reader in this slice.
 	const programsPerEvent = await Promise.all(
 		uniqueIds.map(async (id) => [id, await listProgramItems(cfg, id, fetchImpl, options)] as const)
 	);

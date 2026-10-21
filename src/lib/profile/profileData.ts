@@ -1,6 +1,7 @@
 // The sole profile create path (#25, soleCreatePath.spec.ts) and the profile edit reads/writes.
 import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
-import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resolveTypeId } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { postEntity } from '$lib/entity/entityCreateShared';
 import { clearEntityProperty, replaceEntityProperty } from '$lib/entu/replaceProperty';
 

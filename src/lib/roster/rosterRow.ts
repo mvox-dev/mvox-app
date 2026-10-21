@@ -1,5 +1,5 @@
 // A member's shared profile subset and the roster row built from it.
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { listMyProfiles, resolveField, type MyProfile } from '$lib/profile/profileData';
 import { hasVisibleName } from '$lib/profile/completionGate';
 import type { ActiveMember } from './rosterData';

@@ -1,7 +1,7 @@
 // Library availability and the name lookups behind lent copies and my-loans rows.
 import { m } from '$lib/paraglide/messages.js';
 import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { listMyProfiles } from '$lib/profile/profileData';
 import { resolveRealNameByPerson } from '$lib/roster/rosterData';
 import type { Copy, Edition, Lending, Work } from './libraryReads';

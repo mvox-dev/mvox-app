@@ -1,17 +1,11 @@
-// #53 (#37-P3.4b) — delete the 7 corroborated orphan member entities (name +
-// section-parent-ref match, per the corrected #46 comparison committed at
-// `seed-results/probe-46-parent-section-corroboration-2026-08-08T04-31-31-000Z.json`).
-// Authorized on #37 by Gama (2026-08-08 07:33) — the delete set fell out
-// MECHANICALLY from the recorded criterion, no judgment-call rows. All 7 are
-// currently `_sharing:private` (Phase C, #46) — this converts hidden→deleted.
-//
-// Every row is re-verified LIVE before being treated as a delete target —
-// not trusted from the committed artifact alone (state could have moved:
-// entity deleted by another path, _sharing changed, etc.).
+// #53: delete the 7 orphan member entities corroborated by name and section parent (#46).
+
+// Authorized by Gama on #37 (2026-08-08 07:33); the set falls out of the recorded criterion.
+// Each target is re-verified live first; the committed artifact alone could be stale.
 
 import { readFileSync } from 'node:fs';
 import { entuFetch } from '$lib/entu/request';
-import { type EntuCfg } from '$lib/seasons/entuSeasons';
+import { type EntuCfg } from '$lib/entu/cfg';
 
 export const CORROBORATION_ARTIFACT_PATH = 'scripts/migrations/seed-results/probe-46-parent-section-corroboration-2026-08-08T04-31-31-000Z.json';
 
@@ -74,11 +68,7 @@ export function loadCorroboratedTargets(): PlannedDelete[] {
 
 export type VerifiedTarget = PlannedDelete & { liveExists: boolean; liveSharing: string | null; verified: boolean; verifyMessage?: string };
 
-/** Step-0 enumeration (READ-ONLY). Re-verifies each of the 7 planned targets
- * live: still exists, still `_sharing:private` (Phase C's expected state).
- * Also re-confirms none of the 7 ids appear in the wider "stays untouched"
- * populations (the 11 uncorroborated + 97 without-twin) — cross-checked
- * against the same source artifact's full result set, not re-derived. */
+// Also checks none of the 7 ids is in the populations that must stay untouched.
 export async function verifyAll(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<{ targets: VerifiedTarget[]; crossCheckPassed: boolean; crossCheckMessage: string }> {
 	const planned = loadCorroboratedTargets();
 	const raw = readFileSync(CORROBORATION_ARTIFACT_PATH, 'utf-8');

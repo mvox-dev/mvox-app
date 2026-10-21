@@ -1,5 +1,6 @@
 // The shared route-load machine (#232); routeLoad.spec.ts pins its contract.
 import { getToken } from '$lib/auth/storage';
+import { cfgFor } from '$lib/entu/cfg';
 import { isAuthExpiredError } from '$lib/entu/auth-expired';
 import { reportProblem } from '$lib/problems/reportProblem';
 
@@ -94,7 +95,7 @@ export function createRouteLoadMachine<TSelected extends { db: string }>(
 		}
 
 		opts.setStatus('loading');
-		const cfg = { db: current.db, token };
+		const cfg = cfgFor(current.db);
 		const ctx = { cfg, selected: current, g, isCurrent: () => isCurrent(g) };
 		if (opts.gate) {
 			const pass = await opts.gate(ctx);

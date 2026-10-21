@@ -1,6 +1,6 @@
 // Every crede person and rsvp gets _sharing domain and _inheritrights true.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 
 const writeLedgerMock = vi.fn(() => 'scripts/migrations/seed-results/crede-instance/seed-445-fake.json');
 

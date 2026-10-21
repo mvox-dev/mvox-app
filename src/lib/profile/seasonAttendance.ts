@@ -10,7 +10,8 @@ import { reportProblem } from '$lib/problems/reportProblem';
 import { manageRightsFrom, resolveManageRights } from '$lib/repertoire/repertoireActions';
 import { loadActiveAndArchivedRosters } from '$lib/roster/memberLifecycle';
 import { findMyMemberId } from '$lib/rsvp/rsvpData';
-import { listEvents, listSeasonsOf, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { listEvents, listSeasonsOf } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { AgendaItem } from '$lib/agenda/types';
 import type { Season } from '$lib/seasons/types';
 

@@ -2,7 +2,7 @@
 // Bound entries come back whole; invite placeholders come back masked and are never identities.
 
 import { entuFetch } from '$lib/entu/request';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { reportProblem } from '$lib/problems/reportProblem';
 
 export interface LinkedIdentity {

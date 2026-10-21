@@ -1,6 +1,7 @@
 // Section write layer; specs and pages mock this one path, so every part re-exports here.
 import { postEntity } from '$lib/entity/entityCreateShared';
-import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resolveTypeId } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 
 export { assignMemberSection, unassignMemberSection } from './sectionMembership';
 export { reorderSections, deleteSection, reparentSection, renameSection } from './sectionTreeWrites';

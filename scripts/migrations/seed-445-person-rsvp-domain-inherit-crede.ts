@@ -1,110 +1,17 @@
-// mvox-app#445 — every `person` and every `rsvp` entity on crede gets
-// `_sharing: domain` and `_inheritrights: true`. Mihkel's ruling (team
-// console, 2026-09-22 10:14:18 UTC, confirmed on #445): "yes, this is my
-// ruling. we have all persons and rsvp's domain shared". Crede only.
-//
-// DOCS FIRST (entu-www, read via `git show origin/main:<path>` — the local
-// checkout sits on `docs/sharing-not-inherited`, not main):
-//
-//   - `_sharing`/`_inheritrights` are RIGHTS-TYPE properties. `src/api/
-//     properties/index.md` ("Deleting a Property" restrictions table):
-//     "`_owner`, `_editor`, `_expander`, `_viewer`, `_noaccess`, `_sharing`,
-//     `_inheritrights`, `_parent` | Requires `_owner` rights on the
-//     entity." `docs/architecture/entu-rights-and-visibility-model.md`
-//     ER-11 (this repo, sourced from entu-api's own code): "Changing
-//     `_sharing` requires `_owner`: `_sharing` is a rights-type property,
-//     and writing or deleting any rights-type property requires the caller
-//     be in the entity's `_owner` list." So the rights preflight below
-//     checks `_owner` ONLY — never `_editor` (unlike seed-233-s2's
-//     `event_name` preflight, a PLAIN property, owner-or-editor).
-//
-//   - What `domain` means: `src/overview/entities/index.md` ("Sharing"
-//     table): "`domain` | All authenticated users in the database,
-//     regardless of explicit rights."
-//
-//   - PROPERTY-LEVEL VISIBILITY (#445 body, "what each move makes
-//     visible"): an entity's own `_sharing` is only ONE of a 3-gate AND —
-//     `src/configuration/entity-types/index.md`: the TYPE-DEF's `_sharing`
-//     is a CAP ("not set | No properties are projected into domain or
-//     public views, regardless of property definition settings"; "domain |
-//     Properties set to `domain` are exposed to domain users. Properties
-//     set to `public` are automatically capped to `domain`."), and each
-//     PROP-DEF carries its own `_sharing` tier. So "which properties become
-//     member-visible" when an entity moves to `domain` = the type-def's cap
-//     allows domain/public projection AND the prop-def's own tier is
-//     `domain` or `public`. Both reads are schema metadata (prop-def
-//     NAMES and tiers), never instance data — safe to log and commit.
-//
-//   - REPLACE vs APPEND on POST: entu-www's generic property docs are
-//     SILENT on this for rights-type properties (their one worked example
-//     is a `list: true` custom prop). This repo's own prior empirical
-//     finding fills the gap: `teams/mvox-dev/memory/architecture-
-//     decisions.md` "Entu mutation-op wire shapes" (2026-05-20) — `POST
-//     boolean property` row: "Replace semantics: DELETE existing value
-//     first then POST (same as UPDATE)." Empirically confirmed by Phase D
-//     sub-op 5 (commit 88595c7) — 6 successful `_inheritrights: false`
-//     flips. That precedent is specific to `_inheritrights`, a
-//     non-reference boolean, the same shape `_sharing` (a non-reference
-//     string) is — it does NOT extend the separate "direct rights grants
-//     REPLACE by design" memory, which is specific to the four REFERENCE-
-//     bearing grant tiers. So: DELETE the prior value by `_id` first when
-//     one exists, THEN POST; when absent (both properties' legitimate
-//     default state), POST alone — nothing to delete.
-//
-// SCOPE FENCE (#445 body): "Profiles are not in scope and must not be swept
-// in. A `profile` is a child of a person and is deliberately created with
-// `_inheritrights: false`... A sweep that reaches them by walking children
-// would undo the profile privacy model." This script NEVER walks children —
-// both censuses are flat `_type.string=person` / `_type.string=rsvp` GETs,
-// no `_parent` scoping. As a second, independent fence, a read-only
-// `_type.string=profile&props=_id` census runs alongside, and the write
-// plan is asserted disjoint from it before any write — belt-and-suspenders
-// against a future edit accidentally widening the census filter.
-//
-// MOVING-SET EXPECTATION (Gama, #445 comment, relaying Mihkel: "I expect
-// the changes to touch my person and rsvp's only"; "any wider exposure
-// would be a surprise"): `rsvp` is a child of `person` (`_parent.reference`
-// — src/lib/rsvp/rsvpData.ts), so every rsvp census row carries `_parent`,
-// letting the moving set be checked against this expectation WITHOUT a
-// second per-rsvp GET. If the union of (moving persons) and (moving rsvps'
-// parent person ids) is not exactly ONE person, the run aborts before any
-// write — dry run included — and reports the full moving set (ids + type +
-// prior tier, never a name) rather than proceeding on a wider sweep. Only a
-// human lifts that stop.
-//
-// Contract — `runSeed445(cfg, dryRun, fetchImpl, authorizedBy?)`, pinned by
-// the paired `.spec.ts`. `assertLiveRunAuthorized` is the FIRST statement.
-// TWO db-wide instance censuses (person, rsvp; rsvp's also carries
-// `_parent`), hard-throw per type on count mismatch. A `_sharing` or
-// `_inheritrights` holding more than one value is not classifiable —
-// collected as `multiValue`, stops the run before any write. Then, in
-// order: profile-overlap check, moving-set-scope check, ER-11 rights
-// preflight (`_owner` only) — each a hard abort with its own ledger outcome
-// when non-empty, all three running on the dry run too.
-//
-// LIVE write per entity needing it: for each of `_sharing`/`_inheritrights`
-// this entity needs, DELETE the prior value by `_id` if one exists, then
-// POST the new value; after both applicable writes, ONE read-back GET
-// `entity/{id}?props=_sharing,_inheritrights` asserts BOTH hold exactly one
-// value, correct. Any check failing → entity recorded failed, ledger
-// written, throw — never a false "written".
-//
-// Ledger: `sensitive: true` (persons are real PII) routes the instance file
-// to gitignored `crede-instance/`; the committed twin is ids/counts/tiers/
-// prop-def-names only via `COMMITTED_ALLOW` — never a member value.
-//
-// Run (standalone node, outside Vite — needs the $env shim via loader.mjs):
-//   cd ~/workspace-app
-//   set -a; . ~/.config/mvox/credentials.env; set +a
-//   node --import tsx --import ./scripts/migrations/lib/register-loader.mjs \
-//     ./scripts/migrations/seed-445-person-rsvp-domain-inherit-crede.ts        # DRY_RUN=true default
-//   DRY_RUN=false AUTHORIZED_BY='...' node --import tsx \
-//     --import ./scripts/migrations/lib/register-loader.mjs \
-//     ./scripts/migrations/seed-445-person-rsvp-domain-inherit-crede.ts        # ONLY after dry-run verified + authorization
+// #445: every crede `person` and `rsvp` gets `_sharing: domain` and `_inheritrights: true`.
+// Authorized by Mihkel's ruling, 2026-09-22 10:14 UTC (team console, confirmed on #445).
+// Censuses are flat, never walking children, so profiles (`_inheritrights: false`) stay private.
+
+// Writing a rights-type property needs `_owner`, so the rights preflight checks `_owner` only.
+// A prior value is DELETEd by `_id` before the POST: these properties replace, not append.
+// The run stops, dry run too, unless the moving set is exactly one person and their rsvps.
+
+// Dry-run first: node --import tsx --import ./scripts/migrations/lib/register-loader.mjs <file>
+// Live: DRY_RUN=false AUTHORIZED_BY='...', only after a verified dry run and authorization.
 
 import { pathToFileURL } from 'node:url';
 import { entuFetch } from '$lib/entu/request';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { resolveMetaTypeIds, resolveTypeIdByName } from './lib/ensure-schema-type';
 import { readDryRun, loadCredeCfg, readAuthorizedBy } from './lib/script-runner';
 import { writeLedger as writeLedgerShared, assertLiveRunAuthorized } from './lib/ledger-writer';
@@ -152,7 +59,7 @@ export interface TypeCounts {
 	written?: number;
 	wouldWrite?: number;
 	failed: number;
-	/** Written rows where a hidden pre-existing value was found and self-healed mid-write. LIVE runs only; absent on a dry run. */
+	/** Written rows where a hidden earlier value was found and self-healed. Live runs only. */
 	preExistingHidden?: number;
 }
 
@@ -175,7 +82,7 @@ export interface RunSeed445Result {
 	widerThanExpected: boolean;
 	rerun: boolean;
 	ledgerPath: string;
-	/** Delayed re-read of every row this run wrote — [] on a dry run (nothing written) or an abort before any write. */
+	/** Delayed re-read of every row this run wrote; [] when nothing was written. */
 	postRunRecheck: RecheckRow[];
 }
 
@@ -220,10 +127,8 @@ export const COMMITTED_ALLOW = [
 	'movingPersonIdentityCount',
 	'widerThanExpected',
 	'profileOverlap',
-	// #445 failure-diagnostics fields — ids/statuses/structure only; the
-	// writer's own blanket rule excludes 'string' from the committed twin
-	// regardless (rights-tier text, not PII, but the full detail survives
-	// in the gitignored instance ledger either way).
+	// Failure-diagnostic fields: ids, statuses and structure only. 'string' is excluded from the
+	// committed twin regardless; full detail stays in the gitignored instance ledger.
 	'failureDiagnostics',
 	'entityId',
 	'sharingPost',
@@ -242,23 +147,17 @@ export const COMMITTED_ALLOW = [
 	'at',
 	'by',
 	'boolean',
-	// #445 (team-lead, 2nd round) — the readback/recheck bodies nest Entu's
-	// own wire-shape keys, which need their own allowlist entries: the
-	// generic 'body'/'entity' names above only admit the CONTAINER, not
-	// these leaf property names. Fixes a real gap in round 1: without
-	// these, filterByAllowlist silently dropped `_sharing`/`_inheritrights`
-	// out of every readback/probe body in the committed twin (though the
-	// full detail always survived in the gitignored instance ledger).
+	// Entu's own leaf keys inside readback/recheck bodies: 'body'/'entity' admit only the
+	// container, so without these the twin would drop `_sharing`/`_inheritrights`.
 	'_sharing',
 	'_inheritrights',
-	// #445 (team-lead, 2nd round) — every written row's returned property
-	// ids, and the delayed post-run recheck that catches a reversion.
+	// Each written row's returned property ids, and the delayed recheck that catches a reversion.
 	'writtenPropertyIds',
 	'sharingPropertyId',
 	'inheritPropertyId',
 	'postRunRecheck',
 	'stillCorrect',
-	// #445 (team-lead, 3rd round) — hidden-pre-existing-value self-heal.
+	// Rows where a hidden earlier value was self-healed.
 	'preExistingHiddenIds',
 	'preExistingHidden',
 	'sharingSelfHealDelete',
@@ -266,9 +165,7 @@ export const COMMITTED_ALLOW = [
 	'selfHealReadback'
 ] as const;
 
-/** Parse a Response body as JSON, tolerating a non-JSON or empty body — the
- * diagnostic paths below must never themselves throw while building a
- * failure record. */
+/** Parse a body as JSON, tolerating non-JSON: diagnostics must never throw themselves. */
 async function safeJson(res: Response): Promise<unknown> {
 	try {
 		return await res.json();
@@ -277,7 +174,7 @@ async function safeJson(res: Response): Promise<unknown> {
 	}
 }
 
-/** The property `_id` a POST response returned for `propType`, if any — shared by the success path (writtenPropertyIds) and the failure path's diagnostic probe. */
+/** The property `_id` a POST response returned for `propType`, if any. */
 function extractPostedPropertyId(diag: Record<string, unknown>, postField: 'sharingPost' | 'inheritPost', propType: string): string | undefined {
 	const post = diag[postField] as { body?: { properties?: Array<{ _id?: string; type?: string }> } } | undefined;
 	return post?.body?.properties?.find((p) => p.type === propType)?._id;
@@ -296,15 +193,8 @@ export interface RecheckRow {
 	stillCorrect: boolean;
 }
 
-/**
- * #445 (team-lead, 2nd round) — a delayed re-read of every row THIS RUN
- * wrote, after `delayMs` (30s in production), so a reversion that only
- * shows up moments after a passing read-back (exactly what happened live
- * to 6a9c3d37...292) is caught and dated by the script itself, not
- * discovered by a human minutes later. Runs regardless of whether the loop
- * that called it went on to succeed or throw — `writtenIds` only ever
- * contains rows this run actually wrote and verified at write-time.
- */
+// Re-reads every row this run wrote after `delayMs`, catching a reversion that shows up
+// moments after a passing read-back. Runs whether the calling loop succeeded or threw.
 async function recheckWrittenRows(
 	cfg: EntuCfg,
 	ids: string[],
@@ -355,7 +245,7 @@ async function censusProfileIds(cfg: EntuCfg, fetchImpl: typeof fetch): Promise<
 	return new Set(body.entities.map((e) => e._id));
 }
 
-/** Schema metadata only — type-def's own `_sharing` cap, and every prop-def's own `_sharing`, under one type. */
+/** Schema metadata only: the type-def's `_sharing` cap and each prop-def's `_sharing`. */
 async function readTypeVisibility(
 	cfg: EntuCfg,
 	propertyMetaTypeId: string,
@@ -449,29 +339,14 @@ export async function runSeed445(
 
 	const writtenIds: string[] = [];
 	const failedIds: string[] = [];
-	// #445 (team-lead, post-abort diagnosis) — closes the ledger gap: the
-	// FIRST live run's failure carried no record of what the POSTs actually
-	// returned, only the thrown message. One entry per failed entity: the
-	// exact request body sent for each property this entity needed, the
-	// POST response (status + body, including any new property `_id` it
-	// returned), the read-back response, and — ONLY when a POST response
-	// carried a property `_id` — a diagnostic `GET /property/{id}` on that
-	// exact id, so a "POST said ok, but nothing persisted" gap (exactly
-	// what happened on 6a9c3d38...29b) is visible from the ledger alone,
-	// no separate live probe needed next time. Ids/statuses/structure only
-	// — no member value ever named in a report; `string`/`boolean` payload
-	// values are rights-tier text (domain/private/public, true/false), not
-	// PII, but `string` is still excluded from the COMMITTED twin below
-	// (the writer's own blanket rule) — the full detail survives in the
-	// gitignored instance ledger regardless.
+	// One entry per failed entity: request bodies, POST and read-back responses, and a GET of any
+	// property `_id` a POST returned, so "POST said ok but nothing persisted" shows in the ledger.
+	// Ids, statuses and structure only.
 	const failureDiagnostics: Array<Record<string, unknown>> = [];
-	// #445 (team-lead, 2nd round) — every WRITTEN row's returned property
-	// ids, one entry per entity, ids only.
+	// Every written row's returned property ids.
 	const writtenPropertyIds: Array<{ id: string; sharingPropertyId?: string; inheritPropertyId?: string }> = [];
-	// #445 (team-lead, 3rd round) — rows where a hidden pre-existing value
-	// was found and self-healed mid-write (see the write loop's own
-	// comment). A subset of writtenIds, listed separately so the ledger
-	// shows the anomaly without treating it as a failure.
+	// Rows where a hidden earlier value was self-healed mid-write: a subset of writtenIds, listed
+	// apart so the ledger shows the anomaly without calling it a failure.
 	const preExistingHiddenIds: string[] = [];
 	let aborted = false;
 
@@ -570,11 +445,8 @@ export async function runSeed445(
 		);
 	}
 
-	// Scope fence 2/2 — Mihkel's stated expectation, and the live-run
-	// authorization's own stop condition: the moving set must resolve to
-	// exactly one person identity (that person plus that person's own
-	// rsvps). Anything wider is a surprise, reported and stopped, not
-	// executed — dry run included.
+	// Scope fence 2/2 — Mihkel's stated expectation: the moving set is exactly one person and
+	// their rsvps. Anything wider is reported and stopped, dry run included.
 	const identityCount = movingPersonIdentities().size;
 	if (identityCount > 1) {
 		aborted = true;
@@ -617,9 +489,7 @@ export async function runSeed445(
 	}
 
 	for (const entity of toWriteList()) {
-		// Populated as each step completes; attached to the ledger verbatim
-		// (ids/statuses/structure — see the accumulator's own comment above)
-		// if this entity ends up in the catch block below.
+		// Filled as each step completes; attached to the ledger if this entity fails.
 		const diag: Record<string, unknown> = { entityId: entity.id };
 		try {
 			if (entity.needsSharing) {
@@ -665,20 +535,9 @@ export async function runSeed445(
 			let sharingVals = readBody?.entity?._sharing ?? [];
 			let inheritVals = readBody?.entity?._inheritrights ?? [];
 
-			// #445 (team-lead, 3rd round) — a HIDDEN pre-existing value: the
-			// census and this row's own pre-write checks all reported a
-			// property absent, but a PRIOR write (this row's own history —
-			// e.g. an earlier aborted run) had actually persisted invisibly,
-			// and only reappears once this run's fresh POST lands beside it.
-			// Observed live twice (6a9c3d37...292, 6a9c3d38...729b): every
-			// read from the first write until a SECOND write landed showed
-			// the property absent; the first write's value then reappeared.
-			// Self-heal: delete the id THIS RUN's own POST response
-			// returned — never guess which of two values is "the
-			// pre-existing one," only the id we minted ourselves is certain
-			// — re-read, and let the checks below decide correctness on
-			// whatever's left. `selfHealed` drives the outcome classification
-			// ('pre-existing-hidden' vs a plain write) below.
+			// A hidden earlier value: a prior write persisted invisibly and reappears beside this run's
+			// POST (seen live twice). Delete only the id this run's own POST returned, re-read, and let
+			// the checks below judge what's left.
 			let selfHealed = false;
 			if (sharingVals.length > 1) {
 				const postedId = extractPostedPropertyId(diag, 'sharingPost', '_sharing');
@@ -722,11 +581,8 @@ export async function runSeed445(
 		} catch (err) {
 			failedIds.push(entity.id);
 
-			// Diagnostic property probe — ONLY for a property whose POST
-			// response actually returned a new `_id`: GET /property/{that id}
-			// and record status+body, so "the POST said ok but nothing
-			// persisted" is visible from the ledger without a separate live
-			// probe next time.
+			// Only for a property whose POST returned a new `_id`: GET it, so "POST said ok but nothing
+			// persisted" shows in the ledger.
 			async function probeIfIdReturned(postField: 'sharingPost' | 'inheritPost', probeField: string, propType: string): Promise<void> {
 				const newId = extractPostedPropertyId(diag, postField, propType);
 				if (!newId) return;
@@ -737,11 +593,8 @@ export async function runSeed445(
 			await probeIfIdReturned('inheritPost', 'inheritPropertyProbe', '_inheritrights');
 
 			failureDiagnostics.push(diag);
-			// #445 (team-lead, 2nd round) — delayed recheck of every row THIS
-			// RUN wrote so far, even though the run is about to abort: a prior
-			// row can pass its own read-back and still revert later (exactly
-			// what happened live to 6a9c3d37...292), so the abort ledger must
-			// carry the same recheck the healthy path does.
+			// Recheck every row written so far even on abort: a row can pass its read-back and still
+			// revert later, so the abort ledger carries the same recheck as the healthy path.
 			const postRunRecheck = await recheckWrittenRows(cfg, writtenIds, fetchImpl, recheckDelayMs, sleepFn);
 			writeLedgerNow({ failureDiagnostics, postRunRecheck });
 			throw err;

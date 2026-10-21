@@ -1,6 +1,7 @@
 // The library read and write layer: works, editions, copies and lendings on the wire.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { MyProfile } from '$lib/profile/profileData';
 import {
 	listWorks,

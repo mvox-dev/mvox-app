@@ -1,6 +1,6 @@
 // Can the viewer edit the collective's library entity (_owner or _editor on it)?
 import { writable, type Writable } from 'svelte/store';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { EntuFetchOptions } from '$lib/entu/fetchOptions';
 import { reportProblem } from '$lib/problems/reportProblem';
 import type { EditRightState } from '$lib/nav/dbRights';

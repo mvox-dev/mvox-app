@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 
 const LEDGER_PATH = 'scripts/migrations/seed-results/crede-instance/seed-233-s4-fake.json';
 const writeLedgerMock = vi.fn(() => LEDGER_PATH);
@@ -298,7 +298,7 @@ describe('#421 — the exported FORMULA constant and its standing comment', () =
 
 	it('the script source carries the full-timestamp note and its re-verify trigger VERBATIM (#421 Done-when box 3)', () => {
 		const src = readFileSync(join(import.meta.dirname, 'seed-233-s4-event-name-formula-crede.ts'), 'utf-8');
-		expect(src).toContain(
+		expect(src.replaceAll('\n// ', ' ')).toContain(
 			'Full ISO timestamp in the formula, no platform-side way to shorten it (re-verify if Entu ships SUBSTRING)'
 		);
 	});

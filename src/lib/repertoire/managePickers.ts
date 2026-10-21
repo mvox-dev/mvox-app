@@ -1,7 +1,7 @@
 // The one read behind the repertoire manage pickers (works, editions, season repertoire).
 import { listAllEditions, listWorks, type Edition, type Work } from '$lib/library/libraryData';
 import { listRepertoireItems, type RepertoireItem } from '$lib/repertoire/repertoireData';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { reportProblem } from '$lib/problems/reportProblem';
 
 export interface ManagePickers {

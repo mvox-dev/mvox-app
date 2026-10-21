@@ -1,6 +1,6 @@
 // Series and season delete cascades, with the one progress counter they share.
 import { CascadePartialError } from './deleteErrors';
-import type { EntuCfg } from './entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { deleteEntity, deleteEvent, listChildIds, readChildren } from './seasonDeleteEvent';
 import { seriesRefOf, type EventEntity } from './seasonShared';
 

@@ -1,6 +1,6 @@
 // Visibility moves: write order and whole-pair bodies per entity.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { MyProfile } from './profileData';
 import { deferred, testCfg } from '$lib/testing/entuFetchKit';
 

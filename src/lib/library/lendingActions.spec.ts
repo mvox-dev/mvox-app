@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { createLending, returnLending, type CreateLendingPayload } from './lendingActions';
 import { bulkCheckout, type BulkCheckoutPayload, type BulkResult } from './lendingActions';
 import { json, testCfg } from '$lib/testing/entuFetchKit';

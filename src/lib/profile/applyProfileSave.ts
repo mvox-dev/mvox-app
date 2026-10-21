@@ -1,4 +1,4 @@
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { createOwnProfile, saveProfileFields, type Level } from './profileData';
 import { assertDomainNamePersisted } from './completionGate';
 

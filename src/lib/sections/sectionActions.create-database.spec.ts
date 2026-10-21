@@ -1,7 +1,8 @@
 // A top-level section is created as a direct child of the database entity.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSection } from './sectionActions';
-import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 const cfg = testCfg('sampledb');

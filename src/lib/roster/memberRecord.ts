@@ -1,6 +1,7 @@
 // admin_member_record reads and writes (#268). Real PII on crede: errors carry field names only.
 import { entuFetch } from '$lib/entu/request';
-import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resolveTypeId } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { postEntity } from '$lib/entity/entityCreateShared';
 import { replaceEntityProperty, clearEntityProperty } from '$lib/entu/replaceProperty';
 

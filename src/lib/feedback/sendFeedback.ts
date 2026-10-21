@@ -3,6 +3,7 @@ import { derived, get } from 'svelte/store';
 import { authStore } from '$lib/auth/session';
 import { getToken } from '$lib/auth/storage';
 import { isAuthExpiredError } from '$lib/entu/auth-expired';
+import { cfgFor } from '$lib/entu/cfg';
 import { selectedCollectiveIdentityStore } from '$lib/collectives/store';
 import { online } from '$lib/net/online';
 import { findMyMemberId } from '$lib/rsvp/rsvpData';
@@ -63,7 +64,7 @@ async function deliver(
 	fetchImpl: typeof fetch,
 	persist?: (item: SavedFeedback) => Promise<void>
 ): Promise<void> {
-	const cfg = { db: item.db, token };
+	const cfg = cfgFor(item.db, token);
 	// An earlier attempt was cut off after its create: replace that entity, never add a second.
 	if (item.entityId) await discardFeedback(cfg, item.entityId, fetchImpl);
 	const version = await readAppVersion(fetchImpl);

@@ -1,7 +1,7 @@
 // Active member, archived, or none (#255)? A failed read is 'loading', never a claim.
 import { writable, type Writable } from 'svelte/store';
 import { entuFetch } from '$lib/entu/request';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { isTruncated } from '$lib/entu/listRead';
 import { reportProblem } from '$lib/problems/reportProblem';
 

@@ -20,7 +20,7 @@ import {
 import { resolveLibraryEditRight, resolveMyLibraryId, type LibraryEditRightResult } from './libraryRights';
 import { findMyMemberId } from '$lib/rsvp/rsvpData';
 import { listActiveMembers, type ActiveMember } from '$lib/roster/rosterData';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { ListRead } from '$lib/entu/listRead';
 
 export interface LibraryListing {

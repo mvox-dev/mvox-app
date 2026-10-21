@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
-	import { cfgFor } from '$lib/entu/cfg';
+	import { cfgFor, type EntuCfg } from '$lib/entu/cfg';
 	import { listActiveMembers, loadRoster } from '$lib/roster/rosterData';
 	import { isPastDetail } from '$lib/events/eventTime';
 	import PersonName from '$lib/components/PersonName.svelte';
-	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 	import { reportProblem } from '$lib/problems/reportProblem';
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';

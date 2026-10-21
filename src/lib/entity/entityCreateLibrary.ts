@@ -1,5 +1,5 @@
 // Creates for the library's work and edition, through the same shared POST as the agenda's.
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { optional, postCreate, requireText, type WireProp } from './entityCreateShared';
 
 export interface CreateWorkInput {

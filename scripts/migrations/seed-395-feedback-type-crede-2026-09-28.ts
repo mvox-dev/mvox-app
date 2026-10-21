@@ -3,7 +3,7 @@
 // Every write's `_sharing` is set explicitly and read back. Run: node --import tsx --import
 // ./scripts/migrations/lib/register-loader.mjs <this file>; DRY_RUN=false needs AUTHORIZED_BY.
 import { pathToFileURL } from 'node:url';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import {
 	resolveMetaTypeIds,
 	resolveTypeIdByName,

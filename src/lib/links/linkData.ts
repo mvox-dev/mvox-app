@@ -1,6 +1,6 @@
 // The collective's link list, read verbatim: the page normalises URLs once, at save.
 import { entuFetch } from '$lib/entu/request';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { byDisplayOrder } from '$lib/collections/displayOrder';
 import { referenceIds } from '$lib/entu/references';
 

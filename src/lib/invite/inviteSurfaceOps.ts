@@ -1,6 +1,7 @@
 // The async reads and the submit of InviteSurface, as results the component turns into state.
 import { reportProblem } from '$lib/problems/reportProblem';
 import { getToken } from '$lib/auth/storage';
+import { cfgFor } from '$lib/entu/cfg';
 import { isAuthExpiredError } from '$lib/entu/request';
 import { resolveDbRight, type DbRight } from '$lib/nav/dbRights';
 import { listJoinStates, type JoinState } from '$lib/profile/linkedIdentities';
@@ -41,7 +42,7 @@ export async function loadPrerequisites(targetDb: string): Promise<Prerequisites
 		return { status: 'load-error' };
 	}
 	try {
-		return { status: 'ready', dbEntityId: await resolveInviteParentId({ db: targetDb, token }) };
+		return { status: 'ready', dbEntityId: await resolveInviteParentId(cfgFor(targetDb)) };
 	} catch (e) {
 		if (isAuthExpiredError(e)) return { status: 'session-expired' };
 		if (e instanceof InviteCreateError && e.reason === 'not-visible') return { status: 'no-access' };

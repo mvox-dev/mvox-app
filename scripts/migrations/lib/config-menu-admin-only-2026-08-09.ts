@@ -1,17 +1,9 @@
-// #70 (#37) — restrict the 3 domain-shared Configuration menu entries
-// (Entities, Menu, Plugins) to admin-only. Same mechanism as #47/#45's menu
-// privatization: `DELETE /property/{sharingValueId}` on the menu row's own
-// `_sharing` value, leaving it absent — matches "Billing"'s existing
-// admin-only shape exactly (Billing has NO `_sharing` value at all, live-
-// confirmed same group "Configuration").
-//
-// Unlike #68 (schema/meta entities self-owned by the database entity), menu
-// row entities ARE db-root-owned (confirmed by #68 Phase 1's inventory: menu
-// total=23, dbRootOwned=23, flagged=0) — writing `_sharing` here is NOT
-// blocked by the #68 rights gap.
+// #70 (2026-08-09): restrict the Entities, Menu and Plugins Configuration menu rows to admin-only.
 
+// Admin-only means no `_sharing` value at all, as on "Billing"; menu rows are db-root-owned,
+// so deleting their `_sharing` value is allowed.
 import { entuFetch } from '$lib/entu/request';
-import { type EntuCfg } from '$lib/seasons/entuSeasons';
+import { type EntuCfg } from '$lib/entu/cfg';
 
 function errMsg(err: unknown): string {
 	return err instanceof Error ? err.message : String(err);
@@ -30,13 +22,7 @@ export type VerifiedAll = {
 	fullMenu: FullMenuEntry[];
 };
 
-/** Step-0 enumeration (READ-ONLY). Re-verifies each of the 3 target menu rows
- * live — current `_sharing=domain` (HALTs if it moved), group="Configuration"
- * (HALTs if a name match landed on the wrong row), and the row's `_sharing`
- * value `_id` (needed for the DELETE). Also re-verifies the "Billing"
- * reference row is still the admin-only shape we're matching (absent
- * `_sharing`), and captures the FULL live menu for the post-change computed
- * model. */
+// Read-only. Halts if a target moved off domain sharing or a name matched the wrong group.
 export async function verifyAll(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<VerifiedAll> {
 	const menuRes = await entuFetch(cfg.db, `entity?_type.string=menu&props=name,group,_sharing&limit=100`, cfg.token, {}, fetchImpl);
 	if (!menuRes.ok) throw new Error(`verifyAll: menu list GET failed: ${menuRes.status}`);
@@ -90,8 +76,6 @@ export async function verifyAll(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): 
 
 export type PrivatizeLedgerEntry = { menuId: string; name: string; status: 'privatized' | 'failed'; message?: string };
 
-/** Same mechanic as #45/#47: DELETE the menu row's `_sharing` value, leaving
- * it absent. Read-back confirms absence. */
 export async function privatizeMenuEntries(cfg: EntuCfg, targets: VerifiedMenuTarget[], fetchImpl: typeof fetch = fetch): Promise<PrivatizeLedgerEntry[]> {
 	const entries: PrivatizeLedgerEntry[] = [];
 	for (const t of targets) {

@@ -1,39 +1,12 @@
-// #45 (#37-P3.3) — D2 (retire apply-to-join) + D5 (_probe_bulletin cleanup).
-// Four independent mutation steps, EACH its own §8.6 authorization gate per the
-// issue's explicit instruction ("each its own §8.6 step with committed
-// ledger") — this entrypoint refuses to run more than one step per live
-// invocation (see `STEP` env var in the entrypoint file).
-//
-// D2 — apply-to-join retire (grounded in invite-only design, Mihkel's ruling):
-//   Step 1: PRIVATIZE the "Applications" menu entry (DELETE its `_sharing`
-//     property VALUE, leaving it absent — matches the existing "Billing"
-//     admin-only entry's shape exactly, confirmed live in #41: Billing's own
-//     `_sharing` is `(absent)`, not an explicit 'private' string). Chosen over
-//     full entity deletion as the more reversible action for an equivalent
-//     outcome (admin-only visibility) — flagged explicitly for Bentham/
-//     team-lead to confirm or override; "remove" (DELETE /entity/{menuId}) is
-//     the documented alternative if a harder cut is preferred.
-//   Step 2: DELETE the stale specimen `6a2fdac64cd971291c5d5e79` (confirmed
-//     live: type=application, status=approved, expires_at=2026-07-15 — over 3
-//     weeks past expiry as of this run, 2026-08-08).
-//   Step 3: retire the `application` TYPE — delete its 4 prop-def entities
-//     (target_org, message, status, expires_at) then the type entity itself.
-//     Gated on a live recount confirming ZERO application instances remain
-//     (i.e. step 2 has already landed) — deleting a type with live instances
-//     would orphan them.
-//
-// D5 — _probe_bulletin cleanup:
-//   Step 4: delete the 3 inert instances, the type's 3 prop-defs (title,
-//     summary, draft_notes), then the type entity itself. No menu entry
-//     exists for this type (confirmed live — nothing to touch there).
-//
-// Mechanic: `DELETE /entity/{id}` for entities (including prop-def entities —
-// prop-defs ARE entities, confirmed mechanic). `DELETE /property/{id}` for a
-// single property VALUE (the menu entry's `_sharing`, step 1 only). Never
-// interchangeable (architecture-decisions.md "Entu mutation-op wire shapes").
+// Retires apply-to-join and cleans up _probe_bulletin (#45): four steps, one per live run.
+// Step 1 deletes the Applications menu `_sharing` value (reversible) rather than the entry;
+// step 3 is gated on zero live application instances, so no instance is orphaned.
+
+// Retiring apply-to-join follows Mihkel's invite-only ruling; each step is its own §8.6 gate.
+// Specimen 6a2fdac64cd971291c5d5e79 expired 2026-07-15; this ran 2026-08-08.
 
 import { entuFetch } from '$lib/entu/request';
-import { type EntuCfg } from '$lib/seasons/entuSeasons';
+import { type EntuCfg } from '$lib/entu/cfg';
 
 export const MENU_ENTRY_ID = '6a0f6d314ff8277cd4306a0e';
 export const MENU_SHARING_VALUE_ID = '6a0f6d314ff8277cd4306a11';
@@ -90,16 +63,8 @@ export type VerifiedTargets = {
 	probeBulletinType: { id: string; name: string; instanceIds: string[]; propDefs: Array<{ id: string; name: string }>; menuEntryExists: boolean };
 };
 
-/** Targeted step-3-only verification (added 2026-08-08 after steps 1/2/4 had
- * already landed live — steps 1/2/4's entities are gone by design at that
- * point, so `verifyAllTargets`'s unconditional 4-target check fails on them
- * even though step 3 doesn't need menu/specimen/probe-bulletin data at all).
- * Confirms only what step 3 actually depends on: the `application` type
- * entity resolves correctly and its live instance count is 0 (the specimen
- * having been deleted, by this script's step 2 or otherwise — step 2's
- * ownership doesn't matter here, only the resulting count). Does not touch
- * `verifyAllTargets`'s contract for the other 3 (still-relevant-for-planning)
- * steps. */
+/** Verifies only what step 3 needs, the application type and its zero instance count:
+ * once steps 1, 2 and 4 have landed, `verifyAllTargets` fails on their deleted entities. */
 export async function verifyStep3Only(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<{ applicationType: VerifiedTargets['applicationType'] }> {
 	const appTypeRes = await entuFetch(cfg.db, `entity/${APPLICATION_TYPE_ID}?props=name`, cfg.token, {}, fetchImpl);
 	if (!appTypeRes.ok) throw new Error(`verifyStep3Only: application type ${APPLICATION_TYPE_ID} GET failed: ${appTypeRes.status}`);
@@ -114,7 +79,6 @@ export async function verifyStep3Only(cfg: EntuCfg, fetchImpl: typeof fetch = fe
 }
 
 export async function verifyAllTargets(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<VerifiedTargets> {
-	// Menu entry
 	const menuRes = await entuFetch(cfg.db, `entity/${MENU_ENTRY_ID}?props=name,_sharing,query`, cfg.token, {}, fetchImpl);
 	if (!menuRes.ok) throw new Error(`verifyAllTargets: menu entry ${MENU_ENTRY_ID} GET failed: ${menuRes.status}`);
 	const menuBody = (await menuRes.json()) as {
@@ -129,7 +93,6 @@ export async function verifyAllTargets(cfg: EntuCfg, fetchImpl: typeof fetch = f
 		throw new Error(`verifyAllTargets: menu entry ${MENU_ENTRY_ID} query=${JSON.stringify(menuQuery)} does not reference application — refuse to proceed`);
 	}
 
-	// Specimen
 	const specimenRes = await entuFetch(cfg.db, `entity/${SPECIMEN_ID}?props=_type,status,expires_at`, cfg.token, {}, fetchImpl);
 	if (!specimenRes.ok) throw new Error(`verifyAllTargets: specimen ${SPECIMEN_ID} GET failed: ${specimenRes.status}`);
 	const specimenBody = (await specimenRes.json()) as {
@@ -144,7 +107,6 @@ export async function verifyAllTargets(cfg: EntuCfg, fetchImpl: typeof fetch = f
 		throw new Error(`verifyAllTargets: specimen ${SPECIMEN_ID} expires_at=${JSON.stringify(specimenExpiresAt)} is not in the past — the "stale, past expiry" premise no longer holds live, refuse to proceed`);
 	}
 
-	// application type
 	const appTypeRes = await entuFetch(cfg.db, `entity/${APPLICATION_TYPE_ID}?props=name`, cfg.token, {}, fetchImpl);
 	if (!appTypeRes.ok) throw new Error(`verifyAllTargets: application type ${APPLICATION_TYPE_ID} GET failed: ${appTypeRes.status}`);
 	const appTypeBody = (await appTypeRes.json()) as { entity?: { name?: Array<{ string: string }> } };
@@ -155,7 +117,6 @@ export async function verifyAllTargets(cfg: EntuCfg, fetchImpl: typeof fetch = f
 	if (!appCountRes.ok) throw new Error(`verifyAllTargets: application instance count GET failed: ${appCountRes.status}`);
 	const appCountBody = (await appCountRes.json()) as { count: number };
 
-	// _probe_bulletin type
 	const pbTypeRes = await entuFetch(cfg.db, `entity/${PROBE_BULLETIN_TYPE_ID}?props=name`, cfg.token, {}, fetchImpl);
 	if (!pbTypeRes.ok) throw new Error(`verifyAllTargets: _probe_bulletin type ${PROBE_BULLETIN_TYPE_ID} GET failed: ${pbTypeRes.status}`);
 	const pbTypeBody = (await pbTypeRes.json()) as { entity?: { name?: Array<{ string: string }> } };

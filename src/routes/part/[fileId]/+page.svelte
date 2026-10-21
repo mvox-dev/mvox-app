@@ -7,7 +7,7 @@
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
 	import { authStore } from '$lib/auth/session';
-	import { getToken } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import { deriveOfflineIdentities } from '$lib/collectives/offlineIdentity';
 	import { getAppByteStore } from '$lib/files/appByteStore';
 	import { getAppLabelStore } from '$lib/files/appLabelStore';
@@ -151,7 +151,6 @@
 				if (!cancelled) status = 'missing';
 				return;
 			}
-			const token = getToken() ?? '';
 			// Partitions are tried in order; one that cannot deliver says nothing about the part.
 			// deliveryFailed: did any partition refuse, as opposed to not holding the file?
 			let deliveryFailed = false;
@@ -159,7 +158,7 @@
 				const key = { ...identity, fileId };
 				let result: OpenedFileBytes;
 				try {
-					result = await openFileBytes({ db: identity.db, token }, key, getAppByteStore());
+					result = await openFileBytes(cfgFor(identity.db), key, getAppByteStore());
 				} catch (error) {
 					if (!wireUnreachable(error)) {
 						deliveryFailed = true;

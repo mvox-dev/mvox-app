@@ -3,7 +3,7 @@ import { reportProblem } from '$lib/problems/reportProblem';
 import { refreshEventPageWorkRows } from '$lib/events/eventPageData';
 import type { RepertoireItem } from '$lib/repertoire/repertoireData';
 import type { WorkRow } from '$lib/repertoire/types';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 
 export interface RefetchWorkRowsOptions {
 	includeInactive: boolean;

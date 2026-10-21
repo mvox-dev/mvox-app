@@ -2,7 +2,7 @@
 import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
 import { replaceEntityProperty } from '$lib/entu/replaceProperty';
 import { resolveDatabaseEntityId } from './databaseEntity';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 
 export type RosterNamesSetting = { dbEntityId: string; showRealNames: boolean };
 

@@ -1,5 +1,5 @@
 // Shared builders for specs that stub Entu's fetch: responses, settle-later promises, cfg, calls.
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 
 export function json(body: unknown, status = 200, headers?: Record<string, string>): Response {
 	return new Response(JSON.stringify(body), headers ? { status, headers } : { status });

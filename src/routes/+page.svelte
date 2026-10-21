@@ -38,7 +38,7 @@
 	} from '$lib/seasons/seasonManage';
 	import { writesAvailable } from '$lib/net/online';
 	import { focusAfterRender } from '$lib/a11y/focusable';
-	import type { EntuCfg } from '$lib/seasons/entuSeasons';
+	import type { EntuCfg } from '$lib/entu/cfg';
 
 	const auth = $derived($authStore);
 	const collectives = $derived($collectiveState);

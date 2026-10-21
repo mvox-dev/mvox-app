@@ -151,7 +151,7 @@
 			// #260 — a settle for a collective the user has left must not overwrite the gate.
 			const g = routeLoad.generation;
 			refreshGate(
-				() => resolveGate({ db: current.db, token }, current.personId),
+				() => resolveGate(cfgFor(current.db), current.personId),
 				() => g === routeLoad.generation
 			).catch((err) =>
 				reportProblem({ area: 'profile', action: 'refreshing the completion gate', error: err })

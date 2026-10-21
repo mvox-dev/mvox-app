@@ -9,7 +9,7 @@
 		loadSeasonMemberRates,
 		type SeasonAttendance
 	} from '$lib/profile/seasonAttendance';
-	import type { EntuCfg } from '$lib/seasons/entuSeasons';
+	import type { EntuCfg } from '$lib/entu/cfg';
 
 	let { generation }: { generation: () => number } = $props();
 

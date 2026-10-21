@@ -7,7 +7,7 @@
 	import { dbEditRight } from '$lib/nav/dbRights';
 	import { readRosterNamesSettingOf } from '$lib/collective/rosterNames';
 	import type * as RosterNames from '$lib/collective/rosterNames';
-	import type { EntuCfg } from '$lib/seasons/entuSeasons';
+	import type { EntuCfg } from '$lib/entu/cfg';
 
 	interface Props {
 		isOffline: boolean;

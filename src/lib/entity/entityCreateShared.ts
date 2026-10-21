@@ -1,6 +1,7 @@
 // The wire props, required-field checks and the one POST every entity create goes through.
 import { entuFetch } from '$lib/entu/request';
-import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resolveTypeId } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 
 export type WireProp = {
 	type: string;

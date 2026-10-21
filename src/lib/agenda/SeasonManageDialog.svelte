@@ -14,7 +14,7 @@
 	import type * as SeasonManage from '$lib/seasons/seasonManage';
 	import type { SeasonManageDeleteSlot } from '$lib/agenda/seasonManageDelete';
 	import type { SeasonManagePanelState } from '$lib/agenda/seasonManagePanelState';
-	import type { EntuCfg } from '$lib/seasons/entuSeasons';
+	import type { EntuCfg } from '$lib/entu/cfg';
 
 	type RepertoireProps = ComponentProps<typeof RepertoireElement>;
 

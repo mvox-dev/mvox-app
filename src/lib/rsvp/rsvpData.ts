@@ -1,7 +1,8 @@
 // A singer's own rsvp on an event. Member lookup assumes one active member row per person per db.
 import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
 import { overwriteEntityValues } from '$lib/entu/replaceProperty';
-import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resolveTypeId } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { deriveListRead, type ListRead } from '$lib/entu/listRead';
 
 export type RsvpStatus = 'going' | 'not_going' | 'maybe' | 'late';

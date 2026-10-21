@@ -3,13 +3,7 @@ import type { AgendaItem } from '$lib/agenda/types';
 import { referenceIds } from '$lib/entu/references';
 import type { EventRaw, Season, SeasonRaw, SeriesRaw } from './types';
 import { reportProblem } from '$lib/problems/reportProblem';
-
-export interface EntuCfg {
-	/** Runtime db (the selected collective) — threaded as the URL path segment. */
-	db: string;
-	/** The user's Entu JWT (browser-direct, aud=IP-bound). */
-	token: string;
-}
+import type { EntuCfg } from '$lib/entu/cfg';
 
 const typeIdCache = new Map<string, string>();
 

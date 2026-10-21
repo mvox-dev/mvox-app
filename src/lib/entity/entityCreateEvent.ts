@@ -1,5 +1,5 @@
 // Creates for the agenda's season, event_series and event, each one type lookup and one POST.
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import {
 	conductorProps,
 	optional,

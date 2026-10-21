@@ -26,4 +26,9 @@ describe('cfgFor', () => {
 		expect(first).toEqual({ db: 'choir', token: 'old' });
 		expect(cfgFor('choir')).toEqual({ db: 'choir', token: 'new' });
 	});
+
+	it('uses the given token over the stored one', () => {
+		h.token = 'stored';
+		expect(cfgFor('choir', 'redeemed')).toEqual({ db: 'choir', token: 'redeemed' });
+	});
 });

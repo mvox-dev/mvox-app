@@ -1,11 +1,10 @@
 // The agenda's repertoire write queue, behind the season-manage panel.
 import { get } from 'svelte/store';
 import { m } from '$lib/paraglide/messages.js';
-import { cfgFor } from '$lib/entu/cfg';
+import { cfgFor, type EntuCfg } from '$lib/entu/cfg';
 import { selectedCollectiveIdentityStore, sameCollectiveIdentity } from '$lib/collectives/store';
 import type { AgendaLoadState, LoadCounters } from '$lib/agenda/agendaLoad';
 import { isPanelReadStale } from '$lib/agenda/agendaPanels';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { RepertoireStatus } from '$lib/repertoire/types';
 import type * as RepertoireActions from '$lib/repertoire/repertoireActions';
 import type * as RepertoireData from '$lib/repertoire/repertoireData';

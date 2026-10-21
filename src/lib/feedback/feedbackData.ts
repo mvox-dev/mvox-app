@@ -1,28 +1,6 @@
-// #395 slice 2/2 GREEN — loadFeedback: read ONE feedback for FeedbackView.
-// See feedbackData.spec.ts's header for the full pinned contract; the shape
-// in short:
-//
-//   1. GET entity/{feedbackId}?props=screenshot,doodle_layer,description —
-//      only the three fields; no reference `.string` is ever read (a
-//      reference `.string` bakes PII — `.reference` only, and only for
-//      rights; this reader has no reference prop at all).
-//   2. GET property/{screenshotPropertyId} — the signed download url, via
-//      the existing signFileUrl ($lib/repertoire/fileUrls), minted at read
-//      time (a 60s TTL — never cached).
-//
-// FAIL LOUDLY: non-2xx read, no screenshot property, missing or corrupt
-// doodle_layer (strokes.ts's own parse — no silent repair), or a signing
-// failure all reject.
-//
-// REVIEW ROUND (#395, F1): `description` is OPTIONAL on the type — the
-// schema of record (mvox-schema-extensions.ts) puts no `mandatory` on the
-// field — so a feedback that is a screenshot plus ink and no typed words is a
-// schema-valid record. It reads as '' (the house pattern for every optional text prop:
-// repertoireData.ts, linkData.ts, eventDetail.ts) instead of rejecting — a
-// hard throw made such a submission permanently unviewable. The three loud
-// rejections above stay: they ARE load-bearing.
+// Reads one feedback for FeedbackView; fails loudly on a bad read, screenshot or doodle layer.
 import { entuFetch } from '$lib/entu/request';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { signFileUrl } from '$lib/repertoire/fileUrls';
 import { parse, type StrokeData } from '$lib/strokes/strokes';
 
@@ -81,4 +59,4 @@ export async function loadFeedback(
 	return { id: feedbackId, screenshotUrl, strokes, description };
 }
 
-// (*MVOX:Palestrina* — #395 slice 2/2 GREEN)
+// (*MVOX:Palestrina*)

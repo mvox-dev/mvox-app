@@ -1,7 +1,8 @@
 // Attendance, a child of the event recorded by the conductor, plus the rsvp reads it compares.
 import { entuFetch } from '$lib/entu/request';
 import { overwriteEntityValues } from '$lib/entu/replaceProperty';
-import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resolveTypeId } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { RsvpStatus } from '$lib/rsvp/rsvpData';
 import { deriveListRead, type ListRead } from '$lib/entu/listRead';
 

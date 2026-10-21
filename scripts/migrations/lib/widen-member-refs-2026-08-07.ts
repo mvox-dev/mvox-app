@@ -1,105 +1,20 @@
-// #20 follow-up — close the roster rights-narrowing gap diagnosed in
-// probe-person-propdef-sharing-2026-08-07.ts / probe-person-tier-invite-vs-t3-1-
-// 2026-08-07.ts (committed c2f189f). `member.person` and `member.section`
-// prop-defs carry NO explicit `_sharing`, so per entu-api's bucket-placement cap
-// (`aggregate.js:113-121`), both properties are written ONLY into the private
-// bucket at write-time aggregation — never the domain bucket a non-owner
-// authenticated reader receives (`entity.js:573-586 cleanupEntity`). Uniform
-// across every `member` instance by construction; not specific to any one
-// population. The #36 invite-creation path is UNAFFECTED going forward: it
-// writes `person._sharing:'domain'` as an explicit PER-VALUE override at create
-// time (`inviteData.ts:213`), which bypasses the prop-def's default bucketing
-// entirely — an explicit `_sharing` in the same POST always wins over
-// inheritance/defaulting (confirmed mechanism, not luck; see
-// `docs/architecture/entu-rights-and-visibility-model.md` §3 for the general
-// rule this is an instance of).
-//
-// Two bundles, real separation (mirrors t3-1-singer-provision.ts's proven
-// shape), because they have different blast radii and Bundle B depends on
-// Bundle A having actually landed:
-//
-//   Bundle A (schema, tiny blast radius): POST `_sharing:'domain'` onto the
-//   `member.person` and `member.section` prop-def ENTITIES. Both currently have
-//   NO existing `_sharing` value (confirmed live — sharingValueId null for
-//   both), so this is a plain create-POST, not a replace.
-//
-//   Bundle B (data, 245-instance blast radius, GATED on Bundle A succeeding for
-//   BOTH prop-defs): buckets are write-time SNAPSHOTS, not read-time computed
-//   (`entu-rights-and-visibility-model.md` §1) — Bundle A alone does not
-//   retroactively fix any already-aggregated member. Every currently
-//   domain-tier member needs a genuine write to re-trigger `aggregateEntity`.
-//   Touch-save mechanic: an ATOMIC single `POST entity/{id}` carrying the
-//   member's OWN EXISTING `_sharing` property `_id` plus its OWN EXISTING
-//   string value (re-asserting, not changing, the value) — `insertProperties`
-//   soft-deletes the value named by the included `_id` and inserts the new one
-//   in the same call (`entity.js:440-444`), so this is a real write (fresh
-//   aggregation) with ZERO multi-value risk, unlike a bare re-POST of the same
-//   value (which would APPEND a duplicate — the Q5 multi-value-append trap).
-//   `_sharing` was chosen over `status` (originally planned) because the 115
-//   legacy orphan members carry NO `status` value at all (confirmed live — the
-//   first dry-run attempt HALTed loudly on this rather than inventing one), but
-//   EVERY domain-tier member by definition has an explicit `_sharing` value
-//   (that's the filter criterion) — matches Q2's own canonical recommendation
-//   ("pick `_sharing` re-write as the canonical touch-save",
-//   `docs/migration/findings/phase-b-api-probes-2026-05-20.md` in the sibling
-//   repo). `_sharing` is a rightType property (needs `_owner`, not just
-//   `_editor`) — the executing credential (ENTU_API_KEY/PO db-root) has already
-//   proven it holds `_owner` on the 128 T3.1-converted members (it performed
-//   their private→domain `_sharing` conversion itself) and on script-created
-//   entities generally; any per-entity exception is captured as a per-record
-//   ledger failure, never aborts the whole sweep.
-//   The 1 currently-private-tier member (fixture B) is explicitly excluded —
-//   her private bucket already carries everything to her own _viewer/_owner,
-//   unaffected by this gap.
-//
-// SCOPE — INTENDED, NOT INCIDENTAL (Gama, #20 18:11 comment): the touch-save
-// population includes the 115 legacy orphan members (no `person` ref, carry a
-// raw `name` string with no matching prop-def since bundle 3). Their `section`
-// reference goes from private-bucketed to domain-readable as a DIRECT,
-// INTENDED consequence of this fix — sections are roster-bound data, and
-// domain-readability for `section` is exactly what this fix is FOR, applied
-// uniformly (not carved out for orphans). Their `name` value stays invisible
-// outside the private bucket regardless — it has no prop-def at all (removed
-// in T3.1 bundle 3), and `aggregateEntity`'s bucket-placement loop iterates
-// the TYPE's prop-def list (`aggregate.js:111` `for (const d in definition)`)
-// — a raw property with no corresponding prop-def entry is never considered
-// for domain/public placement, it only ever exists in `private` (seeded there
-// unconditionally by `propertiesToEntity`). `verifyMemberNamePropDefAbsent`
-// below re-confirms this live rather than relying on memory of bundle 3.
-//
-// VERIFICATION CAVEAT (read before trusting a "converted" ledger line): every
-// call in this script runs under ENTU_API_KEY (PO/db-root), which is `_owner`
-// on effectively all these entities and therefore ALWAYS reads the private
-// bucket (cleanupEntity's first branch) — this credential can never observe
-// what a plain non-owner domain-tier reader actually receives. Per-member
-// "verified" below means: the touch-save POST returned 200 AND issued a NEW
-// property `_id` for `_sharing` (proof a genuine write happened, which
-// unconditionally re-runs `aggregateEntity` per source — not merely assumed).
-// It does NOT mean "empirically confirmed a domain reader now sees `person`".
-// That last-mile confirmation needs a real non-omniscient read (Mihkel's
-// browser, same pattern as #20/#29) — same caveat this team has hit before on
-// rights-tier work (session 32 `member-tier-rights-visibility` probe; the T3.1
-// bundle-1+2 independent re-verification also ultimately relied on a
-// db-root-vs-fresh-query cross-check, not a genuinely restricted credential).
+// #20 follow-up: give member.person/section prop-defs domain sharing, then re-aggregate.
+// Touch-saves the 245 domain members of 2026-08-07, the 115 legacy orphans included:
+// that scope is Gama's ruling (#20 comment, 18:11). Runs under ENTU_API_KEY (PO/db-root).
+
+// Buckets are write-time snapshots, so Bundle B touch-saves each domain member (atomic
+// `_sharing` replace, no duplicate value). Runs as db-root, which reads the private bucket:
+// "touched" means a fresh write landed, not that a domain reader was seen to get it.
 
 import { entuFetch } from '$lib/entu/request';
-import { type EntuCfg } from '$lib/seasons/entuSeasons';
+import { type EntuCfg } from '$lib/entu/cfg';
 
 export const PERSON_PROPDEF_ID = '69c7ea4b8489bfcb0e819f05';
 export const SECTION_PROPDEF_ID = '69c7ea4c8489bfcb0e819f27';
 export const MEMBER_TYPE_ID = '69c7ea4a8489bfcb0e819edd';
 
-/** Frozen drift-check baseline — the exact 245 domain-tier member ids read
- * live during the #20 follow-up probe (2026-08-07, committed
- * `seed-results/widen-member-refs-2026-08-07-dry-2026-08-07T15-02-29-868Z.json`).
- * Per Gama's #20 18:11 comment: the touch-save population must be stated
- * explicitly, not left as bare arithmetic ("247"). `enumerateDomainMembers`
- * uses this as a set-based drift-check (C4-1/C5-1 discipline — the hardcoded
- * list is a check against live data, not itself authoritative): any baseline
- * id no longer domain-tier live is a HALT, named individually; any live
- * domain-tier member NOT in this list is a genuine delta since the probe,
- * surfaced separately as `newSinceBaselineIds` rather than silently folded
- * into the count. */
+/** The 245 domain-tier member ids from the 2026-08-07 probe: a drift check, not the source.
+ * A missing id HALTs; a new one is named in `newSinceBaselineIds`. */
 export const BASELINE_DOMAIN_MEMBER_IDS: string[] = [
 	'69c7f8728489bfcb0e81b085', '69c7f8728489bfcb0e81b091', '69c7f8728489bfcb0e81b09b', '69c7f8738489bfcb0e81b0a5', '69c7f8738489bfcb0e81b0af', '69c7f8738489bfcb0e81b0b9',
 	'69c7f8738489bfcb0e81b0c3', '69c7f8748489bfcb0e81b0d7', '69c7f8748489bfcb0e81b0e1', '69c7f8748489bfcb0e81b0eb', '69c7f8748489bfcb0e81b0f5', '69c7f8748489bfcb0e81b0ff',
@@ -144,17 +59,12 @@ export const BASELINE_DOMAIN_MEMBER_IDS: string[] = [
 	'6a12036d4ff8277cd4306b89', '6a12036e4ff8277cd4306b9a', '6a12036e4ff8277cd4306bab', '6a2ba6c84cd971291c5d5320', '6a2fdb434cd971291c5d5e85'
 ];
 
-/** Frozen drift tripwire — the live domain-tier member count as of the #20
- * follow-up probe (2026-08-07). `enumerateDomainMembers` HALTs loudly if the
- * live count is BELOW this (a baseline member deleted/converted). Derived
- * from `BASELINE_DOMAIN_MEMBER_IDS.length` so the two can never drift apart. */
+/** HALTs if the live count falls below the baseline. */
 export const EXPECTED_DOMAIN_MEMBER_COUNT = BASELINE_DOMAIN_MEMBER_IDS.length;
 
 function errMsg(err: unknown): string {
 	return err instanceof Error ? err.message : String(err);
 }
-
-// ── Bundle A: prop-def _sharing writes ────────────────────────────────────────
 
 export type PropDefTarget = { id: string; name: 'person' | 'section' };
 export const PROPDEF_TARGETS: PropDefTarget[] = [
@@ -162,21 +72,8 @@ export const PROPDEF_TARGETS: PropDefTarget[] = [
 	{ id: SECTION_PROPDEF_ID, name: 'section' }
 ];
 
-/** Step-0 enumeration (READ-ONLY) for Bundle A. Bentham YELLOW-A (pre-execution
- * review, 2026-08-07): bucket exposure is a three-gate AND — prop-def sharing
- * (what this script sets), the TYPE's own sharing (a CAP: `aggregate.js:94/115`
- * — if the type entity has no `_sharing` at all, it nukes exposure for EVERY
- * prop-def on that type regardless of what this script does), and the
- * instance's own sharing (already satisfied for the 245 domain-tier members).
- * Without this check, gate 2 being unset would make all 247 writes accomplish
- * nothing while the ledger reports "2 set, 245 touched" — an apparent-success
- * trap. HALTs if the `member` type entity's own `_sharing` is absent (neither
- * 'domain' nor 'public' — the only two values the cap logic in
- * aggregate.js:113-121 lets pass through to the propdef-level tier). Read-only;
- * no live mutation. Returns the OBSERVED value (Gama, #20 18:11 comment: the
- * ledger must record the actual value read, not just a pass/fail boolean) so
- * callers can put the real string in the ledger/artifact, e.g. `'domain'` —
- * not merely "guard passed". */
+/** Read-only. The type's own `_sharing` caps every prop-def, so HALT if it is unset (all
+ * writes would do nothing). Returns the observed value for the ledger. */
 export async function verifyMemberTypeSharing(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<string> {
 	const res = await entuFetch(cfg.db, `entity/${MEMBER_TYPE_ID}?props=_sharing,name`, cfg.token, {}, fetchImpl);
 	if (!res.ok) throw new Error(`verifyMemberTypeSharing: GET ${MEMBER_TYPE_ID} failed: ${res.status}`);
@@ -197,14 +94,7 @@ export async function verifyMemberTypeSharing(cfg: EntuCfg, fetchImpl: typeof fe
 	return typeSharing;
 }
 
-/** Step-0 enumeration (READ-ONLY). Gama, #20 18:11 comment: confirm live —
- * don't assume from memory of bundle 3 — that `member.name` genuinely has no
- * prop-def, which is WHY the 115 orphan members' raw `name` string can never
- * reach the domain bucket (aggregate.js's bucket-placement loop iterates the
- * type's prop-def list; a value with no matching prop-def entry is never
- * considered, see the module header's SCOPE note). HALTs if a `name` prop-def
- * is unexpectedly found (would mean bundle 3 was reverted or never landed —
- * changes the scope statement above). */
+/** Read-only. HALTs if `member.name` has a prop-def: orphans' raw names must stay private. */
 export async function verifyMemberNamePropDefAbsent(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<void> {
 	const res = await entuFetch(cfg.db, `entity?_parent.reference=${MEMBER_TYPE_ID}&name.string=name&props=_id&limit=10`, cfg.token, {}, fetchImpl);
 	if (!res.ok) throw new Error(`verifyMemberNamePropDefAbsent: GET failed: ${res.status}`);
@@ -288,42 +178,20 @@ export async function widenPropDefs(cfg: EntuCfg, fetchImpl: typeof fetch = fetc
 	return entries;
 }
 
-// ── Bundle B: touch-save re-aggregation sweep ─────────────────────────────────
-
 export type MemberTarget = { memberId: string; sharingPropId: string; sharingValue: string };
 
 export type EnumerationResult = {
 	targets: MemberTarget[];
 	/** Live domain-tier member ids present in the frozen probe baseline (245, unchanged). */
 	unchangedFromBaselineCount: number;
-	/** Live domain-tier member ids NOT in the probe baseline — created/converted since
-	 * 2026-08-07's probe. Named individually (Gama, #20 18:11) rather than silently
-	 * folded into the touch-save count. Every one of these STILL needs touching:
-	 * Bundle A for THIS run has not executed yet at enumeration time (script
-	 * sequencing — Bundle A always runs before this function), so no member
-	 * currently enumerated was ever aggregated under the fixed prop-def, regardless
-	 * of whether it's a #36-created member whose OWN `person._sharing` is already
-	 * an explicit per-value 'domain' — that only helps `person`'s own entity-level
-	 * exposure, not whether THIS member's domain bucket carries the `person`
-	 * reference at all (that's gated by member.person's prop-def, which Bundle A
-	 * fixes, and by this member's own aggregation having run AFTER that fix). */
+/** Not in the baseline. Still touched: none was aggregated under the fixed prop-def. */
 	newSinceBaselineIds: string[];
-	/** Domain-tier members with NO `person` reference — the 115 legacy orphans (or
-	 * whatever that population currently measures live). Their `section` value
-	 * becomes domain-readable as an INTENDED consequence of this fix (see module
-	 * header SCOPE note); their `name` value has no prop-def and stays invisible
-	 * regardless (see `verifyMemberNamePropDefAbsent`). */
+/** No `person` ref (legacy orphans); their `section` turning domain-readable is intended. */
 	orphanMemberIds: string[];
 };
 
-/** Step-0 enumeration (READ-ONLY) for Bundle B. One page of every `member`;
- * keep only `_sharing==='domain'`; HALT if the drift tripwire count doesn't
- * match, the page was truncated, any domain-tier member is somehow missing its
- * own `_sharing` value's `_id`, OR any baseline member from the 2026-08-07
- * probe is no longer domain-tier live (named individually, not just a count
- * mismatch — matches the C4-1/C5-1 discipline: the hardcoded baseline is a
- * drift-check, not blindly trusted, but a MISSING baseline id is real drift
- * that a bare count comparison could mask). */
+/** Read-only. HALTs on count drift, truncation, a missing `_sharing` id, or a baseline
+ * member no longer domain-tier. */
 export async function enumerateDomainMembers(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<EnumerationResult> {
 	const res = await entuFetch(cfg.db, 'entity?_type.string=member&props=_id,_sharing,person&limit=1000', cfg.token, {}, fetchImpl);
 	if (!res.ok) throw new Error(`enumerateDomainMembers: member census GET failed: ${res.status}`);
@@ -377,16 +245,8 @@ export async function enumerateDomainMembers(cfg: EntuCfg, fetchImpl: typeof fet
 
 export type TouchSaveLedgerEntry = { memberId: string; status: 'touched' | 'failed'; newSharingPropId?: string; message?: string };
 
-/** Bentham note B (pre-execution review, non-blocking, cheap to close):
- * touch-save ONE member as a canary before the full 245-sweep. Performs the
- * SAME atomic replace as `touchSaveDomainMembers`, then an EXTRA read-back
- * asserting the member now carries EXACTLY ONE `_sharing` value (not two —
- * would mean the atomic replace didn't actually soft-delete the old value,
- * i.e. the multi-value-append trap fired despite the `_id`-carrying replace).
- * Throws on ANY failure (canary is a hard gate, not a per-record ledger entry
- * — if the canary fails, the full sweep must not run at all). Callers should
- * invoke this on `targets[0]` before `touchSaveDomainMembers(cfg, targets.slice(1), ...)`
- * and merge the canary's own ledger entry in front of the rest. */
+/** Canary: one touch-save, then assert exactly one `_sharing` value remains. Throws, so a
+ * failed canary stops the full sweep. Run on targets[0] before the rest. */
 export async function touchSaveCanary(cfg: EntuCfg, target: MemberTarget, fetchImpl: typeof fetch = fetch): Promise<TouchSaveLedgerEntry> {
 	const [entry] = await touchSaveDomainMembers(cfg, [target], fetchImpl);
 	if (entry.status !== 'touched') {
@@ -410,15 +270,7 @@ export async function touchSaveCanary(cfg: EntuCfg, target: MemberTarget, fetchI
 	return entry;
 }
 
-/** Bundle B engine. Per member: atomic single-POST replace of `_sharing` (same
- * `_id`, same string 'domain') — a genuine write with zero multi-value risk.
- * `_sharing` is a rightType property (needs `_owner` on this specific entity,
- * not just `_editor`) — a 403 here is a real, informative per-record failure
- * (this credential doesn't own that particular member), captured in the
- * ledger, never aborts the sweep. See the module header's VERIFICATION
- * CAVEAT: "touched" means the write landed and issued a fresh property `_id`
- * (proof a real aggregation re-run happened), NOT an empirically-confirmed
- * domain-bucket read. */
+/** Per member: atomic `_sharing` replace. A 403 (not owner) is a ledger entry, never an abort. */
 export async function touchSaveDomainMembers(cfg: EntuCfg, targets: MemberTarget[], fetchImpl: typeof fetch = fetch): Promise<TouchSaveLedgerEntry[]> {
 	const entries: TouchSaveLedgerEntry[] = [];
 	for (const t of targets) {
@@ -456,14 +308,7 @@ export async function touchSaveDomainMembers(cfg: EntuCfg, targets: MemberTarget
 	return entries;
 }
 
-// ── Dry-run render + ledger ────────────────────────────────────────────────────
-
-/** PURE dry-run render — the operator's per-run verify surface for both
- * bundles. Carries the explicit prop-def ids + the disambiguated touch-save
- * population (unchanged-from-baseline count, individually-named deltas,
- * orphan-section-visibility scope statement) per Gama's #20 18:11 comment —
- * not bare "247" arithmetic. `observedMemberTypeSharing` is the ACTUAL value
- * read live (Gama: record the observed value, not a pass/fail boolean). */
+/** PURE dry-run render, with the observed member-type sharing and named deltas. */
 export function renderPlan(enumeration: EnumerationResult, observedMemberTypeSharing: string): string {
 	const { targets, unchangedFromBaselineCount, newSinceBaselineIds, orphanMemberIds } = enumeration;
 	const lines: string[] = [];
