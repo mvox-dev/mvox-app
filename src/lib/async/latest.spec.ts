@@ -47,6 +47,16 @@ describe('createLatest', () => {
 		expect(inA()).toBe(true);
 	});
 
+	it('epoch reads the open load without bumping it, and next() bumps it', () => {
+		const latest = createLatest();
+		const before = latest.epoch;
+		expect(latest.epoch).toBe(before);
+		const open = latest.next();
+		expect(latest.epoch).toBe(before + 1);
+		expect(latest.epoch).toBe(before + 1);
+		expect(open()).toBe(true);
+	});
+
 	it('a stale check stays stale', () => {
 		const latest = createLatest();
 		const first = latest.next();

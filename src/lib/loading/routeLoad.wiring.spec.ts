@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { stripComments } from '$lib/testing/commentRules';
 
 const SRC_ROOT = resolve(__dirname, '../..'); // …/src
 
@@ -79,4 +80,13 @@ describe('#232 — the shared route-load machine is wired into its consumers (so
 	}
 });
 
-// (*MVOX:Tallis*)
+describe('routeLoad.ts keeps its epoch in createLatest, not a counter of its own', () => {
+	// A text fence: a hand-rolled counter behaves the same, so only the source can show it.
+	it('declares no `let generation` and builds on createLatest', () => {
+		const src = stripComments(read('lib/loading/routeLoad.ts'));
+		expect(src).not.toMatch(/\blet\s+generation\b/);
+		expect(src).toMatch(/createLatest\(\)/);
+	});
+});
+
+// (*MVOX:Tallis*) (*MVOX:Josquin*)

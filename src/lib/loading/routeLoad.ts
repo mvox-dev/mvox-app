@@ -1,4 +1,5 @@
 // The shared route-load machine (#232); routeLoad.spec.ts pins its contract.
+import { createLatest } from '$lib/async/latest';
 import { getToken } from '$lib/auth/storage';
 import { cfgFor } from '$lib/entu/cfg';
 import { isAuthExpiredError } from '$lib/entu/auth-expired';
@@ -64,12 +65,12 @@ export function createRouteLoadMachine<TSelected extends { db: string }>(
 export function createRouteLoadMachine<TSelected extends { db: string }>(
 	opts: RouteLoadMachineOptions<TSelected> | GatedRouteLoadMachineOptions<TSelected>
 ): RouteLoadMachine {
-	let generation = 0;
+	const latest = createLatest();
 	let hasLoadedOnce = false;
 	let lastDb: string | null = null;
 
 	function isCurrent(g: number): boolean {
-		return g === generation;
+		return g === latest.epoch;
 	}
 
 	async function run(current: TSelected | null, g: number): Promise<void> {
@@ -111,7 +112,8 @@ export function createRouteLoadMachine<TSelected extends { db: string }>(
 	// One catch for the hooks and status writes as well as the body, so no page needs its own.
 	async function loadForSelected(): Promise<void> {
 		const current = opts.selected();
-		const g = ++generation;
+		latest.next();
+		const g = latest.epoch;
 		try {
 			await run(current, g);
 		} catch (e) {
@@ -128,7 +130,7 @@ export function createRouteLoadMachine<TSelected extends { db: string }>(
 	return {
 		loadForSelected,
 		get generation() {
-			return generation;
+			return latest.epoch;
 		},
 		isCurrent
 	};
