@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // The library page: my loans and the librarian return.
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/pages/libraryCopy')).libraryMessages()
@@ -50,8 +50,10 @@ import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
 import { signInLibraryReader } from '$lib/testing/pages/library';
 import { useLibraryPage } from '$lib/testing/pages/libraryPage';
+import { resetDeviceClock, setDeviceClock, TALLINN_SUMMER_NIGHT } from '$lib/testing/deviceClock';
 
 useLibraryPage();
+afterEach(resetDeviceClock);
 
 describe('#73 — my loans', () => {
 	it('renders the my-loans section when the current member has an active loan (returnedAt === "")', async () => {
@@ -153,6 +155,50 @@ describe('#73 — my loans', () => {
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="my-loans-item-lend-mine"]')).not.toBeNull();
 		});
+	});
+});
+
+describe('my loans: the closed toggle and the date range', () => {
+	function myLoans(rows: Array<{ id: string; assignedAt: string; assignedUntil: string }>) {
+		listWorksMock.mockResolvedValue(toListRead([]));
+		listLendingsMock.mockResolvedValue(
+			toListRead(rows.map((r) => ({ ...r, copyId: `copy-${r.id}`, memberId: 'member-mine', returnedAt: '' })))
+		);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
+		findMyMemberIdMock.mockResolvedValue('member-mine');
+	}
+
+	it('the closed toggle names the overdue count, as the local day sees it', async () => {
+		setDeviceClock(TALLINN_SUMMER_NIGHT);
+		myLoans([
+			{ id: 'a', assignedAt: '2026-10-01', assignedUntil: '2026-10-20' },
+			{ id: 'b', assignedAt: '2026-10-01', assignedUntil: '2026-10-21' },
+			{ id: 'c', assignedAt: '2026-10-01', assignedUntil: '' }
+		]);
+		const { findByRole } = render(Page);
+
+		const toggle = await findByRole('button', { name: 'My loans (3) · 1 overdue' });
+		expect(toggle.getAttribute('aria-expanded')).toBe('false');
+	});
+
+	it('with nothing overdue, the closed toggle shows no count', async () => {
+		setDeviceClock(TALLINN_SUMMER_NIGHT);
+		myLoans([{ id: 'b', assignedAt: '2026-10-01', assignedUntil: '2026-10-21' }]);
+		const { findByRole } = render(Page);
+
+		await findByRole('button', { name: 'My loans (1)' });
+	});
+
+	it('a loan with no start date shows its due date alone, with no dash', async () => {
+		myLoans([{ id: 'a', assignedAt: '', assignedUntil: '2099-01-01' }]);
+		const { container, findByRole } = render(Page);
+
+		await fireEvent.click(await findByRole('button', { name: 'My loans (1)' }));
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="my-loans-item-a"]')?.textContent).toContain('until 2099-01-01');
+		});
+		expect(container.querySelector('[data-testid="my-loans-item-a"]')?.textContent).not.toContain('–');
 	});
 });
 

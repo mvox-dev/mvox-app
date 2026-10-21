@@ -4,6 +4,7 @@ import type { EntuCfg } from '$lib/entu/cfg';
 import { createLending, returnLending, type CreateLendingPayload } from './lendingActions';
 import { bulkCheckout, type BulkCheckoutPayload, type BulkResult } from './lendingActions';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
+import { resetDeviceClock, setDeviceClock, TALLINN_SUMMER_NIGHT } from '$lib/testing/deviceClock';
 
 const cfg = testCfg('testdb');
 
@@ -117,9 +118,7 @@ describe('returnLending', () => {
 		vi.setSystemTime(new Date('2026-08-10T12:34:56Z'));
 	});
 
-	afterEach(() => {
-		vi.useRealTimers();
-	});
+	afterEach(resetDeviceClock);
 
 	it('POSTs to the lending entity with returned_at set to today (date-only)', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({}));
@@ -130,6 +129,14 @@ describe('returnLending', () => {
 		expect(call[1].method).toBe('POST');
 		const body = JSON.parse(String(call[1].body)) as Array<{ type: string; date?: string }>;
 		expect(body).toEqual([{ type: 'returned_at', date: '2026-08-10' }]);
+	});
+
+	it("records the device's date: 01:30 in Tallinn returns on the 21st, not UTC's 20th", async () => {
+		setDeviceClock(TALLINN_SUMMER_NIGHT);
+		const fetchImpl = vi.fn().mockResolvedValue(json({}));
+		await returnLending(cfg, 'lend-1', fetchImpl);
+		const body = JSON.parse(String((fetchImpl.mock.calls[0] as [string, RequestInit])[1].body));
+		expect(body).toEqual([{ type: 'returned_at', date: '2026-10-21' }]);
 	});
 
 	it('throws on HTTP error', async () => {

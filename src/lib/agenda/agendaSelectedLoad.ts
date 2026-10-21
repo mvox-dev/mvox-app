@@ -1,5 +1,6 @@
 import { cfgFor } from '$lib/entu/cfg';
 import { loadFullAgenda } from '$lib/agenda/agendaData';
+import { seasonNotEnded } from '$lib/attendance/conductorLogic';
 import { sameCollectiveIdentity } from '$lib/collectives/store';
 import { isAuthExpiredError } from '$lib/entu/request';
 import { resetServedFromCache } from '$lib/entu/readCache';
@@ -152,9 +153,9 @@ export function createSelectedLoad(
 						seasonEditors,
 						personId
 					);
-					const nowDateOnly = new Date().toISOString().slice(0, 10);
+					const now = new Date();
 					const candidateSeasons = fullSeasons.filter(
-						(s) => s.id === mSeasonId || s.endDate === '' || s.endDate >= nowDateOnly
+						(s) => s.id === mSeasonId || seasonNotEnded(s, now)
 					);
 					const nextManageableRightsById: Record<string, ManageRightsState> = {};
 					for (const s of candidateSeasons) {

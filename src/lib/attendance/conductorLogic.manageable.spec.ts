@@ -1,8 +1,9 @@
 // manageableSeason: the season an admin manages by default. The current one, else the season
 // with the smallest startDate (dates or not), else null. currentSeason keeps viewer semantics.
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { Season } from '$lib/seasons/types';
-import { currentSeason, manageableSeason } from './conductorLogic';
+import { currentSeason, manageableSeason, seasonNotEnded } from './conductorLogic';
+import { resetDeviceClock, setDeviceClock, TALLINN_SUMMER_NIGHT } from '$lib/testing/deviceClock';
 
 const NOW = new Date('2026-06-15T12:00:00.000Z');
 
@@ -92,6 +93,35 @@ describe('manageableSeason — the admin equivalent of currentSeason (#167)', ()
 		const seasons = [season('s-b', '2027-09-01'), season('s-a', '2026-09-01')];
 		manageableSeason(seasons, NOW);
 		expect(seasons.map((s) => s.id)).toEqual(['s-b', 's-a']);
+	});
+});
+
+// 01:30 on 2026-10-21 in Tallinn: UTC still says the 20th, the device says the 21st.
+describe("a season's days follow the device's date", () => {
+	afterEach(resetDeviceClock);
+	const night = new Date(TALLINN_SUMMER_NIGHT);
+
+	it('a season starting today is current from local midnight', () => {
+		setDeviceClock(TALLINN_SUMMER_NIGHT);
+		expect(currentSeason([season('s-new', '2026-10-21')], night)?.id).toBe('s-new');
+	});
+
+	it.each([
+		['ended yesterday: lapsed, the next season is managed', '2026-10-20', 's-next'],
+		['ends today, its last day: still managed', '2026-10-21', 's-now']
+	])('a current season that %s', (_case, endDate, managed) => {
+		setDeviceClock(TALLINN_SUMMER_NIGHT);
+		const seasons = [season('s-now', '2026-09-01', endDate), season('s-next', '2026-11-01')];
+		expect(manageableSeason(seasons, night)?.id).toBe(managed);
+	});
+
+	it.each([
+		['2026-10-20', false],
+		['2026-10-21', true],
+		['', true]
+	])('seasonNotEnded with end date "%s" is %s', (endDate, open) => {
+		setDeviceClock(TALLINN_SUMMER_NIGHT);
+		expect(seasonNotEnded(season('s', '2026-09-01', endDate), night)).toBe(open);
 	});
 });
 

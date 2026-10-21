@@ -1,6 +1,7 @@
 import { entuFetch } from '$lib/entu/request';
 import { resolveTypeId } from '$lib/seasons/entuSeasons';
 import type { EntuCfg } from '$lib/entu/cfg';
+import { localDayKey } from '$lib/preferences/timeFormat';
 import type { Lending } from './libraryData';
 import { isActiveLending, listCopies } from './libraryData';
 
@@ -65,7 +66,7 @@ export async function returnLending(
 	lendingId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<void> {
-	const today = new Date().toISOString().slice(0, 10);
+	const today = localDayKey(new Date());
 	const res = await entuFetch(
 		cfg.db,
 		`entity/${lendingId}`,
