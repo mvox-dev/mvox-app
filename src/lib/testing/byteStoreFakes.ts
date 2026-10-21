@@ -93,7 +93,7 @@ export interface FakeByteStore extends ByteStore {
 	heldFor(db: string, personId: string): string[];
 	/** Every setProtectedKeys() set, in order: the files eviction must keep (#410). */
 	protectedLog: Array<ReadonlySet<string>>;
-	/** Records the keys only: the fake has no quota, so nothing is ever evicted (#410). */
+	/** Records the keys only: the fake has no quota, so it never evicts by itself (#410). */
 	setProtectedKeys(keys: ReadonlySet<string>): void;
 	/** #410: lets page specs spy call order (setProtectedKeys, relieve, prefetch). */
 	relieve(): Promise<
