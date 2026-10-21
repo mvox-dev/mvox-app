@@ -1,6 +1,7 @@
 // Singer provisioning against an in-memory Entu mock.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import {
 	enumerateSingerTargets,
 	provisionDomainProfiles,

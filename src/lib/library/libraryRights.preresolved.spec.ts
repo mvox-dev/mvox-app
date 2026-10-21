@@ -5,7 +5,7 @@ import {
 	resolveLibraryEditRight as resolveLibrarianActual,
 	type LibraryEditRightResult
 } from './libraryRights';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 type ResolveMyLibraryIdPreResolved = (

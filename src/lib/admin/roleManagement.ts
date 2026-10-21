@@ -3,7 +3,7 @@
 // The read folds every _owner into _editor under the same _id and splices in the parent's rights
 // as `inherited: true`; fetchRights alone un-folds and filters it.
 import { entuFetch } from '$lib/entu/request';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { resolveNamesFromRoster } from '$lib/admin/rosterNames';
 

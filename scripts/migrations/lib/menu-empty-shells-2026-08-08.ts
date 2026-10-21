@@ -1,28 +1,8 @@
-// #47 (#37-P3.5) — restrict the 3 empty-shell menu entries (repertoire_item,
-// program_item, attendance — all 0 live instances per #41) to admin-only.
-// Same mechanism as #45 step 1 (Applications): `DELETE /property/{sharingValueId}`
-// on the menu row's own `_sharing` value, leaving it absent — matches the
-// existing "Billing" admin-only entry's shape exactly.
-//
-// MEMBER-SEAT VERIFICATION — cannot be performed empirically this run. Per
-// #44's finding, `ENTU_ADMIN_KEY` (the only non-db-root credential locally
-// available) resolves to an ANONYMOUS FLOOR JWT (`accounts:[]`), not a real
-// member/OAuth identity — there is no working member seat to verify against.
-// This script instead computes the post-change menu-row-visibility model
-// (which rows carry `_sharing:domain` vs absent) and states that computed
-// model plainly as computed, not observed.
-//
-// KNOWN OPEN DISCREPANCY (from #37's own history, 2026-08-07 walkthrough,
-// quoted verbatim rather than re-derived): "Member seat showed 11
-// Polyphony-group entries; admin seat shows 18 ... computed menu visibility
-// (22 of 23 rows domain) vs the 2026-08-07 walkthrough's observed 11
-// member-visible entries. Mechanism unknown (candidate: menu-entity property
-// bucketing)." This script's computed model will NOT resolve that mechanism —
-// it is explicitly parked for Mihkel's real-browser verification per the
-// issue's own instruction. Flagging, not diagnosing.
+// Restricts the 3 empty-shell menu entries to admin-only by deleting each row's `_sharing` (#47).
+// Member-seat visibility is computed, not observed: no member credential is available locally.
 
 import { entuFetch } from '$lib/entu/request';
-import { type EntuCfg } from '$lib/seasons/entuSeasons';
+import { type EntuCfg } from '$lib/entu/cfg';
 
 export type MenuTarget = { name: string; typeQuery: string };
 export const TARGETS: MenuTarget[] = [
@@ -51,12 +31,7 @@ export type VerifiedAll = {
 	fullMenu: FullMenuEntry[];
 };
 
-/** Step-0 enumeration (READ-ONLY). Re-verifies each of the 3 target menu rows
- * live — current `_sharing`, the row's own `_id`, its `_sharing` value `_id`
- * (needed for the DELETE), and a live recount of its referenced type's
- * instance count (HALTs if no longer 0 — the "empty shell" premise must hold
- * live, not from #41 memory). Also captures the FULL live menu for the
- * post-change computed model. */
+/** Read-only: re-verifies each target live; HALTs if its type is no longer empty. */
 export async function verifyAll(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<VerifiedAll> {
 	const menuRes = await entuFetch(cfg.db, `entity?_type.string=menu&props=name,group,query,_sharing&limit=100`, cfg.token, {}, fetchImpl);
 	if (!menuRes.ok) throw new Error(`verifyAll: menu list GET failed: ${menuRes.status}`);
@@ -107,8 +82,7 @@ export async function verifyAll(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): 
 
 export type PrivatizeLedgerEntry = { menuId: string; name: string; status: 'privatized' | 'failed'; message?: string };
 
-/** Same mechanic as #45 step 1: DELETE the menu row's `_sharing` value,
- * leaving it absent. Read-back-confirms absence. */
+/** Deletes the menu row's `_sharing` value, leaving it absent, and reads the absence back. */
 export async function privatizeMenuEntries(cfg: EntuCfg, targets: VerifiedMenuTarget[], fetchImpl: typeof fetch = fetch): Promise<PrivatizeLedgerEntry[]> {
 	const entries: PrivatizeLedgerEntry[] = [];
 	for (const t of targets) {

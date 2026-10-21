@@ -1,4 +1,4 @@
-import { cfgFor } from '$lib/entu/cfg';
+import { cfgFor, type EntuCfg } from '$lib/entu/cfg';
 import { nextEventFileIds } from '$lib/agenda/nextEventFileIds';
 import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
 import { refreshEventPageDetail, refreshEventPageWorkRows } from '$lib/events/eventPageData';
@@ -7,7 +7,6 @@ import { prefetchNextEventParts } from '$lib/files/prefetch';
 import { ensureRetentionSweep, seedRetentionKeys } from '$lib/files/retention';
 import type { ManageRightsState, WorkRow } from '$lib/repertoire/types';
 import type { Season } from '$lib/seasons/types';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { mergePendingRows as mergeRows } from '$lib/repertoire/repertoirePending';
 import { refetchWorkRows } from '$lib/repertoire/refetchWorkRows';
 import { reportProblem } from '$lib/problems/reportProblem';

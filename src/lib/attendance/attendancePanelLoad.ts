@@ -3,7 +3,7 @@ import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
 import { without } from '$lib/collections/immutable';
 import type { RsvpEntry } from '$lib/rsvp/rsvpData';
 import type * as AttendanceData from '$lib/attendance/attendanceData';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { createLatest } from '$lib/async/latest';
 import { reportProblem } from '$lib/problems/reportProblem';
 

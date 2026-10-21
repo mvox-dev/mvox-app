@@ -1,6 +1,6 @@
 // The roster rows' invite mint, withdraw and copy handlers.
 import type { RosterRow } from '$lib/roster/rosterData';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { isAuthExpiredError } from '$lib/entu/request';
 // The invite token is a bearer secret: the row hands out a full URL, never a bare JWT.
 // The URL composer and the copy-click share their code with InviteSurface.

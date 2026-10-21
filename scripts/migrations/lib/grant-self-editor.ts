@@ -1,42 +1,12 @@
-// #371 — grantSelfEditor: the shared bulk-provisioning primitive.
-//
-// A newly created person's create-time grant goes to the CREATOR (the admin
-// key that ran the creation); the person themselves gets nothing. The invite
-// path knows this and grants self-`_editor` right after create
-// (src/lib/invite/inviteData.ts:255-265); seed-178 did not — 19 crede members
-// could not answer an RSVP (#369). This primitive is FORWARD-ONLY: every
-// future bulk-person script calls it right after person-create. It patches no
-// existing row (remedy-369 already fixed the live population, 24/24 read-back,
-// 2026-09-15).
-//
-// Contract (pinned by grant-self-editor.spec.ts):
-//   1. Read-before-write: fresh read of all five rights tiers. Direct self-
-//      `_editor` already present -> skip-and-return, no write (the remedy-369
-//      check-first discipline, scripts/migrations/probes/
-//      remedy-369-crede-self-editor-grant-2026-09-15.ts).
-//   2. A DIFFERENT direct self-tier present (worst: `_owner`) -> REFUSE, throw
-//      naming the tier. ER-6/ER-9: one active direct tier per reference per
-//      entity — a self-`_editor` POST would SILENTLY RETIRE it (downgrade), so
-//      the primitive must never issue that write.
-//   3. Write: POST entity/{personId} body [{type:'_editor',reference:personId}]
-//      — wire-identical to the invite path. Non-2xx -> throw, status surfaced.
-//   4. Read-back proof (#369 class: payload said yes, rights said no): re-READ
-//      the entity's `_editor` and assert the DIRECT self grant is present —
-//      never inferred from the write's echo. Missing -> throw loudly.
-//
-// CONSUMERS: every future bulk-person-creation script, called immediately
-// after person-create (parity with the invite path's post-create grant) —
-// #369 is exactly the defect that shipped when a bulk-seed skipped this step.
-//
-// This primitive itself never prints or ledgers the rights bodies it reads —
-// nothing here to strip. A CALLER that logs or ledgers what this returns (or
-// the rights bodies it read to get there) MUST strip `.string` at the point
-// of extraction first (ER-26: every reference a read returns carries the
-// referenced person's name+email baked into `.string`, regardless of the
-// `props` requested).
+// #371 grantSelfEditor: grants a newly created person `_editor` on themselves.
+
+// A create-time grant goes to the creator, not the person; skipping this step left 19 crede
+// members unable to RSVP (#369). Every bulk-person script calls it right after person-create.
+
+// A caller that logs what this reads must strip `.string` first: references carry name and email.
 
 import { entuFetch } from '$lib/entu/request';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 
 export type GrantSelfEditorResult =
 	| { action: 'granted'; personId: string }
@@ -49,8 +19,6 @@ interface RawRef {
 	inherited?: boolean;
 }
 
-/** The DIRECT (non-inherited) rights tier `personId` holds on itself, if any
- *  — ER-6/ER-9: at most one active direct tier per reference per entity. */
 function directSelfTier(
 	entity: Record<string, RawRef[] | undefined>,
 	personId: string
@@ -69,7 +37,6 @@ export async function grantSelfEditor(
 	personId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<GrantSelfEditorResult> {
-	// ── 1. Read-before-write: fresh read of all five rights tiers.
 	const preReadRes = await entuFetch(
 		cfg.db,
 		`entity/${personId}?props=_owner,_editor,_viewer,_expander,_noaccess`,
@@ -91,14 +58,12 @@ export async function grantSelfEditor(
 		return { action: 'skip-already-granted', personId };
 	}
 	if (existingTier !== null) {
-		// ER-6/ER-9 downgrade trap: a self-_editor POST would silently retire
-		// whatever direct tier is already held. Never issue that write.
+		// A self-_editor POST would silently retire whatever direct tier is already held.
 		throw new Error(
 			`grantSelfEditor: person ${personId} already holds a direct self-${existingTier} — a self-_editor grant would silently retire it (ER-6/ER-9); refusing to write`
 		);
 	}
 
-	// ── 2. Write — wire-identical to the invite path (inviteData.ts:255-265).
 	const grantRes = await entuFetch(
 		cfg.db,
 		`entity/${personId}`,
@@ -116,8 +81,7 @@ export async function grantSelfEditor(
 		);
 	}
 
-	// ── 3. Read-back proof (#369 class: payload said yes, rights said no) —
-	// never trust the write's own echo.
+	// Read back the grant; the write's own echo is not proof.
 	const readBackRes = await entuFetch(
 		cfg.db,
 		`entity/${personId}?props=_editor`,

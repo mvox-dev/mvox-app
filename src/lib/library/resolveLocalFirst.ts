@@ -1,7 +1,7 @@
 import { firstById } from '$lib/collections/firstById';
 import { getToken } from '$lib/auth/storage';
 import type { Copy, Lending } from '$lib/library/libraryData';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { cfgFor, type EntuCfg } from '$lib/entu/cfg';
 import { reportProblem } from '$lib/problems/reportProblem';
 
 export interface LocalFirst<T> {
@@ -43,7 +43,7 @@ export function resolveLocalFirst<T>(o: LocalFirst<T>): Promise<void> {
 		o.apply(local);
 		return Promise.resolve();
 	}
-	return o.fetch({ db: current.db, token }, unresolved)
+	return o.fetch(cfgFor(current.db), unresolved)
 		.then((resolved) => {
 			if (!o.isCurrent()) return;
 			for (const [id, value] of local) resolved.set(id, value);

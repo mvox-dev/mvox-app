@@ -1,7 +1,7 @@
 // Event delete: an event takes its own attendance and program_item children with it.
 import { entuFetch } from '$lib/entu/request';
 import { CascadePartialError, EntityDeleteForbiddenError } from './deleteErrors';
-import type { EntuCfg } from './entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 
 export const CHILD_READ_LIMIT = 500;
 

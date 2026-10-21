@@ -1,7 +1,7 @@
 // Member lifecycle: deactivate and reinstate flip only `status`; plus the archived-roster reads.
 import { entuFetch } from '$lib/entu/request';
 import { replaceEntityProperty } from '$lib/entu/replaceProperty';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { listAdmins, listLibrarians } from '$lib/admin/roleManagement';
 import {
 	applyRealNames,

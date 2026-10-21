@@ -1,6 +1,6 @@
 // Which Entu right does the signed-in person hold on the selected collective's database entity?
 import { writable, type Writable } from 'svelte/store';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { reportProblem } from '$lib/problems/reportProblem';
 
 export type EditRightState = 'loading' | 'editor' | 'not-editor' | 'error';

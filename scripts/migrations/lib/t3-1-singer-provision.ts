@@ -1,21 +1,10 @@
-// T3.1 (#17) — provision the 128 synthetic singers: domain `profile` entities
-// (Bundle 1) + `member` tier conversion private→domain (Bundle 2). Authorized on
-// #17 (§8.6 chain recorded there); Owner: Pérotin (build + execute — no separate
-// build/review handoff for this task, per the issue's ownership line).
-//
-// Design mirrors t4-10-plan.ts's proven shape: read-only enumeration with
-// fail-loud drift guards, pure plan builders, per-record engines that NEVER throw
-// (captured in a ledger), a dry-run renderer as the operator's verify surface.
-//
-// Bundle separation is real, not cosmetic: `provisionDomainProfiles` (Bundle 1)
-// and `convertMemberTiers` (Bundle 2) are independent engines. The entrypoint
-// gates Bundle 2 on Bundle 1's full success — converting a member's tier to
-// domain without a populated, verified domain profile would surface her as an
-// incomplete/unnamed member (worse than leaving her private), so a partial
-// Bundle 1 must never let Bundle 2 run.
+// #17: give each synthetic singer a domain profile, then move her member to the domain tier.
+
+// Bundle 2 runs only after Bundle 1 fully succeeds: a domain member without a verified
+// profile shows as an unnamed member, worse than leaving her private.
 
 import { entuFetch } from '$lib/entu/request';
-import { type EntuCfg } from '$lib/seasons/entuSeasons';
+import { type EntuCfg } from '$lib/entu/cfg';
 import { createProfile, saveProfileFields, listMyProfiles } from '$lib/profile/profileData';
 
 /** Frozen drift tripwire — the live public-tier person count, as of the #17 probe
@@ -38,15 +27,8 @@ function errMsg(err: unknown): string {
 	return err instanceof Error ? err.message : String(err);
 }
 
-/**
- * Step-0 enumeration (READ-ONLY). One-page GET of every person; keep only
- * `_sharing==='public'`; HALT if the count differs from `EXPECTED_PUBLIC_PERSON_COUNT`
- * (drift tripwire) or the page was truncated (`count !== entities.length`). For each
- * public person: HALT if she does not have EXACTLY ONE `member` entity at
- * `_sharing==='private'` (anything else means the #17 probe's picture has changed
- * underneath this run); HALT if a `profile` entity already exists for her at ANY
- * tier (the #30 existing-profile lesson — never blind-create over one that exists).
- */
+/** Read-only enumeration. HALTs on count drift, truncation, a member that is not exactly one
+ * private entity, or any existing profile (never blind-create over one). */
 export async function enumerateSingerTargets(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch
@@ -88,7 +70,6 @@ export async function enumerateSingerTargets(
 			throw new Error(`enumerateSingerTargets: public person ${p._id} has no name value — cannot provision an unnamed profile`);
 		}
 
-		// Member precheck: exactly one, private.
 		const memberRes = await entuFetch(
 			cfg.db,
 			`entity?_type.string=member&person.reference=${encodeURIComponent(p._id)}&props=_id,_sharing&limit=10`,
@@ -114,8 +95,6 @@ export async function enumerateSingerTargets(
 			);
 		}
 
-		// Existing-profile precheck (the #30 lesson): HALT if ANY profile already
-		// exists for this person, at any tier.
 		const profileRes = await entuFetch(
 			cfg.db,
 			`entity?_type.string=profile&_parent.reference=${encodeURIComponent(p._id)}&props=_id,_sharing&limit=10`,
@@ -147,13 +126,8 @@ export type ProfileLedgerEntry = {
 	message?: string;
 };
 
-/**
- * Bundle 1 engine. Per person: create a bare `profile` shell (admin-created,
- * admin-owned — NO `ownerIds`, so Entu adds the creating db-root identity as
- * `_owner` itself, per `createProfile`'s documented default), populate `name`,
- * then read-back-PROVE the profile holds it. NEVER throws for a per-record
- * failure — captured in the ledger, per-record, never aggregated.
- */
+/** Bundle 1: create an admin-owned profile shell, set `name`, read it back to prove it.
+ * Per-record failures go to the ledger; never throws. */
 export async function provisionDomainProfiles(
 	cfg: EntuCfg,
 	targets: SingerTarget[],
@@ -212,17 +186,8 @@ export type TierLedgerEntry = {
 	message?: string;
 };
 
-/**
- * Bundle 2 engine. Per member: atomic `_sharing` replace — a single
- * `POST entity/{memberId}` carrying the OLD `_sharing` property's `_id` plus the
- * new string (`type:'_sharing', string:'domain'`). entu-api's `insertProperties`
- * soft-deletes the property named by an included `_id` and inserts the new value
- * in the same call (`entity.js:440-444`) — atomic, avoids the two-request race a
- * separate DELETE-then-POST would have. `_sharing` has no `_inheritrights`
- * cascade (confirmed against source: excluded from `aggregate.js`'s
- * `rightProperties` re-aggregation list), so this is a flat, local change. Then
- * read-back-PROVE the member now reads `_sharing==='domain'`.
- */
+/** Bundle 2: one POST carrying the old `_sharing` value id replaces it atomically, then
+ * reads back. `_sharing` does not cascade via _inheritrights, so the change stays local. */
 export async function convertMemberTiers(
 	cfg: EntuCfg,
 	targets: SingerTarget[],

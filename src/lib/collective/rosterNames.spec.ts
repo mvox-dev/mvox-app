@@ -1,6 +1,6 @@
 // The roster_show_real_names toggle on the database entity: read and admin write.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
 import { readRosterNamesSetting, updateRosterShowRealNames } from './rosterNames';
 

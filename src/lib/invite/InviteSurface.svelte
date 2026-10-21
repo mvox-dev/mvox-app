@@ -105,7 +105,7 @@
 		if (key === resolvedPersonDataKey) return;
 		resolvedPersonDataKey = key;
 		personListError = false;
-		void loadPersonInviteData({ db: presetDb, token }, presetDbEntityId, viewerPersonId, personIds).then(
+		void loadPersonInviteData(cfgFor(presetDb), presetDbEntityId, viewerPersonId, personIds).then(
 			(loaded) => {
 				dbRight = loaded.dbRight;
 				joinStates = loaded.joinStates;

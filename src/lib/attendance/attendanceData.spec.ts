@@ -1,6 +1,7 @@
 // attendanceData: per-tap attendance writes under the event, and the attendance reads.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import {
 	createAttendance,
 	updateAttendanceStatus,

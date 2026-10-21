@@ -3,7 +3,7 @@
 // Meta-type ids are resolved per db, never hardcoded: each db has its own generated ids.
 
 import { entuFetch } from '$lib/entu/request';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { MvoxEntityDef, PropertySpec, Sharing } from './mvox-schema-extensions';
 
 function errMsg(err: unknown): string {

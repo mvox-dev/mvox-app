@@ -1,6 +1,7 @@
 // The RSVP data layer: member lookup, reads and the status write.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import {
 	findMyMemberId,
 	createRsvp,

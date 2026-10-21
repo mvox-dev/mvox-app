@@ -1,7 +1,7 @@
 // Read-through open of a file's bytes: the stored copy, else sign, fetch and store (#343).
 
 import { signFileUrl } from '$lib/repertoire/fileUrls';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { FileKey } from './idb';
 import { reportProblem } from '$lib/problems/reportProblem';
 import { BYTE_STORE_CAP_BYTES, type ByteStore } from './byteStore';

@@ -2,7 +2,7 @@
 import { entuFetch } from '$lib/entu/request';
 import { readParentValues } from '$lib/entu/readParents';
 import { SectionMembershipMissingError } from './sectionErrors';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { ParentValue } from '$lib/entu/wireTypes';
 
 // POST appends, so this adds one `_parent` and leaves the rest. A stale row can add a duplicate;

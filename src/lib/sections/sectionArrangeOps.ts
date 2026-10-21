@@ -1,5 +1,5 @@
 // The section tree editor's handlers, composed from one module per flow.
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { listSections, SectionNode } from '$lib/sections/sectionData';
 import type {
 	createSection,

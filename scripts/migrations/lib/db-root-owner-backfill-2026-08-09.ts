@@ -1,22 +1,10 @@
-// #68 (epic #37) Phase 2 — db-root `_owner` backfill. Governance: Mihkel's
-// ruling on #68, verbatim: "1 is correct -- all objects must be under dev
-// team's control. this installation is sandbox now, but should transform to
-// template at the finish line." Add-only: existing `_owner`/`_editor` values
-// are never touched or removed — this is a pure POST-appends write (the
-// natural multi-value semantics for a reference-type property), never a
-// DELETE-then-POST replace. `_sharing` is untouched by construction (this
-// module never writes that property).
-//
-// Population: the 72 entities Phase 1's probe flagged
-// (scripts/migrations/probes/probe-68-db-root-owner-inventory-2026-08-09.ts),
-// loaded from its committed result artifact — same frozen-baseline +
-// live-drift-check discipline as #46's orphan pre-check, so a population
-// that moved between Phase 1 and Phase 2 execution is caught, not silently
-// missed.
+// #68: add db-root as `_owner` on the 72 entities the Phase-1 probe flagged.
+
+// Add-only: POST appends to a reference property, so existing owners and `_sharing` stay.
 
 import { readFileSync } from 'node:fs';
 import { entuFetch } from '$lib/entu/request';
-import { type EntuCfg } from '$lib/seasons/entuSeasons';
+import { type EntuCfg } from '$lib/entu/cfg';
 
 export const DB_ROOT_PERSON_ID = '69bcfd8e9c031ab8e6ce8079';
 
@@ -38,10 +26,7 @@ type BaselineArtifact = {
 	}>;
 };
 
-/** Loads the frozen Phase-1 baseline (72 targets) from its committed artifact
- * — not hand-transcribed, avoids transcription risk on a 72-entry id list
- * spanning 6 types. Throws if the artifact's shape drifted from what Phase 1
- * produced. */
+// Read from the committed artifact, not hand-copied, so the 72 ids cannot be mistyped.
 export function loadFlaggedBaseline(): FlaggedTarget[] {
 	const raw = readFileSync(BASELINE_ARTIFACT_PATH, 'utf-8');
 	const artifact = JSON.parse(raw) as BaselineArtifact;
@@ -64,12 +49,7 @@ export type PopulationCheck = {
 	preOwnerCounts: Record<string, number>;
 };
 
-/** Re-verifies the baseline live, per type (one list query per type — not 72
- * individual GETs), before any write. Distinguishes: still flagged (needs the
- * backfill), already fixed since Phase 1 (someone else already added db-root
- * — skip, don't double-add), and missing (deleted since Phase 1 — flag, don't
- * silently drop). Also captures each target's CURRENT `_owner` value count,
- * so the post-write add-only check has a real pre-image to compare against. */
+// Splits targets into still flagged, already fixed (skip) and missing (flag, don't drop).
 export async function verifyPopulation(cfg: EntuCfg, baseline: FlaggedTarget[], fetchImpl: typeof fetch = fetch): Promise<PopulationCheck> {
 	const byType = new Map<string, FlaggedTarget[]>();
 	for (const t of baseline) {
@@ -110,18 +90,7 @@ export async function verifyPopulation(cfg: EntuCfg, baseline: FlaggedTarget[], 
 
 export type BackfillLedgerEntry = { type: string; id: string; status: 'added' | 'skipped' | 'failed'; message?: string };
 
-/** The genuine mutation: POST `_owner` (add, never replace — reference-type
- * properties APPEND on POST by default, which is exactly the wanted
- * semantics here, no DELETE-then-POST). Read-back verifies (a) db-root's
- * reference is now present, AND (b) the owner count grew by EXACTLY 1 —
- * proves add-only, not an accidental replace or a duplicate-add.
- *
- * Idempotency guard (Bentham review, item 3 / YELLOW-T4.10.1 lesson): a
- * FRESH GET immediately precedes every write, independent of whatever
- * `verifyPopulation` already filtered upstream. If db-root is already
- * present, SKIP — never POST again. This makes the function safe to
- * re-run or call with a stale/unfiltered target list, not just safe when
- * the caller remembers to filter first. */
+// A fresh GET before each write skips targets already owned by db-root: re-runs never double-add.
 export async function backfillOwner(cfg: EntuCfg, targets: FlaggedTarget[], fetchImpl: typeof fetch = fetch): Promise<BackfillLedgerEntry[]> {
 	const entries: BackfillLedgerEntry[] = [];
 	for (const t of targets) {
@@ -174,9 +143,7 @@ export async function backfillOwner(cfg: EntuCfg, targets: FlaggedTarget[], fetc
 	return entries;
 }
 
-/** Full-entity snapshot for the canary diff gate — deliberately NOT
- * `props=`-scoped, so it captures every property Entu returns (aggregated
- * buckets included) rather than only the one field we expect to change. */
+// Not props-scoped: the canary diff must see every property, not only `_owner`.
 async function readFullEntity(cfg: EntuCfg, id: string, fetchImpl: typeof fetch = fetch): Promise<Record<string, unknown>> {
 	const res = await entuFetch(cfg.db, `entity/${id}`, cfg.token, {}, fetchImpl);
 	if (!res.ok) throw new Error(`readFullEntity: GET ${id} failed: ${res.status}`);
@@ -184,11 +151,6 @@ async function readFullEntity(cfg: EntuCfg, id: string, fetchImpl: typeof fetch 
 	return body.entity ?? {};
 }
 
-/** Diffs two full-entity snapshots with `_owner` stripped from both sides —
- * `_owner` is the ONLY field this module ever intends to change. Any other
- * difference (a re-aggregated `_sharing`/bucket, a mutated custom property,
- * anything) means the write had a side-effect nobody asked for. Returns the
- * list of top-level keys whose JSON representation differs. */
 function diffEntitiesExcludingOwner(before: Record<string, unknown>, after: Record<string, unknown>): string[] {
 	const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
 	keys.delete('_owner');
@@ -199,21 +161,7 @@ function diffEntitiesExcludingOwner(before: Record<string, unknown>, after: Reco
 	return changed;
 }
 
-/** Canary — one target PER TYPE (6 types in the flagged population), added +
- * add-only verified, BEFORE the full 72-entity sweep. Throws on any canary
- * failure — refuses to run the full sweep on an unproven mechanic for that
- * type.
- *
- * Ordering (Bentham review, item 1): `no-owner` canaries run FIRST. The 3
- * fully-unowned `profile` entities are the hardest case — if a POST can
- * establish `_owner` where NONE exists at all, every other cohort (which
- * already has SOME owner, just not db-root) is a weaker condition. Fail
- * fast on the hardest case before spending writes on the easier ones.
- *
- * Re-aggregation diff gate (Bentham review, item 2): each canary captures a
- * FULL entity snapshot before the write and after the read-back, then diffs
- * every field except `_owner`. Throws immediately if anything else moved —
- * this module has no business changing `_sharing` or any custom property. */
+// Unowned canaries go first: the hardest case should fail before writes are spent on easier ones.
 export async function backfillCanaries(cfg: EntuCfg, targets: FlaggedTarget[], fetchImpl: typeof fetch = fetch): Promise<{ canaryEntries: BackfillLedgerEntry[]; remainingTargets: FlaggedTarget[] }> {
 	const canaryByType = new Map<string, FlaggedTarget>();
 	for (const t of targets) {
@@ -245,11 +193,7 @@ export async function backfillCanaries(cfg: EntuCfg, targets: FlaggedTarget[], f
 	return { canaryEntries, remainingTargets };
 }
 
-/** Constraint spot-check (issue #68's own ask): confirm `_sharing` on one
- * specimen is bit-for-bit unchanged across the backfill — this module never
- * writes `_sharing`, so an unexpected re-aggregation side-effect would show
- * here. Compares both the string VALUE and the value's own `_id` (an `_id`
- * rotation with the same string would still mean something touched it). */
+// Compares the value's `_id` too: a rotated id with the same string still means it was touched.
 export async function readSharing(cfg: EntuCfg, id: string, fetchImpl: typeof fetch = fetch): Promise<{ string: string | null; valueId: string | null }> {
 	const res = await entuFetch(cfg.db, `entity/${id}?props=_sharing`, cfg.token, {}, fetchImpl);
 	if (!res.ok) throw new Error(`readSharing: GET ${id} failed: ${res.status}`);
@@ -257,8 +201,6 @@ export async function readSharing(cfg: EntuCfg, id: string, fetchImpl: typeof fe
 	const v = body.entity?._sharing?.[0];
 	return { string: v?.string ?? null, valueId: v?._id ?? null };
 }
-
-// ── Dry-run render + ledger ─────────────────────────────────────────────────────
 
 export function renderPlan(check: PopulationCheck): string {
 	const lines: string[] = [];

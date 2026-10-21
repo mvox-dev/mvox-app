@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { cfgFor } from '$lib/entu/cfg';
+	import { cfgFor, type EntuCfg } from '$lib/entu/cfg';
 	import { isPastDetail } from '$lib/events/eventTime';
 	import RsvpControl from '$lib/components/agenda/RsvpControl.svelte';
 	import RsvpNonMemberHint from '$lib/components/agenda/RsvpNonMemberHint.svelte';
@@ -8,7 +8,6 @@
 	import type { RsvpEntry } from '$lib/rsvp/rsvpData';
 	import { createRsvpWriteStatus, existingRsvp } from '$lib/rsvp/rsvpWriteStatus';
 	import { createWriteTokens } from '$lib/net/writeTokens';
-	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 	import { reportProblem } from '$lib/problems/reportProblem';
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';

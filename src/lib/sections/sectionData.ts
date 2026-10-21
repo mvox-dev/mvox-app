@@ -1,6 +1,6 @@
 // The section tree and the roster grouped over it; a section that cannot be placed fails loud.
 import { entuFetch } from '$lib/entu/request';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { byDisplayOrder } from '$lib/collections/displayOrder';
 import { referenceIds } from '$lib/entu/references';
 import type { RosterRow } from '$lib/roster/rosterData';

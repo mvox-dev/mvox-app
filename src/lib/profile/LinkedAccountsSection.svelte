@@ -13,7 +13,7 @@
 	import { buildOAuthInitUrl } from '../../routes/auth/[provider]/build-oauth-init-url';
 	import type * as InviteData from '$lib/invite/inviteData';
 	import { focusAfterRender } from '$lib/a11y/focusable';
-	import type { EntuCfg } from '$lib/seasons/entuSeasons';
+	import type { EntuCfg } from '$lib/entu/cfg';
 
 	interface Props {
 		ready: boolean;

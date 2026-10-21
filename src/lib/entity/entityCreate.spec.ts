@@ -1,6 +1,7 @@
 // entityCreate: season/event/series create bodies, full shape, never a rights field (#132).
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { createEvent, createEventSeries, createSeason } from './entityCreate';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
 

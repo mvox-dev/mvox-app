@@ -1,6 +1,7 @@
 // The admin invite create: person with a minted invite, the self-_editor grant, then the member.
 import { entuFetch } from '$lib/entu/request';
-import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resolveTypeId } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { resolveDatabaseEntityId, DatabaseEntityLookupError } from '$lib/collective/databaseEntity';
 import { INVITE_MINT_TRIGGER } from './inviteConstants';
 import { inviteOf } from './inviteOf';

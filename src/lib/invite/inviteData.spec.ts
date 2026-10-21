@@ -1,6 +1,7 @@
 // createInvite and the invite reads: person + member mint, self-edit grant, link token.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import {
 	createInvite,
 	InviteCreateError,

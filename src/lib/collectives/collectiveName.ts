@@ -2,7 +2,7 @@
 import { entuFetch } from '$lib/entu/request';
 import { replaceEntityProperty } from '$lib/entu/replaceProperty';
 import type { EntuSearchResponse } from '$lib/entu/wireTypes';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { MVOX_COLLECTIVE_MARKER_TYPE } from './marker';
 
 export type CollectiveNameMarker = { markerId: string; name: string };

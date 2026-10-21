@@ -1,6 +1,11 @@
+// Entu call config: the selected collective's db and the user's JWT (browser-direct).
 import { getToken } from '$lib/auth/storage';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
-export function cfgFor(db: string): EntuCfg {
-	return { db, token: getToken() ?? '' };
+export interface EntuCfg {
+	db: string;
+	token: string;
+}
+
+export function cfgFor(db: string, token?: string): EntuCfg {
+	return { db, token: token ?? getToken() ?? '' };
 }

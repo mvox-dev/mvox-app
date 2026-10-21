@@ -1,23 +1,10 @@
-// T6.2b (#57, epic #54) — the completing mutation Gama's 2026-08-08 11:00
-// STOP identified: T6.2 (#56) widened the PROP-DEFS (gate 1) and touch-saved
-// all 586 instances, but the touch-save re-asserted the SAME `_sharing:
-// 'private'` value (a re-aggregation trigger, not a tier change) — gate 3
-// (the instance's own `_sharing`) never moved. By the 3-gate-AND
-// (architecture-decisions.md, first stated in #44's bucket check): prop-def
-// tier ∧ TYPE tier ∧ INSTANCE tier, narrowest wins. Gate 3 stayed private for
-// all 586, so nothing T6.2 touched was actually member-readable. This module
-// closes gate 3: converts each instance's `_sharing` from `private` to
-// `domain` (a genuine replace, not a touch-save) after first re-verifying
-// gate 2 (the four TYPE entities' own `_sharing`) live, per Gama's explicit
-// ask — unchecked for these types on any record before this task.
-//
-// Reuses `TYPE_IDS`, `DB_ROOT_PERSON_ID`, and `verifyInstances` from
-// `lib/library-visibility-2026-08-08.ts` (T6.2's own module) rather than
-// duplicating — same population, same ownership-pre-check discipline, this
-// module only adds the gate-2 check and the private→domain replace engine.
+// #57: widen the 586 library instances' own `_sharing` from private to domain.
+
+// Member read needs prop-def, type and instance tiers all open, narrowest wins; #56's touch-save
+// left the instance tier private, so nothing became member-readable.
 
 import { entuFetch } from '$lib/entu/request';
-import { type EntuCfg } from '$lib/seasons/entuSeasons';
+import { type EntuCfg } from '$lib/entu/cfg';
 import { TYPE_IDS, DB_ROOT_PERSON_ID, verifyInstances, type InstanceTarget } from './library-visibility-2026-08-08';
 
 export { TYPE_IDS, DB_ROOT_PERSON_ID, verifyInstances };
@@ -29,13 +16,7 @@ function errMsg(err: unknown): string {
 
 export type TypeGateResult = { type: string; typeId: string; sharing: string; passesGate2: boolean };
 
-/** Gate 2 verification (read-only) — Gama's explicit ask, unchecked for these
- * four types on any prior record. `domain` or `public` pass; anything else
- * (absent/private) caps domain-bucket exposure for EVERY prop-def on that
- * type regardless of gates 1/3 (aggregate.js's cap logic, same mechanic as
- * #20's `verifyMemberTypeSharing`). Does not throw — returns the observed
- * state for every type so the caller/report can see all four, flagging any
- * failure explicitly rather than halting on the first one. */
+// Reports every type instead of halting: a type tier below domain caps all its prop-defs.
 export async function verifyTypeGate2(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<TypeGateResult[]> {
 	const results: TypeGateResult[] = [];
 	for (const [typeName, typeId] of Object.entries(TYPE_IDS)) {
@@ -53,11 +34,7 @@ export async function verifyTypeGate2(cfg: EntuCfg, fetchImpl: typeof fetch = fe
 
 export type ReplaceLedgerEntry = { type: string; id: string; status: 'widened' | 'failed'; newSharingPropId?: string; message?: string };
 
-/** The genuine tier-changing write: atomic replace-by-`_id` of the
- * instance's own `_sharing` value, `private` → `domain`. Same wire mechanic
- * as every prior `_sharing` replace in this codebase (#44, #20) — this time
- * the STRING actually changes, which is what makes it a widen rather than a
- * touch-save. */
+// Replaces the value by `_id` with a new string; re-saving the same string changes no tier.
 export async function widenInstances(cfg: EntuCfg, targets: InstanceTarget[], fetchImpl: typeof fetch = fetch): Promise<ReplaceLedgerEntry[]> {
 	const entries: ReplaceLedgerEntry[] = [];
 	for (const t of targets) {
@@ -105,8 +82,6 @@ export async function widenInstances(cfg: EntuCfg, targets: InstanceTarget[], fe
 	return entries;
 }
 
-/** Canary — one instance PER TYPE (4 total), widened + single-value-survives
- * verified, BEFORE the full sweep. Throws on any canary failure. */
 export async function widenCanaries(cfg: EntuCfg, targets: InstanceTarget[], fetchImpl: typeof fetch = fetch): Promise<{ canaryEntries: ReplaceLedgerEntry[]; remainingTargets: InstanceTarget[] }> {
 	const canaryByType = new Map<string, InstanceTarget>();
 	for (const t of targets) {
@@ -132,8 +107,6 @@ export async function widenCanaries(cfg: EntuCfg, targets: InstanceTarget[], fet
 	const remainingTargets = targets.filter((t) => !canaryIds.has(t.id));
 	return { canaryEntries, remainingTargets };
 }
-
-// ── Dry-run render + ledger ─────────────────────────────────────────────────────
 
 export function renderPlan(gate2: TypeGateResult[], instances: Awaited<ReturnType<typeof verifyInstances>>): string {
 	const lines: string[] = [];

@@ -1,7 +1,7 @@
 // Season field and conductor writes: replace a field's value, add or remove a conductor.
 import { entuFetch } from '$lib/entu/request';
 import { replaceEntityProperty, type EntuWireValue } from '$lib/entu/replaceProperty';
-import type { EntuCfg } from './entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 
 export type SeasonEditableField = 'name' | 'start_date' | 'end_date';
 

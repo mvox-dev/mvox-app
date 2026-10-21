@@ -1,7 +1,7 @@
 // The next event's parts, fetched while the app is open, never in the background (#409).
 // One keys-only heldFileIds read decides the skips; missing parts open one at a time, each URL
 // released; `isCurrent` false stops the walk. Never throws: a failed part is a result.
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { CollectiveIdentity } from '$lib/collectives/store';
 import type { ByteStore } from './byteStore';
 import { reportProblem } from '$lib/problems/reportProblem';

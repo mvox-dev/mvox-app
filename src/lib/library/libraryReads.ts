@@ -1,6 +1,6 @@
 // Library list reads; read-only, and never a still-private field (library-browse design §2).
 import type { EntuFetchOptions } from '$lib/entu/request';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { readList, type ListRead } from '$lib/entu/listRead';
 
 export interface Work {

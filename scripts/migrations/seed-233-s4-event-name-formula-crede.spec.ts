@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 
 const LEDGER_PATH = 'scripts/migrations/seed-results/crede-instance/seed-233-s4-fake.json';
 const writeLedgerMock = vi.fn(() => LEDGER_PATH);

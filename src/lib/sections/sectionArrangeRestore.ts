@@ -1,5 +1,5 @@
 // The section tree reload every failed structural write falls back on.
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { ArrangeOpsDeps } from '$lib/sections/sectionArrangeOps';
 import { reportProblem } from '$lib/problems/reportProblem';

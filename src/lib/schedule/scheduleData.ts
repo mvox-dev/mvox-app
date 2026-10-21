@@ -1,7 +1,8 @@
 // schedule_item data layer under an event: sorted by datetime, then name; no ordinal (#246).
 import { entuFetch } from '$lib/entu/request';
 import { replaceEntityProperty } from '$lib/entu/replaceProperty';
-import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resolveTypeId } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { compareScheduleItems, type ScheduleItem } from './scheduleSort';
 export { compareScheduleItems, type ScheduleItem };
 

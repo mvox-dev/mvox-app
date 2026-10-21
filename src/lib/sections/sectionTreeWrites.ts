@@ -6,7 +6,7 @@ import {
 	SectionParentDamagedError,
 	SectionReparentPartialError
 } from './sectionErrors';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { EntuSearchResponse, ParentValue } from '$lib/entu/wireTypes';
 
 // A broken stream on an already-failing response must not mask the status the caller needs.

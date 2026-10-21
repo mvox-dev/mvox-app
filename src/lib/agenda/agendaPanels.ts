@@ -1,9 +1,8 @@
 import { untrack } from 'svelte';
-import { cfgFor } from '$lib/entu/cfg';
+import { cfgFor, type EntuCfg } from '$lib/entu/cfg';
 import { focusAfterRender } from '$lib/a11y/focusable';
 import type { AgendaItem } from '$lib/agenda/types';
 import { createAttendancePanelLoad, failedMarksFor } from '$lib/attendance/attendancePanelLoad';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { reportProblem } from '$lib/problems/reportProblem';
 import type { AgendaLoadDeps, AgendaLoadState, LoadCounters } from '$lib/agenda/agendaLoad';
 

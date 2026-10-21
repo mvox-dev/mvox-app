@@ -1,6 +1,6 @@
 // Its own module so specs that mock resolveDatabaseEntityId also reach this caller.
 import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { reportProblem } from '$lib/problems/reportProblem';
 
 export interface DbEntityLogLabel {

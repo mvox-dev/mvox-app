@@ -6,6 +6,7 @@ import type { CollectiveIdentity } from '$lib/collectives/store';
 import type { FileKey } from '$lib/files/idb';
 import { getAppByteStore } from '$lib/files/appByteStore';
 import { reportProblem } from '$lib/problems/reportProblem';
+import { cfgFor } from '$lib/entu/cfg';
 
 export type RetentionCollective = CollectiveIdentity;
 
@@ -69,7 +70,7 @@ async function runRetentionSweep({
 }): Promise<void> {
 	for (const collective of collectives) {
 		if (keysByDb.has(collective.db)) continue;
-		const cfg = { db: collective.db, token };
+		const cfg = cfgFor(collective.db, token);
 		try {
 			const agenda = await listFullAgenda(cfg, now ?? new Date(), fetchImpl);
 			const next = agenda.upcoming[0];

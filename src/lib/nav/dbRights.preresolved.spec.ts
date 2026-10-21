@@ -1,7 +1,7 @@
 // resolveDbEditRight skips the database lookup when given its id.
 import { describe, it, expect, vi } from 'vitest';
 import { resolveDbEditRight as resolveAdminActual, type EditRightState } from './dbRights';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 type ResolveAdminPreResolved = (

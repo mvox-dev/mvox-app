@@ -5,7 +5,7 @@
 // The default, dry, prints the read plan and calls nothing.
 
 import { pathToFileURL } from 'node:url';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { entuFetch } from '$lib/entu/request';
 import { RIGHTS_WRITES_REGISTER } from '$lib/testing/rightsWrites';
 import { loadCredeCfg, readAuthorizedBy, readDryRun } from '../lib/script-runner';

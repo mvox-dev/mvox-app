@@ -1,6 +1,6 @@
 // The scoped one-row read of a singer's own RSVP on one event.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { findMyRsvpForEvent } from './rsvpData';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
 

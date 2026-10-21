@@ -2,12 +2,11 @@
 	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
-	import { cfgFor } from '$lib/entu/cfg';
+	import { cfgFor, type EntuCfg } from '$lib/entu/cfg';
 	import ConductorChip from '$lib/agenda/ConductorChip.svelte';
 	import RosterPersonSelect from '$lib/roster/RosterPersonSelect.svelte';
 	import type { RosterRow } from '$lib/roster/rosterData';
 	import type * as SeasonManage from '$lib/seasons/seasonManage';
-	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	interface Props {
 		selected: Collective | null;

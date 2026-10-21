@@ -4,7 +4,7 @@
 	import { alreadyReported, reportProblem } from '$lib/problems/reportProblem';
 	import { type ComponentProps } from 'svelte';
 	import type { Collective } from '$lib/collectives/types';
-	import { cfgFor } from '$lib/entu/cfg';
+	import { cfgFor, type EntuCfg } from '$lib/entu/cfg';
 	import { isSeasonDeletePending } from '$lib/agenda/seasonManageDelete';
 	import type RepertoireElement from '$lib/agenda/RepertoireElement.svelte';
 	import SeasonCardHeader from '$lib/agenda/SeasonCardHeader.svelte';
@@ -22,7 +22,6 @@
 		seasonManageDeleteSlotFor
 	} from '$lib/agenda/seasonManagePanelState';
 	import { focusAfterRender, focusTestIdAfterRender } from '$lib/a11y/focusable';
-	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	type RepertoireProps = ComponentProps<typeof RepertoireElement>;
 

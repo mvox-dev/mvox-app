@@ -1,4 +1,5 @@
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+// Joins each event's repertoire refs with work/edition/copy details, read once per agenda.
+import type { EntuCfg } from '$lib/entu/cfg';
 import {
 	listWorks,
 	listAllEditions,
@@ -15,20 +16,9 @@ import {
 } from './repertoireData';
 import type { RepertoireStatus, WorkRow } from './types';
 
-// #90 TR.2 — the JOIN between the repertoire data layer and the agenda's works
-// view model. repertoireData.ts resolves WHICH items an event shows
-// (program_items, else the season's active repertoire_items); those items carry
-// only refs (workId / editionId). Everything a member actually reads — work
-// name, composer, edition name, external links, whether a PDF exists, whether
-// copies exist to borrow — lives on the work/edition/copy entities. This module
-// resolves that lookup set ONCE for the whole agenda and joins it in.
-//
-// Read-only throughout: no entuFetch(..., { method: 'POST' | 'DELETE' }).
-
 export interface WorkRowSources {
 	worksById: Map<string, Work>;
 	editionsById: Map<string, Edition>;
-	/** How many copy entities exist per edition id — >0 is what lights Borrow. */
 	copyCountByEditionId: Map<string, number>;
 }
 
@@ -45,13 +35,7 @@ export function collectSources(works: Work[], editions: Edition[], copies: Copy[
 	};
 }
 
-/**
- * The edition's downloadable score. Prefers an actual PDF; falls back to the
- * first file so an edition whose score was uploaded with a vague filetype
- * still offers the link. Returns the whole file (#353: the row keeps its
- * NAME alongside its id — never one without the other) rather than just the
- * PROPERTY id (see types.ts's `fileId` note on the 60-second signing window).
- */
+// Prefers a PDF, else the first file, so a vaguely typed upload still offers the link.
 function pickFile(edition: Edition | undefined): EditionFile | undefined {
 	if (!edition || edition.files.length === 0) return undefined;
 	const pdf = edition.files.find(
@@ -60,15 +44,8 @@ function pickFile(edition: Edition | undefined): EditionFile | undefined {
 	return pdf ?? edition.files[0];
 }
 
-/**
- * Only http(s) urls survive. `edition.external_link` is free text typed by
- * anyone with editor rights on the edition, and RepertoireElement binds these
- * straight into an `href` — Svelte does not sanitize href bindings, so a
- * `javascript:` value would render as a live anchor running in the member's
- * session. Filtering here rather than in the template means every future
- * consumer of WorkRow inherits it. A bad value is DROPPED, not rendered inert:
- * a silently missing link beats a live hostile one.
- */
+// external_link is free text bound into an href Svelte does not sanitize: only http(s)
+// survives, and a bad value is dropped rather than rendered.
 function safeExternalLinks(links: string[]): string[] {
 	return links.filter((v) => {
 		try {
@@ -80,22 +57,6 @@ function safeExternalLinks(links: string[]): string[] {
 	});
 }
 
-/**
- * Pure — no fetch. Joins one event's resolved items against the collective-wide
- * lookup set. Both branches produce the SAME row shape; they differ only in
- * where the work comes from and what the row carries:
- *   - 'program'    — edition-first (program_item.edition is required); the work
- *                    is the edition's parent. Carries ordinal + notes, status
- *                    null (a concert programme has no learning/active state).
- *   - 'repertoire' — work-first (repertoire_item.work is required); the edition
- *                    is optional (an unpinned work renders the no-edition
- *                    placeholder). Carries status, ordinal null (season
- *                    repertoire has no concert position), notes '' (the type
- *                    has no notes prop).
- * Missing lookups degrade to '' rather than dropping the row: a member seeing a
- * work name with a blank composer is strictly better than a silently shorter
- * programme.
- */
 const KNOWN_STATUSES = new Set<string>([
 	'learning',
 	'active',
@@ -103,14 +64,12 @@ const KNOWN_STATUSES = new Set<string>([
 	'dropped'
 ] satisfies RepertoireStatus[]);
 
-/** All four schema statuses survive to the row (#91: an editor must be able to
- *  toggle a retired work back). Anything OUTSIDE the four is a data slip and
- *  becomes null — no badge, and the management select falls back to the schema
- *  default rather than seeding an option that does not exist. */
+// Anything outside the four schema statuses is a data slip; null keeps the select honest.
 function narrowStatus(raw: string): RepertoireStatus | null {
 	return KNOWN_STATUSES.has(raw) ? (raw as RepertoireStatus) : null;
 }
 
+// Missing lookups degrade to '' and keep the row: a blank composer beats a shorter programme.
 export function buildWorkRows(eventWorks: EventWorks, sources: WorkRowSources): WorkRow[] {
 	const { worksById, editionsById, copyCountByEditionId } = sources;
 
@@ -121,13 +80,9 @@ export function buildWorkRows(eventWorks: EventWorks, sources: WorkRowSources): 
 			const file = pickFile(edition);
 			return {
 				id: item.id,
-				// #91 — provenance travels WITH the row: `id` here names a
-				// program_item, so only the programme write layer may touch it.
 				kind: 'program' as const,
 				workId: edition?.workId ?? '',
 				editionId: item.editionId,
-				// item.name is the program_item's own formula (edition -> work), the
-				// right fallback when the work entity itself isn't readable.
 				workName: work?.name || item.name,
 				composer: work?.composer ?? '',
 				status: null,
@@ -148,8 +103,6 @@ export function buildWorkRows(eventWorks: EventWorks, sources: WorkRowSources): 
 		const file = pickFile(edition);
 		return {
 			id: item.id,
-			// #91 — `id` here names a repertoire_item (a CHILD OF SEASON, shared by
-			// every event that falls back to it), never a program_item.
 			kind: 'repertoire' as const,
 			workId: item.workId,
 			editionId: item.editionId,
@@ -167,21 +120,6 @@ export function buildWorkRows(eventWorks: EventWorks, sources: WorkRowSources): 
 	});
 }
 
-/**
- * The page's single entry point: every agenda event's works, keyed by event id.
- *
- * Cost, for an agenda of N unique event ids:
- *   - THREE collective-wide lookups, regardless of N — works / editions /
- *     copies, the same bulk reads the library page makes;
- *   - ONE program_item read per unique event id (resolveEventWorksBatch fans
- *     these out concurrently). Unavoidable: Entu has no multi-parent entity
- *     query, so program_items can only be fetched per `_parent.reference`;
- *   - AT MOST ONE season repertoire read — only when some event actually falls
- *     back (a fully programmed agenda never touches it), and never more than
- *     once however many events fall back.
- * So ~N+4 requests, not a constant. An empty event list short-circuits with NO
- * fetch at all.
- */
 export async function loadWorksByEventId(
 	cfg: EntuCfg,
 	eventIds: string[],
@@ -191,38 +129,14 @@ export async function loadWorksByEventId(
 ): Promise<Record<string, WorkRow[]>> {
 	if (eventIds.length === 0) return {};
 
-	// #434 slice 5 — `options` (extends EntuFetchOptions) threads into EVERY
-	// read this function makes, not just the program/repertoire-item join: a
-	// caller opting into the read cache must get the WHOLE joined row set
-	// offline, never one with a blank name/composer/edition because only the
-	// join itself was cache-backed. Still opt-in, never hard-wired here — the
-	// event page's own entry point (eventPageData.ts) is what actually passes
-	// CACHED_READ.
 	const [worksRead, editionsRead, copiesRead, worksByEvent] = await Promise.all([
 		listWorks(cfg, fetchImpl, options),
 		listAllEditions(cfg, fetchImpl, options),
 		listAllCopies(cfg, fetchImpl, options),
 		resolveEventWorksBatch(cfg, eventIds, seasonId, fetchImpl, options)
 	]);
-	// #321 — no partial-list notice here, and the reason is NOT the pinned-scope
-	// narrowing this comment used to give (the PO's 2026-09-11 ruling rejected
-	// that narrowing everywhere it appeared, and every other site carrying it now
-	// says its truncation out loud). The real reason: these three reads are a
-	// LABEL LOOKUP, not a list anybody reads or picks from. Every row that
-	// belongs on screen is already in `worksByEvent`; a work missing from this
-	// join loses its name/composer/edition TEXT — `buildWorkRows` degrades the
-	// lookup to '' and keeps the row (see its own "missing lookups degrade" doc).
-	// For name/composer that blank asserts nothing, so a truncation there really
-	// does cost nothing worth a notice. It is NOT true for edition (#331): a
-	// blank `editionName` is rendered by RepertoireElement's terminal `{:else}`
-	// as "No pinned edition" — a positive claim the label lookup cannot back
-	// when it was truncated. So `editionsRead.truncated` rides every row below
-	// (`WorkRow.truncated`) rather than being thrown away; it is what lets a
-	// reader's row say "unknown" instead of asserting an absence it never read.
-	// The one other caller that builds rows straight off `buildWorkRows` — the
-	// #234 season-manage panel in routes/+page.svelte — still discards its own
-	// `editionsRead.truncated`, and says there why it is held out (editor-only
-	// surface, waiting on #331's split-out item 4). Not a precedent to copy.
+	// A blank editionName reads as "No pinned edition", which a truncated lookup cannot back,
+	// so editionsRead.truncated rides every row.
 	const sources = collectSources(worksRead.items, editionsRead.items, copiesRead.items);
 	const out: Record<string, WorkRow[]> = {};
 	for (const [eventId, eventWorks] of Object.entries(worksByEvent)) {
@@ -235,5 +149,3 @@ export async function loadWorksByEventId(
 }
 
 // (*MVOX:Josquin*)
-// (*MVOX:Josquin* — review fix-forward: http(s)-only external links, honest
-// read-cost docstring)

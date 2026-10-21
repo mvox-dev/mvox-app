@@ -1,6 +1,7 @@
 // createSection with a caller-supplied database entity as the top-level parent.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { createSection } from './sectionActions';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
 

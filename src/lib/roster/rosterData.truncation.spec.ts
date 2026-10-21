@@ -1,6 +1,7 @@
 // The roster's member reads say when a list is partial, from the server count.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { listActiveMembers, loadRoster } from './rosterData';
 import { listInactiveMembers, loadInactiveRoster } from './memberLifecycle';
 import { json, testCfg } from '$lib/testing/entuFetchKit';

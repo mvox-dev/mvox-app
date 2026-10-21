@@ -1,13 +1,12 @@
 <!-- The admin page's collective-name field: a pencil that opens an inline editor. -->
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
-	import { cfgFor } from '$lib/entu/cfg';
+	import { cfgFor, type EntuCfg } from '$lib/entu/cfg';
 	import { renameCollectiveInStore } from '$lib/collectives/store';
 	import type * as CollectiveName from '$lib/collectives/collectiveName';
 	import type { CollectiveNameMarker } from '$lib/collectives/collectiveName';
 	import { focusAfterRender, focusOnMount } from '$lib/a11y/focusable';
 	import EditActivator from '$lib/components/EditActivator.svelte';
-	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	interface Props {
 		nameMarker: CollectiveNameMarker | null;

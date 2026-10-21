@@ -1,4 +1,4 @@
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { createAttendance, updateAttendanceStatus, deleteAttendance } from './attendanceData';
 import type { EventAttendance, AttendanceStatus } from './attendanceData';
 

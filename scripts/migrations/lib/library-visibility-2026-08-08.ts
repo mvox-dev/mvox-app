@@ -1,42 +1,9 @@
-// T6.2 (#56, epic #54) — library visibility mutation. Final scope per Gama's
-// 2026-08-08 rulings on #54 (grounded in Pérotin's T6.1 grooming pass, #55):
-//
-//   Bundle A — 12 prop-def writes:
-//     11 WIDEN (private/absent → domain): work.name, work.composer,
-//     edition.name, edition.publisher, copy.name, copy.copy_number,
-//     lending.member, lending.assigned_at, lending.copy,
-//     lending.assigned_until, lending.returned_at. All 11 currently carry NO
-//     `_sharing` value at all (confirmed live) — plain CREATE-POSTs, no
-//     existing value to replace.
-//     1 NARROW (domain → private): edition.cost (Mihkel's ruling, PO session
-//     2026-08-08 — "acquisition cost is bookkeeping, not browse data").
-//     Currently `_sharing:'domain'` WITH an existing value `_id` — atomic
-//     REPLACE-by-`_id`, same mechanic as #44's narrow.
-//
-//   Bundle B — 586-instance touch-save re-aggregation (work 13 + edition 17 +
-//     copy 552 + lending 4), GATED on Bundle A succeeding for all 12. Every
-//     instance across all four types carries an explicit `_sharing:'private'`
-//     value (confirmed live, uniform, zero absent) — the atomic-replace
-//     touch-save mechanic (#20/#44 lineage) applies uniformly, no edge cases.
-//     Canary-first, ONE PER TYPE (four canaries) since this is the first time
-//     this mechanic runs on these four types (unlike #44's `person`, this is
-//     genuinely new ground) — not a single credential-holder-specific canary
-//     like #44's (no evidence any of these entities are the executing
-//     credential's own identity entity, so that specific extra gate doesn't
-//     apply here; ownership pre-check below covers the actual risk class
-//     learned from #44/#45 instead).
-//
-//   OWNERSHIP PRE-CHECK (the #44/#45 lesson, applied proactively): scanned all
-//   586 instances live — 100% db-root-owned (`_owner` includes
-//   69bcfd8e9c031ab8e6ce8079), 0 non-db-root-owned, 0 missing an explicit
-//   `_sharing` value. Unlike #44 (person `6a2fc05e...5ddc`) and #45 (the
-//   application specimen), there is NO known rights-gap risk for this batch —
-//   these are all script/seed-created library entities, not entities created
-//   via Mihkel's real OAuth account. Re-verified fresh in this script's own
-//   Step-0 enumeration, not trusted from a prior scan.
+// Library visibility (#56): 11 prop-defs widen to domain, edition.cost narrows to private,
+// then 586 instances are touch-saved to re-aggregate, gated on all 12 writes and a canary per type.
+// All 586 were db-root-owned when scanned, so no rights gap; Step 0 re-checks that live.
 
 import { entuFetch } from '$lib/entu/request';
-import { type EntuCfg } from '$lib/seasons/entuSeasons';
+import { type EntuCfg } from '$lib/entu/cfg';
 
 function errMsg(err: unknown): string {
 	return err instanceof Error ? err.message : String(err);

@@ -1,7 +1,7 @@
 <!-- The admin page's two role lists (administrators, librarians) and their grant controls. -->
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
-	import { cfgFor } from '$lib/entu/cfg';
+	import { cfgFor, type EntuCfg } from '$lib/entu/cfg';
 	import { rosterOrder, type SectionNode } from '$lib/sections/sectionData';
 	import type { RosterRow } from '$lib/roster/rosterData';
 	import type * as RoleManagement from '$lib/admin/roleManagement';
@@ -12,7 +12,6 @@
 	import RedactedText from '$lib/components/RedactedText.svelte';
 	import RosterPersonSelect from '$lib/roster/RosterPersonSelect.svelte';
 	import { pickerPromptText } from '$lib/roster/pickerPrompt';
-	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	type RoleWrites = Pick<
 		typeof RoleManagement,

@@ -14,7 +14,7 @@ import {
 import { libraryEditRight, resetLibraryEditRight } from '$lib/library/libraryRights';
 import { without } from '$lib/collections/immutable';
 import type { LibraryState, NodeStatus } from '$lib/library/libraryState';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { cfgFor, type EntuCfg } from '$lib/entu/cfg';
 import type { ListRead } from '$lib/entu/listRead';
 import { reportProblem } from '$lib/problems/reportProblem';
 
@@ -58,7 +58,7 @@ function createNodeLoad<T>(ctx: LibraryTreeContext, spec: NodeLoadSpec<T>) {
 		if (!token) return;
 		setNodeStatus(id, 'loading');
 		try {
-			const result = await spec.read({ db: current.db, token }, id);
+			const result = await spec.read(cfgFor(current.db), id);
 			spec.items.set(new Map(spec.items.get()).set(id, result.items));
 			spec.markPartial(id, result.truncated);
 			setNodeStatus(id, 'idle');
@@ -143,8 +143,7 @@ export function createLibrarianLoad(lib: LibraryState) {
 
 	function loadLibrarian(current: { db: string; personId: string }): Promise<void> {
 		const isCurrent = librarianLoad.next();
-		const token = getToken();
-		const cfg = { db: current.db, token: token ?? '' };
+		const cfg = cfgFor(current.db);
 		return loadLibraryEditRight(cfg, current.personId).then(async (result) => {
 			if (!isCurrent()) return;
 			if (result.state === 'editor') {

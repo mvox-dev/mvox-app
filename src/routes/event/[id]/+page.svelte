@@ -3,7 +3,7 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import AsOfLine from '$lib/components/offline/AsOfLine.svelte';
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
-	import { cfgFor } from '$lib/entu/cfg';
+	import { cfgFor, type EntuCfg } from '$lib/entu/cfg';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import { EventDetailLoadError, type EventDetail } from '$lib/events/eventDetail';
 	// Two load/refresh pairs: loadEventPageDetail/loadEventPageWorkRows store
@@ -41,7 +41,6 @@
 	import EventWorksSection from '$lib/events/EventWorksSection.svelte';
 	import EventAttendanceSection from '$lib/events/EventAttendanceSection.svelte';
 	import EventDangerZone from '$lib/events/EventDangerZone.svelte';
-	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	const selected = $derived($selectedCollectiveStore);
 	const eventId = $derived(page.params.id ?? '');

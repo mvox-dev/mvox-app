@@ -1,6 +1,6 @@
 // A series' defaults, shown as placeholders while the event-create form has that series selected.
 import { entuFetch } from '$lib/entu/request';
-import type { EntuCfg } from './entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 
 /** `durationMinutes` is null when the series carries none. */
 export interface SeriesDefaults {

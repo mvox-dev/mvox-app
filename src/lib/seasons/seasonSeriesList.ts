@@ -2,7 +2,7 @@
 import { entuFetch } from '$lib/entu/request';
 import { isTruncated } from '$lib/entu/listRead';
 import { referenceIds } from '$lib/entu/references';
-import type { EntuCfg } from './entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { seriesRefOf, type EventEntity, type SeriesEntity } from './seasonShared';
 
 export interface SeriesListItem {

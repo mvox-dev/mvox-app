@@ -1,6 +1,6 @@
 // Display lists report when they are partial: the server's `count` against the raw rows (#321).
 import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 
 export interface ListRead<T> {
 	items: T[];

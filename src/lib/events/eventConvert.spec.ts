@@ -1,6 +1,7 @@
 // Standalone event to series conversion: the data layer, then the real readers end to end.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetTypeIdCache, listEvents, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resetTypeIdCache, listEvents } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { listEventSeriesForSeason } from '$lib/seasons/seasonManage';
 import { createEvent } from '$lib/entity/entityCreate';
 import {

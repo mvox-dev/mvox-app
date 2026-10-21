@@ -1,5 +1,5 @@
 // The roster page's member handlers, composed from one module per concern.
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { listJoinStateDetails } from '$lib/profile/linkedIdentities';
 import type { mintSelfLinkInvite, withdrawInvite } from '$lib/invite/inviteData';
 import type {

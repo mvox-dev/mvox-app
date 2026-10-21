@@ -1,64 +1,16 @@
-// #37-P3.2 (#44) — narrow the 18 person prop-defs identified by #41's inventory
-// (`probe-epic37-phase1-inventory-2026-08-08.ts`, committed `d605f3e`) from
-// `_sharing:'domain'` back to `_sharing:'private'`, then re-aggregate all 132
-// person entities so their domain/public buckets actually drop these properties
-// (buckets are write-time SNAPSHOTS, not read-time computed — a prop-def change
-// alone does not retroactively fix any already-aggregated instance; same
-// mechanic as the #20 widen, mirrored here in the opposite direction).
-//
-// Authorized by Gama on #37 (2026-08-08 06:56). Stated, authorized consequence:
-// narrowing drops the 128 T3.1-synthetic singers' residual `name` values from
-// their historical domain buckets — wait, `name` has no prop-def at all (T4.3
-// removal) and was never part of THIS narrow's 18-prop-def target list; the
-// actual stated consequence is about the in-app roster losing whatever display
-// affordance depended on these 18 domain-tier person fields for the synthetic
-// population until fixtures are regenerated. Real people (db-root, Mihkel's
-// OAuth identity, Test User, fixture B) are the only persons whose OWN
-// entity-level `_sharing` is not 'public' — narrowing affects all 132 uniformly
-// at the prop-def/bucket level regardless of each instance's own tier.
-//
-// Two bundles, same separation as #20 (different blast radii; Bundle B gated on
-// Bundle A landing for ALL 18, not just some):
-//
-//   Bundle A (schema, 18-entity blast radius): REPLACE (not create — these 18
-//   prop-defs currently carry an explicit `_sharing:'domain'` value per #41) the
-//   `_sharing` value on each of the 18 person prop-def ENTITIES to `'private'`.
-//   Atomic replace-by-`_id` (same POST-with-existing-`_id` mechanic as #20's
-//   touch-save) — no DELETE-then-POST needed, no multi-value risk.
-//
-//   Bundle B (data, 132-instance blast radius, GATED on Bundle A succeeding for
-//   ALL 18 prop-defs): touch-save every person entity's own `_sharing` property
-//   (atomic replace, same value, fresh `_id`) to force a real `aggregateEntity`
-//   re-run. CANARY FIRST (Gama's dispatch, non-negotiable): person
-//   `69bcfd8e9c031ab8e6ce8079` (db-root/PO — also the #43/#44 credential-exposure
-//   subject) is touched alone first, followed by an EXTRA verification step this
-//   run uniquely requires: the db-root ENTU_API_KEY must still authenticate a
-//   trivial read AFTER its own entity has been re-aggregated. This is the run's
-//   own credential proving itself alive — if it fails, every subsequent write in
-//   this process (including the remaining 131 persons) would be unreachable
-//   anyway, so it is a hard gate, not a per-record ledger entry.
-//
-// VERIFICATION CAVEAT (same as #20): every call here runs under ENTU_API_KEY
-// (PO/db-root), which is `_owner` on effectively all these entities and
-// therefore ALWAYS reads the private bucket regardless of prop-def sharing.
-// "touched"/"narrowed" below means the write landed and rotated the property
-// `_id` (proof a genuine write + fresh aggregation occurred) — NOT an
-// empirically-confirmed absence from a non-owner domain reader's view. That
-// last-mile confirmation needs a real non-omniscient read (Mihkel), same
-// pattern as #20/#29.
+// Narrows 18 person prop-defs from domain to private (#44), then touch-saves all 132 persons:
+// buckets are write-time snapshots, so the prop-def change alone fixes no instance.
+// Runs as db-root, which always reads the private bucket; a non-owner read must confirm.
 
 import { entuFetch } from '$lib/entu/request';
-import { type EntuCfg } from '$lib/seasons/entuSeasons';
+import { type EntuCfg } from '$lib/entu/cfg';
 
 export const PERSON_TYPE_ID = '69bcfd8e9c031ab8e6ce805f';
 export const CANARY_PERSON_ID = '69bcfd8e9c031ab8e6ce8079'; // db-root/PO — the #43/#44 subject
 
 export type PropDefTarget = { id: string; name: string };
 
-/** The 18 person prop-defs at `_sharing:'domain'`, per #41's live inventory
- * (`seed-results/probe-epic37-phase1-inventory-2026-08-08T02-19-47-000Z.json`).
- * Treated as a claim to re-verify live (`verifyPropDefsCurrentlyDomain`), not
- * blindly trusted — matches the #20 template's discipline. */
+/** The 18 domain-tier person prop-defs from #41's inventory; re-verified live before use. */
 export const PROPDEF_TARGETS: PropDefTarget[] = [
 	{ id: '69bcfd8e9c031ab8e6ce8060', name: 'address' },
 	{ id: '69bcfd8e9c031ab8e6ce8061', name: 'birthdate' },
@@ -86,10 +38,8 @@ function errMsg(err: unknown): string {
 
 // ── Step-0 enumeration (READ-ONLY) ──────────────────────────────────────────────
 
-/** Gate 2 of the 3-gate-AND: the `person` TYPE entity's own `_sharing`. Not
- * load-bearing for THIS narrow (narrowing gate 1 alone is sufficient to close
- * exposure regardless of gate 2/3), but read + recorded for the ledger per the
- * #20 template's discipline of recording observed values, not assumptions. */
+/** The `person` type's own `_sharing`, recorded for the ledger; narrowing prop-defs
+ * closes the exposure whatever it holds. */
 export async function verifyPersonTypeSharing(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<string> {
 	const res = await entuFetch(cfg.db, `entity/${PERSON_TYPE_ID}?props=_sharing,name`, cfg.token, {}, fetchImpl);
 	if (!res.ok) throw new Error(`verifyPersonTypeSharing: GET ${PERSON_TYPE_ID} failed: ${res.status}`);
@@ -103,11 +53,8 @@ export async function verifyPersonTypeSharing(cfg: EntuCfg, fetchImpl: typeof fe
 
 export type PropDefObserved = { id: string; name: string; sharingValueId: string; sharingValue: string };
 
-/** Step-0 enumeration for Bundle A. HALTs if any of the 18 prop-defs is NOT
- * currently `_sharing:'domain'` (live state moved since #41's probe — re-verify
- * manually rather than blind-replacing an unexpected value) or if the wrong
- * entity id resolves (name mismatch). Returns each prop-def's CURRENT `_sharing`
- * value `_id` — required for the atomic replace-by-`_id` POST in Bundle A. */
+/** HALTs if any of the 18 prop-defs is not domain-tier now or resolves to the wrong name.
+ * Returns each current `_sharing` value `_id`, which the replace POST needs. */
 export async function verifyPropDefsCurrentlyDomain(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<PropDefObserved[]> {
 	const observed: PropDefObserved[] = [];
 	for (const t of PROPDEF_TARGETS) {
@@ -134,16 +81,12 @@ export type PersonTarget = { personId: string; sharingPropId: string | null; sha
 export type PersonEnumerationResult = {
 	targets: PersonTarget[];
 	total: number;
-	missingSharingIds: string[]; // persons with NO explicit _sharing value at all (absent = private by default) — cannot atomic-replace, need a plain create-POST instead
+	missingSharingIds: string[]; // no _sharing value: cannot atomic-replace, needs a create-POST
 	tierBreakdown: Record<string, number>;
 };
 
-/** Step-0 enumeration for Bundle B. Reads ALL person entities (expected 132 —
- * HALTs on truncation or an unexpected total, matching #41's committed count so
- * a fresh drift is surfaced rather than silently absorbed). Every person is a
- * touch-save target regardless of its OWN `_sharing` tier — narrowing the 18
- * prop-defs affects the domain/public bucket contents for ALL 132 instances
- * uniformly, not just the ones currently domain/public-tier themselves. */
+/** Reads all persons, HALTing on truncation or a total other than 132. Every person is a
+ * target: the narrow changes bucket contents whatever each instance's own tier. */
 export async function enumeratePersons(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<PersonEnumerationResult> {
 	const res = await entuFetch(cfg.db, `entity?_type.reference=${PERSON_TYPE_ID}&props=_id,_sharing&limit=200`, cfg.token, {}, fetchImpl);
 	if (!res.ok) throw new Error(`enumeratePersons: person census GET failed: ${res.status}`);
@@ -181,10 +124,8 @@ export async function enumeratePersons(cfg: EntuCfg, fetchImpl: typeof fetch = f
 
 export type PropertyPresenceCount = { name: string; personsCarryingValue: number };
 
-/** Per-property value-presence count across the 132 persons — answers "what
- * domain bucket values would actually be dropped" (a prop-def existing on the
- * TYPE doesn't mean every instance carries a value for it). Read-only, 18
- * queries (one per prop-def), each bounded to the 132-person population. */
+/** Counts which persons carry a value per prop-def: a prop-def on the type does not mean
+ * every instance holds a value that the narrow would drop. */
 export async function countPropertyPresence(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<PropertyPresenceCount[]> {
 	const results: PropertyPresenceCount[] = [];
 	for (const t of PROPDEF_TARGETS) {
@@ -202,11 +143,8 @@ export async function countPropertyPresence(cfg: EntuCfg, fetchImpl: typeof fetc
 
 export type PropDefLedgerEntry = { propDefId: string; name: string; status: 'narrowed' | 'failed'; message?: string };
 
-/** Bundle A engine. Per prop-def: atomic replace-by-`_id` POST (existing
- * `_sharing` value `_id`, new string `'private'`), then read-back-PROVE it now
- * reads `_sharing==='private'` under a NEW property `_id` (proof the replace
- * actually rotated, not merely returned 200 — same apparent-success guard as
- * #20's `touchSaveDomainMembers`). */
+/** Replaces each prop-def's `_sharing` with 'private' and reads back a NEW value `_id`,
+ * proving the replace rotated rather than merely returning 200. */
 export async function narrowPropDefs(cfg: EntuCfg, observed: PropDefObserved[], fetchImpl: typeof fetch = fetch): Promise<PropDefLedgerEntry[]> {
 	const entries: PropDefLedgerEntry[] = [];
 	for (const t of observed) {
@@ -263,13 +201,8 @@ export async function narrowPropDefs(cfg: EntuCfg, observed: PropDefObserved[], 
 
 export type TouchSaveLedgerEntry = { personId: string; status: 'touched' | 'failed'; newSharingPropId?: string; message?: string };
 
-/** Canary step — touch-save person `69bcfd8e9c031ab8e6ce8079` ALONE first, then
- * the run's own unique extra gate: verify the db-root ENTU_API_KEY can still
- * authenticate a trivial read (exchange the key for a JWT, GET a cheap known
- * entity). Throws (hard gate, not a ledger entry) on ANY failure — if the
- * canary or the credential self-test fails, the full 131-person sweep MUST NOT
- * run; every subsequent write in this process depends on this exact credential
- * staying valid. */
+/** Touch-saves db-root's own person alone, then re-exchanges ENTU_API_KEY and does one read.
+ * Throws on any failure: every later write depends on that key staying valid. */
 export async function touchSaveCanaryAndSelfTest(
 	cfg: EntuCfg,
 	canaryTarget: PersonTarget,
@@ -291,9 +224,6 @@ export async function touchSaveCanaryAndSelfTest(
 		);
 	}
 
-	// The run's own credential proving itself alive: re-exchange ENTU_API_KEY for
-	// a fresh JWT and perform one trivial read, AFTER the canary (db-root's own
-	// entity) has been re-aggregated. NOT OPTIONAL per Gama's dispatch.
 	const freshCfg = await reAuthenticate();
 	const selfTestRes = await entuFetch(freshCfg.db, `entity/${canaryTarget.personId}?props=_id`, freshCfg.token, {}, fetchImpl);
 	if (!selfTestRes.ok) {
@@ -305,12 +235,8 @@ export async function touchSaveCanaryAndSelfTest(
 	return entry;
 }
 
-/** Bundle B engine. Per person: atomic single-POST replace of `_sharing` (same
- * `_id`, same string) — a genuine write with zero multi-value risk, forcing a
- * fresh `aggregateEntity` run. Persons with NO existing `_sharing` value
- * (`sharingPropId === null`) cannot use the replace path — flagged as a
- * per-record failure rather than inventing a POST shape; #41's data did not
- * surface any such person, but this guards against live drift. */
+/** Replaces each person's `_sharing` with the same value to force re-aggregation.
+ * A person with no `_sharing` value is a per-record failure; no POST shape is invented. */
 export async function touchSavePersons(cfg: EntuCfg, targets: PersonTarget[], fetchImpl: typeof fetch = fetch): Promise<TouchSaveLedgerEntry[]> {
 	const entries: TouchSaveLedgerEntry[] = [];
 	for (const t of targets) {

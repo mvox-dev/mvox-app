@@ -8,6 +8,7 @@ import { hydrateAuth } from '$lib/auth/session';
 import { hydrateCollectives } from '$lib/collectives/store';
 import { listLinkedIdentities } from '$lib/profile/linkedIdentities';
 import { entuFetch } from '$lib/entu/request';
+import { cfgFor } from '$lib/entu/cfg';
 import type { CallbackOutcome } from './run-callback-exchange';
 import { reportProblem } from '$lib/problems/reportProblem';
 
@@ -85,7 +86,7 @@ export async function runLinkCallbackExchange(
 	if (state.linkedSnapshot) {
 		try {
 			const relinked = await listLinkedIdentities(
-				{ db: invite.db, token: result.token },
+				cfgFor(invite.db, result.token),
 				linkPersonId,
 				fetch
 			);

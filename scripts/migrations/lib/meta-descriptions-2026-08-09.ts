@@ -1,18 +1,9 @@
-// #48 (#37-P3.6) — meta-polish: fill `description` on all 20 type-defs + 140
-// prop-defs, both English and Estonian (Entu's `description` meta-field is
-// declared `multilingual: true` on both the "entity" and "property"
-// meta-types — probed and posted on #48). Cosmetic tier per the ruling: no
-// §8.6 chain (no `_sharing`/rights/data mutation), "trust alternative" — the
-// team drafts and ships all 160 from schema knowledge, no pre-ship review.
-// Mihkel corrects opportunistically; corrections are ordinary small writes.
-//
-// Population: the structural inventory (20 types × their prop-defs, 140
-// total) from the committed Phase-1 artifact, joined with drafted EN/ET
-// content from the committed seed-source manifest.
+// Fills EN+ET `description` on all 20 type-defs and 140 prop-defs (#48).
+// Cosmetic tier: no rights or data change, so drafts ship without pre-review.
 
 import { readFileSync } from 'node:fs';
 import { entuFetch } from '$lib/entu/request';
-import { type EntuCfg } from '$lib/seasons/entuSeasons';
+import { type EntuCfg } from '$lib/entu/cfg';
 
 const ENTITY_META_ID = '69bcfd8e9c031ab8e6ce8034';
 const PROPERTY_META_ID = '69bcfd8e9c031ab8e6ce8048';
@@ -34,11 +25,8 @@ type ContentManifest = {
 
 export type DescriptionTarget = { kind: 'type' | 'prop'; id: string; label: string; en: string; et: string };
 
-/** Joins the structural inventory (which entities exist) with the drafted
- * content manifest (what to write) — two independently-verifiable committed
- * artifacts, not one hand-assembled list. Throws on any mismatch: a
- * structural id with no matching content entry, or vice versa, or either
- * side's count drifting from the expected 20/140. */
+/** Joins the structural inventory with the drafted content manifest; throws on any mismatch
+ * or on either side drifting from the expected 20/140. */
 export function loadTargets(): DescriptionTarget[] {
 	const inventory = JSON.parse(readFileSync(INVENTORY_ARTIFACT_PATH, 'utf-8')) as InventoryType[];
 	const content = JSON.parse(readFileSync(CONTENT_MANIFEST_PATH, 'utf-8')) as ContentManifest;
@@ -73,13 +61,8 @@ export function loadTargets(): DescriptionTarget[] {
 
 export type LiveCheck = { stillEmpty: DescriptionTarget[]; alreadyFilled: Array<{ id: string; label: string }> };
 
-/** Re-verifies live, per meta-type (2 list queries — all 20 type-defs live
- * under `_type.reference=ENTITY_META_ID`, all 140+ prop-defs live under
- * `_type.reference=PROPERTY_META_ID` — not 160 individual GETs). Confirms
- * the 0%-fill baseline still holds; distinguishes already-filled (skip, per
- * the "corrections land as ordinary small writes" model — don't clobber a
- * hand-correction that landed between drafting and shipping) from genuinely
- * empty. */
+/** Re-verifies the empty baseline live, two list queries; already-filled targets are skipped
+ * so a hand correction landed since drafting is not clobbered. */
 export async function verifyStillEmpty(cfg: EntuCfg, targets: DescriptionTarget[], fetchImpl: typeof fetch = fetch): Promise<LiveCheck> {
 	const typeTargets = targets.filter((t) => t.kind === 'type');
 	const propTargets = targets.filter((t) => t.kind === 'prop');
@@ -120,12 +103,8 @@ export async function verifyStillEmpty(cfg: EntuCfg, targets: DescriptionTarget[
 
 export type WriteLedgerEntry = { kind: 'type' | 'prop'; id: string; label: string; status: 'written' | 'skipped' | 'failed'; message?: string };
 
-/** The write: POST both language values in one call (`description`/en +
- * `description`/et), read-back verifies BOTH are present with the exact
- * strings (not just count) — catches a partial write or a silent
- * single-language landing. Idempotency guard: a fresh GET immediately
- * precedes every write; if a description already exists (any language),
- * SKIP rather than append a duplicate/second value. */
+/** POSTs EN+ET in one call and reads back both exact strings, catching a partial write.
+ * A fresh GET precedes every write; an existing description means SKIP, never a second value. */
 export async function writeDescriptions(cfg: EntuCfg, targets: DescriptionTarget[], fetchImpl: typeof fetch = fetch): Promise<WriteLedgerEntry[]> {
 	const entries: WriteLedgerEntry[] = [];
 	for (const t of targets) {
@@ -186,9 +165,7 @@ export async function writeDescriptions(cfg: EntuCfg, targets: DescriptionTarget
 	return entries;
 }
 
-/** Canary — one type-kind target + one prop-kind target, written + verified,
- * BEFORE the full sweep. Throws on either canary failing — refuses to run
- * the full ~160-write sweep on an unproven mechanic for that kind. */
+/** One type-kind and one prop-kind canary before the full sweep; throws if either fails. */
 export async function writeCanaries(cfg: EntuCfg, targets: DescriptionTarget[], fetchImpl: typeof fetch = fetch): Promise<{ canaryEntries: WriteLedgerEntry[]; remainingTargets: DescriptionTarget[] }> {
 	const firstType = targets.find((t) => t.kind === 'type');
 	const firstProp = targets.find((t) => t.kind === 'prop');

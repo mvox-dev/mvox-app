@@ -1,6 +1,6 @@
 // The member-reference widening script against an in-memory Entu mock.
 import { describe, expect, it, vi } from 'vitest';
-import { type EntuCfg } from '$lib/seasons/entuSeasons';
+import { type EntuCfg } from '$lib/entu/cfg';
 import {
 	MEMBER_TYPE_ID,
 	PERSON_PROPDEF_ID,

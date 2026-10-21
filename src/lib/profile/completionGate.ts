@@ -1,7 +1,7 @@
 // The app-wide completion gate (#28): a member with no visible name is sent to /profile.
 import { writable, type Writable } from 'svelte/store';
 import type { MyProfile } from './profileData';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { createLatest } from '$lib/async/latest';
 import { reportProblem } from '$lib/problems/reportProblem';
 

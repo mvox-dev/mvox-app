@@ -5,7 +5,7 @@
 import { entuFetch } from '$lib/entu/request';
 import { readParentValues } from '$lib/entu/readParents';
 import { overwriteEntityValues } from '$lib/entu/replaceProperty';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { ParentValue } from '$lib/entu/wireTypes';
 
 export class EventSeriesMissingError extends Error {

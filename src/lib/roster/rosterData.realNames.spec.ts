@@ -1,6 +1,7 @@
 // Every producer of member names obeys the collective's real-names setting.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { loadRoster, type RosterRow } from './rosterData';
 import * as rosterDataModule from './rosterData';
 import { json, testCfg } from '$lib/testing/entuFetchKit';

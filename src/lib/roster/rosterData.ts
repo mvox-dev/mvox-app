@@ -1,6 +1,6 @@
 // The roster's member read and the shared member-name producer with its real-names overlay.
 import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { readRosterNamesSetting } from '$lib/collective/rosterNames';
 import { deriveListRead, isTruncated, type ListRead } from '$lib/entu/listRead';
 import { listProfilesForPerson, toRosterRow, type RosterRow } from './rosterRow';

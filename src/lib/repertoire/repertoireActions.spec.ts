@@ -1,6 +1,7 @@
 // repertoire_item and program_item creates, atomic updates, and deletes.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { Work } from '$lib/library/libraryData';
 import type { RepertoireItem } from './repertoireData';
 import {

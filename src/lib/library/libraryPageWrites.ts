@@ -1,7 +1,6 @@
 // The library page's writes, over state the page owns and hands in as getters.
 import { m } from '$lib/paraglide/messages.js';
-import { cfgFor } from '$lib/entu/cfg';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { cfgFor, type EntuCfg } from '$lib/entu/cfg';
 import type { Collective } from '$lib/collectives/types';
 import type { RouteLoadMachine } from '$lib/loading/routeLoad';
 import { refreshLibraryLendings, resolveWriteLibraryId } from '$lib/library/libraryPageData';

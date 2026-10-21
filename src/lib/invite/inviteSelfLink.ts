@@ -1,6 +1,6 @@
 // Minting an invite onto an existing person, and withdrawing the un-redeemed ones.
 import { entuFetch } from '$lib/entu/request';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import { INVITE_MINT_TRIGGER } from './inviteConstants';
 import { inviteOf } from './inviteOf';
 

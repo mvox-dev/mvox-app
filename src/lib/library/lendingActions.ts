@@ -1,5 +1,6 @@
 import { entuFetch } from '$lib/entu/request';
-import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resolveTypeId } from '$lib/seasons/entuSeasons';
+import type { EntuCfg } from '$lib/entu/cfg';
 import type { Lending } from './libraryData';
 import { isActiveLending, listCopies } from './libraryData';
 

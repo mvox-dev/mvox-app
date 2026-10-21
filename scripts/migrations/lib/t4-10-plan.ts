@@ -1,43 +1,19 @@
-// T4.10 migration — move `name`/`email` VALUES off real persons into `profile`
-// entities (issue mvox-dev/mvox-app#30, epic #21). This is the TESTED CORE: pure
-// planning + a per-record move engine + a fail-loud ledger. The thin entrypoint
-// (token exchange, DRY_RUN switch, invocation) lives one dir up and is NOT the
-// unit-test surface.
-//
-// It imports the REAL data layer — `createProfile`/`saveProfileFields`/
-// `listMyProfiles` from `$lib/profile/profileData` — so the `_inheritrights:false`
-// literal + `resolveTypeId(cfg,'profile')` stay SOLE to profileData.ts (YELLOW-
-// T4.4.1). The sole-create-path guard scans only `src/`, so a script under
-// `scripts/` is outside it — the funnel is a human rule here, honored by construction
-// (direct import, never a hand-rolled create) and PROVEN at runtime by the
-// `t4-10-plan.spec.ts` funnel test (a `resolveTypeId` GET precedes the create POST).
+// #30 migration core: move real persons' name/email values into `profile` entities.
+
+// Creates go through the real profileData helpers, never a hand-rolled POST; the funnel
+// spec proves it at runtime.
 
 import { entuFetch } from '$lib/entu/request';
-import { type EntuCfg } from '$lib/seasons/entuSeasons';
+import { type EntuCfg } from '$lib/entu/cfg';
 import { createProfile, saveProfileFields, listMyProfiles } from '$lib/profile/profileData';
 
-/**
- * The real (non-synthetic) persons IN MIGRATION SCOPE, frozen at build time as a
- * DRIFT TRIPWIRE — NOT the authoritative source. The live `_sharing !== 'public'`
- * filter (minus `EXCLUDED_TARGET_IDS`) is authoritative; `enumerateTargets` HALTs
- * loudly if the live-filtered-and-included id-set does not exactly equal this list
- * (a new real person, or a synthetic drifted off `public`). Ids: Mihkel's OAuth
- * person (domain), Test User (domain). The db-root/PO person is EXCLUDED — see
- * `EXCLUDED_TARGET_IDS`. See RECON A §1-2.
- */
+/** Drift tripwire, not the source of truth: enumerateTargets HALTs if the live set differs. */
 export const EXPECTED_TARGET_IDS: readonly string[] = [
 	'6a2fc05e4cd971291c5d5ddc',
 	'6a097dcc90c8df7a1cc7d6dd'
 ];
 
-/**
- * Persons that pass the `_sharing !== 'public'` selector but are deliberately OUT
- * of migration scope (#30). The db-root/PO person is private and structurally
- * different from a real member; Mihkel ruled to leave its name/email in place.
- * `enumerateTargets` filters these out BEFORE the drift check (so an excluded
- * non-public person is dropped, not flagged as drift) and HALTs if the exclusion
- * has gone stale — the id absent from the live non-public set, or no longer private.
- */
+/** Non-public but out of scope (db-root/PO, Mihkel's ruling); a stale exclusion HALTs. */
 export const EXCLUDED_TARGET_IDS: readonly string[] = [
 	'69bcfd8e9c031ab8e6ce8079' // db-root/PO
 ];
@@ -51,36 +27,22 @@ export type TargetPerson = {
 	sourceTier: 'domain' | 'private';
 };
 
-/**
- * One profile create = the fields of a person destined for the SAME target tier.
- * A person whose values land at two different tiers yields two groups (two profiles).
- */
+/** One profile create: a person's fields bound for the same target tier. */
 export type MigrationGroup = {
 	personId: string;
 	tier: 'domain' | 'private';
 	fields: { name?: string; email?: string };
 	/** The `_owner` grant — always `[personId]` (the member owns her own profile). */
 	ownerIds: string[];
-	/**
-	 * The source person's own `_sharing` — carried through only so the ledger can
-	 * surface each field's source→target tier (e.g. the R1 private→domain name
-	 * promotion). Optional so a hand-built group (tests) need not supply it.
-	 */
 	sourceTier?: 'domain' | 'private';
 };
 
-/** The per-record move phases, in execution order. */
 export type Phase = 'create' | 'write-value' | 'verify-profile' | 'delete-person' | 'readback-person';
 
-/**
- * `moved` = proven by BOTH a profile-present read-back AND a person-absent read-back.
- * `failed` = a per-record failure before any person delete (value still intact on person).
- * `duplicate-hazard` = create+populate+verify OK but the person delete failed → the value
- * now lives in BOTH person and profile (the T4.7 bulk hazard), operator-repairable.
- */
+/** `moved` is proven on both sides; `failed` left the person intact; `duplicate-hazard`
+ * means the value sits on both person and profile after a failed person delete. */
 export type RecordStatus = 'moved' | 'failed' | 'duplicate-hazard';
 
-/** One ledger entry per `(personId, field)` — the read-back granularity the ACs demand. */
 export type LedgerEntry = {
 	personId: string;
 	field: 'name' | 'email';
@@ -111,17 +73,8 @@ function errMsg(err: unknown): string {
 	return err instanceof Error ? err.message : String(err);
 }
 
-/**
- * Step-0 enumeration (READ-ONLY). One-page GET of every person projecting
- * `_id,name,email,_sharing`; HALT if `count !== entities.length` (a truncated page
- * would silently drop targets); keep only `_sharing?.[0]?.string !== 'public'` (the
- * SOLE discriminator — excludes the 128 synthetic public-tier singers); drop the
- * `EXCLUDED_TARGET_IDS` (db-root/PO) BEFORE the drift check, HALTing if that
- * exclusion is stale; HALT if the remaining filtered id-set ≠ `EXPECTED_TARGET_IDS`
- * (drift tripwire, with the exact set diff).
- * Reads values off the entity `props=` projection, never a `?name.string=` filter
- * (the name/email prop-defs were deleted in T4.3 — only the raw values survive).
- */
+/** Read-only enumeration. HALTs on a truncated page, a stale exclusion, or id-set drift.
+ * Reads values off `props=`, since the name/email prop-defs no longer exist. */
 export async function enumerateTargets(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch
@@ -155,13 +108,7 @@ export async function enumerateTargets(
 	// Sole discriminator: exclude the 128 synthetic public-tier singers.
 	const nonPublic = entities.filter((e) => e._sharing?.[0]?.string !== 'public');
 
-	// #30 EXCLUSION (BEFORE the drift check): the db-root/PO person passes the
-	// `_sharing !== 'public'` selector but is deliberately out of scope. Filter the
-	// excluded ids out of the working set FIRST — otherwise an excluded-but-non-public
-	// person would trip the drift tripwire as "unexpected" and HALT the whole run.
-	// Guard the exclusion's premise fail-loud: each excluded id must still be present
-	// AND still private, or the exclusion is stale and proceeding could migrate/skip
-	// the wrong record.
+// Drop exclusions before the drift check, or they would trip it; a stale exclusion HALTs.
 	for (const id of EXCLUDED_TARGET_IDS) {
 		const present = nonPublic.find((e) => e._id === id);
 		if (!present) {
@@ -181,7 +128,6 @@ export async function enumerateTargets(
 	const excludedSet = new Set(EXCLUDED_TARGET_IDS);
 	const reals = nonPublic.filter((e) => !excludedSet.has(e._id));
 
-	// Drift tripwire: the live-filtered-and-included id-set MUST exactly equal EXPECTED_TARGET_IDS.
 	const filteredIds = reals.map((e) => e._id);
 	const filteredSet = new Set(filteredIds);
 	const expectedSet = new Set(EXPECTED_TARGET_IDS);
@@ -196,11 +142,8 @@ export async function enumerateTargets(
 		);
 	}
 
-	// Multi-value tripwire (HALT, zero writes): the engine captures only value[0]
-	// (below) but `deletePersonField` deletes EVERY value-id of the field. A field
-	// carrying >1 value would copy one value to the profile yet delete all of them,
-	// SILENTLY destroying the uncopied values while the record still reads `moved`.
-	// Refuse to migrate a multi-valued name/email — self-halt like the drift tripwire.
+// The engine copies only value[0] but deletes every value, so a multi-valued field would
+// lose data while reading `moved`: HALT instead.
 	for (const e of reals) {
 		for (const field of ['name', 'email'] as const) {
 			const count = e[field]?.length ?? 0;
@@ -230,18 +173,11 @@ export async function enumerateTargets(
 	});
 }
 
-/**
- * PURE. Per person compute each field's target tier (name→'domain' ALWAYS — the
- * T4.8 completion gate reads only the domain-`_sharing` profile; email→sourceTier —
- * move-not-copy must never silently re-expose a private email), then group fields
- * destined for the SAME tier into one group (one profile). `ownerIds` is always
- * `[personId]`.
- */
+/** PURE. name always goes to domain (the completion gate reads only that); email keeps
+ * its source tier so a private email is never re-exposed. One group per target tier. */
 export function buildPlan(targets: TargetPerson[]): MigrationGroup[] {
 	const groups: MigrationGroup[] = [];
 	for (const t of targets) {
-		// Each present field → its target tier. name is ALWAYS domain; email preserves
-		// the source tier.
 		const perTier = new Map<'domain' | 'private', { name?: string; email?: string }>();
 		const add = (tier: 'domain' | 'private', field: 'name' | 'email', value: string) => {
 			const bucket = perTier.get(tier) ?? {};
@@ -251,7 +187,6 @@ export function buildPlan(targets: TargetPerson[]): MigrationGroup[] {
 		if (t.name != null && t.name !== '') add('domain', 'name', t.name);
 		if (t.email != null && t.email !== '') add(t.sourceTier, 'email', t.email);
 
-		// Deterministic order: domain group before private group.
 		for (const tier of ['domain', 'private'] as const) {
 			const fields = perTier.get(tier);
 			if (!fields) continue;
@@ -267,15 +202,8 @@ export function buildPlan(targets: TargetPerson[]): MigrationGroup[] {
 	return groups;
 }
 
-/**
- * The per-record move engine. NEVER throws for a per-record failure — captures and
- * RETURNS one `LedgerEntry` per field in the group. Ordering invariant
- * (create-before-delete, AC4): create shell → populate values → read-back-PROVE the
- * profile holds each value → ONLY THEN delete each value from the person → read-back-
- * PROVE it is absent from the person. No DELETE is ever issued against an unproven
- * write. A create-ok/delete-fail is surfaced per-record as `duplicate-hazard`, named,
- * never aggregated.
- */
+/** Never throws per record. Create, populate, prove on the profile, and only then delete
+ * from the person and prove it gone: no DELETE follows an unproven write. */
 export async function migrateOneGroup(
 	cfg: EntuCfg,
 	group: MigrationGroup,
@@ -293,7 +221,6 @@ export async function migrateOneGroup(
 		...extra
 	} as LedgerEntry);
 
-	// 1) Create the profile SHELL via the sole-path createProfile (never hand-rolled).
 	let profileId: string;
 	try {
 		profileId = await createProfile(
@@ -318,7 +245,6 @@ export async function migrateOneGroup(
 		);
 	}
 
-	// 2) Populate the shell with name/email (fresh shell → internal DELETE no-ops → pure add).
 	try {
 		await saveProfileFields(
 			cfg,
@@ -339,13 +265,10 @@ export async function migrateOneGroup(
 		);
 	}
 
-	// 3-5) Per field: verify-profile → delete-person → readback-person.
 	const entries: LedgerEntry[] = [];
 	for (const field of fields) {
 		const expected = group.fields[field]!;
 
-		// 3) Verify the profile HOLDS the value BEFORE any delete. Never delete against
-		//    an unproven write.
 		let present: boolean;
 		try {
 			present = await readbackProfileFieldPresent(cfg, group.personId, profileId, field, expected, fetchImpl);
@@ -373,7 +296,6 @@ export async function migrateOneGroup(
 			continue;
 		}
 
-		// 4) Delete the value from the person.
 		let deletedIds: string[];
 		try {
 			deletedIds = await deletePersonField(cfg, group.personId, field, fetchImpl);
@@ -393,7 +315,6 @@ export async function migrateOneGroup(
 			continue;
 		}
 
-		// 5) Read-back PROVE the value is now absent from the person (AC1).
 		let absent: boolean;
 		try {
 			absent = await readbackPersonFieldAbsent(cfg, group.personId, field, fetchImpl);
@@ -430,12 +351,8 @@ export async function migrateOneGroup(
 	return entries;
 }
 
-/**
- * Delete `field`'s value(s) from a PERSON — the migration's own delete helper, NOT
- * `saveProfileFields` (which re-adds after deleting). GETs the person's value-ids off
- * the entity `props=` projection, DELETEs each `property/{id}`, returns the deleted
- * ids. Fails loud (throws `PersonFieldDeleteError` naming field+id) on any non-2xx.
- */
+/** Not saveProfileFields, which re-adds after deleting. Throws PersonFieldDeleteError on a
+ * non-2xx, naming field and id. */
 export async function deletePersonField(
 	cfg: EntuCfg,
 	personId: string,
@@ -458,7 +375,6 @@ export async function deletePersonField(
 	return deleted;
 }
 
-/** GET the raw value-ids of `field` off the person entity projection (no prop-def filter). */
 async function getPersonFieldValueIds(
 	cfg: EntuCfg,
 	personId: string,
@@ -471,10 +387,8 @@ async function getPersonFieldValueIds(
 		entity?: { name?: Array<{ _id: string }>; email?: Array<{ _id: string }> };
 	};
 	const ids = (body.entity?.[field] ?? []).map((v) => v._id);
-	// Belt for the live re-derivation (enumerateTargets HALTs on multi-value up front,
-	// but the value set is re-read here at delete time): only value[0] was copied to the
-	// profile, so deleting >1 value-id would destroy the uncopied value(s). Refuse loudly
-	// rather than delete unmigrated values — the caller surfaces it per-record.
+// enumerateTargets HALTs on multi-value, but the set is re-read here: refuse to delete
+// values that were never copied.
 	if (ids.length > 1) {
 		throw new Error(
 			`getPersonFieldValueIds: person ${personId} carries ${ids.length} \`${field}\` value-ids [${ids.join(', ')}] — ` +
@@ -495,7 +409,7 @@ export async function readbackPersonFieldAbsent(
 	return ids.length === 0;
 }
 
-/** Via `listMyProfiles`; resolves `true` iff `profileId` holds a non-empty `field` === `expected`. */
+/** Resolves true iff `profileId` holds `field` equal to `expected`. */
 export async function readbackProfileFieldPresent(
 	cfg: EntuCfg,
 	personId: string,
@@ -518,13 +432,7 @@ function maskEmail(email: string): string {
 	return `${email[0]}***${email.slice(at)}`;
 }
 
-/**
- * PURE dry-run render (no I/O). One human-readable block per group: WOULD CREATE
- * profile `_sharing=<tier> _parent=<personId> ownerIds=[<personId>]`; WOULD POPULATE
- * `{name?, email(masked)?}`; WOULD DELETE from person `<field(s)>`; WOULD READ-BACK
- * both sides — plus each field's source→target tier (surfacing the R1 private→domain
- * name promotion). Email is masked. This printout IS the operator's per-run verify surface.
- */
+/** PURE dry-run render, emails masked: the operator's per-run verify surface. */
 export function renderPlan(groups: MigrationGroup[]): string {
 	const lines: string[] = [];
 	lines.push('T4.10 migration DRY-RUN plan — name/email VALUES → profile entities (NO writes issued)');
@@ -551,12 +459,7 @@ export function renderPlan(groups: MigrationGroup[]): string {
 	return lines.join('\n');
 }
 
-/**
- * Collects per-record outcomes and reports them LOUDLY, per-record — NO aggregate
- * "done" ever substitutes. `printReport` prints one line per `(person,field)`; if any
- * entry is not `moved` it prints a MIGRATION INCOMPLETE block listing each id+field+
- * phase+repairHint. `hasFailures()` is true iff any entry's status !== 'moved'.
- */
+/** Reports every record; any entry not `moved` prints MIGRATION INCOMPLETE, never a bare done. */
 export class MigrationLedger {
 	private entries: LedgerEntry[] = [];
 
@@ -573,7 +476,6 @@ export class MigrationLedger {
 	}
 
 	printReport(): void {
-		// One line per record — never an aggregate "done" that masks a per-record failure.
 		for (const e of this.entries) {
 			const line =
 				`${e.status.toUpperCase()} ${e.personId}.${e.field} ` +
