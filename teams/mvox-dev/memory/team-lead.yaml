@@ -5,14 +5,17 @@
 
 current:
   - label: WIP
-    record: "Epic #962 left: #971 (cfgFor, EntuCfg into $lib/entu), #969 last; then #963"
+    record: "Epics #962 and #963 done 2026-10-22 (last PR #1019); queue empty, ask Gama for work"
     ref: scratchpad/findings-session.md
-  - label: LEARNED
-    record: "#434 write gate: a .svelte importing a writer must render the offline reason; writers stay props"
-    ref: src/write-gate-coverage.spec.ts
   - label: WIP
-    record: "#998 (routeLoad generation) is drafted by Gama; waits for Mihkel's release"
-    ref: scratchpad/findings-session.md
+    record: "Feedback MCP merged (#1009/#1011); shipyard deploy waits for Mihkel's go to Passe"
+    ref: services/feedback-mcp/README.md
+  - label: WIP
+    record: "Gama owes a yes or new wording on 'Copy no. 3' (# is banned in messages)"
+    ref: "#976"
+  - label: WIP
+    record: "Stray /tmp/fb-config.json, not ours: told Mihkel; inspecting it was blocked"
+    ref: ""
   - label: WIP
     record: "Valdur: send-invite sent 2026-10-20; he redeems within 24h (record PR #1002)"
     ref: scripts/migrations/seed-crede-valdur-second-signin-2026-10-20.ts

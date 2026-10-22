@@ -59,4 +59,16 @@ staging:
   - label: GOTCHA
     record: "startSendingSavedFeedback sweeps at once on sign-in: await a sweep before keeping a report"
     ref: "src/lib/problems/autoReport.spec.ts"
+  - label: GOTCHA
+    record: "Touching vitest.config.ts drags its long comments into comment-rules: trim them to 2 lines"
+    ref: "#1009"
+  - label: PATTERN
+    record: "Node services: .ts import extensions + rewriteRelativeImportExtensions let tsc emit runnable dist/"
+    ref: "services/feedback-mcp/tsconfig.build.json"
+  - label: GOTCHA
+    record: "pluralization.spec bans any '#' in messages/*.json: 'Copy #3' cannot move into m.*"
+    ref: "src/lib/i18n/pluralization.spec.ts"
+  - label: GOTCHA
+    record: "setLocale('et') is a no-op in node env; happy-dom needs $lib/entu-config mocked for libraryData"
+    ref: "src/lib/library/loanCopies.spec.ts"
 # (*MVOX:Josquin*)
