@@ -11,7 +11,10 @@ import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import {
+  bellChange,
   bellLabel,
+  bellsKey,
+  bookmarksOf,
   combineRings,
   confContextPercent,
   confIdleMinutes,
@@ -29,16 +32,20 @@ import {
   pathSegments,
   readDoorbells,
   ringText,
+  textHash,
 } from './watch'
-import type { Doorbell } from './watch'
+import type { Bookmark, Doorbell } from './watch'
 import { foundAboveNote, normalizePath, resolveKitHome } from './kit-home'
 import type { KitHome } from './kit-home'
 
 const startCwd = atom({ plugin: 'watch', key: 'startCwd' } as const, '')
 /** Context marks already reported this session: once per mark, reloads included. */
 const reportedMarks = atom({ plugin: 'watch', key: 'reportedMarks' } as const, [] as number[])
-/** Each watched file's last-seen size, by expanded path: growth past it rings. */
+/** Each watched file's last-seen size, by expanded path: growth past it rings. A tail-style
+ *  file's is also kept in $.store, which a new session, having none of its own, reads (kit #51). */
 const bellSizes = atom({ plugin: 'watch', key: 'bellSizes' } as const, {} as Record<string, number>)
+/** Each watched file's last-seen text hash, by the same key: other text in its place rings (kit #52). */
+const bellHashes = atom({ plugin: 'watch', key: 'bellHashes' } as const, {} as Record<string, number>)
 
 type Settings = { home: string; pollMs: number }
 
@@ -54,6 +61,11 @@ let lastActivity = 0
 let retiredOption: string | undefined
 let polling = false
 const logged = new Set<string>()
+/** The tail-style rings of this session whose prompt has not yet entered or been refused, by
+ *  the files each carries: the kept bookmark of such a file waits for its ring (kit #51). A
+ *  reload forgets them, so a ring queued across a reload and then lost with its session is not
+ *  rung again. */
+const inFlight = new Set<readonly string[]>()
 
 /** One debug line per distinct message for the module's life: a poll every 5 s must not spam. */
 function logOnce($: EngineInterface, text: string): void {
@@ -150,22 +162,27 @@ async function expand($: EngineInterface, path: string): Promise<string[]> {
 /**
  * One prompt, fire and forget (its submit resolves only when its turn starts, which a poll must
  * not wait for). A refusal runs `undo`, so a lost ring's baseline rolls back and the growth
- * rings again at a later poll.
+ * rings again at a later poll; a prompt that enters runs `entered`. A prompt that never resolves
+ * (its session ended first) runs neither.
  */
-function ask($: EngineInterface, text: string, undo?: () => Promise<void>): void {
-  void $.prompt.submit({ text }).then(
-    r => {
-      if (r.drop !== undefined) {
-        logOnce($, `prompt refused: ${r.drop}`)
+function ask($: EngineInterface, text: string, undo?: () => Promise<void>, entered?: () => Promise<void>): void {
+  void $.prompt
+    .submit({ text })
+    .then(
+      r => {
+        if (r.drop !== undefined) {
+          logOnce($, `prompt refused: ${r.drop}`)
+          return undo?.()
+        }
+        return entered?.()
+      },
+      err => {
+        logOnce($, `prompt refused: ${String(err)}`)
         return undo?.()
-      }
-      return
-    },
-    err => {
-      logOnce($, `prompt refused: ${String(err)}`)
-      return undo?.()
-    },
-  )
+      },
+    )
+    // Run past its session, undo or entered may find their calls refused.
+    .catch(err => logOnce($, `after a ring: ${String(err)}`))
 }
 
 /**
@@ -184,10 +201,51 @@ async function sizesOf($: EngineInterface): Promise<Record<string, number>> {
   return sizes
 }
 
+/** The last-seen text hashes, validated out of $.state; a file with none is judged by size alone. */
+async function hashesOf($: EngineInterface): Promise<Record<string, number>> {
+  const raw = await read($, bellHashes)
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {}
+  const hashes: Record<string, number> = {}
+  for (const [key, hash] of Object.entries(raw)) if (typeof hash === 'number') hashes[key] = hash
+  return hashes
+}
+
 /**
- * The doorbells: every declared file that grew since its last-seen size rings, all of one poll's
- * rings as one prompt. Sizes are character counts of what $.fs.read returns -- compared only with
- * themselves. A missing file counts 0, so delete-then-write rings and create-at-0 does not.
+ * The kept bookmarks of the home's tail-style bells (kit #51), out of $.store, which outlives the
+ * session: a new session, or one after /clear, rings only what no ring has brought in. Undefined
+ * when the store cannot be read; a session with no bookmark of its own then counts from 0, as
+ * before.
+ */
+async function keptOf($: EngineInterface, home: string): Promise<Record<string, Bookmark> | undefined> {
+  try {
+    return bookmarksOf(await $.store.get(bellsKey(home)))
+  } catch (err) {
+    logOnce($, `tail-style bookmarks last this session only: the store cannot be read (${String(err)})`)
+    return undefined
+  }
+}
+
+async function keep($: EngineInterface, home: string, kept: Record<string, Bookmark>): Promise<void> {
+  try {
+    await $.store.set(bellsKey(home), kept)
+  } catch (err) {
+    logOnce($, `tail-style bookmarks stay as last kept: the store cannot be written (${String(err)})`)
+  }
+}
+
+/**
+ * The doorbells: every declared file that grew past its last-seen text, or whose text was
+ * replaced by other non-empty text (kit #52), rings; all of one poll's rings as one prompt. Sizes
+ * are character counts of what $.fs.read returns -- compared only with themselves. A missing file
+ * counts 0, so delete-then-write rings and create-at-0 does not.
+ *
+ * $.state, the session's own, keeps every bookmark and is read first. A tail-style bell (inject:
+ * true) is never consumed, so its bookmark is also kept in $.store, per home, which a session with
+ * no bookmark of its own reads (kit #51). The kept one moves only past what reached a turn: when
+ * a ring's prompt enters, and at a poll that rings nothing of the file with no ring of it queued
+ * (it was emptied, an older watch kept it in $.state alone, or a store write failed before). So a
+ * ring still queued when its session ends rings again in the next. An inbox-style bell keeps only
+ * the session's: an unconsumed inbox rings once in a new session.
  */
 async function doorbellCheck($: EngineInterface, home: string, conf: string): Promise<void> {
   const confPath = `${home}/memory-kit.conf`
@@ -199,8 +257,13 @@ async function doorbellCheck($: EngineInterface, home: string, conf: string): Pr
 
   const userHome = (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')) ?? ''
   const sizes = await sizesOf($)
-  const grown: { bell: Doorbell; file: string; key: string; old: number; content: string }[] = []
+  const hashes = await hashesOf($)
+  const kept = d.bells.some(b => b.inject) ? await keptOf($, home) : undefined
+  const queued = new Set([...inFlight].flat())
+  const rung: { bell: Doorbell; file: string; key: string; old: number; oldHash?: number; content: string; replaced: boolean }[] = []
+  const seen = new Set<string>()
   let changed = false
+  let keptChanged = false
   for (const bell of d.bells) {
     const path = expandHome(bell.path, home, userHome)
     if (path === undefined) {
@@ -209,23 +272,72 @@ async function doorbellCheck($: EngineInterface, home: string, conf: string): Pr
     }
     for (const file of await expand($, path)) {
       const key = fileKey(file)
+      // A file two entries name is one bell, the first entry's: one bookmark, one ring (kit #46).
+      if (seen.has(key)) continue
+      seen.add(key)
       const content = await readOrEmpty($, file)
-      const old = sizes[key] ?? 0
-      if (content.length > old) grown.push({ bell, file, key, old, content })
-      if (content.length !== old) {
+      const own = sizes[key]
+      const mark = bell.inject ? kept?.[key] : undefined
+      const old = own ?? mark?.size ?? 0
+      const oldHash = own !== undefined ? hashes[key] : mark?.hash
+      const change = bellChange(content, old, oldHash)
+      if (change !== undefined) rung.push({ bell, file, key, old, oldHash, content, replaced: change === 'replaced' })
+      const hash = textHash(content)
+      if (content.length !== sizes[key] || hash !== hashes[key]) {
         sizes[key] = content.length
+        hashes[key] = hash
         changed = true
+      }
+      if (bell.inject && kept !== undefined && change === undefined && !queued.has(key) && (content.length !== mark?.size || hash !== mark.hash)) {
+        kept[key] = { size: content.length, hash }
+        keptChanged = true
       }
     }
   }
-  if (changed) await $.state.set({ plugin: 'watch', key: 'bellSizes' }, sizes)
-  if (grown.length === 0) return
-  $.ui.log(`watch: ring (${grown.map(g => bellLabel(g.bell, g.file)).join(', ')})`, { to: 'debug' })
-  ask($, combineRings(grown.map(g => ringText(g.bell, g.file, g.old, g.content))), async () => {
-    const now = await sizesOf($)
-    for (const g of grown) now[g.key] = Math.min(now[g.key] ?? g.old, g.old)
-    await $.state.set({ plugin: 'watch', key: 'bellSizes' }, now)
-  })
+  if (changed) {
+    await $.state.set({ plugin: 'watch', key: 'bellSizes' }, sizes)
+    await $.state.set({ plugin: 'watch', key: 'bellHashes' }, hashes)
+  }
+  if (kept !== undefined && keptChanged) await keep($, home, kept)
+  if (rung.length === 0) return
+  $.ui.log(`watch: ring (${rung.map(g => bellLabel(g.bell, g.file)).join(', ')})`, { to: 'debug' })
+  const tails = rung.filter(g => g.bell.inject)
+  const carried = tails.map(g => g.key)
+  if (carried.length > 0) inFlight.add(carried)
+  ask(
+    $,
+    combineRings(rung.map(g => ringText(g.bell, g.file, g.old, g.content, g.replaced))),
+    async () => {
+      // Back to the bookmark before the ring, size and hash together, so the next poll rings
+      // again. The kept one never moved for it. Still queued until rolled back: a poll between
+      // must not move the kept one past it.
+      try {
+        const nowSizes = await sizesOf($)
+        const nowHashes = await hashesOf($)
+        for (const g of rung) {
+          nowSizes[g.key] = g.old
+          if (g.oldHash === undefined) delete nowHashes[g.key]
+          else nowHashes[g.key] = g.oldHash
+        }
+        await $.state.set({ plugin: 'watch', key: 'bellSizes' }, nowSizes)
+        await $.state.set({ plugin: 'watch', key: 'bellHashes' }, nowHashes)
+      } finally {
+        inFlight.delete(carried)
+      }
+    },
+    async () => {
+      // The ring reached a turn: the kept bookmarks move past what it carried (kit #51).
+      try {
+        if (tails.length === 0) return
+        const nowKept = await keptOf($, home)
+        if (nowKept === undefined) return
+        for (const g of tails) nowKept[g.key] = { size: g.content.length, hash: textHash(g.content) }
+        await keep($, home, nowKept)
+      } finally {
+        inFlight.delete(carried)
+      }
+    },
+  )
 }
 
 /**
@@ -375,6 +487,9 @@ export const register: Register = (on, options) => {
     if (retiredOption !== undefined) await tellOnce($, retiredOption)
     await markActivity($)
     await $.command.register({ name: 'watch', description: 'Show the doorbells and session reports active in this home' })
+    // A new session (a /clear) has no ring of its own queued yet; one of the last session's that
+    // still enters moves the kept bookmark then (kit #51).
+    inFlight.clear()
     timer?.cancel()
     timer = $.clock.every(settings.pollMs, () => void tick($, settings))
     // Not awaited: a ring waits for its turn to start, which a start hook must not hold up.

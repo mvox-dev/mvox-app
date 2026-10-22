@@ -19,8 +19,8 @@ press its digit (1-8) while the pane has the keyboard. Obligations is the defaul
 | Tab | Source (in the memory directory) | Shows | Header count |
 |---|---|---|---|
 | **O** Obligations | `obligations.yaml` | as below ("What it shows") | `N expired · M due ≤7d` |
-| **N** Next | `scratchpad.yaml` | `current`, then `staging`, each under its heading; a row is its label, record, then ref (dim) | `13/15 current · 4 staging` |
-| **C** Commitments | `commitments.yaml` | `trigger -> obligation`, then `actor -> owed_to, within …` (dim). No file: "commitments tier not in use here" | `N commitments` |
+| **N** Next | the scratchpad tier, found as the lint finds it: see "The Next tab" below (kit #53) | the file's name, then `current` and `staging`, each under its heading; a row is its label, record, then ref (dim). Several files: each under its own name | `13/15 current · 4 staging`, or `2 scratchpads · 9 current · 4 staging` |
+| **C** Commitments | `commitments.yaml` | `trigger -> obligation`, then `actor -> owed_to, within …` (dim). No file: "commitments tier not in use here". A `commitments.yaml` that holds a scratchpad (kit #30) says so and shows under Next | `N commitments` |
 | **R** Rules | `rules.yaml` | numbered | `18/20` |
 | **L** Lessons | `lessons/index.yaml` | the summary, newest `learned` first, its enforcement before it and the date after; the line links to `lessons/<slug>.md` (a `file://` URL; where the terminal opens none, plain text). A chip row under the header filters: `[all][hooked][linted][recognition]` | `N lessons`, or `3/12 linted` |
 | **F** Facts | `facts/*.yaml` | grouped by subject (the file's name), each fact after its `verified` date; a fact not verified in 91 days (a quarter), or never, is dim | `N facts · M subjects · K not verified in 91 days` |
@@ -37,7 +37,8 @@ press its digit (1-8) while the pane has the keyboard. Obligations is the defaul
   while the other subjects show. Every tier goes through the obligations parser's own strict
   reader (`parseMapLists` in `hooks/obligations.ts`): the kit's one shape, a top-level key holding
   a list of flat maps (`memory-kit/types/memory-*.ts`). A missing file says
-  `no <file> here (<path>)`.
+  `no <file> here (<path>)`; Next, which has no fixed file, says
+  `no scratchpad tier in this home (<memory dir>)`.
 - **Secrets: names, paths and dates only.** The tab reads the README and a directory listing,
   never an encrypted file. It assumes a kit-compliant home: a missing README, a label missing or
   left as the skeleton ships it (`_fill in_`), or no encrypted file beside the README turns the
@@ -48,8 +49,30 @@ press its digit (1-8) while the pane has the keyboard. Obligations is the defaul
 - Scrolling (wheel, `k` / `j`) steps through the open tab's lines; a new tab starts at the top.
 - `/obligations` opens the pane on the Obligations tab; `/memory-pane` opens it on the open tab
   (not `/memory`: that is Claude Code's built-in memory command, and the harness refuses it).
-- Not shown: `dormant/` (parked facts) and `urls/` (they are links everywhere). Only
-  `scratchpad.yaml` is the Next tab; a team home's other scratchpads are not.
+- Not shown: `dormant/` (parked facts) and `urls/` (they are links everywhere).
+
+## The Next tab: the scratchpad tier (kit #53)
+
+The kit names no scratchpad file: the tier is `memory/<name>.yaml` (`types/memory-scratchpad.ts`),
+and semafor keeps its own at `memory/vitruvius.yaml`. The tab used to read `scratchpad.yaml`
+alone, so it said `no scratchpad.yaml here` where the lint read eight rows. It now finds the tier
+by the lint's own rule:
+
+- Every `*.yaml` at the top of the memory directory is a scratchpad, except `rules.yaml`,
+  `obligations.yaml` and `keys.yaml`. `commitments.yaml` is one only when it holds `current` or
+  `staging` and no `commitments` key (kit #30); the Commitments tab then says it is not in use.
+  A link to a file counts, as the lint follows it.
+- The lint reads every such file, so the tab shows every one, in the lint's order (by name,
+  upper case before lower), each under its name. One file keeps the header count against the cap
+  (`13/15 current · 4 staging`); several add up (`2 scratchpads · 9 current · 4 staging`), since
+  the cap is per file. A broken file among several is flagged under its name; the others show.
+- A home with no such file has no scratchpad tier, and the tab says so.
+- The rule's twin is `lint_tree` in `lint/memory_lint.py`; the pane's copy is
+  `scratchpadCandidates` and `scratchpadShaped` in `hooks/tiers.ts`. The two cannot share code,
+  so a change to one is a change to both. One difference: the lint asks PyYAML whether
+  `commitments.yaml` holds a scratchpad, and the pane, which has no YAML library, reads its keys
+  at column 0. A `commitments.yaml` that PyYAML cannot parse but that has `current:` at column 0
+  is therefore the lint's commitments error and the pane's scratchpad error, under Next.
 
 ## What it shows (the Obligations tab)
 
@@ -227,7 +250,11 @@ kit_home: ../desk        # absolute, or relative to this conf's own folder
   loop. `kit_home: .` is just the home.
 - **Absolute paths:** POSIX, a drive letter (`C:\` or `C:/`) or UNC. `~` is not expanded: write
   the path absolute or relative to the conf.
-- **Never silent:** a broken pointer fills the pane with "kit_home pointer broken: <why>", and the pane opens itself to show it, never the start folder's ledger instead. A pointed home without `memory-kit/VERSION` shows `memory-kit ?` in the header and asks upstream nothing.
+- **Never silent:** a broken pointer fills the pane with "memory-kit.conf problem: <why>", and the pane opens itself to show it, never the start folder's ledger instead. A pointed home without `memory-kit/VERSION` shows `memory-kit ?` in the header and asks upstream nothing.
+- **A key given twice** (kit #55): a `memory-kit.conf` that gives a top-level key twice, the start
+  folder's or the one a pointer names, is the same kind of problem, shown the same way: "duplicate
+  key 'memory_dir' on line 5 (first on line 3)". The pane had read the first `memory_dir:` and the
+  lint the last, so the two read different memory directories; now neither picks.
 - The lint and the tools follow the same pointer (`lint/kit_home.py`). This plugin's copy of the
   rules is `hooks/kit-home.ts`, identical in all three plugins; `lint/run-fixtures.sh` fails when
   the copies differ.

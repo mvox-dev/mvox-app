@@ -8,6 +8,9 @@ Kit #34: the newline= of Path.write_text exists from Python 3.10 only, so on mac
 tools crashed at the write, and the fixture run passed 35/0 there because it runs the lint alone.
 Each write here runs for real, into a temporary folder, on whatever python3 runs the test; and a
 scan keeps write_text(newline=) out of the kit's Python, which a newer python3 would not catch.
+
+Kit #55: what lesson-index.py reads before it writes is loaded as the lint loads it, so a key given
+twice stops it, and nothing is written.
 """
 import importlib.util
 import io
@@ -74,6 +77,49 @@ class LessonIndexWrites(unittest.TestCase):
         self.assertNotIn(b"\r\n", raw)
         self.assertTrue(raw.endswith(b"# B\nbody\n"))
         self.assertEqual(li.front_matter(self.mem / "lessons" / "b.md")["summary"], "Front matter, ä.")
+
+
+
+class LessonIndexRefusesADuplicateKey(unittest.TestCase):
+    """Kit #55: a key given twice is an error naming the file, the key and both lines, worded as
+    the lint words it; plain YAML would keep the last copy, silently."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.mem = pathlib.Path(self.tmp.name) / "memory"
+        (self.mem / "lessons").mkdir(parents=True)
+        self.index = self.mem / "lessons" / "index.yaml"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def refused(self, *args):
+        with self.assertRaises(SystemExit) as cm:
+            quiet(li.main, [str(self.mem), *args])
+        return str(cm.exception.code)
+
+    def test_front_matter_with_summary_twice_stops_it_and_writes_no_index(self):
+        lesson = self.mem / "lessons" / "a.md"
+        lesson.write_bytes(LESSON.replace("enforcement:", 'summary: "A second summary."\nenforcement:').encode("utf-8"))
+        # Lines are counted in the whole lesson file, as the lint counts them.
+        self.assertEqual(self.refused(), f"{lesson}: front matter: duplicate key 'summary' on line 5 (first on line 2); YAML keeps only the last, silently")
+        self.assertFalse(self.index.exists())
+
+    def test_check_names_a_duplicate_in_the_index_rather_than_calling_it_stale(self):
+        (self.mem / "lessons" / "a.md").write_bytes(LESSON.encode("utf-8"))
+        self.assertEqual(quiet(li.main, [str(self.mem)])[0], 0)
+        text = self.index.read_text(encoding="utf-8")
+        self.index.write_bytes((text + "lessons: []\n").encode("utf-8"))
+        line = text.count("\n") + 1
+        first = text.splitlines().index("lessons:") + 1
+        self.assertEqual(self.refused("--check"), f"{self.index}: duplicate key 'lessons' on line {line} (first on line {first}); YAML keeps only the last, silently")
+
+    def test_from_index_refuses_a_row_with_a_key_twice_and_writes_nothing(self):
+        (self.mem / "lessons" / "b.md").write_bytes("# B\nbody\n".encode("utf-8"))
+        self.index.write_bytes(
+            'lessons:\n- slug: b\n  summary: "One."\n  learned: "2026-10-15"\n  summary: "Two."\n'.encode("utf-8"))
+        self.assertEqual(self.refused("--from-index"), f"{self.index}: duplicate key 'summary' on line 5 (first on line 3); YAML keeps only the last, silently")
+        self.assertEqual((self.mem / "lessons" / "b.md").read_bytes(), b"# B\nbody\n")
 
 
 class ExtractCapsWrites(unittest.TestCase):

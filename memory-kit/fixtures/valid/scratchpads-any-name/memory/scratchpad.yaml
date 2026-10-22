@@ -1,0 +1,9 @@
+# A second scratchpad in the same home: the lint reads both, and so does the memory pane.
+current:
+  - label: WIP
+    record: "Draft the release notes."
+    ref: "#53"
+staging:
+  - label: LEARNED
+    record: "The pane and the lint find the scratchpad by the same rule."
+    ref: "#53"

@@ -10,6 +10,9 @@ update:/upstream: and watch_files all count, and the pointer conf's other keys a
 - One hop, never chained: the target's own conf may not point on (a loop is a chain too). A home
   naming itself (`kit_home: .`) is just the home.
 - A target with no memory-kit.conf is a problem, said plainly; never a silent fall back.
+- So is a memory-kit.conf that gives a top-level key twice (kit #55), the start folder's or the one
+  a pointer names: YAML keeps the last copy and conf_value the first, so a conf with memory_dir:
+  twice sent the lint and the memory pane to different memory directories. Never a silent pick.
 - Absolute is POSIX (/...), a drive letter (C:\\ or C:/) or UNC (\\\\server\\share). `~` is not
   expanded: write the path absolute or relative to the conf.
 - Upward (kit #42), only when asked (`resolve(start, upward=True)`): a start folder without a
@@ -45,6 +48,29 @@ def conf_value(text, name):
 
 def top_keys(text):
     return [m.group(1) for m in (re.match(r"^([A-Za-z_][\w-]*):", line) for line in text.splitlines()) if m]
+
+
+def repeated_key(text):
+    """The first top-level key memory-kit.conf gives twice, as (key, line, first line), or None
+    (kit #55). A key is ASCII word characters, as the plugins' copy reads one."""
+    seen = {}
+    for n, line in enumerate(text.splitlines(), 1):
+        m = re.match(r"^([A-Za-z_][\w-]*):", line, re.ASCII)
+        if m and m.group(1) in seen:
+            return m.group(1), n, seen[m.group(1)]
+        if m:
+            seen[m.group(1)] = n
+    return None
+
+
+def repeated_key_problem(conf_path, text):
+    """The problem a conf giving a top-level key twice is (kit #55), worded as the plugins'
+    repeatedKeyProblem; None when it gives each once."""
+    found = repeated_key(text)
+    if found is None:
+        return None
+    key, line, first = found
+    return f"{conf_path}: duplicate key '{key}' on line {line} (first on line {first}); the plugins would take the first and the lint the last, so keep only one"
 
 
 @dataclass
@@ -93,6 +119,9 @@ def resolve(start, upward=False):
         return Resolved(begin)
     above = None if start == begin else start
     conf_path = start / "memory-kit.conf"
+    twice = repeated_key_problem(conf_path, text)
+    if twice:
+        return Resolved(None, conf_path, twice)
     raw = conf_value(text, KEY)
     if not raw:
         return Resolved(start, found_in=above)
@@ -104,6 +133,9 @@ def resolve(start, upward=False):
     target_text = _read(target / "memory-kit.conf")
     if target_text is None:
         return Resolved(None, conf_path, f"{conf_path}: kit_home: {raw} -> {target}: no memory-kit.conf there, so it is not a kit home")
+    twice = repeated_key_problem(target / "memory-kit.conf", target_text)
+    if twice:
+        return Resolved(None, conf_path, twice)
     onward = conf_value(target_text, KEY)
     if onward:
         onward_target = onward if is_absolute(onward) else str(target / onward)

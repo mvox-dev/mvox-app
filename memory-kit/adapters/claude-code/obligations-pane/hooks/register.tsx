@@ -77,7 +77,10 @@ import {
   LESSON_FILTERS,
   lessonsView,
   nextView,
+  NO_SCRATCHPAD,
   rulesView,
+  scratchpadCandidates,
+  scratchpadShaped,
   secretFiles,
   secretsView,
   TABS,
@@ -191,8 +194,19 @@ async function readTier($: EngineInterface, view: ViewChoice, root: string, toda
       case 'O':
         return null
       case 'N': {
-        const text = await readIfThere($, `${root}/scratchpad.yaml`)
-        return text === undefined ? missing('scratchpad.yaml') : nextView(text)
+        // kit #53: the scratchpad tier is found as the lint finds it, not by a fixed name.
+        const noTier: TierView = { kind: 'missing', message: `${NO_SCRATCHPAD} (${root})` }
+        if (!(await $.fs.exists(root))) return noTier
+        const files: { name: string; text: string }[] = []
+        for (const e of await $.fs.list(root)) {
+          if (scratchpadCandidates([e.name]).length === 0) continue
+          // The lint follows a link to a file; a link is `other` in a listing, so ask where it leads.
+          const kind = e.kind === 'other' ? (await $.fs.stat(`${root}/${e.name}`)).kind : e.kind
+          if (kind !== 'file') continue
+          const text = await $.fs.read(`${root}/${e.name}`)
+          if (e.name !== 'commitments.yaml' || scratchpadShaped(text)) files.push({ name: e.name, text })
+        }
+        return files.length === 0 ? noTier : nextView(files)
       }
       case 'C':
         return commitmentsView(await readIfThere($, `${root}/commitments.yaml`))
@@ -318,7 +332,8 @@ export async function refresh($: EngineInterface, settings: Settings): Promise<v
   const ledger: Pick<PaneSnapshot, 'source' | 'error' | 'items'> =
     'problem' in found ? { source: 'pointer', error: found.problem, items: [] } : await readObligations($, path)
   const offsetMinutes = await offsetOf($, now)
-  // kit #43: the open tab, remembered per home; a broken pointer shows on every tab as it is.
+  // kit #43: the open tab, remembered per home; a conf problem (a broken pointer, kit #18, or a
+  // key given twice, kit #55) shows on every tab as it is.
   const view = await choiceFor($, home)
   const tier = 'problem' in found ? null : await readTier($, view, root, isoDate(now, offsetMinutes), offsetMinutes)
   const urls = await resolveUrls($, root, ledger.items, tier)
@@ -821,7 +836,7 @@ export const register: Register = (on, options) => {
       snap.source === 'missing' ? (
         <Text color={DATE_FG}>no obligations file here ({snap.path})</Text>
       ) : snap.source === 'pointer' ? (
-        <Text color="#9e0000">kit_home pointer broken: {snap.error}</Text>
+        <Text color="#9e0000">memory-kit.conf problem: {snap.error}</Text>
       ) : snap.source === 'error' ? (
         <Text color="#9e0000">obligations.yaml unreadable: {snap.error}</Text>
       ) : items.length === 0 ? (

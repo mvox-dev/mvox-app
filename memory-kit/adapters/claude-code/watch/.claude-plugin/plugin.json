@@ -1,7 +1,7 @@
 {
   "name": "watch",
-  "version": "0.6.0",
-  "description": "memory-kit watch: rings a doorbell in the session (idle-safe) when a file the home declares in memory-kit.conf (watch_files) grows, never touching the file, and reports, information only, idleness and context growth past the marks the home declares there",
+  "version": "0.7.0",
+  "description": "memory-kit watch: rings a doorbell in the session (idle-safe) when a file the home declares in memory-kit.conf (watch_files) grows or is replaced by other text, never touching the file, and reports, information only, idleness and context growth past the marks the home declares there",
   "author": {
     "name": "Mihkel Putrinš"
   },
@@ -16,7 +16,7 @@
     "pollSeconds": {
       "type": "number",
       "title": "Poll interval (seconds)",
-      "description": "How often the doorbell files are checked for growth and the report checks run. Local file reads only; the watch never empties a file.",
+      "description": "How often the doorbell files are checked for new text and the report checks run. Local file reads only; the watch never empties a file.",
       "default": 5
     }
   }

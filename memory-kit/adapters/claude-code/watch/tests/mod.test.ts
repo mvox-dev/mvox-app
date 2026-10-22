@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 
-import { CWD, HOME, SESSION, typed, worldOf } from './fixtures/world'
+import { textHash } from '../hooks/watch'
+import { CWD, HOME, newSession, SESSION, typed, worldOf } from './fixtures/world'
 
 const NOW = Date.parse('2026-10-14T12:00:00Z')
 const MIN = 60_000
@@ -65,7 +66,7 @@ describe('doorbells: ring on growth, never touch the file', () => {
     expect(world.submitted).toHaveLength(2)
   })
 
-  test('created at 0 bytes is not growth; shrinking is not growth; growing past the shrunk size rings', async ($, on) => {
+  test('created at 0 bytes is not growth; cut shorter is other text, a replacement; growing past it rings', async ($, on) => {
     const world = worldOf(on, { 'memory-kit.conf': CONF })
     const clock = mock.clock(on, { now: NOW })
     await $.session.start(SESSION)
@@ -78,10 +79,67 @@ describe('doorbells: ring on growth, never touch the file', () => {
     expect(world.submitted).toHaveLength(1)
     world.files.set(INBOX, '0123')
     await clock.advance(5_000)
-    expect(world.submitted).toHaveLength(1)
+    expect(world.submitted).toHaveLength(2)
+    expect(world.submitted[1]).toBe(`[hub mail] ${INBOX} was replaced. consume the inbox or new messages won't land`)
     world.files.set(INBOX, '012345')
     await clock.advance(5_000)
+    expect(world.submitted).toHaveLength(3)
+    expect(world.submitted[2]).toBe(`[hub mail] ${INBOX} grew. consume the inbox or new messages won't land`)
+  })
+
+  test('consumed and refilled between two polls by a shorter message still rings (kit #52)', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [INBOX]: '[{"from":"mvox","text":"a long message"}]' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    expect(world.submitted).toHaveLength(1)
+    // The home deletes the inbox and the courier writes the next mail before the watch polls.
+    world.files.set(INBOX, '[{"from":"po","text":"hi"}]')
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([
+      `[hub mail] ${INBOX} grew. consume the inbox or new messages won't land`,
+      `[hub mail] ${INBOX} was replaced. consume the inbox or new messages won't land`,
+    ])
+    // Nothing new after it: no second ring for the same mail.
+    await clock.advance(60_000)
     expect(world.submitted).toHaveLength(2)
+  })
+
+  test('refilled by a message of the same size rings; the same text written again does not', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [INBOX]: '[{"m":1}]' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    world.files.set(INBOX, '[{"m":2}]')
+    await clock.advance(5_000)
+    expect(world.submitted).toHaveLength(2)
+    world.files.set(INBOX, '[{"m":2}]')
+    await clock.advance(5_000)
+    expect(world.submitted).toHaveLength(2)
+  })
+
+  test('inject: a replaced file rings its whole new text, not a tail past the old size', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [LINKS]: 'https://a\nhttps://b\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    world.files.set(LINKS, 'https://c\nhttps://d\nhttps://e\n')
+    await clock.advance(5_000)
+    expect(world.submitted[1]).toBe(`[links.txt] ${LINKS} was replaced.\nhttps://c\nhttps://d\nhttps://e`)
+  })
+
+  test('a refused replacement rolls back and rings again once the refusal lifts', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [INBOX]: '[{"from":"mvox","text":"a long message"}]' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    world.refuse = 'another plugin holds prompts'
+    world.files.set(INBOX, '[{"m":2}]')
+    await clock.advance(5_000)
+    expect(world.submitted).toHaveLength(1)
+    world.refuse = undefined
+    await clock.advance(5_000)
+    expect(world.submitted[1]).toBe(`[hub mail] ${INBOX} was replaced. consume the inbox or new messages won't land`)
   })
 
   test('inject: the ring carries the grown tail, and the next ring only what is new', async ($, on) => {
@@ -172,6 +230,232 @@ describe('doorbells: ring on growth, never touch the file', () => {
     await clock.advance(60_000)
     expect(world.submitted).toEqual([])
     expect(world.notified).toEqual([])
+  })
+})
+
+describe('a tail-style bookmark outlives the session (kit #51)', () => {
+  const BELLS = `bells:${CWD}`
+  const TWO = 'https://a\nhttps://b\n'
+
+  test('after a /clear a tail-style file rings only what is new, not the whole file again', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [LINKS]: 'https://a\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    world.files.set(LINKS, TWO)
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([`[links.txt] ${LINKS} grew.\nhttps://a`, `[links.txt] ${LINKS} grew.\nhttps://b`])
+    newSession(world)
+    await $.session.start(SESSION)
+    await clock.advance(60_000)
+    expect(world.submitted).toHaveLength(2)
+    world.files.set(LINKS, `${TWO}https://c\n`)
+    await clock.advance(5_000)
+    expect(world.submitted[2]).toBe(`[links.txt] ${LINKS} grew.\nhttps://c`)
+  })
+
+  test('lines written while no session ran ring at the next session start, and only they', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [LINKS]: 'https://a\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    newSession(world)
+    world.files.set(LINKS, `${TWO}https://c\n`)
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    expect(world.submitted).toEqual([`[links.txt] ${LINKS} grew.\nhttps://a`, `[links.txt] ${LINKS} grew.\nhttps://b\nhttps://c`])
+  })
+
+  test('an inbox-style file keeps a per-session bookmark: unconsumed, it rings once in the new session', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [INBOX]: '[{"m":1}]' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    newSession(world)
+    await $.session.start(SESSION)
+    await clock.advance(60_000)
+    const ring = `[hub mail] ${INBOX} grew. consume the inbox or new messages won't land`
+    expect(world.submitted).toEqual([ring, ring])
+    expect(Object.keys((world.store.get(BELLS) ?? {}) as object)).not.toContain(INBOX)
+  })
+
+  test("the bookmark is kept per home in the plugin's own store, never in the home", async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [LINKS]: TWO })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    expect(world.store.get(BELLS)).toEqual({ [LINKS]: { size: TWO.length, hash: textHash(TWO) } })
+    expect([...world.files.keys()].sort()).toEqual([`${CWD}/memory-kit.conf`, LINKS])
+  })
+
+  test('another home watching the same file keeps a bookmark of its own: each home rings it', async ($, on) => {
+    const DESK = '/home/u/desk'
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [`${DESK}/memory-kit.conf`]: CONF, [LINKS]: TWO })
+    world.root = DESK
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start({ ...SESSION, cwd: DESK })
+    await clock.advance(0)
+    newSession(world)
+    world.root = CWD
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    const ring = `[links.txt] ${LINKS} grew.\nhttps://a\nhttps://b`
+    expect(world.submitted).toEqual([ring, ring])
+    expect([...world.store.keys()].sort()).toEqual([`bells:${DESK}`, BELLS])
+  })
+
+  test('a bookmark an older watch kept in $.state folds in without a false ring', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [LINKS]: TWO })
+    // The plugin updated and reloaded mid-session: $.state still holds the older watch's bookmark.
+    world.state.set('watch/bellSizes', { value: { [LINKS]: TWO.length }, version: 1 })
+    world.state.set('watch/bellHashes', { value: { [LINKS]: textHash(TWO) }, version: 1 })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([])
+    newSession(world)
+    await $.session.start(SESSION)
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([])
+    world.files.set(LINKS, `${TWO}https://c\n`)
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([`[links.txt] ${LINKS} grew.\nhttps://c`])
+  })
+
+  test('two sessions in one home each keep their own bookmark: both ring a new line', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [LINKS]: 'https://a\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    // A line arrives, and the other session's ring of it enters first, moving the kept bookmark.
+    world.files.set(LINKS, TWO)
+    world.store.set(BELLS, { [LINKS]: { size: TWO.length, hash: textHash(TWO) } })
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([`[links.txt] ${LINKS} grew.\nhttps://a`, `[links.txt] ${LINKS} grew.\nhttps://b`])
+  })
+
+  test('a refused ring leaves the kept bookmark behind, and rings again once the refusal lifts', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [LINKS]: 'https://a\n' })
+    world.refuse = 'another plugin holds prompts'
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    expect(world.attempts).toHaveLength(1)
+    world.refuse = undefined
+    newSession(world)
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    expect(world.submitted).toEqual([`[links.txt] ${LINKS} grew.\nhttps://a`])
+  })
+
+  test('a ring still queued when its session ends rings again in the next session', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [LINKS]: 'https://a\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(5_000)
+    // A busy closing turn: the ring of b queues behind it, and the session ends before it enters.
+    world.hold = true
+    world.files.set(LINKS, TWO)
+    await clock.advance(5_000)
+    expect(world.attempts).toHaveLength(2)
+    world.hold = false
+    newSession(world)
+    await $.session.start(SESSION)
+    await clock.advance(30_000)
+    expect(world.submitted).toEqual([`[links.txt] ${LINKS} grew.\nhttps://a`, `[links.txt] ${LINKS} grew.\nhttps://b`])
+  })
+
+  test('a queued ring that enters late moves the kept bookmark then: the next session does not ring it again', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [LINKS]: 'https://a\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(5_000)
+    world.hold = true
+    world.files.set(LINKS, TWO)
+    await clock.advance(30_000)
+    expect(world.store.get(BELLS)).toEqual({ [LINKS]: { size: 'https://a\n'.length, hash: textHash('https://a\n') } })
+    world.release()
+    world.hold = false
+    await clock.advance(0)
+    expect(world.store.get(BELLS)).toEqual({ [LINKS]: { size: TWO.length, hash: textHash(TWO) } })
+    newSession(world)
+    await $.session.start(SESSION)
+    await clock.advance(30_000)
+    expect(world.submitted).toEqual([`[links.txt] ${LINKS} grew.\nhttps://a`, `[links.txt] ${LINKS} grew.\nhttps://b`])
+  })
+
+  test("a ring the last session left queued does not hold the new session's kept bookmark back", async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [LINKS]: 'https://a\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(5_000)
+    world.hold = true
+    world.files.set(LINKS, TWO)
+    await clock.advance(5_000)
+    world.hold = false
+    newSession(world)
+    // The new session rings b again; the store takes no write until a later poll.
+    world.storeSetFails = true
+    await $.session.start(SESSION)
+    await clock.advance(5_000)
+    world.storeSetFails = false
+    await clock.advance(5_000)
+    expect(world.store.get(BELLS)).toEqual({ [LINKS]: { size: TWO.length, hash: textHash(TWO) } })
+  })
+
+  test('a store that can be read but not written: the session keeps its own bookmark, each line rings once', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [LINKS]: 'https://a\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(5_000)
+    // A full disk, a read-only configuration folder, or a store over 4 MiB: set is refused, get still answers.
+    world.storeSetFails = true
+    world.files.set(LINKS, TWO)
+    await clock.advance(30_000)
+    expect(world.submitted).toEqual([`[links.txt] ${LINKS} grew.\nhttps://a`, `[links.txt] ${LINKS} grew.\nhttps://b`])
+    expect(world.logs.filter(l => l.includes('store'))).toEqual([expect.stringContaining('cannot be written')])
+    // The store keeps the bookmark it last took: a new session rings again what came since.
+    newSession(world)
+    await $.session.start(SESSION)
+    await clock.advance(5_000)
+    expect(world.submitted.slice(2)).toEqual([`[links.txt] ${LINKS} grew.\nhttps://b`])
+  })
+
+  test('a store that cannot be read for a while rings no line twice, and catches up when it can', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [LINKS]: 'https://a\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(5_000)
+    world.storeFails = true
+    world.files.set(LINKS, TWO)
+    await clock.advance(5_000)
+    world.storeFails = false
+    await clock.advance(30_000)
+    expect(world.submitted).toEqual([`[links.txt] ${LINKS} grew.\nhttps://a`, `[links.txt] ${LINKS} grew.\nhttps://b`])
+    expect(world.store.get(BELLS)).toEqual({ [LINKS]: { size: TWO.length, hash: textHash(TWO) } })
+  })
+
+  test('one file declared inbox-style, then tail-style: the first entry keeps it, one ring per new text', async ($, on) => {
+    const entry = (path: string, inject: boolean) => `  - label: spool\n    path: ${path}\n    instruction: ""\n    inject: ${inject}\n`
+    const world = worldOf(on, { 'memory-kit.conf': `watch_files:\n${entry('spool.txt', false)}${entry('./spool.txt', true)}`, 'spool.txt': 'x\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    world.files.set(`${CWD}/spool.txt`, 'x\ny\n')
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([`[spool] ${CWD}/spool.txt grew.`, `[spool] ${CWD}/spool.txt grew.`])
+  })
+
+  test('a store that cannot be read: the bookmark lasts the session, as before, and that is said once', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [LINKS]: 'https://a\n' })
+    world.storeFails = true
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(30_000)
+    world.files.set(LINKS, TWO)
+    await clock.advance(30_000)
+    expect(world.submitted).toEqual([`[links.txt] ${LINKS} grew.\nhttps://a`, `[links.txt] ${LINKS} grew.\nhttps://b`])
+    expect(world.logs.filter(l => l.includes('store'))).toEqual([expect.stringContaining('this session only')])
   })
 })
 

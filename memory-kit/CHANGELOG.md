@@ -1,5 +1,40 @@
 # Changelog
 
+## v0.1.0-alpha.20 -- 2026-10-22 -- doorbells that keep their place, one reading of every file
+
+Plugin versions this release: obligations-pane 0.7.1, watch 0.7.0, kit-update 0.3.3.
+
+No data step. A duplicate key now fails the gate (below): a home whose tree or conf has one must
+delete the stray copy the lint names before the update passes.
+
+- **A replaced doorbell file rings** (kit #52): the watch keeps a hash of each file's seen text
+  beside its size, never the text. Other non-empty text in the file's place -- consumed and
+  refilled between two polls, whatever the new size -- rings as `was replaced.`, and with
+  `inject` all of the new text rides along. A file cut to a shorter part of itself counts as
+  replaced too. Found by Passepartout: twice on 20-21.10 a shorter hub message waited about five
+  hours unrung.
+- **A tail-style bell keeps its place across sessions** (kit #51): an `inject: true` file's
+  bookmark is also kept in the plugin's own store, per home, so a `/clear` or a new session no
+  longer replays the whole file, and lines written while no session ran still ring at the next
+  start. Inbox-style bells stay per session: an unconsumed inbox still rings once in a new
+  session. Two sessions in one home share a tail file's bookmark, so one of them rings.
+- **The Next tab finds the scratchpad as the lint does** (kit #53): by its shape, whatever the
+  file is called; it names the file it shows, lists every scratchpad a team home keeps, and says
+  "no scratchpad tier in this home" when there is none.
+- **A duplicate key fails, wherever it is read** (kit #54, #55): the lint refuses a key given
+  twice, at any depth, in every tier file and in memory-kit.conf, where PyYAML kept the last copy
+  silently and the memory pane refused the file. `lesson-index.py` and `obligations-due.py` refuse
+  it too, through one shared loader (`lint/strict_yaml.py`). A top-level key given twice in
+  memory-kit.conf is a problem for every reader of the home (`kit_home`, and its twin in the three
+  plugins), said plainly, where the plugins took the first copy and the lint the last. The pane
+  heads any conf problem `memory-kit.conf problem:`.
+- **kit-update.py** (kit #49, #24): a home inside a larger git repo is pulled from the repo's top;
+  the undo never runs `git reset --hard` (`git merge --abort`, `git reset --keep`, then a check
+  that the home is back where it started); `update_subject_prefix:` in memory-kit.conf puts a
+  story reference before the update's commit subject; `--help` prints usage and changes nothing,
+  and an unknown argument is refused. UPGRADE.md: a home with a post-merge auto-push hook
+  publishes the update's merge commit at once.
+
 ## v0.1.0-alpha.19 -- 2026-10-19 -- the memory pane, and the home found from above
 
 Plugin versions this release: obligations-pane 0.7.0, watch 0.6.0, kit-update 0.3.2.
