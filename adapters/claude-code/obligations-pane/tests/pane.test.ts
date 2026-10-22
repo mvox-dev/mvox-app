@@ -192,7 +192,20 @@ describe('kit_home: the start folder points at the home (kit #18)', () => {
     expect(world.opened).toEqual(['obligations'])
     const ui = await mountPane($)
     expect(await dates(ui)).toHaveLength(0)
-    expect((await textOf(ui)).some(t => t.startsWith('kit_home pointer broken: ') && t.includes('no memory-kit.conf there'))).toBe(true)
+    expect((await textOf(ui)).some(t => t.startsWith('memory-kit.conf problem: ') && t.includes('no memory-kit.conf there'))).toBe(true)
+    await ui.unmount()
+  })
+
+  test('a conf giving a key twice is shown in the pane, never a silent pick of either directory (kit #55)', async ($, on) => {
+    const conf = 'memory_dir: memory\nmemory_dir: notes\n'
+    const world = worldOf(on, { 'memory-kit.conf': conf, 'memory/obligations.yaml': WORKSHOP_YAML, 'notes/obligations.yaml': WORKSHOP_YAML })
+    mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    expect(world.opened).toEqual(['obligations'])
+    const ui = await mountPane($)
+    expect(await dates(ui)).toHaveLength(0)
+    const said = `memory-kit.conf problem: ${CWD}/memory-kit.conf: duplicate key 'memory_dir' on line 2 (first on line 1)`
+    expect((await textOf(ui)).some(t => t.startsWith(said))).toBe(true)
     await ui.unmount()
   })
 
@@ -992,6 +1005,84 @@ describe('the memory pane: one tab per tier (kit #43)', () => {
     expect(await textOf(ui)).toContain('commitments tier not in use here')
     await open(ui, clock, 'R')
     expect(await header(ui)).toBe('memory-kit 0.1.0-alpha.5  2/20')
+    await ui.unmount()
+  })
+
+  // kit #53: semafor keeps its scratchpad at memory/vitruvius.yaml; the lint found it, the pane did not.
+  const VITRUVIUS = 'current:\n- label: WIP\n  record: lead work\n  ref: ""\nstaging: []\n'
+
+  test('N: a scratchpad named for its agent is found as the lint finds it, and the tab names the file', async ($, on) => {
+    const { 'memory/scratchpad.yaml': _, ...rest } = HOME
+    const world = worldOf(on, { ...rest, 'memory/vitruvius.yaml': VITRUVIUS })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    world.readPaths.length = 0
+    await open(ui, clock, 'N')
+    const texts = await textOf(ui)
+    expect(await header(ui)).toBe('memory-kit 0.1.0-alpha.5  1/15 current · 0 staging')
+    expect(texts).toContain('vitruvius.yaml')
+    expect(texts.join(' ')).toContain('lead work')
+    expect(texts.join(' ')).not.toContain('no scratchpad.yaml here')
+    // Only the scratchpad candidates are read for the tab: not rules, keys or the other tiers.
+    expect(world.readPaths.filter(p => /\/memory\/(rules|keys)\.yaml$/.test(p))).toEqual([])
+    await ui.unmount()
+  })
+
+  test('N: a link to a file counts, as the lint follows it; a link to a folder does not', async ($, on) => {
+    const { 'memory/scratchpad.yaml': _, ...rest } = HOME
+    const world = worldOf(on, { ...rest, 'memory/vitruvius.yaml': VITRUVIUS })
+    world.links.set(`${CWD}/memory/vitruvius.yaml`, 'file')
+    world.links.set(`${CWD}/memory/archive.yaml`, 'dir')
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    world.readPaths.length = 0
+    await open(ui, clock, 'N')
+    expect(await header(ui)).toBe('memory-kit 0.1.0-alpha.5  1/15 current · 0 staging')
+    expect(await textOf(ui)).toContain('vitruvius.yaml')
+    expect(world.readPaths).not.toContain(`${CWD}/memory/archive.yaml`)
+    await ui.unmount()
+  })
+
+  test('N: a home with no scratchpad tier says so, naming no missing file', async ($, on) => {
+    const { 'memory/scratchpad.yaml': _, ...rest } = HOME
+    worldOf(on, rest)
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    await open(ui, clock, 'N')
+    const texts = await textOf(ui)
+    expect(texts).toContain(`no scratchpad tier in this home (${CWD}/memory)`)
+    expect(texts.join(' ')).not.toContain('scratchpad.yaml')
+    await ui.unmount()
+  })
+
+  test('N: two scratchpads, as the lint reads both: both show, each under its file name', async ($, on) => {
+    worldOf(on, { ...HOME, 'memory/vitruvius.yaml': VITRUVIUS })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    await open(ui, clock, 'N')
+    const texts = await textOf(ui)
+    expect(await header(ui)).toBe('memory-kit 0.1.0-alpha.5  2 scratchpads · 2 current · 0 staging')
+    expect(texts.indexOf('scratchpad.yaml')).toBeGreaterThan(-1)
+    expect(texts.indexOf('vitruvius.yaml')).toBeGreaterThan(texts.indexOf('scratchpad.yaml'))
+    expect(texts.join(' ')).toContain('lead work')
+    await ui.unmount()
+  })
+
+  test('N and C: a commitments.yaml holding a scratchpad (kit #30) is the scratchpad, as the lint reads it', async ($, on) => {
+    const { 'memory/scratchpad.yaml': _, ...rest } = HOME
+    worldOf(on, { ...rest, 'memory/commitments.yaml': VITRUVIUS })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    const ui = await mountPane($)
+    await open(ui, clock, 'N')
+    expect(await header(ui)).toBe('memory-kit 0.1.0-alpha.5  1/15 current · 0 staging')
+    expect(await textOf(ui)).toContain('commitments.yaml')
+    await open(ui, clock, 'C')
+    expect(await textOf(ui)).toContain('commitments tier not in use here (commitments.yaml holds a scratchpad: see Next)')
     await ui.unmount()
   })
 

@@ -63,28 +63,81 @@ function parsed(text: string, file: string, spec: ListSpec): Record<string, MapR
 const isView = (x: Record<string, MapRow[]> | TierView): x is TierView => 'kind' in x && typeof x.kind === 'string'
 
 // ---------------------------------------------------------------------------------------------
-// N: the scratchpad (memory/scratchpad.yaml), shown as "Next": S is Secrets.
+// N: the scratchpad tier (memory/<name>.yaml), shown as "Next": S is Secrets.
+//
+// Found as the lint finds it (kit #53). The rule's twin is lint_tree and scratchpad_shaped in
+// lint/memory_lint.py; the two cannot share code, so a change to one is a change to both. Every
+// top-level *.yaml of the memory directory is a scratchpad unless it is rules, obligations or
+// keys, and commitments.yaml is one only when it holds current or staging and no commitments key
+// (kit #30). The lint reads every such file, so the tab shows every one, in the lint's order.
 
 const SCRATCHPAD: ListSpec = { tops: ['current', 'staging'], keys: ['label', 'record', 'ref'], required: ['record'], dates: [] }
 
-export function nextView(text: string): TierView {
-  const lists = parsed(text, 'scratchpad.yaml', SCRATCHPAD)
-  if (isView(lists)) return lists
-  const current = lists.current ?? []
-  const staging = lists.staging ?? []
-  const rows = (rows: MapRow[], section: string) =>
-    rows.map(r => line(`${section}-${r.line}`, r.fields.record ?? '', { tag: r.fields.label ?? '', note: r.fields.ref ?? '' }))
-  return {
-    kind: 'ok',
-    count: `${current.length}/${CURRENT_CAP} current · ${staging.length} staging`,
-    banner: '',
-    lines: [
-      line('h-current', `current (${current.length})`, { heading: true }),
-      ...rows(current, 'current'),
-      line('h-staging', `staging (${staging.length})`, { heading: true }),
-      ...rows(staging, 'staging'),
-    ],
+/** The other tiers' files at the top of the memory directory, by stem, as lint_tree names them. */
+const NOT_SCRATCHPAD = ['rules', 'obligations', 'keys']
+
+export const NO_SCRATCHPAD = 'no scratchpad tier in this home'
+
+/**
+ * The memory directory's file names that may be scratchpads, in the lint's order (Python sorts
+ * paths by code point, as a plain sort does). commitments.yaml is among them: its shape decides.
+ */
+export function scratchpadCandidates(names: readonly string[]): string[] {
+  return names.filter(n => n.endsWith('.yaml') && !NOT_SCRATCHPAD.includes(n.slice(0, -'.yaml'.length))).sort()
+}
+
+/**
+ * Whether a commitments.yaml is a scratchpad a home named so before the tier existed (kit #30):
+ * current or staging among its top-level keys, and no commitments key. The lint asks PyYAML; the
+ * pane has no YAML library, so it reads the keys at column 0, as its own parser does.
+ */
+export function scratchpadShaped(text: string): boolean {
+  const keys = text
+    .replace(/^\uFEFF/, '')
+    .split(/\r?\n/)
+    .map(l => /^([A-Za-z_][\w-]*)\s*:(\s|$)/.exec(l)?.[1])
+  return !keys.includes('commitments') && (keys.includes('current') || keys.includes('staging'))
+}
+
+/**
+ * `files`: each scratchpad's name and text, as scratchpadCandidates and scratchpadShaped chose
+ * them. One file is the tab as it was, under its name; several are grouped by file, as facts are
+ * by subject, and a broken one is flagged in its place while the others show.
+ */
+export function nextView(files: readonly { name: string; text: string }[]): TierView {
+  if (files.length === 0) return { kind: 'missing', message: NO_SCRATCHPAD }
+  const sorted = [...files].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+  const lines: ViewLine[] = []
+  let current = 0
+  let staging = 0
+  let errors = 0
+  for (const file of sorted) {
+    const lists = parsed(file.text, file.name, SCRATCHPAD)
+    if (isView(lists)) {
+      if (files.length === 1) return lists
+      lines.push(line(`h-${file.name}`, file.name, { heading: true, flag: lists.kind === 'error' ? lists.message : '' }))
+      errors++
+      continue
+    }
+    const cur = lists.current ?? []
+    const stg = lists.staging ?? []
+    current += cur.length
+    staging += stg.length
+    const rows = (rows: MapRow[], section: string) =>
+      rows.map(r => line(`${file.name}-${section}-${r.line}`, r.fields.record ?? '', { tag: r.fields.label ?? '', note: r.fields.ref ?? '' }))
+    lines.push(
+      line(`h-${file.name}`, file.name, { heading: true }),
+      line(`h-${file.name}-current`, `current (${cur.length})`, { heading: true }),
+      ...rows(cur, 'current'),
+      line(`h-${file.name}-staging`, `staging (${stg.length})`, { heading: true }),
+      ...rows(stg, 'staging'),
+    )
   }
+  // The cap is per file: a sum over several files has none to count against.
+  const parts = files.length === 1 ? [`${current}/${CURRENT_CAP} current`] : [`${files.length} scratchpads`, `${current} current`]
+  parts.push(`${staging} staging`)
+  if (errors > 0) parts.push(`${plural(errors, 'file')} unreadable`)
+  return { kind: 'ok', count: parts.join(' · '), banner: '', lines }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -101,6 +154,8 @@ export const COMMITMENTS_UNUSED = 'commitments tier not in use here'
 
 export function commitmentsView(text: string | undefined): TierView {
   if (text === undefined) return { kind: 'missing', message: COMMITMENTS_UNUSED }
+  // kit #30, #53: the lint reads such a file as a scratchpad, and so does the Next tab.
+  if (scratchpadShaped(text)) return { kind: 'missing', message: `${COMMITMENTS_UNUSED} (commitments.yaml holds a scratchpad: see Next)` }
   const lists = parsed(text, 'commitments.yaml', COMMITMENTS)
   if (isView(lists)) return lists
   const rows = lists.commitments ?? []

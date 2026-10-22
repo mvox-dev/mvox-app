@@ -37,6 +37,23 @@ summary cut by an unquoted ` #` (YAML reads the rest of the line as a comment, s
 index agrees with the cut value; only the raw front matter shows it), an obligation's `owed_to`
 that is the actor, "us" or "we" (kit #29: owed to no one else, it is a to-do).
 
+**A duplicate key is a failure** (kit #54), at any depth, in every tier file and lesson front
+matter: two top-level `keys:` blocks, or one row with `check:` twice. Plain YAML keeps only the
+last one, silently, while the memory pane refuses the file; so one file read as two. The FAIL
+line names the key and both lines: `duplicate key 'keys' on line 31 (first on line 7)`. The
+tools load through the same strict loader, `lint/strict_yaml.py` (kit #55): `lesson-index.py`
+(front matter, and the index under `--check` and `--from-index`) and `obligations-due.py` stop
+with the same words, so a tool run on its own never reads a file the gate refuses.
+
+**So is a key given twice in `memory-kit.conf`** (kit #55). A top-level `memory_dir:` twice was
+read two ways: YAML kept the last copy, the plugins' line readers the first, so the lint and the
+memory pane read different memory directories. `lint/kit_home.py` refuses it, in the start
+folder's conf or the one a pointer names, for the lint, the tools and the plugins' copy alike:
+`duplicate key 'memory_dir' on line 5 (first on line 3); the plugins would take the first and the
+lint the last, so keep only one`. The lint loads the conf as it loads a tier, so a key given twice
+deeper (a doorbell with `path:` twice) fails too. Either fails in every mode, exit 2, as a broken
+pointer does.
+
 Notes never fail a gate. They are the honest gaps the kit wants counted rather than hidden:
 
 | note | why it is not a failure |

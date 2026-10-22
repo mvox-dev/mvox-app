@@ -1,0 +1,6 @@
+# A scratchpad named for its agent, as semafor keeps one (kit #53): the name does not matter.
+current:
+  - label: WIP
+    record: "Answer the desk on the pane."
+    ref: "#53"
+staging: []

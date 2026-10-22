@@ -15,6 +15,10 @@
 // ignored (reported in `ignored`). One hop, never chained: the target's conf may not point on (a
 // loop is a chain too). `kit_home: .` is just the home. A target with no memory-kit.conf, and a
 // `~` path (not expanded), are problems said plainly, never a silent fall back.
+//
+// So is a memory-kit.conf that gives a top-level key twice (kit #55), the start folder's or the one
+// a pointer names: confValueOf and the plugins' confValue take the first copy and YAML the last,
+// so a conf with memory_dir: twice sent the memory pane and the lint to different directories.
 
 export const KIT_HOME_KEY = 'kit_home'
 
@@ -85,6 +89,28 @@ export function foundAboveNote(start: string, foundIn: string): string {
 
 const topKeys = (conf: string) => conf.split(/\r?\n/).flatMap(line => /^([A-Za-z_][\w-]*):/.exec(line)?.[1] ?? [])
 
+/** The first top-level key a memory-kit.conf gives twice, its line and the first one's; undefined
+ *  when it gives each once (kit #55). lint/kit_home.py repeated_key reads it alike. */
+export function repeatedKey(conf: string): { key: string; line: number; first: number } | undefined {
+  const seen = new Map<string, number>()
+  for (const [i, line] of conf.split(/\r?\n/).entries()) {
+    const key = /^([A-Za-z_][\w-]*):/.exec(line)?.[1]
+    if (key === undefined) continue
+    const first = seen.get(key)
+    if (first !== undefined) return { key, line: i + 1, first }
+    seen.set(key, i + 1)
+  }
+  return undefined
+}
+
+/** The problem a conf giving a top-level key twice is (kit #55); undefined when it gives each once.
+ *  lint/kit_home.py repeated_key_problem says it alike. */
+export function repeatedKeyProblem(path: string, conf: string): string | undefined {
+  const twice = repeatedKey(conf)
+  if (twice === undefined) return undefined
+  return `${path}: duplicate key '${twice.key}' on line ${twice.line} (first on line ${twice.first}); the plugins would take the first and the lint the last, so keep only one`
+}
+
 /** The home for a start folder, by its memory-kit.conf's kit_home (see the head of this file). */
 export async function resolveKitHome(start: string, read: (path: string) => Promise<string | undefined>): Promise<KitHome> {
   const begin = normalizePath(start)
@@ -103,6 +129,8 @@ export async function resolveKitHome(start: string, read: (path: string) => Prom
   if (from === undefined || conf === undefined) return { home: begin, ignored: [] }
   const above = from === begin ? {} : { foundIn: from }
   const pointer = inside(from, 'memory-kit.conf')
+  const twice = repeatedKeyProblem(pointer, conf)
+  if (twice !== undefined) return { pointer, problem: twice }
   const raw = confValueOf(conf, KIT_HOME_KEY)
   if (raw === '') return { home: from, ignored: [], ...above }
   if (raw.startsWith('~'))
@@ -111,6 +139,8 @@ export async function resolveKitHome(start: string, read: (path: string) => Prom
   if (sameAs(target, from)) return { home: from, ignored: [], ...above }
   const targetConf = await read(inside(target, 'memory-kit.conf'))
   if (targetConf === undefined) return { pointer, problem: `${pointer}: kit_home: ${raw} -> ${target}: no memory-kit.conf there, so it is not a kit home` }
+  const targetTwice = repeatedKeyProblem(inside(target, 'memory-kit.conf'), targetConf)
+  if (targetTwice !== undefined) return { pointer, problem: targetTwice }
   const onward = confValueOf(targetConf, KIT_HOME_KEY)
   if (onward !== '' && !sameAs(isAbsolute(onward) ? onward : inside(target, onward), target))
     return {

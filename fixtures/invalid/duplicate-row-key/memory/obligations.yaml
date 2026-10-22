@@ -1,0 +1,9 @@
+obligations:
+  - obligation: "Answer the schema question."
+    actor: "the PO"
+    owed_to: "the home"
+    since: "2026-09-21"
+    check: "Read the issue thread."
+    expires: "2099-01-01"
+    check: "Ask the PO."
+    ref: "#1"

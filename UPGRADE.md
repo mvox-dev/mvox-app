@@ -209,6 +209,15 @@ A major means data shape changed. The kit ships `migrations/<version>/` for exac
   Optional: `"idleCompaction": false` in `~/.claude/settings.json` for a home that retires instead
   of compacting, and `watch_idle_repeat: true` beside `watch_idle_minutes` for a repeating idle
   report (adapters README; watch README).
+- **0.1.0-alpha.19 -> 0.1.0-alpha.20:** no data step. Pull, lint, then update all three plugins:
+  `claude plugin marketplace update memory-kit`, `claude plugin update obligations-pane@memory-kit`,
+  `claude plugin update watch@memory-kit`, `claude plugin update kit-update@memory-kit`,
+  `/reload-plugins`. A key given twice in a tier file or in memory-kit.conf now fails the gate, so
+  the update undoes itself on such a home: delete the stray copy the lint names, then run it again.
+  A tail-style (`inject: true`) doorbell rings its whole file one last time in the first session
+  that starts with no bookmark (a fresh start or `/clear`); a reload mid-session carries the
+  bookmark over. Optional: `update_subject_prefix:` in memory-kit.conf for a home whose commit
+  hooks want a story reference first.
 
 ## Always
 
@@ -217,5 +226,9 @@ A major means data shape changed. The kit ships `migrations/<version>/` for exac
   squash merge of a pull request drops git-subtree's metadata, and the next `git subtree pull`
   refuses. (`--squash` on the subtree command itself is fine; it is the PR merge that must not
   squash.) Repair: re-add the kit at the pinned version and merge that with a merge commit.
+- A home with a post-merge hook that pushes publishes `tools/kit-update.py`'s merge commit within
+  seconds, before the lint gate runs: its message cannot be reworded afterwards (only by
+  force-push), so set `update_subject_prefix` in `memory-kit.conf` first if the home's hooks want
+  a story reference, and a lint failure's undo is local only. kit-update.py itself never pushes.
 - If an upgrade requires the assistant to re-read the home's whole memory to make sense of it,
   that is a finding worth reporting: the kit has leaked into the home's data.

@@ -64,7 +64,8 @@ export type AgentLoad = { tokens: number; model: string }
 export type PaneSnapshot = {
   /** Absolute path of the obligations file this snapshot read (or looked for). */
   path: string
-  /** 'pointer': the start folder's kit_home pointer is broken (kit #18); `error` says why, `path` is that conf. */
+  /** 'pointer': the start folder's memory-kit.conf names no usable home: its kit_home pointer is broken
+   *  (kit #18), or it or the conf it names gives a key twice (kit #55). `error` says why, `path` is that conf. */
   source: 'ok' | 'missing' | 'error' | 'pointer'
   /** For source 'error': what went wrong, with the line when known. */
   error: string

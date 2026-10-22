@@ -47,6 +47,11 @@ export type World = {
   logs: string[]
   /** What $.store holds, shared as the store is across sessions: a test reads what the plugin wrote. */
   store: Record<string, unknown>
+  /**
+   * Symbolic links, by path, and what each leads to (kit #53): a listing shows a link as `other`,
+   * as a real one does, and $.fs.stat follows it. A link to a file reads as that file's text.
+   */
+  links: Map<string, 'file' | 'dir' | 'other'>
 }
 
 /** A tags API answer listing these names, newest first as Forgejo lists them. */
@@ -78,6 +83,7 @@ export function worldOf(on: On, files: Readonly<Record<string, string>>, store: 
     answer: undefined,
     logs: [],
     store: { ...store },
+    links: new Map(),
   }
   on('store.get', ($, e) => ({ value: world.store[e.key] }))
   on('store.set', ($, e) => {
@@ -93,19 +99,29 @@ export function worldOf(on: On, files: Readonly<Record<string, string>>, store: 
     const text = world.files.get(abs(e.path))
     return text === undefined ? { deny: `ENOENT: ${e.path}` } : { value: text }
   })
-  // A listing as a real folder gives it: each entry once, a folder for anything deeper; files
-  // dated 2026-09-13 10:00 UTC.
+  // A listing as a real folder gives it: each entry once, a folder for anything deeper, a link as
+  // `other`; files dated 2026-09-13 10:00 UTC.
   on('fs.list', ($, e) => {
     const dir = abs(e.path ?? world.cwd)
     if (!isDir(dir)) return { deny: `ENOENT: ${dir}` }
-    const names = new Map<string, 'file' | 'dir'>()
+    const names = new Map<string, 'file' | 'dir' | 'other'>()
     for (const f of world.files.keys()) {
       if (!f.startsWith(`${dir}/`)) continue
       const [name, ...rest] = f.slice(dir.length + 1).split('/')
       if (name !== undefined) names.set(name, rest.length > 0 ? 'dir' : 'file')
     }
+    for (const link of world.links.keys()) {
+      const name = link.slice(dir.length + 1)
+      if (link.startsWith(`${dir}/`) && !name.includes('/')) names.set(name, 'other')
+    }
     const mtimeMs = Date.parse('2026-09-13T10:00:00Z')
     return { value: [...names].map(([name, kind]) => ({ name, kind, size: 0, mtimeMs, isLink: false })) as never }
+  })
+  on('fs.stat', ($, e) => {
+    const path = abs(e.path)
+    const kind = world.links.get(path) ?? (world.files.has(path) ? 'file' : isDir(path) ? 'dir' : undefined)
+    if (kind === undefined) return { deny: `ENOENT: ${e.path}` }
+    return { value: { kind, size: 0, mtimeMs: Date.parse('2026-09-13T10:00:00Z'), isLink: world.links.has(path) } }
   })
   on('session.cwd', () => ({ value: world.cwd }))
   on('session.root', () => ({ value: world.root }))

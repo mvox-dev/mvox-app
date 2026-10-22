@@ -127,3 +127,33 @@ describe('a start folder without memory-kit.conf looks upward for the nearest on
     expect(foundAboveNote('/u/3D/slicer/', '/u/3D')).toBe('/u/3D/slicer has no memory-kit.conf; using the nearest one above it, in /u/3D')
   })
 })
+
+describe('a memory-kit.conf that gives a top-level key twice is a problem, never a silent pick (kit #55)', () => {
+  const twice = (conf: string, key: string, line: number, first: number) =>
+    `${conf}: duplicate key '${key}' on line ${line} (first on line ${first}); the plugins would take the first and the lint the last, so keep only one`
+
+  test("in the start folder's conf, worded as lint/kit_home.py words it", async () => {
+    const r = await resolveKitHome('/u/start', reader({ '/u/start/memory-kit.conf': 'memory_dir: memory\r\nmode: gate\r\nmemory_dir: notes  # moved\r\n' }))
+    expect(r).toEqual({ pointer: '/u/start/memory-kit.conf', problem: twice('/u/start/memory-kit.conf', 'memory_dir', 3, 1) })
+  })
+
+  test('in the conf a pointer names', async () => {
+    const files = { '/u/start/memory-kit.conf': 'kit_home: ../desk\n', '/u/desk/memory-kit.conf': 'update: pinned\n\nupdate: latest\n' }
+    expect(await resolveKitHome('/u/start', reader(files))).toEqual({ pointer: '/u/start/memory-kit.conf', problem: twice('/u/desk/memory-kit.conf', 'update', 3, 1) })
+  })
+
+  test('kit_home itself twice', async () => {
+    const files = { '/u/start/memory-kit.conf': 'kit_home: ../a\nkit_home: ../b\n', '/u/a/memory-kit.conf': '', '/u/b/memory-kit.conf': '' }
+    expect(await resolveKitHome('/u/start', reader(files))).toMatchObject({ problem: twice('/u/start/memory-kit.conf', 'kit_home', 2, 1) })
+  })
+
+  test('in a conf found above', async () => {
+    const r = await resolveKitHome('/u/home/sub', reader({ '/u/home/memory-kit.conf': 'memory_dir: a\nmemory_dir: b\n' }))
+    expect(r).toEqual({ pointer: '/u/home/memory-kit.conf', problem: twice('/u/home/memory-kit.conf', 'memory_dir', 2, 1) })
+  })
+
+  test('a key repeated inside a block, or in a comment, is not a top-level key given twice', async () => {
+    const conf = 'watch_files:\n  - label: "a"\n    path: a.txt\n  - label: "b"\n    path: b.txt\n# memory_dir: old\nmemory_dir: memory\n'
+    expect(await resolveKitHome('/u/start', reader({ '/u/start/memory-kit.conf': conf }))).toEqual({ home: '/u/start', ignored: [] })
+  })
+})

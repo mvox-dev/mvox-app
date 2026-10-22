@@ -11,15 +11,25 @@ The home's memory-kit.conf names the channel:
     update: latest      # the newest release tag
     upstream: mitselek/memory-kit    # optional; a Codeberg owner/repo or a git URL
 
+The update's commit subject is "chore: memory-kit <from> -> <to> (kit-update, <channel>)". A home
+whose commit hook wants a story reference first puts one before it, one space between (quote it:
+a bare # starts a comment; kit #24):
+
+    update_subject_prefix: "#123"
+
 A folder that is not the home may hold a pointer conf, `kit_home: <path>` (absolute, or relative
 to that conf): the tool then runs on the home it names, one hop (lint/kit_home.py, kit #18).
 
 What it does, and what it never does:
-  - refuses a dirty tree (a tracked change anywhere, an untracked file under memory-kit/; an
+  - refuses a dirty tree (a tracked change anywhere in the repo, an untracked file under memory-kit/; an
     untracked file elsewhere is safe, #25), a new major version, and any step whose UPGRADE.md
     entry does not begin "no data step" (those need the full UPGRADE.md steps, by hand);
-  - git subtree pull --squash of the target tag, then the lint gate over the home;
-  - on a lint failure, undoes the pull (back to the commit it started from) and says why;
+  - git subtree pull --squash of the target tag, then the lint gate over the home. A home that is
+    a folder inside a larger repo (teams/<name>/) is pulled from the repo's top, with the prefix
+    <name's path from the top>/memory-kit (#49);
+  - on a failed pull or lint, undoes the pull (back to the commit it started from) and says why,
+    never by reset --hard (#24): git merge --abort for a merge the pull left in progress, git
+    reset --keep for the pull's commit (it refuses rather than overwrite a local change);
   - commits locally and NEVER pushes: each home's own push rule applies;
   - when the pull changed the plugins (memory-kit/adapters/) and `claude` is on PATH, RUNS
     `claude plugin marketplace update memory-kit`, then `claude plugin update <p>@memory-kit`
@@ -75,10 +85,11 @@ def key(tag):
     return (int(ma), int(mi), int(pa), PRE_RANK[pre], int(n or 0))
 
 
-def git(home, *args, check=True, timeout=None):
-    """git in the home. With a timeout, a call still running then is stopped and fails (exit 124,
-    "timed out after N s"), and git never waits on a credential prompt (GIT_TERMINAL_PROMPT=0)."""
-    argv = ["git", "-C", str(home), *args]
+def git(folder, *args, check=True, timeout=None):
+    """git in a folder: the home, or the top of the repo it is in (kit #49). With a timeout, a call
+    still running then is stopped and fails (exit 124, "timed out after N s"), and git never waits
+    on a credential prompt (GIT_TERMINAL_PROMPT=0)."""
+    argv = ["git", "-C", str(folder), *args]
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     try:
         r = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", timeout=timeout, env=env)
@@ -126,17 +137,43 @@ def data_steps_ok(upgrade_md, path):
     return None
 
 
-def undo(home, start, why):
-    """Back to the commit the update started from. The exit code: 1 when the reset worked, or
-    EXIT_ROLLBACK_FAILED when it did not, said plainly with how to recover (ultrareview alpha.13, 4)."""
-    r = git(home, "reset", "--hard", start, check=False)
-    if r.returncode == 0:
-        say(f"{why}; the pull is undone (back to {start[:12]})")
+def head(top):
+    return git(top, "rev-parse", "HEAD", check=False).stdout.strip()
+
+
+def merging(top):
+    return git(top, "rev-parse", "-q", "--verify", "MERGE_HEAD", check=False).returncode == 0
+
+
+def undo(top, start, why):
+    """Back to the commit the update started from, in the repo whose top is `top`, and never by
+    reset --hard (kit #24): a home's settings may deny it, and a tool must not route around a deny.
+    The tree was clean when the update began, so what is undone is the pull's own:
+      - a merge the pull left in progress (a conflict, or a commit hook refusing the subject) is
+        aborted: git merge --abort;
+      - a commit the pull made goes with git reset --keep, which refuses rather than overwrite a
+        local change, and leaves untracked files alone.
+    Then the end is checked: HEAD at the start, no merge in progress, no tracked change. The exit
+    code: 1 when it holds, or EXIT_ROLLBACK_FAILED when it does not, said plainly with how to
+    recover (ultrareview alpha.13, 4)."""
+    ran = []
+    if merging(top):
+        ran.append(git(top, "merge", "--abort", check=False))
+    if not merging(top) and head(top) != start:
+        ran.append(git(top, "reset", "--keep", start, check=False))
+    failed = [r for r in ran if r.returncode != 0]
+    left = paths_of(git(top, "status", "--porcelain", "--untracked-files=no", check=False).stdout)
+    if not failed and head(top) == start and not merging(top) and not left:
+        say(f"{why}; the pull is undone (back to {start[:12]})" if ran else f"{why}; nothing changed (still at {start[:12]})")
         return 1
     say(f"{why}, AND the undo failed: the tree may be partly pulled.")
-    say(f"  git reset --hard {start} said: {r.stderr.strip()[:300]}")
+    for r in failed:
+        say(f"  git {' '.join(r.args[3:])} said: {r.stderr.strip()[:300]}")
+    if left:
+        say(f"  still changed: {named(left)}")
     say(f"  To recover: remove a stale .git/index.lock if no git is running, then run")
-    say(f"  `git -C {home} reset --hard {start}` and check `git -C {home} status` is clean.")
+    say(f"  `git -C {top} merge --abort` (if a merge is in progress) and `git -C {top} reset --keep {start}`,")
+    say(f"  and check `git -C {top} status`.")
     return EXIT_ROLLBACK_FAILED
 
 
@@ -306,13 +343,24 @@ def main(argv):
     if key(target)[0] != key(cur_tag)[0]:
         say(f"{current} -> {target[1:]} is a new major version: upgrade by hand per UPGRADE.md")
         return 1
+    # Kit #49: a home may be a folder inside a larger repo (apex-research's teams/apex-research).
+    # git subtree runs only from the top of the work tree, and the paths git gives count from
+    # there, so every git call below runs at the top, with the kit's path counted from it.
+    where = git(home, "rev-parse", "--show-toplevel", "--show-prefix", check=False)
+    if where.returncode != 0:
+        say(f"{home} is not in a git work tree ({where.stderr.strip()[:300]}); the update is a git subtree pull")
+        return 2
+    top, below = (where.stdout.splitlines() + ["", ""])[:2]  # below: the home from the top, "" or "teams/x/"
+    kit = below + "memory-kit"
     # Tracked changes anywhere refuse; untracked files only under memory-kit/, where the pull writes
-    # and the lint reads. Elsewhere they are safe: the undo (reset --hard) leaves them alone (#25).
-    tracked = paths_of(git(home, "status", "--porcelain", "--untracked-files=no").stdout)
+    # and the lint reads. Elsewhere they are safe: the undo (merge --abort, reset --keep) leaves them
+    # alone (#25). So whatever the undo takes back is the pull's own (#24).
+    tracked = paths_of(git(top, "status", "--porcelain", "--untracked-files=no").stdout)
     if tracked:
-        say(f"the home has uncommitted changes; commit or stash them first: {named(tracked)}")
+        repo = "the home" if not below else f"the repo the home is in ({top})"
+        say(f"{repo} has uncommitted changes; commit or stash them first: {named(tracked)}")
         return 1
-    stray = paths_of(git(home, "status", "--porcelain", "--untracked-files=all", "--", "memory-kit").stdout)
+    stray = paths_of(git(top, "status", "--porcelain", "--untracked-files=all", "--", kit).stdout)
     if stray:
         say(f"files untracked under memory-kit/ (the pull writes there); remove or commit them first: {named(stray)}")
         return 1
@@ -320,12 +368,12 @@ def main(argv):
         say("the home fails its own lint gate before any update; fix that first")
         return 1
 
-    fetch = git(home, "fetch", "--no-tags", "--quiet", url, f"refs/tags/{target}", check=False,
+    fetch = git(top, "fetch", "--no-tags", "--quiet", url, f"refs/tags/{target}", check=False,
                 timeout=NETWORK_TIMEOUT)
     if fetch.returncode != 0:
         say(f"cannot fetch {target} from {url}: {fetch.stderr.strip()[:300]} (nothing changed)")
         return 1
-    upgrade_md = git(home, "show", "FETCH_HEAD:UPGRADE.md").stdout
+    upgrade_md = git(top, "show", "FETCH_HEAD:UPGRADE.md").stdout
     path = step_path(current, releases, target)
     refusal = data_steps_ok(upgrade_md, path)
     if refusal:
@@ -335,20 +383,28 @@ def main(argv):
         say(f"would move {current} -> {target[1:]} ({channel}) via {' -> '.join(path)}")
         return 0
 
-    start = git(home, "rev-parse", "HEAD").stdout.strip()
+    start = git(top, "rev-parse", "HEAD").stdout.strip()
     msg = f"chore: memory-kit {current} -> {target[1:]} (kit-update, {channel})"
-    pull = git(home, "subtree", "pull", "--prefix=memory-kit", url, target, "--squash",
+    # Kit #24: a home whose commit hook wants a story reference first (#123, a Jira key) names it
+    # here. Read as lint/kit_home.py reads a key, so a quoted "#123" is a value, not a comment.
+    prefix = kit_home.conf_value(conf, "update_subject_prefix").strip()
+    if prefix:
+        msg = f"{prefix} {msg}"
+    pull = git(top, "subtree", "pull", f"--prefix={kit}", url, target, "--squash",
                "-m", msg, check=False, timeout=NETWORK_TIMEOUT)
     if pull.returncode != 0:
-        return undo(home, start, f"subtree pull failed: {pull.stderr.strip()[:300]}")
+        return undo(top, start, f"subtree pull failed: {pull.stderr.strip()[:300]}")
     ok, out = lint_passes(home)
     if not ok:
         fails = [l for l in out.splitlines() if "FAIL" in l][:5]
         say("the lint gate failed on the new version:")
         for f in fails:
             print("   ", f.strip())
-        return undo(home, start, "the lint gate failed on the new version")
-    plugins = git(home, "diff", "--name-only", start, "HEAD", "--", "memory-kit/adapters").stdout.split()
+        return undo(top, start, "the lint gate failed on the new version")
+    # git diff names paths from the top, taken back to the home's own (memory-kit/adapters/...);
+    # -z, so a folder name with a space or an accent is not split or quoted.
+    plugins = [p[len(below):] for p in
+               git(top, "diff", "--name-only", "-z", start, "HEAD", "--", f"{kit}/adapters").stdout.split("\0") if p]
     say(f"updated {current} -> {target[1:]} ({channel}); lint gate passes; committed locally, not pushed")
     if plugins:
         update_plugins(home, plugins)

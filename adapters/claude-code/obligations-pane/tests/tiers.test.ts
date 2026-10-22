@@ -11,7 +11,10 @@ import {
   keysView,
   lessonsView,
   nextView,
+  NO_SCRATCHPAD,
   rulesView,
+  scratchpadCandidates,
+  scratchpadShaped,
   secretFiles,
   secretsReadmeOf,
   secretsView,
@@ -66,16 +69,97 @@ describe('parseMapLists: the obligations parser, for every tier (kit #43)', () =
   })
 })
 
-describe('the tabs', () => {
-  test('N: current, then staging, each under its heading; counted against the cap', () => {
-    const v = ok(nextView('current:\n- label: WIP\n  record: "do urls/thing"\n  ref: mihkel:2026-10-19\nstaging:\n- label: GOTCHA\n  record: careful\n  ref: ""\n'))
+describe('N: the scratchpad tier, found as the lint finds it (kit #53)', () => {
+  test('every top-level *.yaml but rules, obligations and keys, in the lint order; commitments.yaml left to its shape', () => {
+    const names = ['scratchpad.yaml', 'obligations.yaml', 'vitruvius.yaml', 'rules.yaml', 'keys.yaml', 'commitments.yaml', 'notes.md', 'old.yml', 'Zed.yaml', '.hidden.yaml', 'rules.yaml.bak']
+    // Code-point order, as Python sorts paths: upper case before lower, a dot before both.
+    expect(scratchpadCandidates(names)).toEqual(['.hidden.yaml', 'Zed.yaml', 'commitments.yaml', 'scratchpad.yaml', 'vitruvius.yaml'])
+    expect(scratchpadCandidates(['rules.yaml', 'obligations.yaml', 'keys.yaml'])).toEqual([])
+  })
+
+  test('commitments.yaml is a scratchpad when it holds current or staging and no commitments key (kit #30)', () => {
+    expect(scratchpadShaped('# named so before the tier existed\ncurrent:\n  - label: WIP\n    record: x\n    ref: ""\nstaging: []\n')).toBe(true)
+    expect(scratchpadShaped('staging: []\n')).toBe(true)
+    expect(scratchpadShaped('\uFEFFcurrent: []\n')).toBe(true)
+    expect(scratchpadShaped('commitments:\n- trigger: a\n  obligation: b\n')).toBe(false)
+    expect(scratchpadShaped('commitments: []\ncurrent: []\n')).toBe(false)
+    // A key deeper than column 0 is not a top-level key; a comment is not a key.
+    expect(scratchpadShaped('commitments:\n- trigger: a\n  current: b\n# current: c\n')).toBe(false)
+    expect(scratchpadShaped('')).toBe(false)
+  })
+
+  test('one file: its name heads the tab, then current and staging under their headings; counted against the cap', () => {
+    const v = ok(nextView([{ name: 'vitruvius.yaml', text: 'current:\n- label: WIP\n  record: "do urls/thing"\n  ref: mihkel:2026-10-19\nstaging:\n- label: GOTCHA\n  record: careful\n  ref: ""\n' }]))
     expect(v.count).toBe('1/15 current · 1 staging')
     expect(v.lines.map(l => [l.heading, l.tag, l.text, l.note])).toEqual([
+      [true, '', 'vitruvius.yaml', ''],
       [true, '', 'current (1)', ''],
       [false, 'WIP', 'do urls/thing', 'mihkel:2026-10-19'],
       [true, '', 'staging (1)', ''],
       [false, 'GOTCHA', 'careful', ''],
     ])
+  })
+
+  test('no scratchpad file: the home has no scratchpad tier, and no file is named as missing', () => {
+    expect(nextView([])).toEqual({ kind: 'missing', message: NO_SCRATCHPAD })
+    expect(NO_SCRATCHPAD).toBe('no scratchpad tier in this home')
+  })
+
+  test('one file the parser rejects is its error, under its own name', () => {
+    expect(nextView([{ name: 'vitruvius.yaml', text: 'current:\n- record: x\n   ref: y\n' }])).toEqual({
+      kind: 'error',
+      message: expect.stringMatching(/^vitruvius.yaml unreadable: line 3: /),
+    })
+  })
+
+  test('two files: the lint reads both, so both show, each under its name in the lint order; the counts add up', () => {
+    const v = ok(
+      nextView([
+        { name: 'vitruvius.yaml', text: 'current:\n- label: WIP\n  record: lead work\n  ref: ""\nstaging: []\n' },
+        { name: 'scratchpad.yaml', text: 'current:\n- label: WIP\n  record: one\n  ref: ""\n- label: DEFERRED\n  record: two\n  ref: ""\nstaging:\n- label: LEARNED\n  record: three\n  ref: ""\n' },
+      ]),
+    )
+    expect(v.count).toBe('2 scratchpads · 3 current · 1 staging')
+    expect(v.lines.map(l => [l.heading, l.text])).toEqual([
+      [true, 'scratchpad.yaml'],
+      [true, 'current (2)'],
+      [false, 'one'],
+      [false, 'two'],
+      [true, 'staging (1)'],
+      [false, 'three'],
+      [true, 'vitruvius.yaml'],
+      [true, 'current (1)'],
+      [false, 'lead work'],
+      [true, 'staging (0)'],
+    ])
+    expect(new Set(v.lines.map(l => l.key)).size).toBe(v.lines.length)
+  })
+
+  test('two files, one broken: it is flagged in its place and the other still shows', () => {
+    const v = ok(
+      nextView([
+        { name: 'scratchpad.yaml', text: 'current:\n- label: WIP\n  record: one\n  ref: ""\nstaging: []\n' },
+        { name: 'notes.yaml', text: 'notes:\n- a thing\n' },
+      ]),
+    )
+    expect(v.count).toBe('2 scratchpads · 1 current · 0 staging · 1 file unreadable')
+    expect(v.lines.map(l => [l.heading, l.text])).toEqual([
+      [true, 'notes.yaml'],
+      [true, 'scratchpad.yaml'],
+      [true, 'current (1)'],
+      [false, 'one'],
+      [true, 'staging (0)'],
+    ])
+    expect(v.lines[0]?.flag).toBe('notes.yaml unreadable: line 1: unknown top-level key "notes"')
+  })
+})
+
+describe('the tabs', () => {
+  test('C: a commitments.yaml that is a scratchpad (kit #30) is shown under Next, not here', () => {
+    expect(commitmentsView('current:\n- label: WIP\n  record: x\n  ref: ""\nstaging: []\n')).toEqual({
+      kind: 'missing',
+      message: `${COMMITMENTS_UNUSED} (commitments.yaml holds a scratchpad: see Next)`,
+    })
   })
 
   test('C: trigger -> obligation, then actor -> owed_to and within; a missing file is a tier not in use', () => {

@@ -50,6 +50,13 @@ export type World = {
   sessionId: string
   /** Runs after each store write: another session writing just after the plugin. */
   afterStoreSet: ((key: string) => void) | undefined
+  /** While set, every $.store call is refused, as a store the engine cannot read or write. */
+  storeFails: boolean
+  /** While set, only $.store.set is refused and get still answers: a full disk, a read-only
+   *  configuration folder, a store over 4 MiB. */
+  storeSetFails: boolean
+  /** The session's $.state, as the host holds it, by `plugin/key`: a new session starts with none of it (kit #51). */
+  state: Map<string, { value: unknown; version: number }>
 }
 
 /** As a real file system resolves a path: under the cwd unless absolute, `.` and `..` resolved, so
@@ -73,6 +80,15 @@ export function decodeUtf16le(b64: string): string {
   let out = ''
   for (let i = 0; i + 1 < bin.length; i += 2) out += String.fromCharCode(bin.charCodeAt(i) | (bin.charCodeAt(i + 1) << 8))
   return out
+}
+
+/**
+ * A new session in the same home, as /clear or a restart makes one (kit #51): another id, its
+ * $.state empty, the plugin's $.store kept. The test then raises session.start.
+ */
+export function newSession(world: World, id = 'sess-2'): void {
+  world.sessionId = id
+  world.state.clear()
 }
 
 export function worldOf(
@@ -107,11 +123,15 @@ export function worldOf(
     store: new Map(Object.entries(store)),
     sessionId: 'sess-1',
     afterStoreSet: undefined,
+    storeFails: false,
+    storeSetFails: false,
+    state: new Map(),
   }
   // The store in memory, readable and writable by the test (another session's writes).
   const copy = (v: unknown) => (v === undefined ? undefined : (JSON.parse(JSON.stringify(v)) as unknown))
-  on('store.get', ($, e) => ({ value: copy(world.store.get(e.key)) }))
+  on('store.get', ($, e) => (world.storeFails ? { deny: 'store unreadable' } : { value: copy(world.store.get(e.key)) }))
   on('store.set', ($, e) => {
+    if (world.storeFails || world.storeSetFails) return { deny: 'store unwritable' }
     world.store.set(e.key, copy(e.value))
     world.afterStoreSet?.(e.key)
     return { value: undefined }
@@ -121,6 +141,18 @@ export function worldOf(
     return { value: undefined }
   })
   on('store.keys', () => ({ value: [...world.store.keys()] }))
+  // $.state in memory, one session's: newSession() starts another with none of it, as /clear does.
+  const at = (e: { plugin: string; key: string; id?: string }) => `${e.plugin}/${e.key}${e.id === undefined ? '' : `/${e.id}`}`
+  on('state.get', ($, e) => {
+    const held = world.state.get(at(e))
+    return { value: { value: copy(held?.value), version: held?.version ?? 0 } }
+  })
+  on('state.set', ($, e) => {
+    const version = world.state.get(at(e))?.version ?? 0
+    if (e.ifVersion !== undefined && e.ifVersion !== version) return { value: { isSet: false, version } }
+    world.state.set(at(e), { value: copy(e.value), version: version + 1 })
+    return { value: { isSet: true, version: version + 1 } }
+  })
   mock.env(on, env)
   const isDir = (path: string) => world.locks.has(path) || [...world.files.keys(), ...world.locks.keys()].some(f => f.startsWith(`${path}/`))
 

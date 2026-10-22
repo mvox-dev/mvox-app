@@ -12,6 +12,8 @@ Prints each row as `expires  actor -> owed_to: obligation` (no arrow on a row wi
 Prints the expired rows first (check them, then re-state, resolve or hand them to the human --
 never renew one silently), then the rows that expire in the window, then a count of the rest.
 Read-only. Exit 0 with output, 2 when there is no memory directory or the file cannot be read.
+A key given twice, in obligations.yaml or memory-kit.conf, is such a file: loaded as the lint
+loads it, never the last copy kept silently (kit #55).
 
 Three homes wrote this script independently before it shipped (household finding 13).
 """
@@ -31,6 +33,8 @@ except ImportError:
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "lint"))
 import kit_home  # noqa: E402
+# A key given twice is an error, as the lint reads it, never the last copy kept silently (kit #55).
+from strict_yaml import DuplicateKey, strict_load  # noqa: E402
 
 
 def memory_dir(target, upward=False):
@@ -47,7 +51,12 @@ def memory_dir(target, upward=False):
     conf = target / "memory-kit.conf"
     name = "memory"
     if conf.exists():
-        name = (yaml.safe_load(conf.read_text(encoding="utf-8")) or {}).get("memory_dir", "memory")
+        try:
+            data = strict_load(conf.read_text(encoding="utf-8"))
+        except DuplicateKey as e:
+            sys.stderr.write(f"memory-kit: {conf}: {e.message()}\n")
+            sys.exit(2)
+        name = (data or {}).get("memory_dir", "memory")
     return target / name
 
 
@@ -64,7 +73,10 @@ def main(argv):
         print(f"no obligations file ({path})")
         return 0
     try:
-        rows = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("obligations") or []
+        rows = (strict_load(path.read_text(encoding="utf-8")) or {}).get("obligations") or []
+    except DuplicateKey as e:
+        sys.stderr.write(f"memory-kit: {path}: {e.message()}\n")
+        return 2
     except yaml.YAMLError as e:
         sys.stderr.write(f"memory-kit: {path}: unparseable YAML: {str(e).splitlines()[0]}\n")
         return 2
