@@ -1,10 +1,10 @@
-// Library availability and the name lookups behind lent copies and my-loans rows.
+// Library availability and the borrower lookups behind lent copies.
 import { m } from '$lib/paraglide/messages.js';
 import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/entu/cfg';
 import { listMyProfiles } from '$lib/profile/profileData';
 import { resolveRealNameByPerson } from '$lib/roster/rosterData';
-import type { Copy, Edition, Lending, Work } from './libraryReads';
+import type { Copy, Edition, Lending } from './libraryReads';
 
 export type CopyAvailability =
 	| { status: 'available' }
@@ -26,38 +26,6 @@ export function deriveCopyAvailability(copyId: string, lendings: Lending[]): Cop
 		assignedAt: chosen.assignedAt,
 		assignedUntil: chosen.assignedUntil
 	};
-}
-
-async function resolveCopyName(
-	cfg: EntuCfg,
-	copyId: string,
-	fetchImpl: typeof fetch = fetch,
-	opts: EntuFetchOptions = {}
-): Promise<string> {
-	const res = await entuFetch(cfg.db, `entity/${copyId}?props=name,copy_number`, cfg.token, {}, fetchImpl, opts);
-	if (!res.ok) throw new Error(`resolveCopyName: copy ${copyId} lookup failed: ${res.status}`);
-	const body = (await res.json()) as {
-		entity?: { name?: Array<{ string: string }>; copy_number?: Array<{ number: number }> };
-	};
-	const name = body.entity?.name?.[0]?.string ?? '';
-	if (name) return name;
-	const num = body.entity?.copy_number?.[0]?.number;
-	if (num !== undefined) return `#${num}`;
-	return '';
-}
-
-// Shared readers: `opts` defaults the cache off and reaches every read.
-export async function resolveCopyNames(
-	cfg: EntuCfg,
-	copyIds: string[],
-	fetchImpl: typeof fetch = fetch,
-	opts: EntuFetchOptions = {}
-): Promise<Map<string, string>> {
-	const unique = [...new Set(copyIds)];
-	const pairs = await Promise.all(
-		unique.map(async (id) => [id, await resolveCopyName(cfg, id, fetchImpl, opts)] as const)
-	);
-	return new Map(pairs);
 }
 
 // A member has no name: member -> person -> profile, domain or public only, as the roster does.
@@ -147,67 +115,9 @@ export function activeLendingForMemberInEdition(
 	);
 }
 
-export interface LoanChain {
-	copyNumber: number;
-	workName: string;
-	editionName: string;
-}
-
 export function copyLabel(copy: Copy): string {
-	return copy.name || (copy.copyNumber ? `#${copy.copyNumber}` : m.library_copy_name_unknown());
-}
-
-export function formatLoanChainLabel(chain: LoanChain): string {
-	const context = `${chain.workName} / ${chain.editionName}`;
-	if (!chain.copyNumber) return context;
-	return `Copy #${chain.copyNumber} — ${context}`;
-}
-
-export async function resolveCopyChains(
-	cfg: EntuCfg,
-	copyIds: string[],
-	works: Work[],
-	fetchImpl: typeof fetch = fetch,
-	opts: EntuFetchOptions = {}
-): Promise<Map<string, LoanChain>> {
-	const unique = [...new Set(copyIds)];
-	const editionCache = new Map<string, { name: string; workId: string }>();
-
-	const pairs = await Promise.all(
-		unique.map(async (copyId) => {
-			const copyRes = await entuFetch(cfg.db, `entity/${copyId}?props=copy_number,_parent`, cfg.token, {}, fetchImpl, opts);
-			if (!copyRes.ok) throw new Error(`resolveCopyChains: copy ${copyId} lookup failed: ${copyRes.status}`);
-			const copyBody = (await copyRes.json()) as {
-				entity?: {
-					copy_number?: Array<{ number: number }>;
-					_parent?: Array<{ reference: string; entity_type?: string }>;
-				};
-			};
-			const copyNumber = copyBody.entity?.copy_number?.[0]?.number ?? 0;
-			const editionParent = (copyBody.entity?._parent ?? []).find((p) => p.entity_type === 'edition');
-			if (!editionParent) {
-				return [copyId, { copyNumber, workName: '', editionName: '' }] as const;
-			}
-
-			const editionId = editionParent.reference;
-			if (!editionCache.has(editionId)) {
-				const edRes = await entuFetch(cfg.db, `entity/${editionId}?props=name,_parent`, cfg.token, {}, fetchImpl, opts);
-				if (!edRes.ok) throw new Error(`resolveCopyChains: edition ${editionId} lookup failed: ${edRes.status}`);
-				const edBody = (await edRes.json()) as {
-					entity?: {
-						name?: Array<{ string: string }>;
-						_parent?: Array<{ reference: string; entity_type?: string }>;
-					};
-				};
-				const edName = edBody.entity?.name?.[0]?.string ?? '';
-				const workParent = (edBody.entity?._parent ?? []).find((p) => p.entity_type === 'work');
-				editionCache.set(editionId, { name: edName, workId: workParent?.reference ?? '' });
-			}
-
-			const ed = editionCache.get(editionId)!;
-			const workName = works.find((w) => w.id === ed.workId)?.name ?? '';
-			return [copyId, { copyNumber, workName, editionName: ed.name }] as const;
-		})
-	);
-	return new Map(pairs);
+	if (copy.name) return copy.name;
+	return copy.copyNumber
+		? m.library_copy_number({ copyNumber: copy.copyNumber })
+		: m.library_copy_name_unknown();
 }

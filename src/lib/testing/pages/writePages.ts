@@ -46,8 +46,7 @@ import {
 	listLendingsMock,
 	listWorksMock,
 	resolveBorrowerNamesMock,
-	resolveCopyChainsMock,
-	resolveCopyNamesMock,
+	resolveLoanCopiesMock,
 	resolveLibraryEditRightMock,
 	resolveMyLibraryIdMock
 } from '$lib/testing/mocks/library';
@@ -143,8 +142,6 @@ function arrangeLibrary() {
 	signIn();
 	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 	resolveMyLibraryIdMock.mockResolvedValue('lib-1');
-	resolveCopyNamesMock.mockResolvedValue(new Map());
-	resolveCopyChainsMock.mockResolvedValue(new Map());
 	listWorksMock.mockResolvedValue(toListRead([{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }]));
 	listLendingsMock.mockResolvedValue(
 		toListRead([
@@ -333,8 +330,7 @@ export const WRITE_PAGE_HANDLES = [
 	resolveDbEditRightMock,
 	resolveBorrowerNamesMock,
 	resolveCollectiveNameMarkerMock,
-	resolveCopyChainsMock,
-	resolveCopyNamesMock,
+	resolveLoanCopiesMock,
 	resolveDatabaseEntityIdMock,
 	resolveInviteParentMock,
 	resolveLibraryEditRightMock,

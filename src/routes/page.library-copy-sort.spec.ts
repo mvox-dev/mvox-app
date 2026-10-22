@@ -8,7 +8,7 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 vi.mock('$lib/library/libraryData', async () =>
-	(await import('$lib/testing/mocks/library')).libraryReadsModule({ chains: false })
+	(await import('$lib/testing/mocks/library')).libraryReadsModule()
 );
 vi.mock('$lib/paraglide/runtime', async () =>
 	(await import('$lib/testing/moduleStubs')).runtimeModule()

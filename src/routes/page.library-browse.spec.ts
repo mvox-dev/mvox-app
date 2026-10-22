@@ -63,7 +63,7 @@ describe('/library — work expand -> edition expand -> copy availability', () =
 			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1 },
 			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2 }
 		]));
-		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
+		signInLibraryReader({ myLibraryId: 'lib-1' });
 
 		const { container } = render(Page);
 
@@ -118,7 +118,7 @@ describe('/library — work expand -> edition expand -> copy availability', () =
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		listEditionsMock.mockResolvedValue(toListRead([]));
-		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
+		signInLibraryReader({ myLibraryId: 'lib-1' });
 
 		const { container } = render(Page);
 		await waitFor(() => expect(container.querySelector('[data-testid="library-work-work-1"]')).not.toBeNull());
@@ -149,7 +149,7 @@ describe('/library — unresolved borrower name', () => {
 		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-x', '']]));
 		listEditionsMock.mockResolvedValue(toListRead([{ id: 'edition-1', name: 'Ed', publisher: 'Pub' }]));
 		listCopiesMock.mockResolvedValue(toListRead([{ id: 'copy-1', name: 'Copy #1', copyNumber: 1 }]));
-		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
+		signInLibraryReader({ myLibraryId: 'lib-1' });
 
 		const { container } = render(Page);
 		await waitFor(() => expect(container.querySelector('[data-testid="library-work-work-1"]')).not.toBeNull());
@@ -172,7 +172,7 @@ describe('#72 — librarian tools composition', () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
+		signInLibraryReader({ myLibraryId: 'lib-1' });
 		resolveLibraryEditRightMock.mockReturnValue(new Promise(() => {}));
 
 		const { container } = render(Page);
@@ -188,7 +188,7 @@ describe('#72 — librarian tools composition', () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
+		signInLibraryReader({ myLibraryId: 'lib-1' });
 		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 
 		const { container } = render(Page);
@@ -203,7 +203,7 @@ describe('#72 — librarian tools composition', () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
+		signInLibraryReader({ myLibraryId: 'lib-1' });
 		resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 
 		const { container } = render(Page);
@@ -218,7 +218,7 @@ describe('#72 — librarian tools composition', () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
+		signInLibraryReader({ myLibraryId: 'lib-1' });
 		resolveLibraryEditRightMock.mockResolvedValue({ state: 'error', libraryId: null });
 
 		const { container } = render(Page);

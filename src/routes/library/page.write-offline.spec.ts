@@ -71,8 +71,7 @@ import {
 	listLendingsMock,
 	listWorksMock,
 	resolveBorrowerNamesMock,
-	resolveCopyChainsMock,
-	resolveCopyNamesMock,
+	resolveLoanCopiesMock,
 	resolveLibraryEditRightMock,
 	resolveMyLibraryIdMock,
 	returnLendingMock
@@ -88,8 +87,7 @@ afterEach(() => {
 	listCopiesMock.mockReset();
 	listLendingsMock.mockReset();
 	resolveBorrowerNamesMock.mockReset();
-	resolveCopyNamesMock.mockReset();
-	resolveCopyChainsMock.mockReset();
+	resolveLoanCopiesMock.mockReset();
 	resolveLibraryEditRightMock.mockReset();
 	resolveMyLibraryIdMock.mockReset();
 	findMyMemberIdMock.mockReset();
@@ -129,7 +127,7 @@ function mockLibrarianTree() {
 			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' }
 		])
 	);
-	signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
+	signInLibraryReader({ myLibraryId: 'lib-1' });
 	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 	listAllEditionsMock.mockResolvedValue(
 		toListRead([{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter', workId: 'work-1' }])

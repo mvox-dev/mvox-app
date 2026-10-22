@@ -79,8 +79,7 @@ import {
 	listLendingsMock,
 	listWorksMock,
 	resolveBorrowerNamesMock,
-	resolveCopyChainsMock,
-	resolveCopyNamesMock,
+	resolveLoanCopiesMock,
 	resolveMyLibraryIdMock
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
@@ -95,8 +94,6 @@ function setAuthedWithOneCollective() {
 	// The live write-path resolution.
 	resolveMyLibraryIdMock.mockResolvedValue('lib-1');
 	findMyMemberIdMock.mockResolvedValue(null);
-	resolveCopyNamesMock.mockResolvedValue(new Map());
-	resolveCopyChainsMock.mockResolvedValue(new Map());
 	listAllEditionsMock.mockResolvedValue(toListRead([]));
 	listAllCopiesMock.mockResolvedValue(toListRead([]));
 	listActiveMembersMock.mockResolvedValue(toListRead([]));
@@ -120,8 +117,7 @@ afterEach(() => {
 	listCopiesMock.mockReset();
 	listLendingsMock.mockReset();
 	resolveBorrowerNamesMock.mockReset();
-	resolveCopyNamesMock.mockReset();
-	resolveCopyChainsMock.mockReset();
+	resolveLoanCopiesMock.mockReset();
 	resolveLibraryEditRightMock.mockReset();
 	resolveMyLibraryIdMock.mockReset();
 	findMyMemberIdMock.mockReset();

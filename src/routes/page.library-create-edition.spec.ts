@@ -75,8 +75,7 @@ import {
 	listLendingsMock,
 	listWorksMock,
 	resolveBorrowerNamesMock,
-	resolveCopyChainsMock,
-	resolveCopyNamesMock
+	resolveLoanCopiesMock
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
@@ -115,8 +114,7 @@ afterEach(() => {
 	listCopiesMock.mockReset();
 	listLendingsMock.mockReset();
 	resolveBorrowerNamesMock.mockReset();
-	resolveCopyNamesMock.mockReset();
-	resolveCopyChainsMock.mockReset();
+	resolveLoanCopiesMock.mockReset();
 	resolveLibraryEditRightMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listAllEditionsMock.mockReset();
@@ -141,7 +139,7 @@ async function renderReady(): Promise<HTMLElement> {
 describe('#271 — create-edition control placement on /library (integration)', () => {
 	it('a POPULATED work offers it: the button renders INSIDE #library-editions-{workId}, alongside the edition list (sibling after the list, not a replacement of it)', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		mockLibrarian();
 
 		const container = await renderReady();
@@ -164,7 +162,7 @@ describe('#271 — create-edition control placement on /library (integration)', 
 
 	it('a ZERO-EDITIONS work offers it TOO — the empty message and the button render together (the empty branch is mutually exclusive with the list branch, so an in-branch insert would hide the control exactly when a new work needs it most)', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		mockLibrarian();
 
 		const container = await renderReady();
@@ -182,7 +180,7 @@ describe('#271 — create-edition control placement on /library (integration)', 
 
 	it('a work whose editions are still LOADING does not offer it', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		mockLibrarian();
 		listEditionsMock.mockImplementation((_cfg: unknown, workId: string) =>
 			workId === 'work-2'
@@ -208,7 +206,7 @@ describe('#271 — create-edition control placement on /library (integration)', 
 
 	it('a work whose edition read ERRORED does not offer it — the retry affordance owns that state', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		mockLibrarian();
 		listEditionsMock.mockImplementation((_cfg: unknown, workId: string) =>
 			workId === 'work-2' ? Promise.reject(new Error('boom')) : Promise.resolve(toListRead([]))
@@ -227,7 +225,7 @@ describe('#271 — create-edition control placement on /library (integration)', 
 
 	it('ABSENT (not disabled) for a non-librarian — the editions still render (inline gate on the tree, fail-closed)', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 
 		const container = await renderReady();
@@ -241,7 +239,7 @@ describe('#271 — create-edition control placement on /library (integration)', 
 
 	it('hidden while resolveLibraryEditRight is still pending (hidden-if-undeterminable)', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		resolveLibraryEditRightMock.mockReturnValue(new Promise(() => {}));
 
 		const container = await renderReady();
@@ -257,7 +255,7 @@ describe('#271 — create-edition control placement on /library (integration)', 
 describe('#271 — form state is keyed per work (expandedWorks is a Set: several works open at once)', () => {
 	it('opening the form under work-2 leaves work-1 formless, and what was typed under work-2 never appears under work-1', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		mockLibrarian();
 
 		const container = await renderReady();
@@ -300,7 +298,7 @@ describe('#271 — form state is keyed per work (expandedWorks is a Set: several
 
 async function renderWithFormOpen(workId = 'work-2'): Promise<HTMLElement> {
 	mockBaselineLibrary();
-	signInLibraryReader({ chains: true, seasons: true });
+	signInLibraryReader({ seasons: true });
 	mockLibrarian();
 	const container = await renderReady();
 	await expandWork(container, workId);
@@ -321,7 +319,7 @@ async function renderWithFormOpen(workId = 'work-2'): Promise<HTMLElement> {
 describe('#271 — inline create-edition form', () => {
 	it('no form in the DOM until the button is clicked; clicking reveals the inline form with a name input and a publisher input, both labelled, plus a submit control', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		mockLibrarian();
 
 		const container = await renderReady();
@@ -546,7 +544,7 @@ describe('#271 — the form is escapable, and open/close CLEAR state', () => {
 describe('#271 — create-edition controls are focusable, labelled 44px touch targets', () => {
 	it('the entry-point button reserves min-h-11, is keyboard-reachable (no negative tabindex) and carries its accessible name as text', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		mockLibrarian();
 
 		const container = await renderReady();
@@ -863,8 +861,6 @@ describe('#271 — the local insert is generation-guarded against a mid-flight c
 		signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }, { db: 'secondchoir', name: 'Second Choir', personId: 'person-s' }] });
 		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		findMyMemberIdMock.mockResolvedValue(null);
-		resolveCopyNamesMock.mockResolvedValue(new Map());
-		resolveCopyChainsMock.mockResolvedValue(new Map());
 		listAllEditionsMock.mockResolvedValue(toListRead([]));
 		listAllCopiesMock.mockResolvedValue(toListRead([]));
 		listActiveMembersMock.mockResolvedValue(toListRead([]));

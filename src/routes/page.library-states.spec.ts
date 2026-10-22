@@ -47,7 +47,7 @@ describe('/library — loading state', () => {
 	it('shows the skeleton while the initial load is in flight', async () => {
 		listWorksMock.mockReturnValue(new Promise(() => {}));
 		listLendingsMock.mockReturnValue(new Promise(() => {}));
-		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
+		signInLibraryReader({ myLibraryId: 'lib-1' });
 
 		const { container } = render(Page);
 
@@ -65,7 +65,7 @@ describe('/library — ready state', () => {
 		]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
+		signInLibraryReader({ myLibraryId: 'lib-1' });
 
 		const { container } = render(Page);
 
@@ -98,7 +98,7 @@ describe('/library — ready state', () => {
 				files: [{ id: 'file-1', filename: 'spem-vocal-score.pdf', filesize: 1937, filetype: 'application/pdf' }]
 			}
 		]));
-		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
+		signInLibraryReader({ myLibraryId: 'lib-1' });
 
 		const { container } = render(Page);
 		await waitFor(() => expect(container.querySelector('[data-testid="library-work-work-1"]')).not.toBeNull());
@@ -118,7 +118,7 @@ describe('/library — empty state', () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
+		signInLibraryReader({ myLibraryId: 'lib-1' });
 
 		const { container } = render(Page);
 
@@ -134,7 +134,7 @@ describe('/library — load-error state', () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		listWorksMock.mockRejectedValue(new Error('boom 500'));
 		listLendingsMock.mockResolvedValue(toListRead([]));
-		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
+		signInLibraryReader({ myLibraryId: 'lib-1' });
 
 		const { container } = render(Page);
 

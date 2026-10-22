@@ -129,8 +129,6 @@ import {
 	listLendingsMock,
 	listWorksMock,
 	resolveBorrowerNamesMock,
-	resolveCopyChainsMock,
-	resolveCopyNamesMock,
 	resolveLibraryEditRightMock
 } from '$lib/testing/mocks/library';
 
@@ -365,9 +363,7 @@ function arrangeComplete() {
 	for (const read of [listLendingsMock, listEditionsMock, listCopiesMock, listAllEditionsMock, listAllCopiesMock]) {
 		read.mockResolvedValue(complete([]));
 	}
-	for (const names of [resolveBorrowerNamesMock, resolveCopyNamesMock, resolveCopyChainsMock]) {
-		names.mockResolvedValue(new Map());
-	}
+	resolveBorrowerNamesMock.mockResolvedValue(new Map());
 	listEventSeriesForSeasonMock.mockResolvedValue(complete([]));
 	listSeriesOptionsForSeasonMock.mockResolvedValue([]);
 	listEventsForSeasonMock.mockResolvedValue(complete([]));

@@ -48,9 +48,7 @@ import {
 	listEditionsMock,
 	listLendingsMock,
 	listWorksMock,
-	resolveBorrowerNamesMock,
-	resolveCopyChainsMock,
-	resolveCopyNamesMock
+	resolveBorrowerNamesMock
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
@@ -115,8 +113,6 @@ beforeEach(() => {
 	);
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a1', 'Ada Lovelace']]));
-	resolveCopyNamesMock.mockResolvedValue(new Map());
-	resolveCopyChainsMock.mockResolvedValue(new Map());
 });
 
 afterEach(cleanupClearReset);

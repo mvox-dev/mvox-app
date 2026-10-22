@@ -63,7 +63,7 @@ describe('returning a lent copy', () => {
 		listEditionsMock.mockResolvedValue(toListRead([{ id: 'edition-1', name: '40-part original', publisher: 'B' }]));
 		listCopiesMock.mockResolvedValue(toListRead(copies));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a', 'Ada Lovelace']]));
-		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
+		signInLibraryReader({ myLibraryId: 'lib-1' });
 		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(
 			toListRead([{ id: 'edition-1', name: '40-part original', publisher: 'B', workId: 'work-1' }])

@@ -8,14 +8,14 @@ import {
 	listAllEditions,
 	listAllCopies,
 	resolveBorrowerNames,
-	resolveCopyNames,
-	resolveCopyChains,
+	resolveLoanCopies,
 	isActiveLending,
 	type Work,
 	type Edition,
 	type Copy,
 	type Lending,
-	type LoanChain
+	type LoanCopy,
+	type SettledReads
 } from './libraryData';
 import { resolveLibraryEditRight, resolveMyLibraryId, type LibraryEditRightResult } from './libraryRights';
 import { findMyMemberId } from '$lib/rsvp/rsvpData';
@@ -99,21 +99,13 @@ export async function loadMyMemberId(
 	return findMyMemberId(cfg, personId, fetchImpl, CACHED_READ);
 }
 
-export async function loadMyLoanCopyNames(
-	cfg: EntuCfg,
-	copyIds: string[],
-	fetchImpl: typeof fetch = fetch
-): Promise<Map<string, string>> {
-	return resolveCopyNames(cfg, copyIds, fetchImpl, CACHED_READ);
-}
-
-export async function loadMyLoanCopyChains(
+export async function loadMyLoanCopies(
 	cfg: EntuCfg,
 	copyIds: string[],
 	works: Work[],
 	fetchImpl: typeof fetch = fetch
-): Promise<Map<string, LoanChain>> {
-	return resolveCopyChains(cfg, copyIds, works, fetchImpl, CACHED_READ);
+): Promise<SettledReads<LoanCopy>> {
+	return resolveLoanCopies(cfg, copyIds, works, fetchImpl, CACHED_READ);
 }
 
 export interface LibrarianPickers {

@@ -47,9 +47,7 @@ import {
 	listAllEditionsMock,
 	listLendingsMock,
 	listWorksMock,
-	resolveBorrowerNamesMock,
-	resolveCopyChainsMock,
-	resolveCopyNamesMock
+	resolveBorrowerNamesMock
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
@@ -59,8 +57,6 @@ function setAuthedLibrarian() {
 	signIn();
 	resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 	findMyMemberIdMock.mockResolvedValue(null);
-	resolveCopyNamesMock.mockResolvedValue(new Map());
-	resolveCopyChainsMock.mockResolvedValue(new Map());
 	resolveBorrowerNamesMock.mockResolvedValue(new Map());
 	listLendingsMock.mockResolvedValue(toListRead([]));
 	listAllEditionsMock.mockResolvedValue(toListRead([]));

@@ -75,8 +75,7 @@ vi.mock('$lib/library/libraryData', async (importOriginal) => {
 		listAllEditions: library.listAllEditionsMock,
 		listAllCopies: library.listAllCopiesMock,
 		listLendings: library.listLendingsMock,
-		resolveCopyNames: library.resolveCopyNamesMock,
-		resolveCopyChains: library.resolveCopyChainsMock
+		resolveLoanCopies: library.resolveLoanCopiesMock
 	};
 });
 
@@ -122,8 +121,7 @@ import {
 	listEditionsMock,
 	listLendingsMock,
 	listWorksMock,
-	resolveCopyChainsMock,
-	resolveCopyNamesMock
+	resolveLoanCopiesMock
 } from '$lib/testing/mocks/library';
 
 type Member = keyof typeof REAL_NAMES;
@@ -300,8 +298,6 @@ const ROWS: Record<string, Row> = {
 					{ id: 'lend-1', copyId: 'copy-1', memberId: 'm1', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '' }
 				])
 			);
-			resolveCopyNamesMock.mockResolvedValue(new Map());
-			resolveCopyChainsMock.mockResolvedValue(new Map());
 		},
 		extra: (url) =>
 			url.includes('/entity/m1?props=person') ? { entity: { person: [{ reference: 'person-p' }] } } : undefined,

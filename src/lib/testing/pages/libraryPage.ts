@@ -13,8 +13,7 @@ import {
 	listLendingsMock,
 	listWorksMock,
 	resolveBorrowerNamesMock,
-	resolveCopyChainsMock,
-	resolveCopyNamesMock,
+	resolveLoanCopiesMock,
 	resolveMyLibraryIdMock,
 	returnLendingMock
 } from '$lib/testing/mocks/library';
@@ -29,8 +28,7 @@ export function useLibraryPage(): void {
 		listCopiesMock.mockReset();
 		listLendingsMock.mockReset();
 		resolveBorrowerNamesMock.mockReset();
-		resolveCopyNamesMock.mockReset();
-		resolveCopyChainsMock.mockReset();
+		resolveLoanCopiesMock.mockReset();
 		resolveLibraryEditRightMock.mockReset();
 		resolveMyLibraryIdMock.mockReset();
 		findMyMemberIdMock.mockReset();

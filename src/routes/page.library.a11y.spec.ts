@@ -12,7 +12,7 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 vi.mock('$lib/library/libraryData', async () =>
-	(await import('$lib/testing/mocks/library')).libraryReadsModule({ chains: false })
+	(await import('$lib/testing/mocks/library')).libraryReadsModule()
 );
 vi.mock('$lib/paraglide/runtime', async () =>
 	(await import('$lib/testing/moduleStubs')).runtimeModule()
@@ -51,8 +51,7 @@ import {
 	listEditionsMock,
 	listLendingsMock,
 	listWorksMock,
-	resolveBorrowerNamesMock,
-	resolveCopyNamesMock
+	resolveBorrowerNamesMock
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
@@ -110,7 +109,6 @@ describe('#75 — a11y: my-loans section', () => {
 			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		resolveCopyNamesMock.mockResolvedValue(new Map());
 		setAuthedWithOneCollective();
 		findMyMemberIdMock.mockResolvedValue('member-mine');
 
@@ -148,7 +146,6 @@ describe('#75 — a11y: my-loans section', () => {
 			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		resolveCopyNamesMock.mockResolvedValue(new Map());
 		setAuthedWithOneCollective();
 		findMyMemberIdMock.mockResolvedValue('member-mine');
 
@@ -410,7 +407,6 @@ describe('#75 — a11y: aria-expanded on expandable sections', () => {
 			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		resolveCopyNamesMock.mockResolvedValue(new Map());
 		setAuthedWithOneCollective();
 		findMyMemberIdMock.mockResolvedValue('member-mine');
 
@@ -432,7 +428,6 @@ describe('#75 — a11y: aria-expanded on expandable sections', () => {
 			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		resolveCopyNamesMock.mockResolvedValue(new Map());
 		setAuthedWithOneCollective();
 		findMyMemberIdMock.mockResolvedValue('member-mine');
 

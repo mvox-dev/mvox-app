@@ -16,6 +16,10 @@ export const LIBRARY_COPY = {
 	library_copy_lent_to: (p: { name: string }) => `Out — ${p.name}`,
 	library_borrower_unknown: () => 'an unnamed member',
 	library_copy_name_unknown: () => 'Untitled copy',
+	library_copy_number: (p: { copyNumber: number }) => `No. ${p.copyNumber}`,
+	library_loan_label: (p: { copyNumber: number; work: string; edition: string }) =>
+		`Copy no. ${p.copyNumber} — ${p.work} / ${p.edition}`,
+	library_loan_label_no_number: (p: { work: string; edition: string }) => `${p.work} / ${p.edition}`,
 	library_lent_since: (p: { date: string }) => `since ${p.date}`,
 	library_node_load_error: () => 'Could not load.',
 	library_node_retry: () => 'Retry',

@@ -1,6 +1,7 @@
 // Library read, librarian and lending mocks; spec and vi.mock factory share one handle each.
 import { vi } from 'vitest';
 import { resolveLibraryEditRightMock } from './admin';
+import type { LoanCopy, SettledReads } from '$lib/library/libraryData';
 
 export { resolveLibraryEditRightMock };
 
@@ -11,16 +12,24 @@ export const listAllEditionsMock = vi.fn();
 export const listAllCopiesMock = vi.fn();
 export const listLendingsMock = vi.fn();
 export const resolveBorrowerNamesMock = vi.fn();
-export const resolveCopyNamesMock = vi.fn();
-export const resolveCopyChainsMock = vi.fn();
+// Every loaned copy unresolved unless a spec seeds one; mockReset keeps this answer.
+export const resolveLoanCopiesMock = vi.fn(
+	async (): Promise<SettledReads<LoanCopy>> => loanCopiesRead([])
+);
 export const resolveMyLibraryIdMock = vi.fn();
 export const createLendingMock = vi.fn();
 export const returnLendingMock = vi.fn();
 export const bulkCheckoutMock = vi.fn();
 
-// Keeps the real, pure derive* / formatLoanChainLabel helpers.
-// chains: false leaves resolveCopyChains out, as the older specs had it.
-export async function libraryReadsModule(opts: { chains?: boolean } = {}) {
+export function loanCopiesRead(
+	entries: [string, LoanCopy][],
+	failed: unknown[] = []
+): SettledReads<LoanCopy> {
+	return { resolved: new Map(entries), failed };
+}
+
+// Keeps the real, pure derive* and loan label helpers.
+export async function libraryReadsModule() {
 	const actual = await vi.importActual<object>('$lib/library/libraryData');
 	return {
 		...actual,
@@ -31,8 +40,7 @@ export async function libraryReadsModule(opts: { chains?: boolean } = {}) {
 		listAllCopies: listAllCopiesMock,
 		listLendings: listLendingsMock,
 		resolveBorrowerNames: resolveBorrowerNamesMock,
-		resolveCopyNames: resolveCopyNamesMock,
-		...(opts.chains === false ? {} : { resolveCopyChains: resolveCopyChainsMock })
+		resolveLoanCopies: resolveLoanCopiesMock
 	};
 }
 

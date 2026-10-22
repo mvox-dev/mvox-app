@@ -11,8 +11,8 @@ describe('copyLabel', () => {
 		expect(copyLabel(copy({ name: 'Blue binder', copyNumber: 3 }))).toBe('Blue binder');
 	});
 
-	it('uses #N when there is a number but no name', () => {
-		expect(copyLabel(copy({ copyNumber: 3 }))).toBe('#3');
+	it('uses No. N when there is a number but no name', () => {
+		expect(copyLabel(copy({ copyNumber: 3 }))).toBe('No. 3');
 	});
 
 	it('uses the unknown text with neither', () => {
