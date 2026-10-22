@@ -12,6 +12,7 @@ export interface PartLabel {
 
 export interface LabelStore {
 	putLabel(key: FileKey, label: PartLabel): Promise<void>;
+	labelOf(key: FileKey): Promise<PartLabel | undefined>;
 	labelsFor(identity: CollectiveIdentity): Promise<Map<string, PartLabel>>;
 	remove(key: FileKey): Promise<void>;
 }
@@ -33,7 +34,7 @@ export async function storedPartLabel(
 	key: FileKey
 ): Promise<PartLabel | undefined> {
 	try {
-		return (await store.labelsFor(key)).get(key.fileId);
+		return await store.labelOf(key);
 	} catch {
 		return undefined;
 	}

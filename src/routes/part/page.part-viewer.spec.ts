@@ -38,9 +38,9 @@ vi.mock('$lib/files/appLabelStore', () => ({
 			const { fileId, ...identity } = key;
 			labelWrites.push({ identity, fileId, label });
 		},
-		labelsFor: async ({ db, personId }: { db: string; personId: string }) => {
+		labelOf: async ({ db, personId, fileId }: { db: string; personId: string; fileId: string }) => {
 			if (labelRead.throws) throw new Error('label store unreadable');
-			return db === 'sampledb' && personId === 'person-p' ? new Map(storedLabels) : new Map();
+			return db === 'sampledb' && personId === 'person-p' ? storedLabels.get(fileId) : undefined;
 		},
 		remove: async () => {}
 	})
