@@ -28,6 +28,7 @@ function setup(over: Partial<LocalFirst<string>> = {}) {
 		isCurrent: () => true,
 		apply,
 		what: 'name',
+		known: new Map(),
 		...over
 	};
 	return { opts, apply, fetch };
@@ -41,9 +42,8 @@ describe('resolveLocalFirst', () => {
 	it('resolves held copies locally and reads only the rest, merged', async () => {
 		const { opts, apply, fetch } = setup();
 		await resolveLocalFirst(opts);
-		expect(apply).toHaveBeenCalledTimes(1);
 		expect(fetch).toHaveBeenCalledWith({ db: 'db1', token: 'jwt' }, ['c2']);
-		expect([...apply.mock.calls[0][0]]).toEqual([
+		expect([...apply.mock.lastCall![0]]).toEqual([
 			['c2', 'fetched'],
 			['c1', 'held']
 		]);
@@ -66,19 +66,48 @@ describe('resolveLocalFirst', () => {
 		expect(allCopies).not.toHaveBeenCalled();
 	});
 
-	it('leaves the state alone with no token', () => {
+	it('#978 with no token, clears the labels and what was read, without a read', () => {
 		token.value = null;
-		const { opts, apply, fetch } = setup();
+		const known = new Map([['db1', new Map([['c2', 'fetched']])]]);
+		const { opts, apply, fetch } = setup({ known });
 		resolveLocalFirst(opts);
-		expect(apply).not.toHaveBeenCalled();
+		expect([...apply.mock.calls[0][0]]).toEqual([]);
 		expect(fetch).not.toHaveBeenCalled();
+		expect(known.size).toBe(0);
+	});
+
+	it('#978 shows only this db\'s known labels while the read is out', () => {
+		const known = new Map([['db0', new Map([['c2', 'other db']])]]);
+		const { opts, apply } = setup({ known, fetch: vi.fn(() => new Promise<never>(() => {})) });
+		resolveLocalFirst(opts);
+		expect([...apply.mock.calls[0][0]]).toEqual([['c1', 'held']]);
+	});
+
+	it('#984 reads only copies this db has not answered, and keeps each answer', async () => {
+		const known = new Map([['db1', new Map([['c2', 'fetched']])]]);
+		const { opts, apply, fetch } = setup({ known, loans: [loan('c1'), loan('c2'), loan('c3')] });
+		fetch.mockResolvedValueOnce({ resolved: new Map([['c3', 'new']]), failed: [] });
+		await resolveLocalFirst(opts);
+		expect(fetch).toHaveBeenCalledWith({ db: 'db1', token: 'jwt' }, ['c3']);
+		expect(new Map(apply.mock.lastCall![0])).toEqual(
+			new Map([['c1', 'held'], ['c2', 'fetched'], ['c3', 'new']])
+		);
+		expect([...known.get('db1')!.keys()]).toEqual(['c2', 'c3']);
+	});
+
+	it('a superseded answer is still kept for the next run', async () => {
+		const known = new Map<string, Map<string, string>>();
+		const { opts } = setup({ known, isCurrent: () => false });
+		await resolveLocalFirst(opts);
+		expect([...known.get('db1')!]).toEqual([['c2', 'fetched']]);
 	});
 
 	it('drops a superseded fetched answer', async () => {
 		const fetched = setup({ isCurrent: () => false });
 		await resolveLocalFirst(fetched.opts);
 		expect(fetched.fetch).toHaveBeenCalled();
-		expect(fetched.apply).not.toHaveBeenCalled();
+		expect(fetched.apply).toHaveBeenCalledTimes(1);
+		expect([...fetched.apply.mock.calls[0][0]]).toEqual([['c1', 'held']]);
 	});
 
 	it('#979 a partly failed read applies what resolved and reports once', async () => {
@@ -89,7 +118,7 @@ describe('resolveLocalFirst', () => {
 			fetch: vi.fn(async () => ({ resolved: new Map([['c2', 'fetched']]), failed }))
 		});
 		await resolveLocalFirst(opts);
-		expect([...apply.mock.calls[0][0]]).toEqual([
+		expect([...apply.mock.lastCall![0]]).toEqual([
 			['c2', 'fetched'],
 			['c1', 'held']
 		]);
@@ -108,7 +137,8 @@ describe('resolveLocalFirst', () => {
 		await resolveLocalFirst(opts);
 		expect(error).toHaveBeenCalled();
 		expect(error).toHaveBeenCalledWith('library: resolving the copy name failed', failure);
-		expect(apply).not.toHaveBeenCalled();
+		expect(apply).toHaveBeenCalledTimes(1);
+		expect([...apply.mock.calls[0][0]]).toEqual([['c1', 'held']]);
 		error.mockRestore();
 	});
 
