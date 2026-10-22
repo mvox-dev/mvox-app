@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import {
+  bellChange,
   bellLabel,
+  bellsKey,
+  bookmarksOf,
   combineRings,
   confContextPercent,
   confIdleMinutes,
@@ -18,6 +21,7 @@ import {
   pathSegments,
   readDoorbells,
   ringText,
+  textHash,
 } from '../hooks/watch'
 import type { Doorbell } from '../hooks/watch'
 
@@ -138,9 +142,64 @@ describe('rings', () => {
     )
   })
 
+  test('a replaced file (kit #52): the bell says so, and inject carries the whole new text', () => {
+    expect(ringText(BELL, '/x/a.txt', 9, 'hi', true)).toBe('[a.txt] /x/a.txt was replaced.')
+    const bell = { ...BELL, label: 'gh-links', inject: true }
+    expect(ringText(bell, '/x/links.txt', 4, 'one url\ntwo url\n', true)).toBe('[gh-links] /x/links.txt was replaced.\none url\ntwo url')
+  })
+
   test('one ring goes as it is; several under a count', () => {
     expect(combineRings(['[a] /a grew.'])).toBe('[a] /a grew.')
     expect(combineRings(['[a] /a grew.', '[b] /b grew.'])).toBe('[watch] 2 doorbells:\n[a] /a grew.\n[b] /b grew.')
+  })
+})
+
+describe('bellChange: growth, or a replacement (kit #52)', () => {
+  const OLD = '[{"from":"mvox","text":"a long message"}]'
+
+  test('empty or absent is never a ring', () => {
+    expect(bellChange('', OLD.length, textHash(OLD))).toBeUndefined()
+  })
+
+  test('appended past the seen text is growth', () => {
+    expect(bellChange(`${OLD}\nmore`, OLD.length, textHash(OLD))).toBe('grew')
+    expect(bellChange('[{"m":1}]', 0, textHash(''))).toBe('grew')
+  })
+
+  test('the same text again is nothing', () => {
+    expect(bellChange(OLD, OLD.length, textHash(OLD))).toBeUndefined()
+  })
+
+  test('other text, shorter, the same size or longer, is a replacement', () => {
+    expect(bellChange('[{"m":2}]', OLD.length, textHash(OLD))).toBe('replaced')
+    expect(bellChange(OLD.replace('mvox', 'shop'), OLD.length, textHash(OLD))).toBe('replaced')
+    expect(bellChange(`[{"m":3}]${OLD}`, OLD.length, textHash(OLD))).toBe('replaced')
+  })
+
+  test('no hash yet (a fresh bookmark, or one an older watch kept): growth by size only', () => {
+    expect(bellChange(OLD, 0, undefined)).toBe('grew')
+    expect(bellChange('[{"m":2}]', OLD.length, undefined)).toBeUndefined()
+    expect(bellChange(OLD, OLD.length, undefined)).toBeUndefined()
+  })
+})
+
+describe('kept bookmarks: tail-style bells in the store (kit #51)', () => {
+  test('bellsKey: one store key per home, however its path is spelled', () => {
+    expect(bellsKey('/home/u/kit')).toBe('bells:/home/u/kit')
+    expect(bellsKey('/home/u/./kit/')).toBe(bellsKey('/home/u/kit'))
+    expect(bellsKey('C:\\Users\\m\\Desk')).toBe(bellsKey('c:/users/m/desk'))
+    expect(bellsKey('/home/u/desk')).not.toBe(bellsKey('/home/u/kit'))
+  })
+
+  test('bookmarksOf: a size, with its hash when there is one; anything else is dropped', () => {
+    expect(bookmarksOf({ '/a': { size: 3, hash: 7 }, '/b': { size: 2 }, '/c': { hash: 1 }, '/d': 5, '/e': { size: '3' }, '/f': { size: 4, hash: 'x' } })).toEqual({
+      '/a': { size: 3, hash: 7 },
+      '/b': { size: 2 },
+      '/f': { size: 4 },
+    })
+    expect(bookmarksOf(undefined)).toEqual({})
+    expect(bookmarksOf([{ size: 1 }])).toEqual({})
+    expect(bookmarksOf('x')).toEqual({})
   })
 })
 

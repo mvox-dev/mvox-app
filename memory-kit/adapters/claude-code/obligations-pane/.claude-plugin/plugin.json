@@ -1,6 +1,6 @@
 {
   "name": "obligations-pane",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "The memory pane: a side pane over a memory-kit home's memory, one tab per tier (obligations, scratchpad, commitments, rules, lessons, facts, keys, secrets); read-only",
   "author": {
     "name": "Mihkel Putrin\u0161"

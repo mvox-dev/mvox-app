@@ -26,6 +26,9 @@ except ImportError:
         "Refusing to run: a lint that skips checks is worse than no lint.\n")
     sys.exit(2)
 
+# lint/strict_yaml.py refuses a key given twice (kit #54); the tools load through it too (kit #55).
+from strict_yaml import DuplicateKey, strict_load  # noqa: E402
+
 KIT = pathlib.Path(__file__).resolve().parent.parent
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -56,9 +59,13 @@ class Findings:
 
 def load(path, f):
     """Parse a YAML file. A parse error is always a failure: an unreadable tier is not a
-    tier, and treating it as empty would hide everything in it."""
+    tier, and treating it as empty would hide everything in it. So is a duplicate key, which
+    plain PyYAML would read as the last one alone (kit #54)."""
     try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        data = strict_load(path.read_text(encoding="utf-8"))
+    except DuplicateKey as e:
+        f.fail(path, e.message())
+        return None
     except yaml.YAMLError as e:
         f.fail(path, f"unparseable YAML: {str(e).splitlines()[0]}")
         return None
@@ -327,7 +334,8 @@ LESSON_FRONT_KEYS = ("summary", "learned", "ref", "enforcement", "trigger")
 
 
 def lesson_front_matter(path):
-    """The index fields a lesson carries in its YAML front matter, or None if it has none."""
+    """The index fields a lesson carries in its YAML front matter, or None if it has none.
+    Raises DuplicateKey, its lines counted in the whole file, when a key repeats (kit #54)."""
     text = path.read_text(encoding="utf-8")
     if not text.startswith("---\n"):
         return None
@@ -335,7 +343,9 @@ def lesson_front_matter(path):
     if not sep:
         return None
     try:
-        meta = yaml.safe_load(head)
+        meta = strict_load(head)
+    except DuplicateKey as e:
+        raise e.shifted(1) from None  # the front matter starts on the file's line 2
     except yaml.YAMLError:
         return None
     return meta if isinstance(meta, dict) else None
@@ -362,7 +372,11 @@ def summary_cut_by_hash(path):
 def lesson_drift(body, row, f):
     # The index is generated from the front matter; any difference means it was hand-edited
     # or not regenerated -- the rot the generated index exists to prevent.
-    meta = lesson_front_matter(body)
+    try:
+        meta = lesson_front_matter(body)
+    except DuplicateKey as e:
+        f.fail(body, f"front matter: {e.message()}")
+        return
     if meta is None:
         f.fail(body, "no front matter; the index fields live there (tools/lesson-index.py)")
         return
@@ -441,10 +455,11 @@ def lint_urls(mem, f):
 
 def scratchpad_shaped(path):
     """A commitments.yaml holding current/staging and no commitments key is a scratchpad a home
-    named so before the tier existed (kit #30): a minor upgrade must not fail it. Unparseable is
-    not scratchpad-shaped; the commitments check reports it."""
+    named so before the tier existed (kit #30): a minor upgrade must not fail it. Unparseable (a
+    duplicate key included, kit #54) is not scratchpad-shaped; the commitments check reports it.
+    The memory pane's twin is scratchpadShaped (see lint_tree, kit #53)."""
     try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        data = strict_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError:
         return False
     return (isinstance(data, dict) and "commitments" not in data
@@ -455,6 +470,10 @@ def lint_tree(mem, caps, f, ref_re, today, *, shipped_rules=False):
     if not mem.is_dir():
         f.fail(mem, "no such memory directory")
         return
+    # Every other top-level *.yaml is a scratchpad, whatever its name (memory/<name>.yaml). The
+    # rule's twin is scratchpadCandidates and scratchpadShaped in the memory pane,
+    # adapters/claude-code/obligations-pane/hooks/tiers.ts (kit #53): the two cannot share code,
+    # so a change to one is a change to both.
     for p in sorted(mem.glob("*.yaml")):
         name = p.stem
         if name == "rules":
@@ -565,7 +584,15 @@ def main(argv=None):
     conf_path = home / "memory-kit.conf"
     conf = {}
     if conf_path.exists():
-        conf = yaml.safe_load(conf_path.read_text(encoding="utf-8")) or {}
+        # Loaded as a tier is (kit #55): a key given twice below the top, or in the conf beside a
+        # memory directory named directly (no pointer followed, so resolve never read it), fails
+        # in every mode, as a broken pointer does; the key given twice may be mode: itself.
+        try:
+            conf = strict_load(conf_path.read_text(encoding="utf-8")) or {}
+        except DuplicateKey as e:
+            print(f"memory-kit lint {version} -- {home}")
+            print(f"  FAIL memory-kit.conf: {conf_path}: {e.message()}")
+            return 2
     mem = target if target.name == "memory" else home / conf.get("memory_dir", "memory")
 
     # Mode: flag beats config; config beats the default. A home adopting an existing tree

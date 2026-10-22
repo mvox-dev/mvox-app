@@ -18,11 +18,21 @@ Usage: tools/lesson-index.py [memory_dir]          write the index (default: mem
        tools/lesson-index.py [memory_dir] --from-index  one-time upgrade: write front matter into
                                            lessons that lack it, from the existing index
        tools/lesson-index.py [memory_dir] --check  exit 1 if the index on disk is not what would be generated
+
+A key given twice, in a lesson's front matter or in the index, stops the run, naming the file, the
+key and both lines as the lint does; plain YAML would keep the last copy, silently (kit #55).
 """
 import sys
 from pathlib import Path
 
 import yaml
+
+# Importing strict_yaml must leave no lint/__pycache__ in a home's vendored kit: an untracked file
+# there is a dirty tree, which kit-update.py refuses.
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lint"))
+# A key given twice is an error, as the lint reads it, never the last copy kept silently (kit #55).
+from strict_yaml import DuplicateKey, strict_load  # noqa: E402
 
 FIELDS = ("summary", "learned", "ref", "enforcement", "trigger")
 
@@ -41,7 +51,11 @@ def front_matter(path):
     head, sep, _ = text[4:].partition("\n---\n")
     if not sep:
         sys.exit(f"{path}: front matter not closed")
-    meta = yaml.safe_load(head) or {}
+    try:
+        meta = strict_load(head) or {}
+    except DuplicateKey as e:
+        # Lines counted in the whole file, as the lint counts them: the front matter starts on line 2.
+        sys.exit(f"{path}: front matter: {e.shifted(1).message()}")
     unknown = set(meta) - set(FIELDS)
     if unknown:
         sys.exit(f"{path}: unknown front-matter key(s) {', '.join(sorted(unknown))}")
@@ -66,8 +80,16 @@ def generate(lessons_dir):
     return header + yaml.safe_dump({"lessons": rows}, allow_unicode=True, sort_keys=False, width=200)
 
 
+def index_rows(index):
+    """The rows of the index on disk; a key given twice stops the run (kit #55)."""
+    try:
+        return (strict_load(index.read_text(encoding="utf-8")) or {}).get("lessons")
+    except DuplicateKey as e:
+        sys.exit(f"{index}: {e.message()}")
+
+
 def from_index(lessons_dir, index):
-    rows = (yaml.safe_load(index.read_text(encoding="utf-8")) or {}).get("lessons") or []
+    rows = index_rows(index) or []
     done = 0
     for r in rows:
         p = lessons_dir / f"{r['slug']}.md"
@@ -91,7 +113,7 @@ def main(argv):
         return 0
     want = generate(lessons)
     if "--check" in argv:
-        have = (yaml.safe_load(index.read_text(encoding="utf-8")) or {}).get("lessons") if index.exists() else None
+        have = index_rows(index) if index.exists() else None
         if have != yaml.safe_load(want)["lessons"]:
             print(f"{index}: stale -- run memory-kit/tools/lesson-index.py")
             return 1

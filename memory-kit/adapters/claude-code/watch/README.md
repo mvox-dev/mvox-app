@@ -10,7 +10,8 @@ archives anything, and never says what a signal means: that is the home's own ru
 (`pollSeconds`, default 5) it watches two kinds of things, both declared in the home's
 `memory-kit.conf` (absent means off):
 
-1. **Doorbells** (`watch_files`): when a declared file *grows*, the watch rings once -- one
+1. **Doorbells** (`watch_files`): when a declared file *grows* or its text is *replaced*, the
+   watch rings once -- one
    `$.prompt.submit`, which queues until the session is idle and starts a turn of its own,
    marked as coming from the plugin.
 2. **Session sensors** (`watch_idle_minutes`, `watch_context_percent`): one report when the
@@ -47,20 +48,28 @@ Every entry carries the same four fields, empty where unused:
   For short, line-shaped files (a spool of URLs, one-line mail summaries): the harness cuts very
   long lines, so a file of essays wants `inject: false` and a session that reads the file itself.
 
-**A ring is growth.** The watch remembers each file's last-seen size; bigger rings once, and
-everything else only moves the bookmark: created at 0 bytes is not growth, shrinking and
-truncating are not growth, a deleted file counts 0 (so delete-then-write rings). A file that sits
-unconsumed is not nagged: no new growth, no new ring. All of one poll's rings go as **one**
+**A ring is new text.** The watch remembers each file's last-seen size and a hash of its text
+(never the text). Text added past what was seen rings once, as growth. Other non-empty text in
+its place rings once, as a replacement, whatever its size: the file was consumed and refilled
+between two polls (kit #52); with `inject`, all of the new text rides along. Everything else only
+moves the bookmark: created at 0 bytes, emptied, deleted (it counts 0, so delete-then-write
+rings), or the same text written again. A file that sits unconsumed is not nagged: no new text,
+no new ring. All of one poll's rings go as **one**
 prompt. A ring the session's guards refuse rolls its bookmark back and rings again at a later
 poll.
 
-**Consuming is the home's own step.** An inbox-style file is consumed by reading it and then
-deleting or emptying it -- either resets the bookmark, so the next real write rings again. A
-tail-style file (`inject: true`) needs no consuming: the bookmark simply advances, and the file
-may grow forever. Say the habit in the entry's `instruction`, where the session will read it.
+**Consuming is the home's own step.** An inbox-style file (`inject: false`) is consumed by
+reading it and then deleting or emptying it -- either resets the bookmark, so the next real write
+rings again. Its bookmark is the session's own: a new session (a restart, a `/clear`) rings an
+unconsumed inbox once more. A tail-style file (`inject: true`) needs no consuming: its bookmark
+advances and outlives the session (kit #51). The watch keeps it in the plugin's own store, per
+home, never in the home, and moves it only past what reached a turn: a new session rings only the
+lines no ring has brought in -- those written while no session ran, and those of a ring still
+queued when its session ended -- and the file may grow for good. Say the habit in the entry's
+`instruction`, where the session will read it.
 
-**A consumer must take everything a ring announced, or retry by itself.** The ring is growth
-only: a file the consumer leaves as it was never grows again, so it never rings again, and what
+**A consumer must take everything a ring announced, or retry by itself.** A ring needs new
+text: a file the consumer leaves as it was never changes again, so it never rings again, and what
 it holds waits until something else writes to the file. esl-suvekool met this on its first live
 ring (2026-10-16): its consumer waits 10 s before taking fresh courier mail, the ring came inside
 those 10 s, and the message stayed until a hand-run. Its fix is a model: when mail is too fresh,
@@ -69,7 +78,8 @@ or the harness holds the lock, wait once and pass again; if something is still l
 at once, as the household's does, is not exposed.
 
 A ring reads `[hub mail] /home/u/kit/comms/inboxes/team-lead.json grew. consume the inbox or new
-messages won't land` -- with `inject`, the new lines follow, one per line.
+messages won't land` -- `was replaced.` in place of `grew.` when other text took the file's
+place; with `inject`, the new lines follow, one per line.
 
 **Never silently idle** (kit #14): a `watch_files` the watch cannot read, an entry without a
 path, an unknown field, an `inject` that is not true/false -- each is one visible notice (notify,
@@ -126,7 +136,8 @@ watch_files:
 
 Each ring carries the new lines, `from=… id=… subject=…`. The session then collects and acks the
 mail with its own `recv`, after recording it. **Custody stays with the session**: the poller only
-looks, and the watch only rings. The spool is never consumed; the bookmark advances.
+looks, and the watch only rings. The spool is never consumed; the bookmark advances, from one
+session to the next too.
 
 **Ack only what you read, by id** (kit #39). `evr-mail recv` without `--peek` acks everything
 waiting on the hub, not what the peek showed: mail that arrived after the spool line is acked
@@ -200,6 +211,10 @@ kit_home: ../desk        # absolute, or relative to this conf's own folder
 - **Never silent:** a target with no `memory-kit.conf`, a chained pointer or a `~` path is one
   visible notice, and the watch rings nothing. It never falls back to the start folder. `/watch`
   names the home and the pointer.
+- **A key given twice** (kit #55): a `memory-kit.conf` that gives a top-level key twice, the start
+  folder's or the one a pointer names, is the same kind of notice, naming the key and both lines,
+  and the watch rings nothing. It would read the first copy where YAML keeps the last; now neither
+  picks.
 - A session whose home came from the user-scope `home` option but which started outside that home
   rings nothing there (one notice); its own session sensors still run.
 - The lint and the tools follow the same pointer (`lint/kit_home.py`). This plugin's copy of the
@@ -238,12 +253,22 @@ problem in the declaration, and the sensor marks.
 
 ## Limits
 
-- A ring is growth in the text `$.fs.read` returns, compared only with itself. A same-size
-  overwrite is invisible; that is the definition, not an accident.
+- A ring is new text in what `$.fs.read` returns, compared only with itself, through a 32-bit
+  hash. Keeping no text, the watch cannot tell a file cut to a shorter part of itself from a new
+  message: that rings as a replacement. Two different texts with one hash (about one in four
+  billion) would not ring.
 - The watch does not watch directories, only files (a `*` path is expanded per poll, so a new
   matching file is picked up then).
 - Two sessions in one home each keep their own bookmarks: both ring. Information is per session;
-  consuming is not, so the home's rules say who consumes.
+  consuming is not, so the home's rules say who consumes. The kept bookmark of a tail-style file
+  (kit #51) serves only a session that has none of its own yet.
+- A store the engine cannot read or write never costs the running session a ring, nor rings one
+  twice: the session's own bookmark comes first. A new session finds no kept bookmark where the
+  store cannot be read, and rings the whole file again, as before kit #51; where it cannot be
+  written, the kept one stays where it was last written, and a new session rings again what came
+  since. One debug line says so.
+- A ring still queued when the watch reloads (an update), and then lost with its session, is not
+  rung again: the reload forgets which rings were still queued.
 
 ## Install
 

@@ -1,0 +1,11 @@
+# Two top-level keys blocks (kit #54): PyYAML kept the last silently, the memory pane refused
+# the file, so one keys.yaml read as two different files.
+keys: []
+
+keys:
+  - subject: "example"
+    holder: "the home"
+    scope: "read"
+    granted: "2026-10-01"
+    revoke: "Settings -> revoke."
+    ref: ""

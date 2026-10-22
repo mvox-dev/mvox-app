@@ -41,3 +41,9 @@ staging:
   - label: PATTERN
     record: "A 'covered elsewhere' claim: check reload and race cases apart; first-load specs rarely hold them."
     ref: "#933"
+  - label: WARNING
+    record: "Entu masks a pending invite as invite: true; mvox checks typeof string, fixtures use '***'."
+    ref: "#1026"
+  - label: LEARNED
+    record: "Entu redeems an invite by exact token match; stale placeholders no longer block a newer link."
+    ref: "#1003"

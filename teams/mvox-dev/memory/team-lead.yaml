@@ -5,8 +5,14 @@
 
 current:
   - label: WIP
-    record: "Epics #962 and #963 done 2026-10-22 (last PR #1019); queue empty, ask Gama for work"
+    record: "Epic #1024 tasks landed 2026-10-22 in PR #1025 (ce610432); #1021-1023 closed"
     ref: scratchpad/findings-session.md
+  - label: WIP
+    record: "#1003 landed in PR #1027 (cce8d279); #1026 (pending invite reads as joined) awaits release"
+    ref: "#1026"
+  - label: WIP
+    record: "Kit alpha.20 signed by Passe 2026-10-22; applied on chore/kit-alpha20"
+    ref: memory-kit/UPGRADE.md
   - label: WIP
     record: "Feedback MCP merged (#1009/#1011); shipyard deploy waits for Mihkel's go to Passe"
     ref: services/feedback-mcp/README.md
@@ -20,14 +26,8 @@ current:
     record: "Valdur: send-invite sent 2026-10-20; he redeems within 24h (record PR #1002)"
     ref: scripts/migrations/seed-crede-valdur-second-signin-2026-10-20.ts
   - label: WIP
-    record: "Roster admin invite broken: Entu returns the token only to self; told Gama 2026-10-20"
-    ref: src/lib/roster/MemberInvite.svelte
-  - label: WIP
     record: "josquin.md:86 says .svelte is Byrd's; stale since the 2026-09-30 chain ruling"
     ref: teams/mvox-dev/prompts/josquin.md
-  - label: WIP
-    record: "GATE 3 done 2026-10-15: fallback deleted (git: fd701a4c); adoption closed"
-    ref: teams/mvox-dev/memory-adoption/05-debt.md
   - label: DECISION
     record: "Adopt memory-kit fully for team memory and the lead's auto-memory; work autonomously"
     ref: mihkel:2026-10-14

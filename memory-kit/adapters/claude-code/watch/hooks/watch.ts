@@ -37,10 +37,11 @@ export function confValue(conf: string, key: string): string | undefined {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Doorbells. A doorbell is a labeled file: when the file GROWS, the watch rings once -- one
-// prompt at the next turn seam. The watch never reads a file's meaning, never empties, moves or
-// archives it; consuming (read, then delete or empty) is the home's own step, and it is what
-// re-arms the bell. Created at 0 bytes is not growth; shrinking only resets the remembered size.
+// Doorbells. A doorbell is a labeled file: when the file GROWS, or other text REPLACES its text
+// (kit #52), the watch rings once -- one prompt at the next turn seam. The watch never reads a
+// file's meaning, never empties, moves or archives it; consuming (read, then delete or empty) is
+// the home's own step, and it is what re-arms the bell. Created at 0 bytes, emptied, or the same
+// text again only moves the bookmark.
 
 /** One declared doorbell. Every field is always present in the conf; empty means its default. */
 export type Doorbell = {
@@ -130,15 +131,58 @@ export function bellLabel(bell: Doorbell, file: string): string {
   return bell.label !== '' ? bell.label : baseOf(file)
 }
 
+/** A text's 32-bit FNV-1a hash: the bookmark keeps it, never the text. */
+export function textHash(text: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193)
+  return h >>> 0
+}
+
+/**
+ * What a watched file did since its bookmark (kit #52): `grew` past the seen text, or was
+ * `replaced` by other non-empty text -- consumed and refilled between two polls, whatever the new
+ * size. Empty, or the seen text again, is nothing. Without a hash (a fresh bookmark, or one an
+ * older watch kept) growth is by size alone.
+ */
+export function bellChange(content: string, oldSize: number, oldHash: number | undefined): 'grew' | 'replaced' | undefined {
+  if (content === '') return undefined
+  if (oldHash === undefined) return content.length > oldSize ? 'grew' : undefined
+  if (content.length > oldSize && textHash(content.slice(0, oldSize)) === oldHash) return 'grew'
+  return textHash(content) === oldHash ? undefined : 'replaced'
+}
+
+/** A file's bookmark: its last-seen size and, when known, the hash of its text. */
+export type Bookmark = { size: number; hash?: number }
+
+/**
+ * The $.store key of a home's kept bookmarks (kit #51): a tail-style bell is never consumed, so
+ * its bookmark must outlive the session. One per home, however its path is spelled.
+ */
+export function bellsKey(home: string): string {
+  return `bells:${fileKey(home)}`
+}
+
+/** Kept bookmarks, validated out of the store: a size, with its hash when there is one. */
+export function bookmarksOf(stored: unknown): Record<string, Bookmark> {
+  if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) return {}
+  const marks: Record<string, Bookmark> = {}
+  for (const [key, raw] of Object.entries(stored)) {
+    const { size, hash } = (typeof raw === 'object' && raw !== null ? raw : {}) as { size?: unknown; hash?: unknown }
+    if (typeof size === 'number') marks[key] = typeof hash === 'number' ? { size, hash } : { size }
+  }
+  return marks
+}
+
 /**
  * One ring. Information plus the home's own instruction; with `inject`, the grown tail's
  * non-blank lines ride along (meant for short, line-shaped files: the harness cuts long lines).
+ * A replaced file's whole text is new, so all of it rides along.
  */
-export function ringText(bell: Doorbell, file: string, oldSize: number, content: string): string {
-  const head = `[${bellLabel(bell, file)}] ${file} grew.${bell.instruction === '' ? '' : ` ${bell.instruction}`}`
+export function ringText(bell: Doorbell, file: string, oldSize: number, content: string, replaced = false): string {
+  const head = `[${bellLabel(bell, file)}] ${file} ${replaced ? 'was replaced' : 'grew'}.${bell.instruction === '' ? '' : ` ${bell.instruction}`}`
   if (!bell.inject) return head
   const tail = content
-    .slice(oldSize)
+    .slice(replaced ? 0 : oldSize)
     .split(/\r?\n/)
     .map(l => l.trimEnd())
     .filter(l => l.trim() !== '')

@@ -144,6 +144,10 @@ kit_home: ../desk        # absolute, or relative to this conf's own folder
 - **Absolute paths:** POSIX, a drive letter (`C:\` or `C:/`) or UNC. `~` is not expanded: write
   the path absolute or relative to the conf.
 - **Never silent:** a broken pointer, or a pointed home without `memory-kit/VERSION`, is one visible notice (notify, else a transcript line), and nothing is checked. `/kit-update` names the home and the pointer.
+- **A key given twice** (kit #55): a `memory-kit.conf` that gives a top-level key twice, the start
+  folder's or the one a pointer names, is the same kind of notice, naming the key and both lines,
+  and nothing is checked. With `update:` twice, kit-update read the first copy where YAML keeps
+  the last; now neither picks. `tools/kit-update.py` refuses it alike.
 - **No conf where the home is looked for** (kit #31): when the folder taken for the home (the start
   folder, or the `home` option's) has no `memory-kit.conf`, one visible notice says so and names
   the fix (`kit_home: <path>` in a conf there), and `/kit-update` shows the same text. Before, it
