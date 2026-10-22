@@ -3,7 +3,6 @@ import type { AgendaItem } from '$lib/agenda/types';
 import type { Season } from '$lib/seasons/types';
 import { localDayKey } from '$lib/preferences/timeFormat';
 
-// Mihkel 2026-08-10 (#77): no event conductors inherits; an overlap replaces; else guests add.
 export function resolveConductors(seasonConductors: string[], eventConductors: string[]): string[] {
 	if (eventConductors.length === 0) return [...seasonConductors];
 
@@ -32,7 +31,8 @@ export function seasonNotEnded(season: Season, now: Date): boolean {
 	return season.endDate === '' || season.endDate >= localDayKey(now);
 }
 
-// An admin manages the current season; once it lapses, the soonest one not yet started (#167).
+// An admin manages the current season; once it lapses, the soonest one not yet started. The trade:
+// the lapsed season becomes unmanageable; the fix for that is a season selector (#167).
 export function manageableSeason(seasons: Season[], now: Date): Season | null {
 	const nowDate = localDayKey(now);
 	const current = currentSeason(seasons, now);
