@@ -9,6 +9,7 @@ import { createWork, createEdition } from '$lib/entity/entityCreate';
 import { uploadEditionFiles } from '$lib/library/editionFiles';
 import { isActiveLending } from '$lib/library/libraryData';
 import { without } from '$lib/collections/immutable';
+import { localDayKey } from '$lib/preferences/timeFormat';
 import {
 	applyLendings,
 	applyUploadFailures,
@@ -202,7 +203,7 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 			await createLending(cfg, libraryId, {
 				copyId,
 				memberId,
-				assignedAt: new Date().toISOString().slice(0, 10)
+				assignedAt: localDayKey(new Date())
 			});
 			// Stores without serving: the live answer or a rejection, never pre-write availability.
 			await refreshLendings(cfg);
@@ -242,7 +243,7 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 			const result = await bulkCheckout(cfg, libraryId, {
 				editionId: ctx.bulk().editionId,
 				memberIds: [...ctx.bulk().members],
-				assignedAt: new Date().toISOString().slice(0, 10),
+				assignedAt: localDayKey(new Date()),
 				...(ctx.bulk().dueDate ? { assignedUntil: ctx.bulk().dueDate } : {})
 			}, activeLendings);
 			if (result.failed.length > 0) {

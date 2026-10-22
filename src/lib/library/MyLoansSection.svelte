@@ -7,7 +7,7 @@
 	import { copyLabel, formatLoanChainLabel, isActiveLending } from '$lib/library/libraryData';
 	import { loadMyLoanCopyNames, loadMyLoanCopyChains } from '$lib/library/libraryPageData';
 	import type { Copy, Edition, Lending, LoanChain, Work } from '$lib/library/libraryData';
-	import { formatDate, isOverdue } from '$lib/library/lendingView';
+	import { formatLoanRange, isOverdue } from '$lib/library/lendingView';
 	import { resolveLocalFirst } from '$lib/library/resolveLocalFirst';
 
 	interface Props {
@@ -35,6 +35,7 @@
 	const myActiveLoans = $derived(
 		myMemberId ? lendings.filter((l) => l.memberId === myMemberId && isActiveLending(l)) : []
 	);
+	const overdueCount = $derived(myActiveLoans.filter((l) => isOverdue(l.assignedUntil)).length);
 
 	// Copy names, so a loan never renders a raw entity id. A librarian already holds every
 	// copy, so those resolve locally; the rest take one read.
@@ -99,7 +100,12 @@
 			aria-controls={expanded ? 'my-loans-list' : undefined}
 			onclick={() => (expanded = !expanded)}
 		>
-			<span id="my-loans-heading">{m.library_my_loans_title({ count: myActiveLoans.length })}</span>
+			<span id="my-loans-heading">
+				{m.library_my_loans_title({ count: myActiveLoans.length })}
+				{#if overdueCount > 0}
+					<span class="text-danger">· {m.library_my_loans_overdue_count({ count: overdueCount })}</span>
+				{/if}
+			</span>
 			<span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
 		</button>
 		{#if expanded}
@@ -107,9 +113,7 @@
 				{#each myActiveLoans as loan (loan.id)}
 					<li data-testid="my-loans-item-{loan.id}" class="flex items-center justify-between text-xs">
 						<span>{loanLabel(loan.copyId)}</span>
-						<span class="text-ink-2">
-							{formatDate(loan.assignedAt)}{#if loan.assignedUntil} – {formatDate(loan.assignedUntil)}{/if}
-						</span>
+						<span class="text-ink-2">{formatLoanRange(loan.assignedAt, loan.assignedUntil)}</span>
 						{#if isOverdue(loan.assignedUntil)}
 							<span data-testid="my-loans-overdue-{loan.id}" class="text-danger">{m.library_my_loans_overdue()}</span>
 						{/if}

@@ -9,7 +9,8 @@ import {
 	type Lending
 } from '$lib/library/libraryData';
 import type { LibraryState } from '$lib/library/libraryState';
-import { isoDateFormatter } from '$lib/preferences/timeFormat';
+import { m } from '$lib/paraglide/messages.js';
+import { isoDateFormatter, localDayKey } from '$lib/preferences/timeFormat';
 
 // Lending dates are tabular: the ISO date in UTC, so a date-only value never slides a day.
 const dateFmt = isoDateFormatter('UTC');
@@ -21,8 +22,13 @@ export function formatDate(isoDate: string): string {
 
 export function isOverdue(assignedUntil: string): boolean {
 	if (!assignedUntil) return false;
-	const today = new Date().toISOString().slice(0, 10);
-	return assignedUntil < today;
+	return assignedUntil < localDayKey(new Date());
+}
+
+export function formatLoanRange(from: string, to: string): string {
+	if (from && to) return m.library_loan_range({ from: formatDate(from), to: formatDate(to) });
+	if (to) return m.library_loan_until({ date: formatDate(to) });
+	return formatDate(from);
 }
 
 export interface Availability {

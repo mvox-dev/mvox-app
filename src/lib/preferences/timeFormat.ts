@@ -100,6 +100,11 @@ export function isoDateFormatter(timeZone?: string): Intl.DateTimeFormat {
 	});
 }
 
+// A day ends at the device's midnight, not at UTC midnight: Estonia is 2-3 hours ahead.
+export function localDayKey(date: Date): string {
+	return isoDateFormatter().format(date);
+}
+
 const tallinnIsoDate = isoDateFormatter(TALLINN_TZ);
 
 export function tallinnDayKey(date: Date): string {

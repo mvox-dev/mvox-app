@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
 import type { Copy, Edition, Lending } from '$lib/library/libraryData';
 import { deriveWorkAvailability } from '$lib/library/libraryData';
-import { createLendingView } from './lendingView';
+import { createLendingView, formatLoanRange, isOverdue } from './lendingView';
+import { resetDeviceClock, setDeviceClock, TALLINN_SUMMER_NIGHT } from '$lib/testing/deviceClock';
 
 const lending = (id: string, copyId: string, returnedAt = ''): Lending => ({
 	id,
@@ -82,5 +83,30 @@ describe('workAvailability', () => {
 		lib.allEditions = [edition('e1', 'w2'), edition('e2', 'w2')];
 		expect(view.workAvailability('w1')).toEqual({ available: 0, total: 0 });
 		expect(view.workAvailability('w2')).toEqual({ available: 3, total: 4 });
+	});
+});
+
+describe('isOverdue: a loan is due through the last day on the device', () => {
+	afterEach(resetDeviceClock);
+
+	it.each([
+		['01:30 summer time in Tallinn', TALLINN_SUMMER_NIGHT, 'Europe/Tallinn', '2026-10-20', '2026-10-21'],
+		['00:30 winter time in Tallinn', '2026-12-20T22:30:00Z', 'Europe/Tallinn', '2026-12-20', '2026-12-21'],
+		['22:30 in New York, a day behind UTC', '2026-10-21T02:30:00Z', 'America/New_York', '2026-10-19', '2026-10-20']
+	])('at %s, yesterday is overdue and today is not', (_when, instant, zone, yesterday, today) => {
+		setDeviceClock(instant, zone);
+		expect(isOverdue(yesterday)).toBe(true);
+		expect(isOverdue(today)).toBe(false);
+	});
+});
+
+describe('formatLoanRange', () => {
+	it.each([
+		['both dates', '2026-10-01', '2026-10-20', '2026-10-01 – 2026-10-20'],
+		['only the start', '2026-10-01', '', '2026-10-01'],
+		['only the due date', '', '2026-10-20', 'until 2026-10-20'],
+		['neither', '', '', '']
+	])('%s', (_case, from, to, shown) => {
+		expect(formatLoanRange(from, to)).toBe(shown);
 	});
 });

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // The library page: inline and bulk checkout.
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/pages/libraryCopy')).libraryMessages()
@@ -51,8 +51,10 @@ import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { resolveLibraryEditRightMock } from '$lib/testing/mocks/admin';
 import { signInLibraryReader } from '$lib/testing/pages/library';
 import { useLibraryPage } from '$lib/testing/pages/libraryPage';
+import { resetDeviceClock, setDeviceClock, TALLINN_SUMMER_NIGHT } from '$lib/testing/deviceClock';
 
 useLibraryPage();
+afterEach(resetDeviceClock);
 
 describe('#76 — inline checkout on browse tree', () => {
 	// PO ruling: an inline member picker on each available copy row checks the copy out
@@ -227,7 +229,9 @@ describe('#76 — inline checkout on browse tree', () => {
 		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		mockLibrarianCheckoutData();
 
-		const today = new Date().toISOString().slice(0, 10);
+		// 01:30 in Tallinn: the checkout is dated the device's day, not UTC's day before.
+		setDeviceClock(TALLINN_SUMMER_NIGHT);
+		const today = '2026-10-21';
 		const newLending = {
 			id: 'lend-new',
 			copyId: 'copy-1',
@@ -489,7 +493,7 @@ describe('#74 — bulk checkout + return', () => {
 	});
 
 	// ── action-layer wiring (submit triggers the function, not just DOM) ──────
-	it('bulk checkout submit calls bulkCheckout with the selected edition, checked members, and due date', async () => {
+	it("bulk checkout submit calls bulkCheckout with the selected edition, checked members and the device's date", async () => {
 		listWorksMock.mockResolvedValue(toListRead([
 			{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }
 		]));
@@ -508,6 +512,7 @@ describe('#74 — bulk checkout + return', () => {
 			{ memberId: 'member-2', personId: 'person-2', sectionIds: [] }
 		]));
 		bulkCheckoutMock.mockResolvedValue({ succeeded: [], failed: [] });
+		setDeviceClock(TALLINN_SUMMER_NIGHT);
 		// After bulk checkout, the page refreshes lendings
 		listLendingsMock.mockResolvedValue(toListRead([]));
 
@@ -538,6 +543,7 @@ describe('#74 — bulk checkout + return', () => {
 		// callArgs: [cfg, libraryId, payload, activeLendings]
 		expect(callArgs[2].editionId).toBe('edition-1');
 		expect(callArgs[2].memberIds).toContain('member-1');
+		expect(callArgs[2].assignedAt).toBe('2026-10-21');
 	});
 
 });
