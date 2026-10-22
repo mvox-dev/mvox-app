@@ -67,6 +67,7 @@ export function decideFetch(request: FetchLike, ctx: FetchDecisionContext): Fetc
 	try {
 		url = new URL(request.url);
 	} catch {
+		// A request URL that does not parse is left to the network untouched.
 		return { kind: 'bypass' };
 	}
 

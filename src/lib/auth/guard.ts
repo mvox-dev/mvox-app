@@ -11,6 +11,7 @@ export function decodeJwtPayload(token: string | null | undefined): Record<strin
 		b64 += '='.repeat((4 - (b64.length % 4)) % 4); // restore base64 padding for atob
 		return JSON.parse(atob(b64)) as Record<string, unknown>;
 	} catch {
+		// A token whose payload does not decode is no session, the same as no token.
 		return null;
 	}
 }
@@ -38,8 +39,7 @@ export function isProtectedPath(pathname: string): boolean {
 	return true;
 }
 
-// Where a visitor without a valid session goes: login, the session-expired sign-in when the
-// token's exp has passed, or null when the path is public or the token is valid.
+// Where a visitor without a valid session goes: login, the session-expired sign-in, or null.
 export function resolveGuardRedirect(args: {
 	pathname: string;
 	search?: string;

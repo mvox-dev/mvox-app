@@ -117,6 +117,7 @@
 		try {
 			return new URL(url).hostname.replace(/^www\./, '');
 		} catch {
+			// A link that does not parse as a URL is shown as it was typed.
 			return url;
 		}
 	}

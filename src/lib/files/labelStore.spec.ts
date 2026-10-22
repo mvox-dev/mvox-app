@@ -1,6 +1,10 @@
 // #353, #427: the part-label store, and the call sites that hand it a name.
 import { IDBFactory, IDBKeyRange, IDBObjectStore } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const reportProblem = vi.hoisted(() => vi.fn());
+vi.mock('$lib/problems/reportProblem', () => ({ reportProblem, alreadyReported: () => {} }));
+
 import { createIdbLabelStore, LABEL_DB_NAME } from './labelIdbStore';
 import { recordPartLabel, storedPartLabel, type LabelStore, type PartLabel } from './labelStore';
 import { createByteStore } from './byteStore';
@@ -25,6 +29,7 @@ function bytes(fill: number, size = 16): { bytes: ArrayBuffer; filetype: string;
 }
 
 beforeEach(() => {
+	reportProblem.mockReset();
 	vi.stubGlobal('IDBKeyRange', IDBKeyRange);
 });
 
@@ -182,6 +187,58 @@ describe('#353 — recordPartLabel: the put-time write, gated on DELIVERY reason
 		await expect(
 			recordPartLabel(store, { ...IDENTITY, fileId: 'file-a' }, LABEL, 'network-stored')
 		).resolves.toBeUndefined();
+	});
+});
+
+describe('#1022 — a failed label write, read or removal is reported once and never blocks', () => {
+	const DEAD: LabelStore = {
+		putLabel: () => Promise.reject(new Error('idb dead')),
+		remove: () => Promise.reject(new Error('idb dead')),
+		labelOf: () => Promise.reject(new Error('idb dead')),
+		labelsFor: () => Promise.reject(new Error('idb dead'))
+	};
+
+	async function freshLabelStore() {
+		vi.resetModules();
+		return import('./labelStore');
+	}
+
+	it('saving: the open still resolves, and two failures send one report', async () => {
+		const { recordPartLabel } = await freshLabelStore();
+		await expect(recordPartLabel(DEAD, { ...IDENTITY, fileId: 'file-a' }, LABEL, 'cache')).resolves.toBeUndefined();
+		await expect(recordPartLabel(DEAD, { ...IDENTITY, fileId: 'file-b' }, LABEL, 'cache')).resolves.toBeUndefined();
+		expect(reportProblem.mock.calls).toEqual([
+			[{ area: 'files', action: 'saving a part name on this device', error: new Error('idb dead') }]
+		]);
+	});
+
+	it('reading: the name falls back to none, and two failures send one report', async () => {
+		const { storedPartLabel } = await freshLabelStore();
+		expect(await storedPartLabel(DEAD, { ...IDENTITY, fileId: 'file-a' })).toBeUndefined();
+		expect(await storedPartLabel(DEAD, { ...IDENTITY, fileId: 'file-b' })).toBeUndefined();
+		expect(reportProblem.mock.calls).toEqual([
+			[{ area: 'files', action: 'reading a part name on this device', error: new Error('idb dead') }]
+		]);
+	});
+
+	it('removing: a partition clear still empties the bytes, and its failures send one report', async () => {
+		vi.stubGlobal('indexedDB', new IDBFactory());
+		vi.resetModules();
+		const { getAppByteStore } = await import('./appByteStore');
+		const { getAppLabelStore } = await import('./appLabelStore');
+		vi.spyOn(getAppLabelStore(), 'remove').mockRejectedValue(new Error('idb dead'));
+		await getAppByteStore().put({ ...IDENTITY, fileId: 'file-a' }, bytes(1));
+		await getAppByteStore().put({ ...IDENTITY, fileId: 'file-b' }, bytes(2));
+
+		await getAppByteStore().clearPartition(IDENTITY);
+
+		expect(await getAppByteStore().heldFileIds(IDENTITY)).toEqual([]);
+		await vi.waitFor(() => expect(getAppLabelStore().remove).toHaveBeenCalledTimes(2));
+		await vi.waitFor(() =>
+			expect(reportProblem.mock.calls).toEqual([
+				[{ area: 'files', action: 'removing a part name from this device', error: new Error('idb dead') }]
+			])
+		);
 	});
 });
 

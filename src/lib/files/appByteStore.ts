@@ -1,26 +1,20 @@
-// #343 — the app-wide byte store singleton (IndexedDB-backed).
-//
-// Page handlers reach the store ONLY through this seam, so page specs can
-// substitute an in-memory store (see $lib/testing/byteStoreFakes) without
-// touching IndexedDB.
+// The app-wide byte store (#343): pages reach it only here, so specs can swap in a fake.
 
 import { createByteStore, type ByteStore } from './byteStore';
 import { createIdbAdapter } from './idbAdapter';
 import { getAppLabelStore } from './appLabelStore';
+import { reportLabelProblem } from './labelStore';
 
 let instance: ByteStore | null = null;
 
 export function getAppByteStore(): ByteStore {
 	if (!instance) {
 		instance = createByteStore(createIdbAdapter(), {
-			// #353 — eviction anywhere (an explicit remove, a partition clear, a
-			// silent LRU cap eviction) removes the part's NAME too, via the
-			// label index's own store (appLabelStore.ts). Never awaited: a label
-			// removal failing must not slow or gate a byte-store operation.
+			// Any eviction drops the part's name too (#353); never awaited, so it never gates the store.
 			onRowRemoved: (key) => {
 				void getAppLabelStore()
 					.remove(key)
-					.catch(() => {});
+					.catch((error) => reportLabelProblem('removing a part name from this device', error));
 			}
 		});
 	}

@@ -85,6 +85,7 @@ async function readStored(store: ByteStore, key: FileKey) {
 	try {
 		return await store.get(key);
 	} catch {
+		// An unreadable store falls through to the network; the put after it reports a dead store.
 		return undefined;
 	}
 }
