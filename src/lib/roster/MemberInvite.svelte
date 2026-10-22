@@ -23,6 +23,7 @@
 {#if roster.joinStates[row.personId] !== undefined}
 	{@const state = roster.joinStates[row.personId]}
 	{#if roster.dbRight === 'owner'}
+		{@const outcome = memberOps.inviteOutcomeByMemberId[row.memberId]}
 		<div class="flex flex-wrap items-center gap-2">
 			{#if state === 'absent'}
 				<button
@@ -55,18 +56,15 @@
 				</button>
 			{/if}
 		</div>
-	{/if}
-	{#if memberOps.inviteOutcomeByMemberId[row.memberId]}
-		{@const outcome = memberOps.inviteOutcomeByMemberId[row.memberId]}
-		{#if outcome.sent}
-			<p data-testid="roster-invite-sent-{row.memberId}" role="status" class="text-xs text-ink-2">
-				{m.roster_member_invite_sent({ email: outcome.email })}
-			</p>
-		{:else}
-			<p data-testid="roster-invite-no-email-{row.memberId}" role="status" class="text-xs text-ink-2">
-				{m.roster_member_invite_no_email()}
-			</p>
-		{/if}
+		<p
+			data-testid="roster-invite-status-{row.memberId}"
+			role="status"
+			aria-live="polite"
+			class="min-h-[16px] text-xs leading-[16px] text-ink-2"
+		>
+			{#if outcome?.sent}{m.roster_member_invite_sent({ email: outcome.email })}
+			{:else if outcome}{m.roster_member_invite_no_email()}{/if}
+		</p>
 	{/if}
 	{#if memberOps.inviteErrorByMemberId[row.memberId]}
 		<FormError data-testid="roster-invite-error-{row.memberId}">

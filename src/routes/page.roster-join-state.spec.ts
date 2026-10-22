@@ -543,7 +543,7 @@ describe('(D) kutsu — first invite, sent to the EXISTING person', () => {
 		expect(mintSelfLinkInviteMock).not.toHaveBeenCalled();
 		expect(createInviteMock).not.toHaveBeenCalled();
 		await waitFor(() =>
-			expect(q(container, 'roster-invite-sent-m4')?.textContent).toContain('dora@person.example')
+			expect(q(container, 'roster-invite-status-m4')?.textContent).toContain('dora@person.example')
 		);
 	});
 
@@ -574,7 +574,7 @@ describe('(D) kutsu — first invite, sent to the EXISTING person', () => {
 			return el!;
 		});
 		expect(alertEl.getAttribute('role')).toBe('alert');
-		expect(q(container, 'roster-invite-sent-m4')).toBeNull();
+		expect(q(container, 'roster-invite-status-m4')?.textContent?.trim()).toBe('');
 		expect(q(container, 'roster-member-invite-m4')).not.toBeNull();
 	});
 });
@@ -591,7 +591,7 @@ describe('(E) saada uuesti — sends the invite again', () => {
 		expect(mintSelfLinkInviteMock).not.toHaveBeenCalled();
 		expect(createInviteMock).not.toHaveBeenCalled();
 		await waitFor(() =>
-			expect(q(container, 'roster-invite-sent-m3')?.textContent).toContain('carl@person.example')
+			expect(q(container, 'roster-invite-status-m3')?.textContent).toContain('carl@person.example')
 		);
 	});
 });
@@ -642,10 +642,13 @@ describe('(G) collective switch — the #287 bug class, kept out of the new feat
 		await openCard(container, 'm4'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
-		await waitFor(() => expect(q(container, 'roster-invite-sent-m4')).not.toBeNull());
+		await waitFor(() =>
+			expect(q(container, 'roster-invite-status-m4')?.textContent).toContain('dora@person.example')
+		);
 
 		await switchToOtherChoir(container);
-		expect(container.querySelectorAll('[data-testid^="roster-invite-sent-"]')).toHaveLength(0);
+		const notes = container.querySelectorAll('[data-testid^="roster-invite-status-"]');
+		expect([...notes].map((n) => n.textContent?.trim()).filter(Boolean)).toEqual([]);
 		await waitFor(() =>
 			expect(
 				[...listJoinStatesMock.mock.calls, ...listJoinStateDetailsMock.mock.calls].some(

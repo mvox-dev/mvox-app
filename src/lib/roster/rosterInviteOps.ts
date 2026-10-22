@@ -54,7 +54,11 @@ export function createInviteOps<Halves>(deps: MemberOpsDeps<Halves>) {
 			row,
 			'inviteErrorByMemberId',
 			'sending an invite',
-			(cfg) => actions.sendInvite(cfg, row.personId),
+			(cfg) => {
+				// Cleared at the start, so a failed send never sits beside an older "Sent to".
+				mo.inviteOutcomeByMemberId = withEntry(mo.inviteOutcomeByMemberId, row.memberId, null);
+				return actions.sendInvite(cfg, row.personId);
+			},
 			(outcome) => {
 				mo.inviteOutcomeByMemberId = withEntry(mo.inviteOutcomeByMemberId, row.memberId, outcome);
 			}

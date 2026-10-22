@@ -131,8 +131,17 @@ async function clickInvite(producer: 'invite' | 'reinvite', memberId: string) {
 	await fireEvent.click(q(container, `roster-row-card-${memberId}`)!);
 	const id = `roster-member-${producer}-${memberId}`;
 	await waitFor(() => expect(q(container, id)).not.toBeNull());
+	// One live region per row, mounted empty before any send, so its later text is announced.
+	const status = q(container, `roster-invite-status-${memberId}`);
+	expect(status?.getAttribute('role')).toBe('status');
+	expect(status?.textContent?.trim()).toBe('');
 	await fireEvent.click(q(container, id)!);
-	return container;
+	return { container, status: status!, button: () => q(container, id)! };
+}
+
+async function statusSays(status: HTMLElement, text: string) {
+	await waitFor(() => expect(status.textContent?.trim()).toBe(text));
+	expect(status.isConnected).toBe(true);
 }
 
 describe('#1003 Invite and Resend send the invite by email', () => {
@@ -140,11 +149,8 @@ describe('#1003 Invite and Resend send the invite by email', () => {
 		['invite', 'm4', 'pp-4', 'dora@person.example'],
 		['reinvite', 'm3', 'pp-3', 'carl@person.example']
 	] as const)('%s POSTs send-invite for that person and shows "Sent to" its person email', async (producer, memberId, personId, email) => {
-		const container = await clickInvite(producer, memberId);
-		await waitFor(() => expect(q(container, `roster-invite-sent-${memberId}`)).not.toBeNull());
-		expect(q(container, `roster-invite-sent-${memberId}`)!.textContent?.trim()).toBe(
-			`[roster_member_invite_sent {"email":"${email}"}]`
-		);
+		const { container, status } = await clickInvite(producer, memberId);
+		await statusSays(status, `[roster_member_invite_sent {"email":"${email}"}]`);
 		expect(posts).toEqual([
 			{
 				url: `https://api.entu-test.invalid/sampledb/entity/${personId}`,
@@ -157,18 +163,14 @@ describe('#1003 Invite and Resend send the invite by email', () => {
 
 	it('a member with a profile email but no person email: nothing is sent, and the no-email message shows', async () => {
 		personEmails['pp-4'] = [];
-		const container = await clickInvite('invite', 'm4');
-		await waitFor(() => expect(q(container, 'roster-invite-no-email-m4')).not.toBeNull());
-		expect(q(container, 'roster-invite-no-email-m4')!.textContent?.trim()).toBe(
-			'[roster_member_invite_no_email]'
-		);
+		const { status } = await clickInvite('invite', 'm4');
+		await statusSays(status, '[roster_member_invite_no_email]');
 		expect(posts).toEqual([]);
-		expect(q(container, 'roster-invite-sent-m4')).toBeNull();
 	});
 
 	it('a refused send shows the plain error, sends one report, and no API text appears', async () => {
 		sendStatus = 403;
-		const container = await clickInvite('invite', 'm4');
+		const { container, status } = await clickInvite('invite', 'm4');
 		await waitFor(() => expect(q(container, 'roster-invite-error-m4')).not.toBeNull());
 		const alert = q(container, 'roster-invite-error-m4')!;
 		expect(alert.getAttribute('role')).toBe('alert');
@@ -176,7 +178,17 @@ describe('#1003 Invite and Resend send the invite by email', () => {
 		expect(reportProblem).toHaveBeenCalledTimes(1);
 		expect(reportProblem.mock.calls[0][0]).toMatchObject({ area: 'roster' });
 		expect(container.textContent).not.toMatch(/HTTP|403|contract|admin_invite_error/);
-		expect(q(container, 'roster-invite-sent-m4')).toBeNull();
+		expect(status.textContent?.trim()).toBe('');
+	});
+
+	it('a failed resend clears the earlier "Sent to" note', async () => {
+		const { container, status, button } = await clickInvite('reinvite', 'm3');
+		await statusSays(status, '[roster_member_invite_sent {"email":"carl@person.example"}]');
+		sendStatus = 403;
+		await waitFor(() => expect((button() as HTMLButtonElement).disabled).toBe(false));
+		await fireEvent.click(button());
+		await waitFor(() => expect(q(container, 'roster-invite-error-m3')).not.toBeNull());
+		expect(status.textContent?.trim()).toBe('');
 	});
 });
 
