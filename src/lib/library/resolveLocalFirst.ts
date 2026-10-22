@@ -64,5 +64,5 @@ function report(what: string, error: unknown): void {
 // One report per batch; an expired session stays recognisable so it is not filed.
 function oneError(failed: unknown[]): unknown {
 	if (failed.length === 1) return failed[0];
-	return failed.find(isAuthExpiredError) ?? new AggregateError(failed, `${failed.length} copies unreadable`);
+	return failed.find(isAuthExpiredError) ?? new AggregateError(failed, `${failed.length} loaned copies not fully read`);
 }
