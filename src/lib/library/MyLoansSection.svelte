@@ -1,7 +1,9 @@
-<!-- #73 — the signed-in member's active loans. Always mounted: the copy lookup runs
-	whether or not the section shows. -->
+<!-- #73 — the signed-in member's active loans. #982: the copy lookup runs before the list
+	opens, so online it fills the offline cache and the labels show at once on open. -->
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
+	import { authStore } from '$lib/auth/session';
 	import { firstById } from '$lib/collections/firstById';
 	import { createLatest } from '$lib/async/latest';
 	import { heldLoanCopy, isActiveLending, loanCopyLabel } from '$lib/library/libraryData';
@@ -39,22 +41,37 @@
 	const editionById = $derived(firstById(allEditions));
 	const workById = $derived(firstById(works));
 
+	// #984 — a string, so a new lendings array with the same loans of mine re-runs nothing.
+	// The held part re-runs it when librarian copies arrive and resolve some locally.
+	const loanKey = $derived.by(() => {
+		const ids = myActiveLoans.map((l) => l.copyId).sort();
+		const held = new Set(allCopies.map((c) => c.id));
+		return `${selected?.db ?? ''} ${ids.join(',')} ${ids.filter((id) => held.has(id)).join(',')}`;
+	});
+	// #978 — the token itself is not reactive; the session store is.
+	const signedIn = $derived($authStore.status === 'authenticated');
+
 	// #129 — each loan's copy name and edition / work chain, so a loan never renders a raw
 	// entity id. A librarian already holds every copy, so those resolve locally; the rest
 	// take one read each.
 	const copyLoad = createLatest();
+	const known = new Map<string, Map<string, LoanCopy>>();
 	$effect(() => {
-		const loans = myActiveLoans;
+		void loanKey;
+		void signedIn;
 		const isCurrent = copyLoad.next();
-		void resolveLocalFirst<LoanCopy>({
-			loans,
-			selected: () => selected,
-			allCopies: () => allCopies,
-			local: (copy) => heldLoanCopy(copy, editionById, workById),
-			fetch: (cfg, ids) => loadMyLoanCopies(cfg, ids, works),
-			isCurrent,
-			apply: (copies) => (loanCopies = copies),
-			what: 'label'
+		untrack(() => {
+			void resolveLocalFirst<LoanCopy>({
+				loans: myActiveLoans,
+				selected: () => selected,
+				allCopies: () => allCopies,
+				local: (copy) => heldLoanCopy(copy, editionById, workById),
+				fetch: (cfg, ids) => loadMyLoanCopies(cfg, ids, works),
+				isCurrent,
+				apply: (copies) => (loanCopies = copies),
+				what: 'label',
+				known
+			});
 		});
 	});
 
