@@ -6,6 +6,7 @@ import { reportProblem } from '$lib/problems/reportProblem';
 import { bareJoinStates } from '$lib/roster/joinStateView';
 import { withEntry } from '$lib/collections/immutable';
 import type { MemberOpsDeps } from '$lib/roster/rosterMemberOps';
+import { InviteWithdrawError } from '$lib/invite/inviteData';
 
 export function createInviteOps<Halves>(deps: MemberOpsDeps<Halves>) {
 	const { roster, mo, actions, generation, isCurrent, isOffline } = deps;
@@ -44,6 +45,12 @@ export function createInviteOps<Halves>(deps: MemberOpsDeps<Halves>) {
 			}
 			reportProblem({ area: 'roster', action, error: e });
 			mo[errorKey] = withEntry(mo[errorKey], row.memberId, true);
+			// Nothing was pending: the row was stale, so read its state again (#1026).
+			if (e instanceof InviteWithdrawError && e.phase === 'no-pending-invite') {
+				await refreshJoinState(cfg, row.personId, g).catch((error: unknown) =>
+					reportProblem({ area: 'roster', action: 'reading join state', error })
+				);
+			}
 		} finally {
 			if (isCurrent(g)) mo.inviteActionPending = false;
 		}

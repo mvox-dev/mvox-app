@@ -83,4 +83,7 @@ staging:
   - label: GOTCHA
     record: "Any new entu_user writer must join MINT_EXEMPT in singleInviteMechanism.spec.ts"
     ref: "src/lib/invite/singleInviteMechanism.spec.ts"
+  - label: GOTCHA
+    record: "Roster join-state fixtures: absent needs row.createdAt; an old invite created.at reads 'expired'"
+    ref: "src/lib/roster/joinStateView.ts"
 # (*MVOX:Josquin*)

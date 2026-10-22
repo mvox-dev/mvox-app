@@ -97,11 +97,10 @@ describe('mintSelfLinkInvite — stale-invite cleanup BEFORE mint (orphan hazard
 						entu_user: [
 							// A real bound identity — must survive untouched (APPEND, not replace).
 							{ _id: 'eu-bound-1', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' },
-							// Two stale placeholders from abandoned link attempts — both must go
-							// (findStoredInvite consumes only the FIRST match; leftovers are
-							// live 24h bearer credentials).
-							{ _id: 'eu-stale-1', invite: '***' },
-							{ _id: 'eu-stale-2', invite: '***' }
+							// Two stale placeholders, one per pending shape (`true` as a read returns
+							// it, or a string token): both must go, leftovers are live credentials.
+							{ _id: 'eu-stale-1', string: 'me@example.com', invite: true },
+							{ _id: 'eu-stale-2', invite: 'tok-stale-2' }
 						]
 					}
 				})
@@ -128,7 +127,7 @@ describe('mintSelfLinkInvite — stale-invite cleanup BEFORE mint (orphan hazard
 	it('a failed placeholder delete aborts LOUDLY before any mint (no mint on top of an unconsumed stale invite)', async () => {
 		const fetchImpl = makeFetchMock({
 			identityRead: () =>
-				json({ entity: { _id: PERSON_ID, entu_user: [{ _id: 'eu-stale-1', invite: '***' }] } }),
+				json({ entity: { _id: PERSON_ID, entu_user: [{ _id: 'eu-stale-1', invite: true }] } }),
 			propertyDelete: () => json({ error: 'nope' }, 500)
 		});
 
@@ -166,9 +165,9 @@ describe('mintSelfLinkInvite — fail loud, every step named (no silent fallback
 	});
 
 	it('a 2xx mint WITHOUT a token in the response is an apparent-success trap — throws, never resolves', async () => {
-		// The update response is the ONLY readable pass (every later GET masks the
-		// token as '***', entu-api utils/entity.js:594-598) — a 2xx without it must
-		// never be treated as a completed mint.
+		// The update response is the ONLY readable pass (every later GET returns
+		// `invite: true`, entu-api utils/entity.js credentialMask) — a 2xx without
+		// it must never be treated as a completed mint.
 		const fetchImpl = makeFetchMock({
 			mint: () => json({ _id: PERSON_ID, properties: [{ _id: 'prop-x', type: 'entu_user' }] })
 		});
