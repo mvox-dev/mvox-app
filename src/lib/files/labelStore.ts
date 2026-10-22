@@ -1,7 +1,7 @@
 // The label index (#353): work, composer, edition and filename per held file, beside the bytes.
 import type { CollectiveIdentity } from '$lib/collectives/store';
 import type { FileKey } from './idb';
-import type { FileBytesDeliveryReason } from './openFileBytes';
+import { holdsOfflineCopy, type FileBytesDeliveryReason } from './openFileBytes';
 
 export interface PartLabel {
 	work: string;
@@ -23,7 +23,7 @@ export function recordPartLabel(
 	label: PartLabel,
 	reason: FileBytesDeliveryReason
 ): Promise<void> {
-	if (reason !== 'network-stored' && reason !== 'cache') return Promise.resolve();
+	if (!holdsOfflineCopy(reason)) return Promise.resolve();
 	// A failed label write must never gate the open it names.
 	return store.putLabel(key, label).catch(() => {});
 }

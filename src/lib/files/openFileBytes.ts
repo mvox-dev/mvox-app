@@ -6,12 +6,22 @@ import type { FileKey } from './idb';
 import { reportProblem } from '$lib/problems/reportProblem';
 import { BYTE_STORE_CAP_BYTES, type ByteStore } from './byteStore';
 
-/** Only 'cache' and 'network-stored' mean this device holds an offline copy. */
 export type FileBytesDeliveryReason =
 	| 'cache'
 	| 'network-stored'
 	| 'network-uncached'
 	| 'fallback-navigation';
+
+const HOLDS_OFFLINE_COPY: Record<FileBytesDeliveryReason, boolean> = {
+	cache: true,
+	'network-stored': true,
+	'network-uncached': false,
+	'fallback-navigation': false
+};
+
+export function holdsOfflineCopy(reason: FileBytesDeliveryReason): boolean {
+	return HOLDS_OFFLINE_COPY[reason];
+}
 
 /** Why a fetched part was not stored; `error` is the thrown one, when there was one. */
 export interface NotStoredCause {

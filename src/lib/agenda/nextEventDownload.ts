@@ -3,7 +3,12 @@ import { get } from 'svelte/store';
 import { cfgFor } from '$lib/entu/cfg';
 import { sameCollectiveIdentity, selectedCollectiveIdentityStore } from '$lib/collectives/store';
 import { getAppByteStore } from '$lib/files/appByteStore';
-import { prefetchNextEventParts, type PrefetchPartResult } from '$lib/files/prefetch';
+import { holdsOfflineCopy } from '$lib/files/openFileBytes';
+import {
+	prefetchNextEventParts,
+	type PrefetchPartOutcome,
+	type PrefetchPartResult
+} from '$lib/files/prefetch';
 import type { PresenceRefresh } from '$lib/files/presenceRefresh';
 import { online } from '$lib/net/online';
 import { reportProblem } from '$lib/problems/reportProblem';
@@ -17,18 +22,18 @@ export interface NextEventPartsView {
 	download: (fileIds: string[]) => ReturnType<typeof downloadNextEventParts>;
 }
 
-const ON_DEVICE: ReadonlySet<PrefetchPartResult['outcome']> = new Set([
-	'held',
-	'cache',
-	'network-stored'
-]);
+function onDevice(outcome: PrefetchPartOutcome): boolean {
+	if (outcome === 'held') return true;
+	if (outcome === 'failed') return false;
+	return holdsOfflineCopy(outcome);
+}
 
 function isQuotaError(error: unknown): boolean {
 	return typeof error === 'object' && error !== null && (error as { name?: unknown }).name === 'QuotaExceededError';
 }
 
 export function failureOf(results: PrefetchPartResult[], offline: boolean): NextEventPartsFailure | null {
-	const first = results.find((r) => !ON_DEVICE.has(r.outcome));
+	const first = results.find((r) => !onDevice(r.outcome));
 	if (!first) return null;
 	const kind = first.cause?.kind;
 	if (kind === 'save-failed' && isQuotaError(first.cause?.error)) return 'storage-full';
