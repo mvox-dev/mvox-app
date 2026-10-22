@@ -111,14 +111,16 @@ export function setProblemKept(listener: typeof kept): void {
 	kept = listener;
 }
 
-export function keepProblem(area: string, action: string, error: unknown): void {
+/** False when nothing was kept: no one is selected, or there is no log on this device. */
+export function keepProblem(area: string, action: string, error: unknown): boolean {
 	const identity = owner && get(owner);
 	const log = getProblemLog();
-	if (!identity || !log) return;
-	log
+	if (!identity || !log) return false;
+	void log
 		.add(identity, { area, action, detail: redactError(error) })
 		.then(() => kept?.())
 		.catch((e) => console.error('keeping a failure for feedback failed', e));
+	return true;
 }
 
 // (*MVOX:Josquin*)

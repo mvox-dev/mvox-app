@@ -71,4 +71,10 @@ staging:
   - label: GOTCHA
     record: "setLocale('et') is a no-op in node env; happy-dom needs $lib/entu-config mocked for libraryData"
     ref: "src/lib/library/loanCopies.spec.ts"
+  - label: GOTCHA
+    record: "Specs run in node: IDBKeyRange is no global; stubGlobal fake-indexeddb's beside the factory"
+    ref: "src/lib/files/labelStore.spec.ts"
+  - label: GOTCHA
+    record: "swPolicy.ts, swUpdate.ts and service-worker.ts are hash-pinned: even a comment needs a repin"
+    ref: "src/sw-untouched-by-install.spec.ts"
 # (*MVOX:Josquin*)

@@ -12,6 +12,7 @@ export function appLabelStoreModule() {
 	return {
 		getAppLabelStore: () => ({
 			putLabel: async () => {},
+			labelOf: async () => undefined,
 			labelsFor: async () => new Map(),
 			remove: async () => {}
 		})

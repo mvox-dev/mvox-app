@@ -1,7 +1,8 @@
 // The label index (#353): work, composer, edition and filename per held file, beside the bytes.
 import type { CollectiveIdentity } from '$lib/collectives/store';
 import type { FileKey } from './idb';
-import type { FileBytesDeliveryReason } from './openFileBytes';
+import { holdsOfflineCopy, type FileBytesDeliveryReason } from './openFileBytes';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export interface PartLabel {
 	work: string;
@@ -12,8 +13,19 @@ export interface PartLabel {
 
 export interface LabelStore {
 	putLabel(key: FileKey, label: PartLabel): Promise<void>;
+	labelOf(key: FileKey): Promise<PartLabel | undefined>;
 	labelsFor(identity: CollectiveIdentity): Promise<Map<string, PartLabel>>;
 	remove(key: FileKey): Promise<void>;
+}
+
+// One kept report per action, db and person for the app session: an eviction sweep or a dead
+// store fails every row.
+const reported = new Set<string>();
+
+export function reportLabelProblem(action: string, { db, personId }: FileKey, error: unknown): void {
+	const once = JSON.stringify([action, db, personId]);
+	if (reported.has(once)) return;
+	if (reportProblem({ area: 'files', action, error })) reported.add(once);
 }
 
 // Written only when the device holds the bytes, or an orphan name would be minted on purpose.
@@ -23,9 +35,11 @@ export function recordPartLabel(
 	label: PartLabel,
 	reason: FileBytesDeliveryReason
 ): Promise<void> {
-	if (reason !== 'network-stored' && reason !== 'cache') return Promise.resolve();
+	if (!holdsOfflineCopy(reason)) return Promise.resolve();
 	// A failed label write must never gate the open it names.
-	return store.putLabel(key, label).catch(() => {});
+	return store
+		.putLabel(key, label)
+		.catch((error) => reportLabelProblem('saving a part name on this device', key, error));
 }
 
 export async function storedPartLabel(
@@ -33,8 +47,9 @@ export async function storedPartLabel(
 	key: FileKey
 ): Promise<PartLabel | undefined> {
 	try {
-		return (await store.labelsFor(key)).get(key.fileId);
-	} catch {
+		return await store.labelOf(key);
+	} catch (error) {
+		reportLabelProblem('reading a part name on this device', key, error);
 		return undefined;
 	}
 }

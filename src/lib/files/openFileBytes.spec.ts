@@ -7,7 +7,7 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 const reportProblem = vi.hoisted(() => vi.fn());
 vi.mock('$lib/problems/reportProblem', () => ({ reportProblem, alreadyReported: () => {} }));
 
-import { openFileBytes } from './openFileBytes';
+import { holdsOfflineCopy, openFileBytes, type FileBytesDeliveryReason } from './openFileBytes';
 import { BYTE_STORE_CAP_BYTES } from './byteStore';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
 import { testCfg } from '$lib/testing/entuFetchKit';
@@ -458,6 +458,25 @@ describe('openFileBytes — delivery reason on the happy paths (#343 fix-round, 
 		const hit = await openFileBytes(CFG, { ...A, fileId: 'file-1' }, store, fetchImpl as unknown as typeof fetch);
 		expect(hit.reason).toBe('cache');
 		expect(hit.reason).not.toBe(miss.reason);
+	});
+});
+
+describe('#1023 — holdsOfflineCopy: one answer per delivery reason', () => {
+	// Typed over every reason: a new reason fails pnpm check here until it is answered.
+	const EXPECTED: Record<FileBytesDeliveryReason, boolean> = {
+		cache: true,
+		'network-stored': true,
+		'network-uncached': false,
+		'fallback-navigation': false
+	};
+
+	it.each(Object.entries(EXPECTED))('%s holds an offline copy: %s', (reason, held) => {
+		expect(holdsOfflineCopy(reason as FileBytesDeliveryReason)).toBe(held);
+	});
+
+	it('takes only a delivery reason, not a prefetch outcome', () => {
+		// @ts-expect-error 'held' is a prefetch outcome, never a delivery reason
+		expect(() => holdsOfflineCopy('held')).not.toThrow();
 	});
 });
 

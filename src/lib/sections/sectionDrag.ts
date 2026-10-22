@@ -107,6 +107,7 @@ export function createArrangeDrag(deps: ArrangeDragDeps) {
 					pressHandle.releasePointerCapture(pressPointerId);
 				}
 			} catch {
+				// The pointer can already be gone; then there is no capture left to release.
 			}
 		}
 		pressOrigin = null;
@@ -149,6 +150,7 @@ export function createArrangeDrag(deps: ArrangeDragDeps) {
 			try {
 				handle.setPointerCapture(pressPointerId as number);
 			} catch {
+				// The browser may have cancelled the pointer already; the drag then runs without capture.
 			}
 		}, LONG_PRESS_MS);
 	}

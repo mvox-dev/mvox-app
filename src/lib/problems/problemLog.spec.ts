@@ -155,4 +155,13 @@ describe('#684 problem log', () => {
 	});
 });
 
+describe('#1024 reportProblem says whether the failure was kept', () => {
+	it('true once kept under a signed-in person; false with no one selected or a lapsed session', () => {
+		expect(reportProblem({ area: 'files', action: 'a', error: new Error('x') })).toBe(false);
+		signIn({ collectives: [P] });
+		expect(reportProblem({ area: 'files', action: 'a', error: new Error('x') })).toBe(true);
+		expect(reportProblem({ area: 'files', action: 'a', error: new AuthExpiredError() })).toBe(false);
+	});
+});
+
 // (*MVOX:Josquin*)
