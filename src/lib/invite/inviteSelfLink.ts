@@ -2,7 +2,7 @@
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/entu/cfg';
 import { INVITE_MINT_TRIGGER } from './inviteConstants';
-import { inviteOf } from './inviteOf';
+import { inviteOf, isPendingInvite } from './inviteOf';
 
 // Redemption takes the FIRST value carrying `invite`, so stale placeholders go before a mint.
 // A value carrying `uid` is a bound identity and is never touched.
@@ -27,7 +27,7 @@ interface StoredEntuUserEntry {
 	uid?: string;
 	provider?: string;
 	email?: string;
-	invite?: string;
+	invite?: string | true;
 }
 
 type SweepPhase = 'identity-read' | 'stale-invite-cleanup';
@@ -65,7 +65,7 @@ async function sweepStaleInvitePlaceholders(
 		entity?: { entu_user?: StoredEntuUserEntry[] };
 	};
 	const entries = readBody.entity?.entu_user ?? [];
-	const stalePlaceholders = entries.filter((e) => inviteOf(e) !== undefined);
+	const stalePlaceholders = entries.filter(isPendingInvite);
 
 	for (const stale of stalePlaceholders) {
 		const delRes = await entuFetch(
@@ -85,7 +85,7 @@ async function sweepStaleInvitePlaceholders(
 	return { sweptCount: stalePlaceholders.length };
 }
 
-type InviteWithdrawPhase = SweepPhase;
+type InviteWithdrawPhase = SweepPhase | 'no-pending-invite';
 
 export class InviteWithdrawError extends Error {
 	readonly phase: InviteWithdrawPhase;
@@ -103,13 +103,21 @@ export async function withdrawInvite(
 	personId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<void> {
+	let swept: { sweptCount: number };
 	try {
-		await sweepStaleInvitePlaceholders(cfg, personId, fetchImpl);
+		swept = await sweepStaleInvitePlaceholders(cfg, personId, fetchImpl);
 	} catch (e) {
 		if (e instanceof InvitePlaceholderSweepError) {
 			throw new InviteWithdrawError(e.message, e.phase);
 		}
 		throw e;
+	}
+	// Nothing deleted is not a withdrawal: the row was stale, so say so (#1026).
+	if (swept.sweptCount === 0) {
+		throw new InviteWithdrawError(
+			`withdraw: person ${personId} has no pending invite`,
+			'no-pending-invite'
+		);
 	}
 }
 

@@ -1,9 +1,10 @@
 // The person's own `entu_user` identities (#193); a read, not an invite mechanism (MINT_EXEMPT).
-// Bound entries come back whole; invite placeholders come back masked and are never identities.
+// Bound entries come back whole; a pending invite reads back as `invite: true`, never an identity.
 
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/entu/cfg';
 import { reportProblem } from '$lib/problems/reportProblem';
+import { isPendingInvite } from '$lib/invite/inviteOf';
 
 export interface LinkedIdentity {
 	_id: string;
@@ -26,7 +27,7 @@ interface StoredEntuUserEntry {
 	uid?: string;
 	provider?: string;
 	email?: string;
-	invite?: string;
+	invite?: string | true;
 }
 
 // `_viewer` lives in the same private bucket, so `_viewer` present means the bucket was read
@@ -57,7 +58,7 @@ export async function listLinkedIdentities(
 	let pendingInvites = 0;
 	let pendingInviteId: string | undefined;
 	for (const entry of entries) {
-		if (typeof entry.invite === 'string') {
+		if (isPendingInvite(entry)) {
 			pendingInvites += 1;
 			pendingInviteId = entry._id;
 			continue;

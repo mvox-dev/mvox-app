@@ -160,7 +160,7 @@ export async function createInvite(
 	}
 	const personId = personBody._id;
 
-	// The create response is the only read of the token; every later GET masks it as '***'.
+	// The create response is the only read of the token; every later GET returns `invite: true`.
 	const inviteToken = (personBody.properties ?? [])
 		.filter((p) => p.type === 'entu_user')
 		.map(inviteOf)

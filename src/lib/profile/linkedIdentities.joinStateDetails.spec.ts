@@ -12,7 +12,14 @@ type JoinState = 'absent' | 'invited' | 'joined';
 type JoinStateDetail = { state: JoinState; at?: string };
 const cfg = testCfg('sampledb', 'jwt-admin');
 
-type WireEntry = { _id: string; uid?: string; provider?: string; email?: string; invite?: string };
+type WireEntry = {
+	_id: string;
+	string?: string;
+	uid?: string;
+	provider?: string;
+	email?: string;
+	invite?: string | true;
+};
 
 const ADMITTED = [{ _id: 'gr-1', reference: 'me', property_type: '_editor' }];
 
@@ -46,7 +53,7 @@ function routedFetch(
 }
 
 const BOUND: WireEntry = { _id: 'eu-b', uid: 'google:123', provider: 'google', email: 'x@y.ee' };
-const PLACEHOLDER: WireEntry = { _id: 'eu-p', invite: '***' };
+const PLACEHOLDER: WireEntry = { _id: 'eu-p', string: 'x@y.ee', invite: true };
 const AT_INVITED = '2026-09-22T10:00:00.000Z';
 const AT_JOINED = '2026-09-10T12:00:00.000Z';
 

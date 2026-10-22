@@ -37,7 +37,7 @@ describe('listLinkedIdentities — bound identities vs masked placeholders', () 
 				entu_user: [
 					{ _id: 'eu-1', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' },
 					{ _id: 'eu-2', uid: '38510170212', provider: 'mobile-id', email: '38510170212' },
-					{ _id: 'eu-3', invite: '***' }
+					{ _id: 'eu-3', string: 'me@example.com', invite: true }
 				]
 			}
 		});

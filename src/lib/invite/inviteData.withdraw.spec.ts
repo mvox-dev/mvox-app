@@ -1,6 +1,6 @@
 // withdrawInvite revokes an unredeemed invite link; one live link per person.
 import { describe, expect, it, vi } from 'vitest';
-import { mintSelfLinkInvite, withdrawInvite } from './inviteData';
+import { InviteWithdrawError, mintSelfLinkInvite, withdrawInvite } from './inviteData';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 const cfg = testCfg('sampledb', 'jwt-owner');
@@ -25,7 +25,7 @@ function makeEntuStore(initial: StoredValue[], failDeleteIds: string[] = []) {
 		if (method === 'GET' && u.includes(`/entity/${PERSON_ID}`) && u.includes('props=entu_user')) {
 			const masked = state.values.map((v) =>
 				v.rawInvite !== undefined
-					? { _id: v._id, invite: '***' }
+					? { _id: v._id, string: 'invitee@example.com', invite: true }
 					: { _id: v._id, uid: v.uid, provider: v.provider, email: v.email }
 			);
 			return Promise.resolve(
@@ -88,9 +88,11 @@ describe('withdrawInvite — the sweep, standalone (revocation, not tidiness)', 
 		expect(deletes[0].url).toContain('/property/eu-stale');
 	});
 
-	it('withdraw cannot unlink a member who has actually JOINED: only bound entries present → zero DELETEs, resolves as a no-op', async () => {
+	it('withdraw cannot unlink a member who has actually JOINED: only bound entries present → zero DELETEs, and it rejects (#1026)', async () => {
 		const { fetchImpl, state, ops } = makeEntuStore([BOUND]);
-		await withdrawInvite(cfg, PERSON_ID, fetchImpl);
+		await expect(withdrawInvite(cfg, PERSON_ID, fetchImpl)).rejects.toThrow(
+			/no pending invite/
+		);
 		expect(state.values).toEqual([BOUND]);
 		expect(ops.filter((o) => o.method === 'DELETE')).toHaveLength(0);
 	});
@@ -112,6 +114,14 @@ describe('withdrawInvite — the sweep, standalone (revocation, not tidiness)', 
 			'eu-old-1'
 		]);
 		await expect(withdrawInvite(cfg, PERSON_ID, fetchImpl)).rejects.toThrow(/eu-old-1|500/);
+	});
+
+	it('nothing pending is never a success: no entu_user at all → zero DELETEs, rejects (#1026)', async () => {
+		const { fetchImpl, ops } = makeEntuStore([]);
+		const err = await withdrawInvite(cfg, PERSON_ID, fetchImpl).catch((e: unknown) => e);
+		expect(err).toBeInstanceOf(InviteWithdrawError);
+		expect((err as InviteWithdrawError).phase).toBe('no-pending-invite');
+		expect(ops.filter((o) => o.method === 'DELETE')).toHaveLength(0);
 	});
 
 	it('an identity-read failure rejects — never silently treated as "nothing to withdraw"', async () => {

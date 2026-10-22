@@ -6,7 +6,14 @@ import { json, testCfg } from '$lib/testing/entuFetchKit';
 type JoinState = 'absent' | 'invited' | 'joined';
 const cfg = testCfg('sampledb', 'jwt-admin');
 
-type WireEntry = { _id: string; uid?: string; provider?: string; email?: string; invite?: string };
+type WireEntry = {
+	_id: string;
+	string?: string;
+	uid?: string;
+	provider?: string;
+	email?: string;
+	invite?: string | true;
+};
 
 const ADMITTED = [{ _id: 'gr-1', reference: 'me', property_type: '_editor' }];
 
@@ -26,7 +33,7 @@ function personFetch(byId: Record<string, WireEntry[] | 'no-key' | 'withheld' | 
 }
 
 const BOUND: WireEntry = { _id: 'eu-b', uid: 'google:123', provider: 'google', email: 'x@y.ee' };
-const PLACEHOLDER: WireEntry = { _id: 'eu-p', invite: '***' };
+const PLACEHOLDER: WireEntry = { _id: 'eu-p', string: 'x@y.ee', invite: true };
 
 describe('listJoinStates — the three states, read from CONTENTS', () => {
 	it('joined — an entry carrying uid (and never invite) reads as joined', async () => {
@@ -34,9 +41,18 @@ describe('listJoinStates — the three states, read from CONTENTS', () => {
 		expect(states).toEqual<Record<string, JoinState>>({ 'p-1': 'joined' });
 	});
 
-	it("invited — the masked placeholder ({invite:'***'}, no uid) reads as invited, NEVER as joined: the presence-check trap, pinned", async () => {
+	it("invited — the pending placeholder ({invite:true}, as Entu reads it back) reads as invited, NEVER as joined", async () => {
 		const states = await listJoinStates(cfg, ['p-2'], personFetch({ 'p-2': [PLACEHOLDER] }));
 		expect(states['p-2']).toBe('invited');
+	});
+
+	it('invited — a string-token placeholder (a self-mint write response shape) reads as invited too', async () => {
+		const states = await listJoinStates(
+			cfg,
+			['p-5'],
+			personFetch({ 'p-5': [{ _id: 'eu-s', invite: 'tok-abc' }] })
+		);
+		expect(states['p-5']).toBe('invited');
 	});
 
 	it('absent — a person the caller CAN read, with no entu_user key at all, reads as absent (never invited)', async () => {
