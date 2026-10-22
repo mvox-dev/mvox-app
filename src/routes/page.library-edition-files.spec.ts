@@ -82,8 +82,7 @@ import {
 	listLendingsMock,
 	listWorksMock,
 	resolveBorrowerNamesMock,
-	resolveCopyChainsMock,
-	resolveCopyNamesMock
+	resolveLoanCopiesMock
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
@@ -148,8 +147,7 @@ afterEach(() => {
 	listCopiesMock.mockReset();
 	listLendingsMock.mockReset();
 	resolveBorrowerNamesMock.mockReset();
-	resolveCopyNamesMock.mockReset();
-	resolveCopyChainsMock.mockReset();
+	resolveLoanCopiesMock.mockReset();
 	resolveLibraryEditRightMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listAllEditionsMock.mockReset();
@@ -188,7 +186,7 @@ function makeFile(name: string, bytes: number, type: string): File {
 describe('#275 — the files list renders inside the expanded edition (integration)', () => {
 	it('an edition WITH files shows one row per file — filename AND human filesize (via the shared formatFileSize) — inside the expanded edition block', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 
 		const container = await renderWithEditionOpen('edition-1');
 
@@ -217,7 +215,7 @@ describe('#275 — the files list renders inside the expanded edition (integrati
 
 	it('the list renders only in the EXPANDED edition — present after expanding, gone again after collapsing', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 
 		const container = await renderReady();
 		await expandWork(container, 'work-1');
@@ -244,7 +242,7 @@ describe('#275 — the files list renders inside the expanded edition (integrati
 
 	it('zero files is normal and UNREMARKABLE: the zero-files edition renders NO files list, NO empty-state message — for a non-librarian, exactly as today (no #275 testid exists under it at all), while the SIBLING edition with files shows its list (the absence is not vacuous)', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 
 		const container = await renderWithEditionOpen('edition-1');
 		await expandEdition(container, 'edition-2');
@@ -266,7 +264,7 @@ describe('#275 — the files list renders inside the expanded edition (integrati
 
 	it('the files list is a READ path — it renders for the non-librarian member too', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 
 		const container = await renderWithEditionOpen('edition-1');
 
@@ -279,7 +277,7 @@ describe('#275 — the files list renders inside the expanded edition (integrati
 
 	it('LAYOUT sanity at phone width (class contract; happy-dom computes no layout): the files container adds NO third ml-4 indent level, and filenames WRAP — break-words/break-all present, truncate/whitespace-nowrap absent throughout the rows', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 
 		const container = await renderWithEditionOpen('edition-1');
 
@@ -307,7 +305,7 @@ describe('#275 — the files list renders inside the expanded edition (integrati
 describe('#275/#427 — the Open affordance: nothing pre-signed, nothing pre-rendered; the click navigates', () => {
 	it('no URL is rendered or pre-signed: at render, signFileUrl has NOT been called, the row holds no <a href>, and the open control is a BUTTON', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 
 		const container = await renderWithEditionOpen('edition-1');
 
@@ -327,7 +325,7 @@ describe('#275/#427 — the Open affordance: nothing pre-signed, nothing pre-ren
 
 	it('clicking Open NAVIGATES — goto(/part/<file property id>?db=<db>) with the part LABEL in the navigation state, full shape, and NO tab opens (#427)', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		const openMock = vi.fn(() => null);
 		vi.stubGlobal('open', openMock);
 		stubByteFetch(); // a live wire, to prove the click needs none of it
@@ -364,7 +362,7 @@ describe('#275/#427 — the Open affordance: nothing pre-signed, nothing pre-ren
 
 	it('the click signs NOTHING, fetches NOTHING, stores NOTHING and raises NO per-file error — the /part viewer owns the read (#427)', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		vi.stubGlobal('open', vi.fn(() => null));
 		const fetchMock = stubByteFetch();
 		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
@@ -392,7 +390,7 @@ describe('#275/#427 — the Open affordance: nothing pre-signed, nothing pre-ren
 describe('#427 — a part already on the device navigates the same way', () => {
 	it('with every network path dead and the file in the store, the click still just navigates — same URL, no signing, no fetch, no error', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		vi.stubGlobal('open', vi.fn(() => null));
 		const fetchMock = vi.fn(async () => {
 			throw new TypeError('Failed to fetch');
@@ -442,7 +440,7 @@ describe('#427 — a part already on the device navigates the same way', () => {
 describe('#275 — the attach control: librarian-only native <input type=file multiple>', () => {
 	it('for the librarian it renders inside the expanded edition — a NATIVE file input, multiple, labelled — on the zero-files edition too (attach is how files ever appear)', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		mockLibrarian();
 
 		const container = await renderWithEditionOpen('edition-2');
@@ -464,7 +462,7 @@ describe('#275 — the attach control: librarian-only native <input type=file mu
 
 	it('ABSENT — not disabled — for the non-librarian: no attach control exists anywhere, while the files list still renders', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 
 		const container = await renderWithEditionOpen('edition-1');
 
@@ -476,7 +474,7 @@ describe('#275 — the attach control: librarian-only native <input type=file mu
 
 	it('hidden while resolveLibraryEditRight is still pending (hidden-if-undeterminable)', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		resolveLibraryEditRightMock.mockReturnValue(new Promise(() => {}));
 
 		const container = await renderWithEditionOpen('edition-1');
@@ -491,7 +489,7 @@ describe('#275 — the attach control: librarian-only native <input type=file mu
 describe('#275 — selecting files uploads them through uploadEditionFiles', () => {
 	it('a change with two Files calls uploadEditionFiles ONCE with (cfg, the edition id, the Files) — and no listEditions refetch afterwards; the new rows appear LOCALLY with the sr-only announcement naming exactly what landed', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		mockLibrarian();
 		uploadEditionFilesMock.mockResolvedValue({
 			uploaded: [
@@ -546,7 +544,7 @@ describe('#275 — selecting files uploads them through uploadEditionFiles', () 
 
 	it('a JUST-uploaded file opens the same way as an existing one — its Open navigates to /part/<NEW property id> (#427)', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		mockLibrarian();
 		vi.stubGlobal('open', vi.fn(() => null));
 		signFileUrlMock.mockResolvedValue('https://s3.example/signed-new');
@@ -598,7 +596,7 @@ describe('#275 — selecting files uploads them through uploadEditionFiles', () 
 describe('#275 — in-flight state is keyed PER EDITION (per-batch, the stated choice)', () => {
 	it("while edition-2's batch uploads: ITS attach input is disabled and an uploading indicator shows — edition-1's attach input stays enabled; on settle the indicator clears and the input re-enables", async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		mockLibrarian();
 		let resolveUpload: (r: unknown) => void = () => {};
 		uploadEditionFilesMock.mockReturnValue(
@@ -652,7 +650,7 @@ describe('#275 — in-flight state is keyed PER EDITION (per-batch, the stated c
 describe('#275 — a failed file is reported by NAME and never renders as an attachment', () => {
 	it('file 2 of 3 fails (cleaned up): rows for 1 and 3 render, NO row for 2, and a visible per-file failure names it — while the announcement names what DID land', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		mockLibrarian();
 		uploadEditionFilesMock.mockResolvedValue({
 			uploaded: [
@@ -705,7 +703,7 @@ describe('#275 — a failed file is reported by NAME and never renders as an att
 
 	it('a "not-created" file is named in the visible error with its OWN message — distinct from the created-then-cleaned-up wording, and no row for it', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		mockLibrarian();
 		uploadEditionFilesMock.mockResolvedValue({
 			uploaded: [
@@ -745,7 +743,7 @@ describe('#275 — a failed file is reported by NAME and never renders as an att
 
 	it('a delete-failed phantom renders as a BROKEN row — visibly failed, no Open control, never a normal attachment', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		mockLibrarian();
 		uploadEditionFilesMock.mockResolvedValue({
 			uploaded: [],
@@ -780,7 +778,7 @@ describe('#275 — a failed file is reported by NAME and never renders as an att
 
 	it('a REJECTED upload (step-1 transport failure — nothing created) shows the batch error, inserts nothing, and re-enables the attach control for a retry', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		mockLibrarian();
 		uploadEditionFilesMock.mockRejectedValue(new Error('HTTP 403'));
 
@@ -811,8 +809,6 @@ describe('#275 — success-apply AND failure-apply are generation-guarded', () =
 		signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }, { db: 'secondchoir', name: 'Second Choir', personId: 'person-s' }] });
 		resolveLibraryEditRightMock.mockResolvedValue({ state: 'editor', libraryId: 'lib-1' });
 		findMyMemberIdMock.mockResolvedValue(null);
-		resolveCopyNamesMock.mockResolvedValue(new Map());
-		resolveCopyChainsMock.mockResolvedValue(new Map());
 		listAllEditionsMock.mockResolvedValue(toListRead([]));
 		listAllCopiesMock.mockResolvedValue(toListRead([]));
 		listActiveMembersMock.mockResolvedValue(toListRead([]));

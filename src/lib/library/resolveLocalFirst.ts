@@ -1,15 +1,16 @@
 import { firstById } from '$lib/collections/firstById';
 import { getToken } from '$lib/auth/storage';
-import type { Copy, Lending } from '$lib/library/libraryData';
+import type { Copy, Lending, SettledReads } from '$lib/library/libraryData';
 import { cfgFor, type EntuCfg } from '$lib/entu/cfg';
 import { reportProblem } from '$lib/problems/reportProblem';
+import { isAuthExpiredError } from '$lib/entu/auth-expired';
 
 export interface LocalFirst<T> {
 	loans: Lending[];
 	selected: () => { db: string } | null;
 	allCopies: () => Copy[];
 	local: (copy: Copy) => T;
-	fetch: (cfg: EntuCfg, unresolvedIds: string[]) => Promise<Map<string, T>>;
+	fetch: (cfg: EntuCfg, unresolvedIds: string[]) => Promise<SettledReads<T>>;
 	isCurrent: () => boolean;
 	apply: (resolved: Map<string, T>) => void;
 	what: string;
@@ -44,13 +45,24 @@ export function resolveLocalFirst<T>(o: LocalFirst<T>): Promise<void> {
 		return Promise.resolve();
 	}
 	return o.fetch(cfgFor(current.db), unresolved)
-		.then((resolved) => {
+		.then(({ resolved, failed }) => {
 			if (!o.isCurrent()) return;
 			for (const [id, value] of local) resolved.set(id, value);
 			o.apply(resolved);
+			if (failed.length > 0) report(o.what, oneError(failed));
 		})
 		.catch((e) => {
 			if (!o.isCurrent()) return;
-			reportProblem({ area: 'library', action: `resolving the copy ${o.what}`, error: e });
+			report(o.what, e);
 		});
+}
+
+function report(what: string, error: unknown): void {
+	reportProblem({ area: 'library', action: `resolving the copy ${what}`, error });
+}
+
+// One report per batch; an expired session stays recognisable so it is not filed.
+function oneError(failed: unknown[]): unknown {
+	if (failed.length === 1) return failed[0];
+	return failed.find(isAuthExpiredError) ?? new AggregateError(failed, `${failed.length} loaned copies not fully read`);
 }

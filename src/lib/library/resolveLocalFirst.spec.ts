@@ -18,7 +18,7 @@ const copy = (id: string, name: string): Copy => ({ id, name, copyNumber: 1, edi
 
 function setup(over: Partial<LocalFirst<string>> = {}) {
 	const apply = vi.fn();
-	const fetch = vi.fn(async () => new Map([['c2', 'fetched']]));
+	const fetch = vi.fn(async () => ({ resolved: new Map([['c2', 'fetched']]), failed: [] as unknown[] }));
 	const opts: LocalFirst<string> = {
 		loans: [loan('c1'), loan('c2')],
 		selected: () => ({ db: 'db1' }),
@@ -81,7 +81,27 @@ describe('resolveLocalFirst', () => {
 		expect(fetched.apply).not.toHaveBeenCalled();
 	});
 
-	it('reports a failed read under its own label', async () => {
+	it('#979 a partly failed read applies what resolved and reports once', async () => {
+		const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const failed = [new Error('c3: 404'), new Error('c4: 403')];
+		const { opts, apply } = setup({
+			loans: [loan('c1'), loan('c2'), loan('c3'), loan('c4')],
+			fetch: vi.fn(async () => ({ resolved: new Map([['c2', 'fetched']]), failed }))
+		});
+		await resolveLocalFirst(opts);
+		expect([...apply.mock.calls[0][0]]).toEqual([
+			['c2', 'fetched'],
+			['c1', 'held']
+		]);
+		expect(error).toHaveBeenCalledTimes(1);
+		expect(error).toHaveBeenCalledWith(
+			'library: resolving the copy name failed',
+			expect.objectContaining({ errors: failed })
+		);
+		error.mockRestore();
+	});
+
+	it('a read that fails outright reports under its own label', async () => {
 		const error = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const failure = new Error('boom');
 		const { opts, apply } = setup({ fetch: vi.fn(async () => Promise.reject(failure)) });

@@ -3,8 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
 	listLendings,
 	resolveBorrowerNames,
-	resolveCopyNames,
-	resolveCopyChains,
+	resolveLoanCopies,
 	type Lending
 } from './libraryData';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
@@ -120,9 +119,8 @@ describe('#258 part 1 — malformed rows never compose an entity/ request with a
 			lendings = (await listLendings(cfg, fetchImpl)).items;
 		} catch {
 		}
-		await resolveCopyNames(cfg, lendings.map((l) => l.copyId), fetchImpl).catch(() => {});
+		await resolveLoanCopies(cfg, lendings.map((l) => l.copyId), [], fetchImpl);
 		await resolveBorrowerNames(cfg, lendings.map((l) => l.memberId), fetchImpl).catch(() => {});
-		await resolveCopyChains(cfg, lendings.map((l) => l.copyId), [], fetchImpl).catch(() => {});
 
 		const urls = fetchImpl.mock.calls.map((c) => String(c[0]));
 		expect(urls.filter((u) => EMPTY_ID_ENTITY_URL.test(u))).toEqual([]);
@@ -130,12 +128,10 @@ describe('#258 part 1 — malformed rows never compose an entity/ request with a
 });
 
 describe('#258 second net — resolvers can no longer silently blank on an empty id', () => {
-	it("resolveCopyNames with an empty id rejects — it must not resolve '' as a copy's name", async () => {
-		await expect(resolveCopyNames(cfg, [''], routedFetch([]))).rejects.toThrow();
-	});
-
-	it('resolveCopyChains with an empty id rejects — it must not return a blank chain that renders as data', async () => {
-		await expect(resolveCopyChains(cfg, [''], [], routedFetch([]))).rejects.toThrow();
+	it('resolveLoanCopies fails an empty id — it must not return a blank copy that renders as data', async () => {
+		const { resolved, failed } = await resolveLoanCopies(cfg, [''], [], routedFetch([]));
+		expect(resolved.size).toBe(0);
+		expect(String(failed[0])).toMatch(/empty entity id/);
 	});
 
 	it('resolveBorrowerNames with an empty id rejects WITHOUT the misleading "carries no readable person reference" message', async () => {

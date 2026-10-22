@@ -42,7 +42,7 @@ describe('/library — list of stuff', () => {
 		]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
+		signInLibraryReader({ myLibraryId: 'lib-1' });
 
 		const { container } = render(Page);
 		await waitFor(() => {

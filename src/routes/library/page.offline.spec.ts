@@ -169,14 +169,7 @@ function onlineEntu(opts: { librarianPerson?: string } = {}) {
 		) {
 			return json({ count: 1, entities: [{ _id: BORROWER_MEMBER }] }, 200, JSON_HEADERS);
 		}
-		if (url.includes(`entity/${COPY.id}?props=name,copy_number`)) {
-			return json(
-				{ entity: { _id: COPY.id, copy_number: [{ number: COPY.copyNumber }] } },
-				200,
-				JSON_HEADERS
-			);
-		}
-		if (url.includes(`entity/${COPY.id}?props=copy_number,_parent`)) {
+		if (url.includes(`entity/${COPY.id}?props=name,copy_number,_parent`)) {
 			return json({
 				entity: {
 					_id: COPY.id,
@@ -439,19 +432,23 @@ describe('#434 slice 4 review round, finding 2 — the borrower sees her OWN loa
 			expect(row, 'my-loans-item-l-1').not.toBeNull();
 			// The FULL label: copy number, work and edition — the copy read plus
 			// the edition read behind it.
+			const parts = { copyNumber: COPY.copyNumber, work: WORKS[0].name, edition: EDITION.name };
 			expect(row!.textContent, 'my-loans row label').toContain(
-				`Copy #${COPY.copyNumber} — ${WORKS[0].name} / ${EDITION.name}`
+				`[library_loan_label ${JSON.stringify(parts)}]`
 			);
 			return row!;
 		});
 	}
 
-	it('online her loan row is labelled by copy, work and edition', async () => {
-		vi.stubGlobal('fetch', onlineEntu());
+	it('online her loan row is labelled by copy, work and edition, from one read of the copy', async () => {
+		const stub = onlineEntu();
+		vi.stubGlobal('fetch', stub);
 		const { container } = await openLibrary();
 		await expectListing(container);
 		await openMyLoans(container);
 		expect(container.querySelector('[data-testid="library-as-of"]')).toBeNull();
+		const copyReads = stub.mock.calls.filter(([input]) => urlOf(input).includes(`entity/${COPY.id}?`));
+		expect(copyReads).toHaveLength(1);
 	});
 
 	it('offline the section is still on screen, with the same labels and an as-of line', async () => {
@@ -490,7 +487,7 @@ describe('#434 slice 4 review round, finding 2 — the borrower sees her OWN loa
 		);
 		const onlineLabel = await waitFor(() => {
 			const text = first.container.querySelector('[data-testid="my-loans-item-l-1"]')?.textContent ?? '';
-			expect(text).toContain(`#${COPY.copyNumber}`);
+			expect(text).toContain(`[library_copy_number ${JSON.stringify({ copyNumber: COPY.copyNumber })}]`);
 			return text;
 		});
 		await awaitRead(live, '_type.string=library&');

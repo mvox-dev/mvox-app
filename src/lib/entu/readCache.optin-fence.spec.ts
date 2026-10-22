@@ -126,8 +126,10 @@ describe('#434 — the shared readers hard-wire no flag', () => {
 	});
 
 	it('the my-loans copy labels thread their own opts all the way down', () => {
-		const library = src('src/lib/library/libraryAvailability.ts');
-		expect(library).toContain('resolveCopyName(cfg, id, fetchImpl, opts)');
+		const library = src('src/lib/library/loanCopies.ts');
+		expect(library).toContain('props=name,copy_number,_parent`, cfg.token, {}, fetchImpl, opts');
+		expect(library).toContain('props=name,_parent`, cfg.token, {}, fetchImpl, opts');
+		expect(library).toContain('readEdition(cfg, editionId, fetchImpl, opts)');
 	});
 
 	it('the repertoire resolver threads its own options into both of its reads', () => {

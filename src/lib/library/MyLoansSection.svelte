@@ -1,12 +1,12 @@
-<!-- #73 — the signed-in member's active loans. Always mounted: the name and chain
-	lookups run whether or not the section shows. -->
+<!-- #73 — the signed-in member's active loans. Always mounted: the copy lookup runs
+	whether or not the section shows. -->
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
 	import { firstById } from '$lib/collections/firstById';
 	import { createLatest } from '$lib/async/latest';
-	import { copyLabel, formatLoanChainLabel, isActiveLending } from '$lib/library/libraryData';
-	import { loadMyLoanCopyNames, loadMyLoanCopyChains } from '$lib/library/libraryPageData';
-	import type { Copy, Edition, Lending, LoanChain, Work } from '$lib/library/libraryData';
+	import { heldLoanCopy, isActiveLending, loanCopyLabel } from '$lib/library/libraryData';
+	import { loadMyLoanCopies } from '$lib/library/libraryPageData';
+	import type { Copy, Edition, Lending, LoanCopy, Work } from '$lib/library/libraryData';
 	import { formatLoanRange, isOverdue } from '$lib/library/lendingView';
 	import { resolveLocalFirst } from '$lib/library/resolveLocalFirst';
 
@@ -29,64 +29,38 @@
 	}: Props = $props();
 
 	let expanded = $state(false);
-	let copyNames = $state<Map<string, string>>(new Map());
-	let copyChains = $state<Map<string, LoanChain>>(new Map());
+	let loanCopies = $state<Map<string, LoanCopy>>(new Map());
 
 	const myActiveLoans = $derived(
 		myMemberId ? lendings.filter((l) => l.memberId === myMemberId && isActiveLending(l)) : []
 	);
 	const overdueCount = $derived(myActiveLoans.filter((l) => isOverdue(l.assignedUntil)).length);
 
-	// Copy names, so a loan never renders a raw entity id. A librarian already holds every
-	// copy, so those resolve locally; the rest take one read.
-	const copyNameLoad = createLatest();
-	$effect(() => {
-		const loans = myActiveLoans;
-		const isCurrent = copyNameLoad.next();
-		void resolveLocalFirst({
-			loans,
-			selected: () => selected,
-			allCopies: () => allCopies,
-			local: copyLabel,
-			fetch: (cfg, ids) => loadMyLoanCopyNames(cfg, ids),
-			isCurrent,
-			apply: (names) => (copyNames = names),
-			what: 'name'
-		});
-	});
-
 	const editionById = $derived(firstById(allEditions));
 	const workById = $derived(firstById(works));
 
-	// #129 — copy, edition and work for each loan's label; same local-first split.
-	const chainLoad = createLatest();
+	// #129 — each loan's copy name and edition / work chain, so a loan never renders a raw
+	// entity id. A librarian already holds every copy, so those resolve locally; the rest
+	// take one read each.
+	const copyLoad = createLatest();
 	$effect(() => {
 		const loans = myActiveLoans;
-		const isCurrent = chainLoad.next();
-		void resolveLocalFirst<LoanChain>({
+		const isCurrent = copyLoad.next();
+		void resolveLocalFirst<LoanCopy>({
 			loans,
 			selected: () => selected,
 			allCopies: () => allCopies,
-			local: (copy) => {
-				const edition = editionById.get(copy.editionId);
-				const work = edition ? workById.get(edition.workId ?? '') : undefined;
-				return {
-					copyNumber: copy.copyNumber,
-					workName: work?.name ?? '',
-					editionName: edition?.name ?? ''
-				};
-			},
-			fetch: (cfg, ids) => loadMyLoanCopyChains(cfg, ids, works),
+			local: (copy) => heldLoanCopy(copy, editionById, workById),
+			fetch: (cfg, ids) => loadMyLoanCopies(cfg, ids, works),
 			isCurrent,
-			apply: (chains) => (copyChains = chains),
-			what: 'chain'
+			apply: (copies) => (loanCopies = copies),
+			what: 'label'
 		});
 	});
 
 	function loanLabel(copyId: string): string {
-		const chain = copyChains.get(copyId);
-		if (chain) return formatLoanChainLabel(chain);
-		return copyNames.get(copyId) || m.library_copy_name_unknown();
+		const copy = loanCopies.get(copyId);
+		return copy ? loanCopyLabel(copy) : m.library_copy_name_unknown();
 	}
 </script>
 

@@ -14,15 +14,20 @@ export {
 } from './libraryReads';
 export {
 	deriveCopyAvailability,
-	resolveCopyNames,
 	resolveBorrowerNames,
 	deriveEditionAvailability,
 	deriveWorkAvailability,
 	isActiveLending,
 	activeLendingForMemberInEdition,
 	copyLabel,
-	formatLoanChainLabel,
-	resolveCopyChains,
-	type CopyAvailability,
-	type LoanChain
+	type CopyAvailability
 } from './libraryAvailability';
+export {
+	formatLoanChainLabel,
+	heldLoanCopy,
+	loanCopyLabel,
+	resolveLoanCopies,
+	type LoanChain,
+	type LoanCopy,
+	type SettledReads
+} from './loanCopies';

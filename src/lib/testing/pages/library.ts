@@ -20,8 +20,7 @@ import {
 	listLendingsMock,
 	listWorksMock,
 	resolveBorrowerNamesMock,
-	resolveCopyChainsMock,
-	resolveCopyNamesMock,
+	resolveLoanCopiesMock,
 	resolveLibraryEditRightMock,
 	resolveMyLibraryIdMock,
 	returnLendingMock
@@ -41,7 +40,7 @@ export function resetCopyListMocks(): void {
 	listCopiesMock.mockReset();
 	listLendingsMock.mockReset();
 	resolveBorrowerNamesMock.mockReset();
-	resolveCopyNamesMock.mockReset();
+	resolveLoanCopiesMock.mockReset();
 	resolveLibraryEditRightMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listAllEditionsMock.mockReset();
@@ -62,7 +61,7 @@ export function resetRepertoireBadgeMocks(): void {
 	listAllCopiesMock.mockReset();
 	listLendingsMock.mockReset();
 	resolveBorrowerNamesMock.mockReset();
-	resolveCopyNamesMock.mockReset();
+	resolveLoanCopiesMock.mockReset();
 	resolveLibraryEditRightMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listActiveMembersMock.mockReset();
@@ -81,7 +80,6 @@ export function armLibraryRecovery(): void {
 export interface ReaderOpts {
 	librarian?: boolean;
 	myLibraryId?: string;
-	chains?: boolean;
 	seasons?: boolean;
 }
 
@@ -95,8 +93,6 @@ export function signInLibraryReader(opts: ReaderOpts = {}): void {
 	);
 	if (opts.myLibraryId) resolveMyLibraryIdMock.mockResolvedValue(opts.myLibraryId);
 	findMyMemberIdMock.mockResolvedValue(null);
-	resolveCopyNamesMock.mockResolvedValue(new Map());
-	if (opts.chains) resolveCopyChainsMock.mockResolvedValue(new Map());
 	listAllEditionsMock.mockResolvedValue(toListRead([]));
 	listAllCopiesMock.mockResolvedValue(toListRead([]));
 	listActiveMembersMock.mockResolvedValue(toListRead([]));
@@ -209,8 +205,6 @@ export function seedTwoLibraries(): void {
 		Promise.resolve(cfg.db === DB_A ? 'lib-a' : 'lib-b')
 	);
 	findMyMemberIdMock.mockResolvedValue(null);
-	resolveCopyNamesMock.mockResolvedValue(new Map());
-	resolveCopyChainsMock.mockResolvedValue(new Map());
 }
 
 // Renders and waits for work-1's row.

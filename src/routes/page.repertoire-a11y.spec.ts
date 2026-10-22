@@ -39,7 +39,7 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 // ── Library page seams for the TR.4 badge tests (page.library-repertoire-badges.spec.ts
 // set); RepertoireElement imports none of them.
 vi.mock('$lib/library/libraryData', async () =>
-	(await import('$lib/testing/mocks/library')).libraryReadsModule({ chains: false })
+	(await import('$lib/testing/mocks/library')).libraryReadsModule()
 );
 vi.mock('$lib/paraglide/runtime', async () =>
 	(await import('$lib/testing/moduleStubs')).runtimeModule()
@@ -102,8 +102,7 @@ import {
 	listEditionsMock,
 	listLendingsMock,
 	listWorksMock,
-	resolveBorrowerNamesMock,
-	resolveCopyNamesMock
+	resolveBorrowerNamesMock
 } from '$lib/testing/mocks/library';
 import { resetRepertoireBadgeMocks } from '$lib/testing/pages/library';
 import { readSource } from '$lib/testing/pages/files';
@@ -621,7 +620,6 @@ describe('#93 — a11y: library repertoire badges are readable without color', (
 		signIn();
 		resolveLibraryEditRightMock.mockResolvedValue({ state: 'not-editor', libraryId: null });
 		findMyMemberIdMock.mockResolvedValue(null);
-		resolveCopyNamesMock.mockResolvedValue(new Map());
 		listAllEditionsMock.mockResolvedValue(toListRead([]));
 		listAllCopiesMock.mockResolvedValue(toListRead([]));
 		listActiveMembersMock.mockResolvedValue(toListRead([]));

@@ -82,8 +82,7 @@ import {
 	listLendingsMock,
 	listWorksMock,
 	resolveBorrowerNamesMock,
-	resolveCopyChainsMock,
-	resolveCopyNamesMock
+	resolveLoanCopiesMock
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
@@ -144,8 +143,7 @@ afterEach(() => {
 	listCopiesMock.mockReset();
 	listLendingsMock.mockReset();
 	resolveBorrowerNamesMock.mockReset();
-	resolveCopyNamesMock.mockReset();
-	resolveCopyChainsMock.mockReset();
+	resolveLoanCopiesMock.mockReset();
 	resolveLibraryEditRightMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listAllEditionsMock.mockReset();
@@ -174,7 +172,7 @@ async function renderWithFilesVisible(): Promise<HTMLElement> {
 describe('#351 — /library: one indicator, two states, on every file row (integration)', () => {
 	it('a held file badges on-device, an unheld file badges needs-network — both states in the SAME render, each INSIDE its own file row', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		fakeByteStore.seed(IDENTITY, 'file-held', pdfData());
 		installPresence();
 
@@ -196,7 +194,7 @@ describe('#351 — /library: one indicator, two states, on every file row (integ
 
 	it('THE trap: rendering asks presence ONCE for the whole list — never get() — and asks for the CURRENT identity partition', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		fakeByteStore.seed(IDENTITY, 'file-held', pdfData());
 		const presenceSpy = installPresence();
 		const getSpy = vi.spyOn(fakeByteStore, 'get');
@@ -212,7 +210,7 @@ describe('#351 — /library: one indicator, two states, on every file row (integ
 
 	it('while the store has NOT answered, NEITHER badge renders — no default-then-correct', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		const pending = deferred<string[]>();
 		installPresence(() => pending.promise);
 
@@ -238,7 +236,7 @@ describe('#351 — /library: one indicator, two states, on every file row (integ
 
 	it('the badge is NOT a control: no button/link semantics, and clicking it signs nothing and opens nothing — the row Open affordance is untouched beside it', async () => {
 		mockBaselineLibrary();
-		signInLibraryReader({ chains: true, seasons: true });
+		signInLibraryReader({ seasons: true });
 		fakeByteStore.seed(IDENTITY, 'file-held', pdfData());
 		installPresence();
 		const openSpy = vi.spyOn(window, 'open');
