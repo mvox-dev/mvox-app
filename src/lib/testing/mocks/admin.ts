@@ -20,6 +20,7 @@ export const resolveParentMock = vi.fn();
 export const resolveInviteParentMock = vi.fn();
 export const createInviteMock = vi.fn();
 export const mintSelfLinkInviteMock = vi.fn();
+export const sendInviteMock = vi.fn();
 export const withdrawInviteMock = vi.fn();
 export const listJoinStateDetailsMock = vi.fn();
 
@@ -119,6 +120,7 @@ export async function inviteWritesModule(importOriginal: Real, opts: { withdraw:
 		...(await real(importOriginal)),
 		createInvite: createInviteMock,
 		mintSelfLinkInvite: mintSelfLinkInviteMock,
+		sendInvite: sendInviteMock,
 		...(opts.withdraw ? { withdrawInvite: withdrawInviteMock } : {})
 	};
 }

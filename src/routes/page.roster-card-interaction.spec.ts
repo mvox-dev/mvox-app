@@ -51,6 +51,7 @@ import {
 	listJoinStateDetailsMock,
 	listJoinStatesMock,
 	mintSelfLinkInviteMock,
+	sendInviteMock,
 	resolveDbRightMock,
 	withdrawInviteMock
 } from '$lib/testing/mocks/admin';
@@ -110,7 +111,7 @@ beforeEach(() => {
 		)
 	);
 	resolveDbRightMock.mockResolvedValue('owner');
-	mintSelfLinkInviteMock.mockResolvedValue({ inviteToken: 'tok-fresh-1' });
+	sendInviteMock.mockResolvedValue({ sent: true, email: 'dora@person.example' });
 	withdrawInviteMock.mockResolvedValue(undefined);
 	deactivateMemberMock.mockResolvedValue(undefined);
 	reinstateMemberMock.mockResolvedValue(undefined);
@@ -392,13 +393,14 @@ describe('(3) relocation — invite controls and the deactivate pair live inside
 		expect(container.querySelectorAll('[data-testid="roster-invite-owner-note"]')).toHaveLength(1);
 	});
 
-	it('INTEGRATION: kutsu clicked inside the opened editor still drives the untouched handler — mintSelfLinkInvite for THAT person, never createInvite', async () => {
+	it('INTEGRATION: kutsu clicked inside the opened editor sends the invite for THAT person, never a mint or createInvite', async () => {
 		const { container } = await renderRosterAs('editor');
 		await openCard(container, 'm4');
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
-		await waitFor(() => expect(mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
-		expect(mintSelfLinkInviteMock.mock.calls[0][1]).toBe('pp-4');
+		await waitFor(() => expect(sendInviteMock).toHaveBeenCalledTimes(1));
+		expect(sendInviteMock.mock.calls[0][1]).toBe('pp-4');
+		expect(mintSelfLinkInviteMock).not.toHaveBeenCalled();
 		expect(createInviteMock).not.toHaveBeenCalled();
 	});
 });

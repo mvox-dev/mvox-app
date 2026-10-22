@@ -23,7 +23,7 @@ const h = vi.hoisted(() => ({
 	loadMemberRecordMock: vi.fn(),
 	createMemberRecordMock: vi.fn(),
 	updateMemberRecordMock: vi.fn(),
-	mintSelfLinkInviteMock: vi.fn(),
+	sendInviteMock: vi.fn(),
 	withdrawInviteMock: vi.fn(),
 	listJoinStateDetailsMock: vi.fn(),
 	resolveDbRightMock: vi.fn()
@@ -60,7 +60,7 @@ vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 );
 vi.mock('$lib/invite/inviteData', async (importActual) => ({
 	...(await importActual<typeof import('$lib/invite/inviteData')>()),
-	mintSelfLinkInvite: h.mintSelfLinkInviteMock,
+	sendInvite: h.sendInviteMock,
 	withdrawInvite: h.withdrawInviteMock
 }));
 vi.mock('$lib/profile/linkedIdentities', async (importActual) => ({
@@ -156,7 +156,7 @@ beforeEach(async () => {
 	h.loadMemberRecordMock.mockResolvedValue({ state: 'none' });
 	h.createMemberRecordMock.mockResolvedValue(undefined);
 	h.updateMemberRecordMock.mockResolvedValue(undefined);
-	h.mintSelfLinkInviteMock.mockResolvedValue({ inviteToken: 'tok' });
+	h.sendInviteMock.mockResolvedValue({ sent: true, email: 'p@person.example' });
 	h.withdrawInviteMock.mockResolvedValue(undefined);
 	h.resolveDbRightMock.mockResolvedValue('owner');
 	h.listJoinStateDetailsMock.mockResolvedValue({
@@ -190,7 +190,7 @@ function noWriteSeamCalled() {
 	expect(h.deleteSectionMock).not.toHaveBeenCalled();
 	expect(h.reparentMock).not.toHaveBeenCalled();
 	expect(h.renameMock).not.toHaveBeenCalled();
-	expect(h.mintSelfLinkInviteMock).not.toHaveBeenCalled();
+	expect(h.sendInviteMock).not.toHaveBeenCalled();
 	expect(h.withdrawInviteMock).not.toHaveBeenCalled();
 }
 

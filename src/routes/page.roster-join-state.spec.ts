@@ -55,6 +55,7 @@ import {
 	listJoinStatesMock,
 	mintSelfLinkInviteMock,
 	resolveDbRightMock,
+	sendInviteMock,
 	withdrawInviteMock
 } from '$lib/testing/mocks/admin';
 import {
@@ -68,7 +69,7 @@ import {
 } from '$lib/testing/mocks/roster';
 import { ORG_A, ORG_B } from '$lib/testing/pages/rosterFixtures';
 import { setAuthedWithTwoCollectives } from '$lib/testing/pages/roster';
-import { cleanupRestoreClipboard, setClipboard, treeA } from '$lib/testing/pages/rosterInvite';
+import { cleanupRestoreClipboard, treeA } from '$lib/testing/pages/rosterInvite';
 import { q } from '$lib/testing/pages/dom';
 
 const CREATED_AT: Record<string, string> = {
@@ -147,7 +148,7 @@ beforeEach(() => {
 		Promise.resolve(detailsFor(cfg.db, personIds))
 	);
 	resolveDbRightMock.mockResolvedValue('owner');
-	mintSelfLinkInviteMock.mockResolvedValue({ inviteToken: 'tok-fresh-1' });
+	sendInviteMock.mockResolvedValue({ sent: true, email: 'dora@person.example' });
 	withdrawInviteMock.mockResolvedValue(undefined);
 	deactivateMemberMock.mockResolvedValue(undefined);
 	reinstateMemberMock.mockResolvedValue(undefined);
@@ -436,13 +437,13 @@ describe('(A) dated status lines — #467: one line per row, four display states
 		expect(listJoinStatesMock).not.toHaveBeenCalled();
 	});
 
-	it('INTEGRATION: the post-mint refresh re-reads through listJoinStateDetails for THAT person (the one-result derivation covers the refresh path too)', async () => {
+	it('INTEGRATION: the post-send refresh re-reads through listJoinStateDetails for THAT person (the one-result derivation covers the refresh path too)', async () => {
 		const { container } = await renderRoster();
 		await openCard(container, 'm4');
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		listJoinStateDetailsMock.mockClear();
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
-		await waitFor(() => expect(mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(sendInviteMock).toHaveBeenCalledTimes(1));
 		await waitFor(() =>
 			expect(
 				listJoinStateDetailsMock.mock.calls.some((call) => {
@@ -530,36 +531,26 @@ describe('(C) the controls gate on _owner ONLY — PO ruling 2026-09-09, probe-o
 	});
 });
 
-describe('(D) kutsu — first invite, minted onto the EXISTING person', () => {
-	it('calls mintSelfLinkInvite (sweep-then-mint) for THAT person, NEVER createInvite, and surfaces the fresh link — the token is the deliverable', async () => {
+describe('(D) kutsu — first invite, sent to the EXISTING person', () => {
+	it("sends the invite for THAT person with the selected collective's cfg, never a mint or createInvite, and says where it went", async () => {
 		const { container } = await renderRoster();
 		await openCard(container, 'm4'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
-		await waitFor(() => expect(mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
-		expect(mintSelfLinkInviteMock.mock.calls[0][0].db).toBe('sampledb');
-		expect(mintSelfLinkInviteMock.mock.calls[0][1]).toBe('pp-4');
+		await waitFor(() => expect(sendInviteMock).toHaveBeenCalledTimes(1));
+		expect(sendInviteMock.mock.calls[0][0].db).toBe('sampledb');
+		expect(sendInviteMock.mock.calls[0][1]).toBe('pp-4');
+		expect(mintSelfLinkInviteMock).not.toHaveBeenCalled();
 		expect(createInviteMock).not.toHaveBeenCalled();
-		const copyButton = await waitFor(() => {
-			const el = q(container, 'roster-invite-copy-m4');
-			expect(el).not.toBeNull();
-			return el!;
-		});
-		const writeText = vi.fn().mockResolvedValue(undefined);
-		setClipboard({ writeText });
-		await fireEvent.click(copyButton);
-		await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
-		const payload = writeText.mock.calls[0][0] as string;
-		expect(payload).toContain('tok-fresh-1');
-		expect(payload).toContain('/invite/');
-		expect(payload.startsWith(window.location.origin)).toBe(true);
-		expect(container.textContent).not.toContain('tok-fresh-1');
+		await waitFor(() =>
+			expect(q(container, 'roster-invite-sent-m4')?.textContent).toContain('dora@person.example')
+		);
 	});
 
-	it('after the mint the state is RE-READ and the row follows the contents: kutsu gone, saada uuesti + tühista kutse on', async () => {
-		mintSelfLinkInviteMock.mockImplementation(async (_cfg: unknown, personId: string) => {
+	it('after the send the state is RE-READ and the row follows the contents: kutsu gone, saada uuesti + tühista kutse on', async () => {
+		sendInviteMock.mockImplementation(async (_cfg: unknown, personId: string) => {
 			joinStatesByDb.sampledb[personId] = 'invited';
-			return { inviteToken: 'tok-fresh-1' };
+			return { sent: true, email: 'dora@person.example' };
 		});
 		const { container } = await renderRoster();
 		await openCard(container, 'm4'); // #302 drive-path edit
@@ -571,10 +562,8 @@ describe('(D) kutsu — first invite, minted onto the EXISTING person', () => {
 		expect(q(container, 'roster-row-join-state-m4')!.getAttribute('data-join-state')).toBe('invited');
 	});
 
-	it('a mint failure surfaces as an inline role="alert" on the row — no link panel, and kutsu stays for a retry', async () => {
-		mintSelfLinkInviteMock.mockRejectedValue(
-			new Error('self-link mint refused: HTTP 403 — the person lacks self-_editor')
-		);
+	it('a send failure surfaces as an inline role="alert" on the row — nothing says sent, and kutsu stays for a retry', async () => {
+		sendInviteMock.mockRejectedValue(new Error('send-invite refused: HTTP 403'));
 		const { container } = await renderRoster();
 		await openCard(container, 'm4'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
@@ -585,34 +574,25 @@ describe('(D) kutsu — first invite, minted onto the EXISTING person', () => {
 			return el!;
 		});
 		expect(alertEl.getAttribute('role')).toBe('alert');
-		expect(q(container, 'roster-invite-copy-m4')).toBeNull();
+		expect(q(container, 'roster-invite-sent-m4')).toBeNull();
 		expect(q(container, 'roster-member-invite-m4')).not.toBeNull();
 	});
 });
 
-describe('(E) saada uuesti — atomic replace via the sweep-then-mint producer', () => {
-	it('calls mintSelfLinkInvite for the invited person (the invariant — old link dies in the same action — is pinned at the wire in inviteData.withdraw.spec.ts), never createInvite, and surfaces the fresh link', async () => {
+describe('(E) saada uuesti — sends the invite again', () => {
+	it('sends the invite for the invited person, never a mint or createInvite, and says where it went', async () => {
+		sendInviteMock.mockResolvedValue({ sent: true, email: 'carl@person.example' });
 		const { container } = await renderRoster();
 		await openCard(container, 'm3'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-reinvite-m3')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-reinvite-m3')!);
-		await waitFor(() => expect(mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
-		expect(mintSelfLinkInviteMock.mock.calls[0][1]).toBe('pp-3');
+		await waitFor(() => expect(sendInviteMock).toHaveBeenCalledTimes(1));
+		expect(sendInviteMock.mock.calls[0][1]).toBe('pp-3');
+		expect(mintSelfLinkInviteMock).not.toHaveBeenCalled();
 		expect(createInviteMock).not.toHaveBeenCalled();
-		const copyButton = await waitFor(() => {
-			const el = q(container, 'roster-invite-copy-m3');
-			expect(el).not.toBeNull();
-			return el!;
-		});
-		const writeText = vi.fn().mockResolvedValue(undefined);
-		setClipboard({ writeText });
-		await fireEvent.click(copyButton);
-		await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
-		const payload = writeText.mock.calls[0][0] as string;
-		expect(payload).toContain('tok-fresh-1');
-		expect(payload).toContain('/invite/');
-		expect(payload.startsWith(window.location.origin)).toBe(true);
-		expect(container.textContent).not.toContain('tok-fresh-1');
+		await waitFor(() =>
+			expect(q(container, 'roster-invite-sent-m3')?.textContent).toContain('carl@person.example')
+		);
 	});
 });
 
@@ -628,7 +608,7 @@ describe('(F) tühista kutse — a revocation; withdrawn collapses to never-invi
 		await waitFor(() => expect(withdrawInviteMock).toHaveBeenCalledTimes(1));
 		expect(withdrawInviteMock.mock.calls[0][0].db).toBe('sampledb');
 		expect(withdrawInviteMock.mock.calls[0][1]).toBe('pp-3');
-		expect(mintSelfLinkInviteMock).not.toHaveBeenCalled();
+		expect(sendInviteMock).not.toHaveBeenCalled();
 		await waitFor(() => expect(q(container, 'roster-member-invite-m3')).not.toBeNull());
 		expect(q(container, 'roster-member-reinvite-m3')).toBeNull();
 		expect(q(container, 'roster-member-withdraw-m3')).toBeNull();
@@ -657,27 +637,15 @@ describe('(F) tühista kutse — a revocation; withdrawn collapses to never-invi
 });
 
 describe('(G) collective switch — the #287 bug class, kept out of the new feature', () => {
-	it("a minted link from collective A does not survive the switch, and B's join states are read fresh with B's cfg", async () => {
+	it("a 'sent' note from collective A does not survive the switch, and B's invite goes out with B's cfg", async () => {
 		const { container } = await renderRoster();
 		await openCard(container, 'm4'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
-		await waitFor(() => expect(q(container, 'roster-invite-copy-m4')).not.toBeNull());
-
-		const writeText = vi.fn().mockResolvedValue(undefined);
-		setClipboard({ writeText });
-		await fireEvent.click(q(container, 'roster-invite-copy-m4')!);
-		await waitFor(() =>
-			expect(q(container, 'roster-invite-copy-status-m4')?.textContent?.trim()).toBe(
-				'[admin_invite_copied]'
-			)
-		);
+		await waitFor(() => expect(q(container, 'roster-invite-sent-m4')).not.toBeNull());
 
 		await switchToOtherChoir(container);
-		expect(q(container, 'roster-invite-copy-m4')).toBeNull();
-		expect(
-			container.querySelectorAll('[data-testid^="roster-invite-copy-status-"]')
-		).toHaveLength(0);
+		expect(container.querySelectorAll('[data-testid^="roster-invite-sent-"]')).toHaveLength(0);
 		await waitFor(() =>
 			expect(
 				[...listJoinStatesMock.mock.calls, ...listJoinStateDetailsMock.mock.calls].some(
@@ -692,35 +660,9 @@ describe('(G) collective switch — the #287 bug class, kept out of the new feat
 		await openCard(container, 'm-bob');
 		await waitFor(() => expect(q(container, 'roster-member-invite-m-bob')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m-bob')!);
-		await waitFor(() => expect(q(container, 'roster-invite-copy-m-bob')).not.toBeNull());
-		const freshStatus = q(container, 'roster-invite-copy-status-m-bob');
-		expect(freshStatus).not.toBeNull();
-		expect(freshStatus!.textContent?.trim()).toBe('');
-	});
-
-	it("#346 — a copy FAILURE's alert from collective A does not survive the switch either (copyFailed state joins the same resets)", async () => {
-		const { container } = await renderRoster();
-		await openCard(container, 'm4'); // #302 drive-path edit
-		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
-		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
-		await waitFor(() => expect(q(container, 'roster-invite-copy-m4')).not.toBeNull());
-
-		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		setClipboard(undefined); // absent API → the visible per-row failure
-		await fireEvent.click(q(container, 'roster-invite-copy-m4')!);
-		await waitFor(() => expect(q(container, 'roster-invite-copy-error-m4')).not.toBeNull());
-		consoleSpy.mockRestore();
-
-		await switchToOtherChoir(container);
-		expect(
-			container.querySelectorAll('[data-testid^="roster-invite-copy-error-"]')
-		).toHaveLength(0);
-
-		await openCard(container, 'm-bob');
-		await waitFor(() => expect(q(container, 'roster-member-invite-m-bob')).not.toBeNull());
-		await fireEvent.click(q(container, 'roster-member-invite-m-bob')!);
-		await waitFor(() => expect(q(container, 'roster-invite-copy-m-bob')).not.toBeNull());
-		expect(q(container, 'roster-invite-copy-error-m-bob')).toBeNull();
+		await waitFor(() => expect(sendInviteMock).toHaveBeenCalledTimes(2));
+		expect(sendInviteMock.mock.calls[1][0].db).toBe('other-choir');
+		expect(sendInviteMock.mock.calls[1][1]).toBe('p-bob');
 	});
 });
 
@@ -812,10 +754,10 @@ describe('(H) a superseded load\'s join-state tail writes NOTHING', () => {
 describe('(I) a generation bump during an in-flight invite write re-enables the controls (#287 discipline)', () => {
 	function heldMint() {
 		let release: () => void = () => {};
-		mintSelfLinkInviteMock.mockImplementation(
+		sendInviteMock.mockImplementation(
 			() =>
-				new Promise<{ inviteToken: string }>((resolve) => {
-					release = () => resolve({ inviteToken: 'tok-fresh-1' });
+				new Promise<{ sent: true; email: string }>((resolve) => {
+					release = () => resolve({ sent: true, email: 'dora@person.example' });
 				})
 		);
 		return () => release();
@@ -827,7 +769,7 @@ describe('(I) a generation bump during an in-flight invite write re-enables the 
 		await openCard(container, 'm4'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
-		await waitFor(() => expect(mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(sendInviteMock).toHaveBeenCalledTimes(1));
 
 		await switchToOtherChoir(container);
 		await openCard(container, 'm-bob'); // #302 drive-path edit (switch closed any editor)
@@ -846,7 +788,7 @@ describe('(I) a generation bump during an in-flight invite write re-enables the 
 		await openCard(container, 'm4'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
-		await waitFor(() => expect(mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(sendInviteMock).toHaveBeenCalledTimes(1));
 
 		await openCard(container, 'm2');
 		await fireEvent.click(q(container, 'member-deactivate-m2')!);

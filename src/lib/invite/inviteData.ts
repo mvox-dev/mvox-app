@@ -13,3 +13,4 @@ export {
 	withdrawInvite,
 	mintSelfLinkInvite
 } from './inviteSelfLink';
+export { SendInviteError, sendInvite, type SendInviteResult } from './sendInvite';
