@@ -1,11 +1,8 @@
-// The roster rows' invite mint, withdraw and copy handlers.
+// The roster rows' invite send and withdraw handlers.
 import type { RosterRow } from '$lib/roster/rosterData';
 import type { EntuCfg } from '$lib/entu/cfg';
 import { isAuthExpiredError } from '$lib/entu/request';
-// The invite token is a bearer secret: the row hands out a full URL, never a bare JWT.
-// The URL composer and the copy-click share their code with InviteSurface.
-import { buildInviteUrl } from '$lib/invite/invite-links';
-import { createInviteLinkCopier } from '$lib/invite/copy-invite-link';
+import { reportProblem } from '$lib/problems/reportProblem';
 import { bareJoinStates } from '$lib/roster/joinStateView';
 import { withEntry } from '$lib/collections/immutable';
 import type { MemberOpsDeps } from '$lib/roster/rosterMemberOps';
@@ -23,7 +20,7 @@ export function createInviteOps<Halves>(deps: MemberOpsDeps<Halves>) {
 	async function runInviteOp<T>(
 		row: RosterRow,
 		errorKey: 'inviteErrorByMemberId' | 'withdrawErrorByMemberId',
-		label: string,
+		action: string,
 		write: (cfg: EntuCfg) => Promise<T>,
 		onDone: (result: T) => void
 	): Promise<void> {
@@ -45,27 +42,21 @@ export function createInviteOps<Halves>(deps: MemberOpsDeps<Halves>) {
 				deps.sessionExpired();
 				return;
 			}
-			console.error(label, row.memberId, e);
+			reportProblem({ area: 'roster', action, error: e });
 			mo[errorKey] = withEntry(mo[errorKey], row.memberId, true);
 		} finally {
 			if (isCurrent(g)) mo.inviteActionPending = false;
 		}
 	}
 
-	function handleMintInvite(row: RosterRow): Promise<void> {
+	function handleSendInvite(row: RosterRow): Promise<void> {
 		return runInviteOp(
 			row,
 			'inviteErrorByMemberId',
-			'roster: invite mint failed',
-			(cfg) => actions.mintSelfLinkInvite(cfg, row.personId),
-			({ inviteToken }) => {
-				mo.inviteLinkByMemberId = withEntry(
-					mo.inviteLinkByMemberId,
-					row.memberId,
-					buildInviteUrl(window.location.origin, inviteToken)
-				);
-				mo.copiedByMemberId = { ...mo.copiedByMemberId, [row.memberId]: false };
-				mo.copyFailedByMemberId = { ...mo.copyFailedByMemberId, [row.memberId]: false };
+			'sending an invite',
+			(cfg) => actions.sendInvite(cfg, row.personId),
+			(outcome) => {
+				mo.inviteOutcomeByMemberId = withEntry(mo.inviteOutcomeByMemberId, row.memberId, outcome);
 			}
 		);
 	}
@@ -74,27 +65,13 @@ export function createInviteOps<Halves>(deps: MemberOpsDeps<Halves>) {
 		return runInviteOp(
 			row,
 			'withdrawErrorByMemberId',
-			'roster: withdraw failed',
+			'withdrawing an invite',
 			(cfg) => actions.withdrawInvite(cfg, row.personId),
 			() => {
-				mo.inviteLinkByMemberId = withEntry(mo.inviteLinkByMemberId, row.memberId, null);
+				mo.inviteOutcomeByMemberId = withEntry(mo.inviteOutcomeByMemberId, row.memberId, null);
 			}
 		);
 	}
 
-	async function copyInviteLink(memberId: string): Promise<void> {
-		let copier = mo.inviteCopierByMemberId[memberId];
-		if (!copier) {
-			copier = createInviteLinkCopier(() => mo.inviteLinkByMemberId[memberId] ?? '');
-			mo.inviteCopierByMemberId = { ...mo.inviteCopierByMemberId, [memberId]: copier };
-		}
-		const pending = copier.copy();
-		mo.copiedByMemberId = { ...mo.copiedByMemberId, [memberId]: copier.copied };
-		mo.copyFailedByMemberId = { ...mo.copyFailedByMemberId, [memberId]: copier.copyFailed };
-		await pending;
-		mo.copiedByMemberId = { ...mo.copiedByMemberId, [memberId]: copier.copied };
-		mo.copyFailedByMemberId = { ...mo.copyFailedByMemberId, [memberId]: copier.copyFailed };
-	}
-
-	return { handleMintInvite, handleWithdrawInvite, copyInviteLink };
+	return { handleSendInvite, handleWithdrawInvite };
 }

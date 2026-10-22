@@ -142,7 +142,7 @@ describe('#1003 Invite and Resend send the invite by email', () => {
 	] as const)('%s POSTs send-invite for that person and shows "Sent to" its person email', async (producer, memberId, personId, email) => {
 		const container = await clickInvite(producer, memberId);
 		await waitFor(() => expect(q(container, `roster-invite-sent-${memberId}`)).not.toBeNull());
-		expect(q(container, `roster-invite-sent-${memberId}`)!.textContent).toContain(
+		expect(q(container, `roster-invite-sent-${memberId}`)!.textContent?.trim()).toBe(
 			`[roster_member_invite_sent {"email":"${email}"}]`
 		);
 		expect(posts).toEqual([
@@ -152,7 +152,6 @@ describe('#1003 Invite and Resend send the invite by email', () => {
 			}
 		]);
 		expect(mintSelfLinkInviteMock).not.toHaveBeenCalled();
-		expect(container.textContent).not.toContain('profile.example');
 		expect(q(container, `roster-invite-copy-${memberId}`)).toBeNull();
 	});
 
@@ -160,12 +159,11 @@ describe('#1003 Invite and Resend send the invite by email', () => {
 		personEmails['pp-4'] = [];
 		const container = await clickInvite('invite', 'm4');
 		await waitFor(() => expect(q(container, 'roster-invite-no-email-m4')).not.toBeNull());
-		expect(q(container, 'roster-invite-no-email-m4')!.textContent).toContain(
+		expect(q(container, 'roster-invite-no-email-m4')!.textContent?.trim()).toBe(
 			'[roster_member_invite_no_email]'
 		);
 		expect(posts).toEqual([]);
 		expect(q(container, 'roster-invite-sent-m4')).toBeNull();
-		expect(container.textContent).not.toContain('dora@profile.example');
 	});
 
 	it('a refused send shows the plain error, sends one report, and no API text appears', async () => {

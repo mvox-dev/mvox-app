@@ -30,7 +30,7 @@
 					data-testid="roster-member-invite-{row.memberId}"
 					disabled={memberOps.inviteActionPending || isOffline}
 					class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
-					onclick={() => ops.handleMintInvite(row)}
+					onclick={() => ops.handleSendInvite(row)}
 				>
 					{m.roster_member_invite()}
 				</button>
@@ -40,7 +40,7 @@
 					data-testid="roster-member-reinvite-{row.memberId}"
 					disabled={memberOps.inviteActionPending || isOffline}
 					class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
-					onclick={() => ops.handleMintInvite(row)}
+					onclick={() => ops.handleSendInvite(row)}
 				>
 					{m.roster_member_reinvite()}
 				</button>
@@ -56,34 +56,21 @@
 			{/if}
 		</div>
 	{/if}
-	{#if memberOps.inviteLinkByMemberId[row.memberId]}
-		<p class="text-xs">{m.admin_invite_link_label()}</p>
-		<button
-			type="button"
-			data-testid="roster-invite-copy-{row.memberId}"
-			class="self-start rounded-md border border-ink-5 px-3 py-1 text-xs text-ink-2 hover:text-ink"
-			onclick={() => ops.copyInviteLink(row.memberId)}
-		>
-			{m.admin_invite_copy()}
-		</button>
-		<p
-			data-testid="roster-invite-copy-status-{row.memberId}"
-			role="status"
-			aria-live="polite"
-			class="min-h-[16px] text-xs leading-[16px] text-ink-2"
-		>
-			{#if memberOps.copiedByMemberId[row.memberId]}{m.admin_invite_copied()}{/if}
-		</p>
-		{#if memberOps.copyFailedByMemberId[row.memberId]}
-			<FormError data-testid="roster-invite-copy-error-{row.memberId}">
-				{m.admin_invite_copy_error()}
-			</FormError>
+	{#if memberOps.inviteOutcomeByMemberId[row.memberId]}
+		{@const outcome = memberOps.inviteOutcomeByMemberId[row.memberId]}
+		{#if outcome.sent}
+			<p data-testid="roster-invite-sent-{row.memberId}" role="status" class="text-xs text-ink-2">
+				{m.roster_member_invite_sent({ email: outcome.email })}
+			</p>
+		{:else}
+			<p data-testid="roster-invite-no-email-{row.memberId}" role="status" class="text-xs text-ink-2">
+				{m.roster_member_invite_no_email()}
+			</p>
 		{/if}
-		<p class="text-xs text-ink-3">{m.admin_invite_bearer_warning()}</p>
 	{/if}
 	{#if memberOps.inviteErrorByMemberId[row.memberId]}
 		<FormError data-testid="roster-invite-error-{row.memberId}">
-			{m.admin_invite_error()}
+			{m.roster_member_invite_send_failed()}
 		</FormError>
 	{/if}
 	{#if memberOps.withdrawErrorByMemberId[row.memberId]}

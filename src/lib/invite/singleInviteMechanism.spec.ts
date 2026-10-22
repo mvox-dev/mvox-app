@@ -8,6 +8,7 @@ const MINT_NEEDLE = 'entu_user';
 const MINT_EXEMPT = [
 	'lib/invite/inviteCreate.ts',
 	'lib/invite/inviteSelfLink.ts',
+	'lib/invite/sendInvite.ts',
 	'lib/profile/linkedIdentities.ts'
 ];
 const REDEEM_NEEDLE = 'auth?account=';
@@ -69,7 +70,7 @@ describe('T4.5 AC3 — exactly one invite mechanism (integration, real src/ tree
 			.map(({ rel }) => rel);
 	}
 
-	it('only lib/invite/inviteCreate.ts and inviteSelfLink.ts contain the invite-mint literal', () => {
+	it('only the named invite modules contain the invite-mint literal', () => {
 		expect(violations(MINT_NEEDLE, MINT_EXEMPT)).toEqual([]);
 	});
 

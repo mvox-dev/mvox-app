@@ -1,6 +1,6 @@
 // The roster page's write and read seams, handed to its member and section handlers.
 import { listJoinStateDetails } from '$lib/profile/linkedIdentities';
-import { mintSelfLinkInvite, withdrawInvite } from '$lib/invite/inviteData';
+import { sendInvite, withdrawInvite } from '$lib/invite/inviteData';
 import {
 	deactivateMember,
 	reinstateMember,
@@ -34,7 +34,7 @@ export function createRosterActions(): RosterActions {
 		reinstateMember: (...a) => reinstateMember(...a),
 		listDeactivateBlockers: (...a) => listDeactivateBlockers(...a),
 		resolveMyLibraryId: (...a) => resolveMyLibraryId(...a),
-		mintSelfLinkInvite: (...a) => mintSelfLinkInvite(...a),
+		sendInvite: (...a) => sendInvite(...a),
 		withdrawInvite: (...a) => withdrawInvite(...a),
 		listJoinStateDetails: (...a) => listJoinStateDetails(...a),
 		loadMemberRecord: (...a) => loadMemberRecord(...a),
