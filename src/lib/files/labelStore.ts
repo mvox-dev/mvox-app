@@ -18,13 +18,14 @@ export interface LabelStore {
 	remove(key: FileKey): Promise<void>;
 }
 
-// One report per action for the app session: an eviction sweep or a dead store fails every row.
+// One kept report per action, db and person for the app session: an eviction sweep or a dead
+// store fails every row.
 const reported = new Set<string>();
 
-export function reportLabelProblem(action: string, error: unknown): void {
-	if (reported.has(action)) return;
-	reported.add(action);
-	reportProblem({ area: 'files', action, error });
+export function reportLabelProblem(action: string, { db, personId }: FileKey, error: unknown): void {
+	const once = JSON.stringify([action, db, personId]);
+	if (reported.has(once)) return;
+	if (reportProblem({ area: 'files', action, error })) reported.add(once);
 }
 
 // Written only when the device holds the bytes, or an orphan name would be minted on purpose.
@@ -38,7 +39,7 @@ export function recordPartLabel(
 	// A failed label write must never gate the open it names.
 	return store
 		.putLabel(key, label)
-		.catch((error) => reportLabelProblem('saving a part name on this device', error));
+		.catch((error) => reportLabelProblem('saving a part name on this device', key, error));
 }
 
 export async function storedPartLabel(
@@ -48,7 +49,7 @@ export async function storedPartLabel(
 	try {
 		return await store.labelOf(key);
 	} catch (error) {
-		reportLabelProblem('reading a part name on this device', error);
+		reportLabelProblem('reading a part name on this device', key, error);
 		return undefined;
 	}
 }

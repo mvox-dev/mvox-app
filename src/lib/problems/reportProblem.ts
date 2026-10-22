@@ -8,10 +8,10 @@ export interface Problem {
 	error: unknown;
 }
 
-export function reportProblem({ area, action, error }: Problem): void {
-	if (isAuthExpiredError(error)) return;
+export function reportProblem({ area, action, error }: Problem): boolean {
+	if (isAuthExpiredError(error)) return false;
 	console.error(`${area}: ${action} failed`, error);
-	keepProblem(area, action, error);
+	return keepProblem(area, action, error);
 }
 
 export function alreadyReported(): void {}

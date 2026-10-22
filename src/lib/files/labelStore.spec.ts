@@ -30,6 +30,7 @@ function bytes(fill: number, size = 16): { bytes: ArrayBuffer; filetype: string;
 
 beforeEach(() => {
 	reportProblem.mockReset();
+	reportProblem.mockReturnValue(true);
 	vi.stubGlobal('IDBKeyRange', IDBKeyRange);
 });
 
@@ -219,6 +220,24 @@ describe('#1022 — a failed label write, read or removal is reported once and n
 		expect(reportProblem.mock.calls).toEqual([
 			[{ area: 'files', action: 'reading a part name on this device', error: new Error('idb dead') }]
 		]);
+	});
+
+	it('a failure for another person or another db is reported again', async () => {
+		const { storedPartLabel } = await freshLabelStore();
+		await storedPartLabel(DEAD, { ...IDENTITY, fileId: 'file-a' });
+		await storedPartLabel(DEAD, { db: 'sampledb', personId: 'person-2', fileId: 'file-a' });
+		await storedPartLabel(DEAD, { db: 'crede', personId: 'person-1', fileId: 'file-a' });
+		await storedPartLabel(DEAD, { ...IDENTITY, fileId: 'file-b' });
+		expect(reportProblem).toHaveBeenCalledTimes(3);
+	});
+
+	it('a report that was not kept (no one selected yet) does not use up the one report', async () => {
+		const { storedPartLabel } = await freshLabelStore();
+		reportProblem.mockReturnValueOnce(false);
+		await storedPartLabel(DEAD, { ...IDENTITY, fileId: 'file-a' });
+		await storedPartLabel(DEAD, { ...IDENTITY, fileId: 'file-b' });
+		await storedPartLabel(DEAD, { ...IDENTITY, fileId: 'file-c' });
+		expect(reportProblem).toHaveBeenCalledTimes(2);
 	});
 
 	it('removing: a partition clear still empties the bytes, and its failures send one report', async () => {

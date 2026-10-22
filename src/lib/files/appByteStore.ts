@@ -14,7 +14,9 @@ export function getAppByteStore(): ByteStore {
 			onRowRemoved: (key) => {
 				void getAppLabelStore()
 					.remove(key)
-					.catch((error) => reportLabelProblem('removing a part name from this device', error));
+					.catch((error) =>
+						reportLabelProblem('removing a part name from this device', key, error)
+					);
 			}
 		});
 	}
