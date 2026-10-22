@@ -1,7 +1,7 @@
 // The roster page's member handlers, composed from one module per concern.
 import type { EntuCfg } from '$lib/entu/cfg';
 import type { listJoinStateDetails } from '$lib/profile/linkedIdentities';
-import type { mintSelfLinkInvite, withdrawInvite } from '$lib/invite/inviteData';
+import type { sendInvite, withdrawInvite } from '$lib/invite/inviteData';
 import type {
 	deactivateMember,
 	listDeactivateBlockers,
@@ -28,9 +28,9 @@ export interface MemberActions {
 	reinstateMember: typeof reinstateMember;
 	listDeactivateBlockers: typeof listDeactivateBlockers;
 	resolveMyLibraryId: typeof resolveMyLibraryId;
-	// Write producers: mintSelfLinkInvite and withdrawInvite, never createInvite,
+	// Write producers: sendInvite and withdrawInvite, never createInvite,
 	// which mints a second person+member.
-	mintSelfLinkInvite: typeof mintSelfLinkInvite;
+	sendInvite: typeof sendInvite;
 	withdrawInvite: typeof withdrawInvite;
 	listJoinStateDetails: typeof listJoinStateDetails;
 	loadMemberRecord: typeof loadMemberRecord;

@@ -46,7 +46,7 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import {
 	listJoinStateDetailsMock,
-	mintSelfLinkInviteMock,
+	sendInviteMock,
 	resolveDbRightMock,
 	withdrawInviteMock
 } from '$lib/testing/mocks/admin';
@@ -63,7 +63,7 @@ import {
 } from '$lib/testing/pages/rosterSwitch';
 import { q } from '$lib/testing/pages/dom';
 
-const WRITES = [mintSelfLinkInviteMock, withdrawInviteMock];
+const WRITES = [sendInviteMock, withdrawInviteMock];
 const INVITED_AT = '2026-10-01T12:00:00.000Z';
 
 beforeEach(() => {
@@ -77,7 +77,7 @@ beforeEach(() => {
 		Promise.resolve(Object.fromEntries(personIds.map((id) => [id, { state: 'absent' }])))
 	);
 	resolveDbRightMock.mockResolvedValue('owner');
-	mintSelfLinkInviteMock.mockResolvedValue({ inviteToken: 'tok-a' });
+	sendInviteMock.mockResolvedValue({ sent: true, email: 'ada@person.example' });
 	withdrawInviteMock.mockResolvedValue(undefined);
 	loadMemberRecordMock.mockResolvedValue({ state: 'none' });
 });
@@ -114,9 +114,9 @@ async function invite(container: HTMLElement, memberId: string, mock: Mock): Pro
 }
 
 const ROWS: Array<{ guard: string; held: Mock; outcome: Outcome<unknown> }> = [
-	{ guard: 'rosterInviteOps 18: the re-read after a mint lands', held: listJoinStateDetailsMock, outcome: { value: { 'p-ada': { state: 'invited', at: INVITED_AT } } } },
-	{ guard: 'rosterInviteOps 38: the mint lands', held: mintSelfLinkInviteMock, outcome: { value: { inviteToken: 'tok-a' } } },
-	{ guard: 'rosterInviteOps 43: the mint fails', held: mintSelfLinkInviteMock, outcome: { error: new Error('boom-a') } }
+	{ guard: 'rosterInviteOps 18: the re-read after a send lands', held: listJoinStateDetailsMock, outcome: { value: { 'p-ada': { state: 'invited', at: INVITED_AT } } } },
+	{ guard: 'rosterInviteOps 38: the send lands', held: sendInviteMock, outcome: { value: { sent: true, email: 'ada@person.example' } } },
+	{ guard: 'rosterInviteOps 43: the send fails', held: sendInviteMock, outcome: { error: new Error('boom-a') } }
 ];
 
 describe('/roster — an invite write settling after a switch changes nothing (#790)', () => {
@@ -134,18 +134,18 @@ describe('/roster — an invite write settling after a switch changes nothing (#
 		await expectLateSettleChangesNothing(container, held, row.outcome, WRITES);
 	});
 
-	it("rosterInviteOps 51: A's late mint keeps B's own mint controls busy", async () => {
+	it("rosterInviteOps 51: A's late send keeps B's own invite controls busy", async () => {
 		const container = await renderOnA();
 		await showMember(container, 'm-ada');
-		const heldA = holdNext<unknown>(mintSelfLinkInviteMock);
-		await invite(container, 'm-ada', mintSelfLinkInviteMock);
+		const heldA = holdNext<unknown>(sendInviteMock);
+		await invite(container, 'm-ada', sendInviteMock);
 		await switchTo(container, 'other-choir', 'section-toggle-sec-b1');
 		await showMember(container, 'm-bob');
-		holdNext<unknown>(mintSelfLinkInviteMock);
-		await invite(container, 'm-bob', mintSelfLinkInviteMock);
+		holdNext<unknown>(sendInviteMock);
+		await invite(container, 'm-bob', sendInviteMock);
 		expect((q(container, 'roster-member-invite-m-bob') as HTMLButtonElement).disabled).toBe(true);
 
-		await expectLateSettleChangesNothing(container, heldA, { value: { inviteToken: 'tok-a' } }, WRITES);
+		await expectLateSettleChangesNothing(container, heldA, { value: { sent: true, email: 'ada@person.example' } }, WRITES);
 	});
 });
 

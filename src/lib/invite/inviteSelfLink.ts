@@ -113,7 +113,7 @@ export async function withdrawInvite(
 	}
 }
 
-// Also the roster's invite and resend: Entu allows the mint on another person only for `_owner`.
+// Also the admin's existing-person pick: Entu allows the mint on another person only for `_owner`.
 export async function mintSelfLinkInvite(
 	cfg: EntuCfg,
 	personId: string,

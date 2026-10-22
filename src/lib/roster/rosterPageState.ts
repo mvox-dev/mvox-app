@@ -3,7 +3,7 @@ import type { RosterRow } from '$lib/roster/rosterData';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { JoinState, JoinStateDetail } from '$lib/profile/linkedIdentities';
 import type { DbRight } from '$lib/nav/dbRights';
-import type { InviteLinkCopier } from '$lib/invite/copy-invite-link';
+import type { SendInviteResult } from '$lib/invite/inviteData';
 import type { DeactivateBlocker } from '$lib/roster/memberLifecycle';
 import type { MemberRecordLookup } from '$lib/roster/memberRecord';
 import type { MemberActions } from '$lib/roster/rosterMemberOps';
@@ -105,12 +105,9 @@ export interface MemberOpsState {
 	deactivateActionError: { memberId: string; kind: 'deactivate' | 'reinstate' } | null;
 	reinstatePending: string | null;
 	inviteActionPending: boolean;
-	inviteLinkByMemberId: Record<string, string>;
+	inviteOutcomeByMemberId: Record<string, SendInviteResult>;
 	inviteErrorByMemberId: Record<string, boolean>;
 	withdrawErrorByMemberId: Record<string, boolean>;
-	inviteCopierByMemberId: Record<string, InviteLinkCopier>;
-	copiedByMemberId: Record<string, boolean>;
-	copyFailedByMemberId: Record<string, boolean>;
 	recordEditorMemberId: string | null;
 	recordEditorLookup: MemberRecordLookup | null;
 	recordForm: RecordForm;
@@ -131,12 +128,9 @@ export function createMemberOpsState(): MemberOpsState {
 		deactivateActionError: null,
 		reinstatePending: null,
 		inviteActionPending: false,
-		inviteLinkByMemberId: {},
+		inviteOutcomeByMemberId: {},
 		inviteErrorByMemberId: {},
 		withdrawErrorByMemberId: {},
-		inviteCopierByMemberId: {},
-		copiedByMemberId: {},
-		copyFailedByMemberId: {},
 		recordEditorMemberId: null,
 		recordEditorLookup: null,
 		recordForm: emptyRecordForm(),
@@ -154,7 +148,7 @@ export function resetSectionPicks(mo: MemberOpsState): void {
 	mo.sectionBusyIds = new SvelteSet();
 }
 
-// A minted link is shown once, so the invite maps survive a same-collective reload.
+// The invite notes survive a same-collective reload; a switch clears them.
 export function resetMemberOps(mo: MemberOpsState, { isSwitch }: { isSwitch: boolean }): void {
 	mo.pendingDeactivateId = null;
 	mo.deactivateRefusal = null;
@@ -173,12 +167,9 @@ export function resetMemberOps(mo: MemberOpsState, { isSwitch }: { isSwitch: boo
 }
 
 export function clearInvites(mo: MemberOpsState): void {
-	mo.inviteLinkByMemberId = {};
+	mo.inviteOutcomeByMemberId = {};
 	mo.inviteErrorByMemberId = {};
 	mo.withdrawErrorByMemberId = {};
-	mo.inviteCopierByMemberId = {};
-	mo.copiedByMemberId = {};
-	mo.copyFailedByMemberId = {};
 }
 
 // (*MVOX:Josquin*)
