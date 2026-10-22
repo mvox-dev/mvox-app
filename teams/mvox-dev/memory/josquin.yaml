@@ -77,4 +77,10 @@ staging:
   - label: GOTCHA
     record: "swPolicy.ts, swUpdate.ts and service-worker.ts are hash-pinned: even a comment needs a repin"
     ref: "src/sw-untouched-by-install.spec.ts"
+  - label: GOTCHA
+    record: "New m.* keys fail pnpm check until paraglide-js compile runs (src/lib/paraglide is gitignored)"
+    ref: "#1003"
+  - label: GOTCHA
+    record: "Any new entu_user writer must join MINT_EXEMPT in singleInviteMechanism.spec.ts"
+    ref: "src/lib/invite/singleInviteMechanism.spec.ts"
 # (*MVOX:Josquin*)
