@@ -1,15 +1,8 @@
-// OAuth state payload encoding for CSRF protection + return URL preservation.
-// The payload is persisted to localStorage at OAuth initiation and read back at
-// the callback — it does NOT ride in the URL, because Entu appends the issued JWT
-// directly after the `key=` stub in `next` with no separator (see
-// build-oauth-init-url.ts). The nonce inside guards against a stray callback with
-// no matching initiation.
+// OAuth state rides a localStorage blob, never the URL: Entu appends the JWT right after `key=`.
 
 const NONCE_KEY = 'mvox.oauth_nonce';
 
-// localStorage key for the encoded OAuth-state blob written at initiation and
-// consumed (single-use) at the callback. Lives here — not in the route module —
-// so `storage.clearAll` can drop it without a lib→routes import.
+// Lives here so storage.clearAll can drop the blob without a lib→routes import.
 export const OAUTH_STATE_KEY = 'mvox.oauth_state';
 
 export interface OAuthState {
@@ -17,31 +10,12 @@ export interface OAuthState {
 	return_to: string;
 	intent: 'login' | 'reauth' | 'invite' | 'link';
 	provider: string;
-	/**
-	 * Present only for `intent: 'invite'` (T4.5/#31) and `intent: 'link'` (#193) —
-	 * the invite bearer token and its db ride the localStorage blob, NEVER the
-	 * OAuth round-trip (Entu's signed server-side state carries only `next`,
-	 * entu-api [provider].get.js:114-117), and are replayed by the callback's
-	 * account-scoped exchange.
-	 */
+	// invite and link only (#31, #193): the bearer token rides this blob, never the round trip.
 	invite?: { db: string; token: string };
-	/**
-	 * #193 — `intent: 'link'` only: the person the self-invite was minted on
-	 * (the initiating, already-authenticated user). Replayed by the callback as
-	 * `expectedEntityId` — the tripwire against binding the second identity to
-	 * anyone else.
-	 */
 	linkPersonId?: string;
-	/**
-	 * #219 — `intent: 'link'` only: a pre-mint snapshot of the identities already
-	 * bound to `linkPersonId` ({_id, uid, provider} — no email, nothing beyond what
-	 * the duplicate check needs). Replayed by run-link-callback.ts after a
-	 * `redeemed` result: entu-api's same-person branch still reports a clean
-	 * `redeemed` when the user re-links a provider they already have, so the only
-	 * way to detect the no-op is comparing the post-redemption identity list back
-	 * against this snapshot.
-	 */
-	linkedSnapshot?: Array<{ _id: string; uid: string; provider: string }>;
+	// link only (#219, #1030): `string` is the user's own account email; the callback compares
+	// provider+string to spot a re-link of an account already held. Nothing beyond that.
+	linkedSnapshot?: Array<{ _id: string; provider: string; string: string }>;
 }
 
 export function createNonce(): string {

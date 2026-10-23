@@ -6,11 +6,11 @@ import type { EntuCfg } from '$lib/entu/cfg';
 import { reportProblem } from '$lib/problems/reportProblem';
 import { isPendingInvite } from '$lib/invite/inviteOf';
 
+// Entu reads an entu_user as {_id, string, provider}: `string` is the account's own email.
 export interface LinkedIdentity {
 	_id: string;
-	uid: string;
 	provider: string;
-	email: string;
+	string: string;
 }
 
 export interface LinkedIdentitiesResult {
@@ -24,14 +24,13 @@ export interface LinkedIdentitiesResult {
 
 interface StoredEntuUserEntry {
 	_id: string;
-	uid?: string;
 	provider?: string;
-	email?: string;
+	string?: string;
 	invite?: string | true;
 }
 
 // `_viewer` lives in the same private bucket, so `_viewer` present means the bucket was read
-// (#454). Rows are counted, never kept: `.string` carries PII (ER-26).
+// (#454). A placeholder is counted, never kept: its `.string` is the invitee's address.
 // Fails loud on HTTP failure, never a silently empty list.
 export async function listLinkedIdentities(
 	cfg: EntuCfg,
@@ -65,9 +64,8 @@ export async function listLinkedIdentities(
 		}
 		identities.push({
 			_id: entry._id,
-			uid: entry.uid ?? '',
 			provider: entry.provider ?? '',
-			email: entry.email ?? ''
+			string: entry.string ?? ''
 		});
 	}
 

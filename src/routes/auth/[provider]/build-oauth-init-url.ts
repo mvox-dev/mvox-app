@@ -11,7 +11,7 @@ interface OAuthInitArgs {
 	nonce: string;
 	invite?: { db: string; token: string };
 	linkPersonId?: string;
-	linkedSnapshot?: Array<{ _id: string; uid: string; provider: string }>;
+	linkedSnapshot?: Array<{ _id: string; provider: string; string: string }>;
 }
 
 export function buildOAuthInitUrl(args: OAuthInitArgs): string {
