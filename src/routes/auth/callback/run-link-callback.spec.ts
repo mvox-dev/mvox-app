@@ -275,10 +275,10 @@ describe('runLinkCallbackExchange — inconsistent state fails loudly, never deg
 
 describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 	type LinkStateWithSnapshot = OAuthState & {
-		linkedSnapshot?: Array<{ _id: string; uid: string; provider: string }>;
+		linkedSnapshot?: Array<{ _id: string; provider: string; string: string }>;
 	};
 
-	const SNAPSHOT = [{ _id: 'eu-1', uid: 'uid-g-1', provider: 'google' }];
+	const SNAPSHOT = [{ _id: 'eu-1', provider: 'google', string: 'me@example.com' }];
 
 	function snapshotState(overrides: Partial<LinkStateWithSnapshot> = {}): OAuthState {
 		return {
@@ -288,12 +288,8 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 		} as OAuthState;
 	}
 
-	const PRE_EXISTING_ENTRY = {
-		_id: 'eu-1',
-		uid: 'uid-g-1',
-		provider: 'google',
-		email: 'me@example.com'
-	};
+	// Entu's read shape (credentialMask): {_id, string, provider}, never uid or email.
+	const PRE_EXISTING_ENTRY = { _id: 'eu-1', string: 'me@example.com', provider: 'google' };
 
 	// The re-read asks for _viewer as the tell that the private bucket came back; the caller
 	// reads their own person and holds self-_editor, so the fixture carries it.
@@ -304,7 +300,7 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 
 	// The real entuFetch's traffic: a canned re-read, a DELETE status; anything else throws.
 	function stubFetch(opts: {
-		entries: Array<{ _id: string; uid?: string; provider?: string; email?: string }>;
+		entries: Array<{ _id: string; string?: string; provider?: string }>;
 		deleteStatus?: number;
 	}) {
 		const fetchMock = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
@@ -331,13 +327,13 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 		vi.unstubAllGlobals();
 	});
 
-	it('a redeemed re-link whose uid+provider is in the snapshot DELETEs the duplicate and reports the neutral no-op', async () => {
+	it('a redeemed re-link whose provider+string is in the snapshot DELETEs the duplicate and reports the neutral no-op', async () => {
 		exchangeInviteMock.mockResolvedValue(REDEEMED);
 		const fetchMock = stubFetch({
 			entries: [
 				PRE_EXISTING_ENTRY,
-				// The just-bound entry: NEW _id, same uid+provider — the duplicate.
-				{ _id: 'eu-9', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' }
+				// The just-bound entry: NEW _id, same provider+string — the duplicate.
+				{ _id: 'eu-9', string: 'me@example.com', provider: 'google' }
 			]
 		});
 
@@ -375,7 +371,7 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 		stubFetch({
 			entries: [
 				PRE_EXISTING_ENTRY,
-				{ _id: 'eu-9', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' }
+				{ _id: 'eu-9', string: 'me@example.com', provider: 'google' }
 			]
 		});
 
@@ -402,7 +398,7 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 			const fetchMock = stubFetch({
 				entries: [
 					PRE_EXISTING_ENTRY,
-					{ _id: 'eu-9', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' }
+					{ _id: 'eu-9', string: 'me@example.com', provider: 'google' }
 				],
 				deleteStatus: 403
 			});
@@ -433,13 +429,13 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 		]);
 	});
 
-	it('a redeemed link whose new entry carries a NOVEL uid+provider takes the existing success path — no DELETE', async () => {
+	it('a redeemed link whose new entry carries a NOVEL provider takes the existing success path — no DELETE', async () => {
 		exchangeInviteMock.mockResolvedValue(REDEEMED);
 		const fetchMock = stubFetch({
 			entries: [
 				PRE_EXISTING_ENTRY,
 				// New _id AND new identity — a legitimate second sign-in.
-				{ _id: 'eu-9', uid: 'uid-a-1', provider: 'apple', email: 'me@icloud.example' }
+				{ _id: 'eu-9', string: 'me@icloud.example', provider: 'apple' }
 			]
 		});
 
@@ -447,6 +443,37 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 
 		expect(outcome).toEqual({ ok: true, redirectTo: '/profile?linked=1' });
 		expect(deleteCalls(fetchMock)).toHaveLength(0);
+	});
+
+	it('a second account at the SAME provider with a different string is kept — no DELETE (#1030)', async () => {
+		exchangeInviteMock.mockResolvedValue(REDEEMED);
+		const fetchMock = stubFetch({
+			entries: [PRE_EXISTING_ENTRY, { _id: 'eu-9', string: 'work@example.com', provider: 'google' }]
+		});
+
+		const outcome = await runLinkCallbackExchange('key1', snapshotState());
+
+		expect(outcome).toEqual({ ok: true, redirectTo: '/profile?linked=1' });
+		expect(deleteCalls(fetchMock)).toHaveLength(0);
+	});
+
+	it('an empty string on either side is no proof of a duplicate — the new entry is kept (#1030)', async () => {
+		exchangeInviteMock.mockResolvedValue(REDEEMED);
+		const emptySnapshot = [{ _id: 'eu-1', provider: 'google', string: '' }];
+		for (const [snapshot, entries] of [
+			[emptySnapshot, [{ _id: 'eu-1', provider: 'google' }, { _id: 'eu-9', provider: 'google' }]],
+			[SNAPSHOT, [PRE_EXISTING_ENTRY, { _id: 'eu-9', provider: 'google' }]]
+		] as const) {
+			const fetchMock = stubFetch({ entries: [...entries] });
+
+			const outcome = await runLinkCallbackExchange(
+				'key1',
+				snapshotState({ linkedSnapshot: [...snapshot] })
+			);
+
+			expect(outcome).toEqual({ ok: true, redirectTo: '/profile?linked=1' });
+			expect(deleteCalls(fetchMock)).toHaveLength(0);
+		}
 	});
 
 	it('an intent-link blob WITHOUT linkedSnapshot (older blob) takes the success path — no crash, no delete', async () => {
@@ -457,7 +484,7 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 		const fetchMock = stubFetch({
 			entries: [
 				PRE_EXISTING_ENTRY,
-				{ _id: 'eu-9', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' }
+				{ _id: 'eu-9', string: 'me@example.com', provider: 'google' }
 			]
 		});
 
