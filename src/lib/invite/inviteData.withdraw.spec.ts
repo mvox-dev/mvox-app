@@ -8,9 +8,8 @@ const PERSON_ID = 'person-target';
 
 interface StoredValue {
 	_id: string;
-	uid?: string;
+	string?: string;
 	provider?: string;
-	email?: string;
 	rawInvite?: string;
 }
 
@@ -26,7 +25,7 @@ function makeEntuStore(initial: StoredValue[], failDeleteIds: string[] = []) {
 			const masked = state.values.map((v) =>
 				v.rawInvite !== undefined
 					? { _id: v._id, string: 'invitee@example.com', invite: true }
-					: { _id: v._id, uid: v.uid, provider: v.provider, email: v.email }
+					: { _id: v._id, string: v.string, provider: v.provider }
 			);
 			return Promise.resolve(
 				json({ entity: { _id: PERSON_ID, ...(masked.length ? { entu_user: masked } : {}) } })
@@ -57,9 +56,8 @@ function findStoredInvite(values: StoredValue[]): StoredValue | undefined {
 
 const BOUND: StoredValue = {
 	_id: 'eu-bound',
-	uid: 'google:real',
-	provider: 'google',
-	email: 'joined@example.com'
+	string: 'joined@example.com',
+	provider: 'google'
 };
 
 describe('withdrawInvite — the sweep, standalone (revocation, not tidiness)', () => {

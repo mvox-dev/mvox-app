@@ -64,7 +64,7 @@ function stubWire(byDb: Record<string, DbWire>): ReturnType<typeof vi.fn> {
 			return json({
 				entity: {
 					_viewer: [{ _id: 'gr-1', reference: 'p-self', property_type: '_editor' }],
-					entu_user: [{ _id: 'eu-1', uid: 'u1', provider: 'test' }]
+					entu_user: [{ _id: 'eu-1', string: 'u1@x.test', provider: 'test' }]
 				}
 			}, 200, JSON_HEADERS);
 		}

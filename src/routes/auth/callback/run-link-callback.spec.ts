@@ -4,6 +4,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OAuthState } from '$lib/auth/state';
+import { listLinkedIdentities } from '$lib/profile/linkedIdentities';
+import { testCfg } from '$lib/testing/entuFetchKit';
 
 // The duplicate check reads through the real entuFetch, so the $env chain is severed here.
 vi.mock('$lib/entu-config', async () =>
@@ -452,6 +454,24 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 		});
 
 		const outcome = await runLinkCallbackExchange('key1', snapshotState());
+
+		expect(outcome).toEqual({ ok: true, redirectTo: '/profile?linked=1' });
+		expect(deleteCalls(fetchMock)).toHaveLength(0);
+	});
+
+	// The snapshot comes from the same reader as the re-read, so a field both default alike shows.
+	it('a snapshot built by listLinkedIdentities keeps a second Google account (#1030)', async () => {
+		exchangeInviteMock.mockResolvedValue(REDEEMED);
+		stubFetch({ entries: [PRE_EXISTING_ENTRY] });
+		const before = await listLinkedIdentities(testCfg('sampledb', 'jwt-me'), 'person-me', fetch);
+		const fetchMock = stubFetch({
+			entries: [PRE_EXISTING_ENTRY, { _id: 'eu-9', string: 'work@example.com', provider: 'google' }]
+		});
+
+		const outcome = await runLinkCallbackExchange(
+			'key1',
+			snapshotState({ linkedSnapshot: before.identities })
+		);
 
 		expect(outcome).toEqual({ ok: true, redirectTo: '/profile?linked=1' });
 		expect(deleteCalls(fetchMock)).toHaveLength(0);

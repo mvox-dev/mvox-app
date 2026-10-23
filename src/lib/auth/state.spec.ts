@@ -30,6 +30,17 @@ describe('OAuth state', () => {
 		expect(decodeState(encodeState(payload))).toEqual(payload);
 	});
 
+	it('round-trips non-Latin1 text: a Cyrillic email or passkey name in the snapshot (#1030)', () => {
+		const payload = {
+			nonce: 'abc',
+			return_to: '/profile?linked=1',
+			intent: 'link' as const,
+			provider: 'google',
+			linkedSnapshot: [{ _id: 'eu-1', provider: 'e-mail', string: 'олег@пошта.укр' }]
+		};
+		expect(decodeState(encodeState(payload))).toEqual(payload);
+	});
+
 	it('encoded state is base64url-safe (no +, /, =)', () => {
 		const encoded = encodeState({
 			nonce: '?+/=&',

@@ -96,7 +96,7 @@ describe('mintSelfLinkInvite — stale-invite cleanup BEFORE mint (orphan hazard
 						_id: PERSON_ID,
 						entu_user: [
 							// A real bound identity — must survive untouched (APPEND, not replace).
-							{ _id: 'eu-bound-1', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' },
+							{ _id: 'eu-bound-1', string: 'me@example.com', provider: 'google' },
 							// Two stale placeholders, one per pending shape (`true` as a read returns
 							// it, or a string token): both must go, leftovers are live credentials.
 							{ _id: 'eu-stale-1', string: 'me@example.com', invite: true },
