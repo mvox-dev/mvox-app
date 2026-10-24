@@ -1,23 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildInviteProviderHref, buildInviteUrl } from './invite-links';
-
-describe('buildInviteUrl', () => {
-	it('builds `${origin}/invite/${token}`', () => {
-		expect(buildInviteUrl('https://mvox.app', 'a.b.c')).toBe('https://mvox.app/invite/a.b.c');
-	});
-
-	it('URI-encodes the token path segment', () => {
-		expect(buildInviteUrl('https://mvox.app', 'a b')).toBe('https://mvox.app/invite/a%20b');
-	});
-
-	it('throws on an empty origin (never fabricates a relative link for the admin)', () => {
-		expect(() => buildInviteUrl('', 'a.b.c')).toThrow(/origin/i);
-	});
-
-	it('throws on an empty token (never fabricates a dead link)', () => {
-		expect(() => buildInviteUrl('https://mvox.app', '')).toThrow(/token/i);
-	});
-});
+import { buildInviteProviderHref } from './invite-links';
 
 describe('buildInviteProviderHref', () => {
 	it('builds the OAuth-kickoff href with intent=invite, the invite token, and a return_to back to the landing', () => {

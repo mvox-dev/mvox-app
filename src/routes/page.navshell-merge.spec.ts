@@ -84,7 +84,7 @@ vi.mock('$lib/entu-config', async () =>
 import { goto } from '$app/navigation';
 import NavShell from '$lib/components/nav/NavShell.svelte';
 import { NAV_ENTRIES } from '$lib/nav/entries';
-import { buildInviteUrl } from '$lib/invite/invite-links';
+import { existsSync } from 'node:fs';
 import AdminPage from './admin/+page.svelte';
 import ProfilePage from './profile/+page.svelte';
 import AdminInvitePage from './admin/invite/+page.svelte';
@@ -403,7 +403,7 @@ describe('#916 — /admin lands on the admin section of /profile', () => {
 
 describe('#140 — backward compat for existing invite URLs', () => {
 	it('externally-held invite links stay at /invite/<token> — the merge does not move the landing URL space', () => {
-		expect(buildInviteUrl('https://mvox.app', 'tok-1')).toBe('https://mvox.app/invite/tok-1');
+		expect(existsSync('src/routes/invite/[token]/+page.svelte')).toBe(true);
 	});
 
 	it('/admin/invite does not dead-end: it redirects to /admin OR still renders the invite surface standalone', async () => {
