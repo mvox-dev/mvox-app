@@ -218,6 +218,10 @@ A major means data shape changed. The kit ships `migrations/<version>/` for exac
   that starts with no bookmark (a fresh start or `/clear`); a reload mid-session carries the
   bookmark over. Optional: `update_subject_prefix:` in memory-kit.conf for a home whose commit
   hooks want a story reference first.
+- **0.1.0-alpha.20 -> 0.1.0-alpha.21:** no data step. Pull, lint, then update the watch:
+  `claude plugin marketplace update memory-kit`, `claude plugin update watch@memory-kit`,
+  `/reload-plugins`. A home whose consumer rewrites the inbox (rather than deleting it) stops
+  getting an empty `was replaced.` ring after each consume.
 
 ## Always
 

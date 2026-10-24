@@ -4,6 +4,7 @@ import {
   bellChange,
   bellLabel,
   bellsKey,
+  bookmarkFor,
   bookmarksOf,
   combineRings,
   confContextPercent,
@@ -15,6 +16,8 @@ import {
   idleReport,
   isHuman,
   isInside,
+  lineHashes,
+  LINES_CAP,
   marksCrossed,
   matchSegment,
   normalPath,
@@ -183,12 +186,79 @@ describe('bellChange: growth, or a replacement (kit #52)', () => {
   })
 })
 
+describe('the lines a bookmark keeps (kit #57)', () => {
+  const sorted = (hashes: number[]) => [...hashes].sort((a, b) => a - b)
+
+  test('a line is trimmed and loses a trailing comma; a line of only brackets, braces and commas is not one', () => {
+    expect(lineHashes('[\n {\n  "a": 1,\n  "b": "x"\n },\n {}\n]\n')).toEqual(sorted([textHash('"a": 1'), textHash('"b": "x"')]))
+    expect(lineHashes('[]')).toEqual([])
+    expect(lineHashes(' , \n\n[ {\r\n}],\n')).toEqual([])
+    expect(lineHashes('  https://a ,\r\n')).toEqual([textHash('https://a')])
+  })
+
+  test('re-indented, the same lines; each kept once, sorted', () => {
+    const entries = [{ from: 'hub', text: 'x' }, { from: 'hub', text: 'y' }]
+    expect(lineHashes(JSON.stringify(entries, null, 2))).toEqual(lineHashes(JSON.stringify(entries, null, 1)))
+    expect(lineHashes(JSON.stringify(entries, null, 1))).toEqual(sorted([textHash('"from": "hub"'), textHash('"text": "x"'), textHash('"text": "y"')]))
+  })
+
+  test('bookmarkFor: size, hash and lines up to the cap; past it, no lines', () => {
+    expect(bookmarkFor('a\nb\n')).toEqual({ size: 4, hash: textHash('a\nb\n'), lines: sorted([textHash('a'), textHash('b')]) })
+    const atCap = 'x'.repeat(LINES_CAP)
+    expect(bookmarkFor(atCap).lines).toEqual([textHash(atCap)])
+    expect(bookmarkFor(`${atCap}y`)).toEqual({ size: LINES_CAP + 1, hash: textHash(`${atCap}y`) })
+  })
+})
+
+describe('bellChange with lines: a replacement rings only when it adds a line (kit #57)', () => {
+  // As esl-suvekool's courier writes its inbox (indent 1) and its consumer writes back what it leaves (indent 2).
+  const HUB1 = { from: 'hub', text: 'mvox: the 06:37 delivery, with a long body', timestamp: '2026-10-24T06:37:00Z' }
+  const MATE = { from: 'poster', text: 'the poster is done', timestamp: '2026-10-24T06:36:00Z' }
+  const NEW = { from: 'hub', text: 'hi', timestamp: '2026-10-24T07:00:00Z' }
+  const SEEN = JSON.stringify([HUB1, MATE], null, 1)
+  const at = [SEEN.length, textHash(SEEN), lineHashes(SEEN)] as const
+
+  test('rewritten as [] adds nothing', () => {
+    expect(bellChange('[]', ...at)).toBeUndefined()
+  })
+
+  test('fewer entries, re-indented, add nothing', () => {
+    expect(bellChange(JSON.stringify([MATE], null, 2), ...at)).toBeUndefined()
+    expect(bellChange(JSON.stringify([MATE, HUB1], null, 2), ...at)).toBeUndefined()
+  })
+
+  test('a new message adds lines: a replacement, shorter or not', () => {
+    expect(bellChange(JSON.stringify([NEW], null, 1), ...at)).toBe('replaced')
+    expect(bellChange(JSON.stringify([MATE, NEW], null, 2), ...at)).toBe('replaced')
+  })
+
+  test('growth past the seen text and the same text are as before', () => {
+    expect(bellChange(`${SEEN}\n`, ...at)).toBe('grew')
+    expect(bellChange(SEEN, ...at)).toBeUndefined()
+    expect(bellChange('', ...at)).toBeUndefined()
+  })
+
+  test('no lines (an older watch\'s bookmark, or a file past the cap): other text is a replacement, as in watch 0.7.0', () => {
+    expect(bellChange('[]', SEEN.length, textHash(SEEN), undefined)).toBe('replaced')
+    expect(bellChange(JSON.stringify([MATE], null, 2), SEEN.length, textHash(SEEN))).toBe('replaced')
+  })
+})
+
 describe('kept bookmarks: tail-style bells in the store (kit #51)', () => {
   test('bellsKey: one store key per home, however its path is spelled', () => {
     expect(bellsKey('/home/u/kit')).toBe('bells:/home/u/kit')
     expect(bellsKey('/home/u/./kit/')).toBe(bellsKey('/home/u/kit'))
     expect(bellsKey('C:\\Users\\m\\Desk')).toBe(bellsKey('c:/users/m/desk'))
     expect(bellsKey('/home/u/desk')).not.toBe(bellsKey('/home/u/kit'))
+  })
+
+  test('bookmarksOf: lines ride along with a hash, when they are a list of numbers (kit #57)', () => {
+    expect(bookmarksOf({ '/a': { size: 3, hash: 7, lines: [1, 2] }, '/b': { size: 3, lines: [1] }, '/c': { size: 3, hash: 7, lines: [1, 'x'] }, '/d': { size: 3, hash: 7, lines: 4 } })).toEqual({
+      '/a': { size: 3, hash: 7, lines: [1, 2] },
+      '/b': { size: 3 },
+      '/c': { size: 3, hash: 7 },
+      '/d': { size: 3, hash: 7 },
+    })
   })
 
   test('bookmarksOf: a size, with its hash when there is one; anything else is dropped', () => {

@@ -37,11 +37,12 @@ export function confValue(conf: string, key: string): string | undefined {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Doorbells. A doorbell is a labeled file: when the file GROWS, or other text REPLACES its text
-// (kit #52), the watch rings once -- one prompt at the next turn seam. The watch never reads a
-// file's meaning, never empties, moves or archives it; consuming (read, then delete or empty) is
-// the home's own step, and it is what re-arms the bell. Created at 0 bytes, emptied, or the same
-// text again only moves the bookmark.
+// Doorbells. A doorbell is a labeled file: when the file GROWS, or other text with a line the old
+// text did not have REPLACES its text (kit #52, #57), the watch rings once -- one prompt at the
+// next turn seam. The watch never reads a file's meaning, never empties, moves or archives it;
+// consuming (read, then delete, empty, or write back what is left) is the home's own step, and it
+// is what re-arms the bell. Created at 0 bytes, emptied, rewritten with none but lines it already
+// had, or the same text again only moves the bookmark.
 
 /** One declared doorbell. Every field is always present in the conf; empty means its default. */
 export type Doorbell = {
@@ -139,20 +140,65 @@ export function textHash(text: string): number {
 }
 
 /**
+ * The largest seen text, in characters (64 KiB of plain ASCII), whose lines a bookmark keeps (kit
+ * #57): room for a busy inbox, while a bookmark stays a list of a few thousand numbers. A bigger
+ * file's bookmark keeps no lines, and any other text in its place rings, as in watch 0.7.0.
+ */
+export const LINES_CAP = 64 * 1024
+
+/**
+ * The hashes of a text's lines, each once, sorted (kit #57). A line is compared trimmed and
+ * without a trailing comma; a line of only brackets, braces, commas or whitespace is not one. So a
+ * JSON array rewritten with fewer entries, or with another indent, has no line the old text did
+ * not have.
+ */
+export function lineHashes(text: string): number[] {
+  const hashes = new Set<number>()
+  for (const raw of text.split('\n')) {
+    if (/^[\s[\]{},]*$/.test(raw)) continue
+    hashes.add(textHash(raw.trim().replace(/,$/, '').trim()))
+  }
+  return [...hashes].sort((a, b) => a - b)
+}
+
+/** A list of line hashes out of a bookmark kept before, or undefined when it is not one. */
+export function lineListOf(raw: unknown): number[] | undefined {
+  return Array.isArray(raw) && raw.every(n => typeof n === 'number') ? (raw as number[]) : undefined
+}
+
+/**
  * What a watched file did since its bookmark (kit #52): `grew` past the seen text, or was
  * `replaced` by other non-empty text -- consumed and refilled between two polls, whatever the new
  * size. Empty, or the seen text again, is nothing. Without a hash (a fresh bookmark, or one an
  * older watch kept) growth is by size alone.
+ *
+ * With the seen text's lines (kit #57), a replacement rings only when it adds a line the seen text
+ * did not have: a consumer that writes back what it leaves (`[]`, or the entries it does not take,
+ * re-indented) adds nothing. Without them (past LINES_CAP, or an older watch's bookmark) any other
+ * text is a replacement, as in watch 0.7.0.
  */
-export function bellChange(content: string, oldSize: number, oldHash: number | undefined): 'grew' | 'replaced' | undefined {
+export function bellChange(content: string, oldSize: number, oldHash: number | undefined, oldLines?: readonly number[]): 'grew' | 'replaced' | undefined {
   if (content === '') return undefined
   if (oldHash === undefined) return content.length > oldSize ? 'grew' : undefined
   if (content.length > oldSize && textHash(content.slice(0, oldSize)) === oldHash) return 'grew'
-  return textHash(content) === oldHash ? undefined : 'replaced'
+  if (textHash(content) === oldHash) return undefined
+  if (oldLines === undefined) return 'replaced'
+  const seen = new Set(oldLines)
+  return lineHashes(content).some(h => !seen.has(h)) ? 'replaced' : undefined
 }
 
-/** A file's bookmark: its last-seen size and, when known, the hash of its text. */
-export type Bookmark = { size: number; hash?: number }
+/**
+ * A file's bookmark: its last-seen size and, when known, the hash of its text and the hashes of
+ * its lines (kit #57; none past LINES_CAP, or from an older watch).
+ */
+export type Bookmark = { size: number; hash?: number; lines?: number[] }
+
+/** The bookmark of a text just seen: its size, its hash, and its lines up to LINES_CAP. */
+export function bookmarkFor(content: string): Bookmark & { hash: number } {
+  const mark: Bookmark & { hash: number } = { size: content.length, hash: textHash(content) }
+  if (content.length <= LINES_CAP) mark.lines = lineHashes(content)
+  return mark
+}
 
 /**
  * The $.store key of a home's kept bookmarks (kit #51): a tail-style bell is never consumed, so
@@ -162,13 +208,22 @@ export function bellsKey(home: string): string {
   return `bells:${fileKey(home)}`
 }
 
-/** Kept bookmarks, validated out of the store: a size, with its hash when there is one. */
+/**
+ * Kept bookmarks, validated out of the store: a size, with its hash when there is one, and beside
+ * the hash its lines when they are a list of numbers (kit #57).
+ */
 export function bookmarksOf(stored: unknown): Record<string, Bookmark> {
   if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) return {}
   const marks: Record<string, Bookmark> = {}
   for (const [key, raw] of Object.entries(stored)) {
-    const { size, hash } = (typeof raw === 'object' && raw !== null ? raw : {}) as { size?: unknown; hash?: unknown }
-    if (typeof size === 'number') marks[key] = typeof hash === 'number' ? { size, hash } : { size }
+    const { size, hash, lines } = (typeof raw === 'object' && raw !== null ? raw : {}) as { size?: unknown; hash?: unknown; lines?: unknown }
+    if (typeof size !== 'number') continue
+    if (typeof hash !== 'number') {
+      marks[key] = { size }
+      continue
+    }
+    const list = lineListOf(lines)
+    marks[key] = list === undefined ? { size, hash } : { size, hash, lines: list }
   }
   return marks
 }
