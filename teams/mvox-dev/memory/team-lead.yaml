@@ -8,11 +8,11 @@ current:
     record: "Epic #1024 tasks landed 2026-10-22 in PR #1025 (ce610432); #1021-1023 closed"
     ref: scratchpad/findings-session.md
   - label: WIP
-    record: "#1003 (PR #1027) and #1026 (PR #1029, 28cd9ed7) landed; roster invite works end to end in code"
-    ref: "#1029"
+    record: "Invites send by email: #1003, #1026 landed; #1030 in PR #1033, #1031 in PR #1035 (925b86df)"
+    ref: "#1035"
   - label: WIP
-    record: "Asked Gama 2026-10-22 for issues: admin mint for another person; no uid on identity reads"
-    ref: scratchpad/review-1026.md
+    record: "No split (Mihkel 2026-10-24): forge mvox/mvox-app becomes origin; GitHub a mirror; wait for Passe"
+    ref: scratchpad/findings-session.md
   - label: WIP
     record: "Feedback MCP merged (#1009/#1011); shipyard deploy waits for Mihkel's go to Passe"
     ref: services/feedback-mcp/README.md

@@ -41,12 +41,30 @@ staging:
   - label: PATTERN
     record: "A 'covered elsewhere' claim: check reload and race cases apart; first-load specs rarely hold them."
     ref: "#933"
-  - label: WARNING
-    record: "Entu GET of entu_user has no uid: link-callback dedupe may DELETE a 2nd same-provider account."
-    ref: src/routes/auth/callback/run-link-callback.ts
   - label: PATTERN
     record: "A fail-loud 'nothing to do' error after re-read can sit under a row whose state moved on."
     ref: "#1026"
   - label: LEARNED
     record: "Entu redeems an invite by exact token match; stale placeholders no longer block a newer link."
     ref: "#1003"
+  - label: PATTERN
+    record: "Two sides compare a field: build the fixture through the real producer, never by hand."
+    ref: "#1030"
+  - label: GOTCHA
+    record: "No git worktrees, even throwaway probes: put the probe spec in the review file instead."
+    ref: "#1030"
+  - label: LEARNED
+    record: "ID code 38001085718 (JÕEORG, JAAK-KRISTJAN) is SK's published test person; fine in fixtures."
+    ref: "#1030"
+  - label: LEARNED
+    record: "Entu's entu_user read is {_id, string, provider}; string is the email, or the ID code for eID."
+    ref: "#1030"
+  - label: DEFERRED
+    record: "'Sent to <email>' is not in RedactedText on the roster or the invite surface; one follow-up."
+    ref: src/lib/roster/MemberInvite.svelte
+  - label: DEFERRED
+    record: "Editor tier: a person whose send failed stays selected with no select to go back; reload only."
+    ref: "#1031"
+  - label: LEARNED
+    record: "Entu's creator is _owner and aggregate runs inline: a new entity's first read carries _viewer."
+    ref: "#1031"
