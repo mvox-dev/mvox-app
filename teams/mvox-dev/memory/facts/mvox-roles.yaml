@@ -1,6 +1,0 @@
-# Facts about how mvox roles map to Entu rights. Converted by memkit 2026-10-14. (*MVOX:memkit*)
-facts:
-  - fact: "A conductor is a direct _editor grant on a season; the conductor list is that season's grants without inherited: true, and names come from GET /entity/{personId}."
-    ref: src/routes/page.season-manage-conductors.spec.ts
-    refute: "=ref"
-    verified: "2026-10-14"

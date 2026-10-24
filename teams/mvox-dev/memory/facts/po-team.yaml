@@ -1,6 +1,0 @@
-# Facts about tools and services that live with po-team. Converted by memkit 2026-10-14. (*MVOX:memkit*)
-facts:
-  - fact: "Mihkel's 48h code-line report runs on po-team's box (tools/line-report.py in po-team); ask gama@po-team for the latest run instead of rebuilding it."
-    ref: "2026-10-02"
-    refute: "Ask gama@po-team whether the report tool still exists."
-    verified: "2026-10-02"

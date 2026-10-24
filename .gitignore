@@ -48,3 +48,9 @@ workers/entu-rights-mcp/generated/
 
 # #1009 feedback-mcp build output
 services/feedback-mcp/dist/
+
+# The team home lives in its own repo (forge mvox/mvox-home), linked in here (Mihkel 2026-10-24).
+/teams
+/memory-kit
+/memory-kit.conf
+/scripts/hub-consume.py
