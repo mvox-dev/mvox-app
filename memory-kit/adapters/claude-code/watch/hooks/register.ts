@@ -2,7 +2,8 @@
 //  1. doorbells: when a file the home declares (watch_files) grows, ring once -- one
 //     $.prompt.submit, which queues until the session is idle and wakes it then. The watch never
 //     reads a file's meaning and never empties, moves or archives it; consuming (read, then
-//     delete or empty) is the home's own step, and it is what re-arms the bell;
+//     delete, empty, or write back what is left) is the home's own step, and it is what re-arms
+//     the bell;
 //  2. session reports: idleness past watch_idle_minutes and context past each
 //     watch_context_percent mark. The watch never says what a ring or report means; that is the
 //     home's own rule.
@@ -14,6 +15,7 @@ import {
   bellChange,
   bellLabel,
   bellsKey,
+  bookmarkFor,
   bookmarksOf,
   combineRings,
   confContextPercent,
@@ -26,13 +28,13 @@ import {
   idleReport,
   isHuman,
   isInside,
+  lineListOf,
   marksCrossed,
   matchSegment,
   MINUTE,
   pathSegments,
   readDoorbells,
   ringText,
-  textHash,
 } from './watch'
 import type { Bookmark, Doorbell } from './watch'
 import { foundAboveNote, normalizePath, resolveKitHome } from './kit-home'
@@ -46,6 +48,12 @@ const reportedMarks = atom({ plugin: 'watch', key: 'reportedMarks' } as const, [
 const bellSizes = atom({ plugin: 'watch', key: 'bellSizes' } as const, {} as Record<string, number>)
 /** Each watched file's last-seen text hash, by the same key: other text in its place rings (kit #52). */
 const bellHashes = atom({ plugin: 'watch', key: 'bellHashes' } as const, {} as Record<string, number>)
+/** Each watched file's last-seen line hashes, by the same key, with the text hash they belong to:
+ *  other text in its place rings only when it adds a line (kit #57). */
+const bellLines = atom({ plugin: 'watch', key: 'bellLines' } as const, {} as Record<string, SeenLines>)
+
+/** The line hashes of one seen text, and that text's hash: lines of another text are never used. */
+type SeenLines = { hash: number; lines: number[] }
 
 type Settings = { home: string; pollMs: number }
 
@@ -211,6 +219,22 @@ async function hashesOf($: EngineInterface): Promise<Record<string, number>> {
 }
 
 /**
+ * The last-seen line hashes, validated out of $.state (kit #57). A file with none, as an older
+ * watch kept it, rings any other text as a replacement, as in watch 0.7.0.
+ */
+async function linesOf($: EngineInterface): Promise<Record<string, SeenLines>> {
+  const raw = await read($, bellLines)
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {}
+  const seen: Record<string, SeenLines> = {}
+  for (const [key, entry] of Object.entries(raw)) {
+    const { hash, lines } = (typeof entry === 'object' && entry !== null ? entry : {}) as { hash?: unknown; lines?: unknown }
+    const list = lineListOf(lines)
+    if (typeof hash === 'number' && list !== undefined) seen[key] = { hash, lines: list }
+  }
+  return seen
+}
+
+/**
  * The kept bookmarks of the home's tail-style bells (kit #51), out of $.store, which outlives the
  * session: a new session, or one after /clear, rings only what no ring has brought in. Undefined
  * when the store cannot be read; a session with no bookmark of its own then counts from 0, as
@@ -235,9 +259,11 @@ async function keep($: EngineInterface, home: string, kept: Record<string, Bookm
 
 /**
  * The doorbells: every declared file that grew past its last-seen text, or whose text was
- * replaced by other non-empty text (kit #52), rings; all of one poll's rings as one prompt. Sizes
- * are character counts of what $.fs.read returns -- compared only with themselves. A missing file
- * counts 0, so delete-then-write rings and create-at-0 does not.
+ * replaced by other non-empty text (kit #52) with a line the last-seen text did not have (kit
+ * #57), rings; all of one poll's rings as one prompt. Sizes are character counts of what $.fs.read
+ * returns -- compared only with themselves. A missing file counts 0, so delete-then-write rings and
+ * create-at-0 does not. A bookmark is a size, a hash and, up to LINES_CAP, the line hashes; both
+ * homes below keep all three, and a rollback restores all three.
  *
  * $.state, the session's own, keeps every bookmark and is read first. A tail-style bell (inject:
  * true) is never consumed, so its bookmark is also kept in $.store, per home, which a session with
@@ -258,9 +284,10 @@ async function doorbellCheck($: EngineInterface, home: string, conf: string): Pr
   const userHome = (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')) ?? ''
   const sizes = await sizesOf($)
   const hashes = await hashesOf($)
+  const lines = await linesOf($)
   const kept = d.bells.some(b => b.inject) ? await keptOf($, home) : undefined
   const queued = new Set([...inFlight].flat())
-  const rung: { bell: Doorbell; file: string; key: string; old: number; oldHash?: number; content: string; replaced: boolean }[] = []
+  const rung: { bell: Doorbell; file: string; key: string; old: number; oldHash?: number; oldLines?: number[]; content: string; replaced: boolean }[] = []
   const seen = new Set<string>()
   let changed = false
   let keptChanged = false
@@ -280,16 +307,25 @@ async function doorbellCheck($: EngineInterface, home: string, conf: string): Pr
       const mark = bell.inject ? kept?.[key] : undefined
       const old = own ?? mark?.size ?? 0
       const oldHash = own !== undefined ? hashes[key] : mark?.hash
-      const change = bellChange(content, old, oldHash)
-      if (change !== undefined) rung.push({ bell, file, key, old, oldHash, content, replaced: change === 'replaced' })
-      const hash = textHash(content)
-      if (content.length !== sizes[key] || hash !== hashes[key]) {
-        sizes[key] = content.length
-        hashes[key] = hash
+      const ownLines = lines[key]?.hash === hashes[key] ? lines[key]?.lines : undefined
+      const oldLines = own !== undefined ? ownLines : mark?.lines
+      const change = bellChange(content, old, oldHash, oldLines)
+      if (change !== undefined) rung.push({ bell, file, key, old, oldHash, oldLines, content, replaced: change === 'replaced' })
+      // A bookmark that lags the text just seen moves to it. One an older watch kept takes its
+      // lines here while the text is still the one it saw (kit #57); only a replacement made
+      // before this watch's first look rings as in 0.7.0.
+      const now = bookmarkFor(content)
+      const lags = (size: number | undefined, hash: number | undefined, seenLines: number[] | undefined) =>
+        size !== now.size || hash !== now.hash || (seenLines === undefined) !== (now.lines === undefined)
+      if (lags(sizes[key], hashes[key], ownLines)) {
+        sizes[key] = now.size
+        hashes[key] = now.hash
+        if (now.lines === undefined) delete lines[key]
+        else lines[key] = { hash: now.hash, lines: now.lines }
         changed = true
       }
-      if (bell.inject && kept !== undefined && change === undefined && !queued.has(key) && (content.length !== mark?.size || hash !== mark.hash)) {
-        kept[key] = { size: content.length, hash }
+      if (bell.inject && kept !== undefined && change === undefined && !queued.has(key) && lags(mark?.size, mark?.hash, mark?.lines)) {
+        kept[key] = now
         keptChanged = true
       }
     }
@@ -297,6 +333,7 @@ async function doorbellCheck($: EngineInterface, home: string, conf: string): Pr
   if (changed) {
     await $.state.set({ plugin: 'watch', key: 'bellSizes' }, sizes)
     await $.state.set({ plugin: 'watch', key: 'bellHashes' }, hashes)
+    await $.state.set({ plugin: 'watch', key: 'bellLines' }, lines)
   }
   if (kept !== undefined && keptChanged) await keep($, home, kept)
   if (rung.length === 0) return
@@ -308,19 +345,23 @@ async function doorbellCheck($: EngineInterface, home: string, conf: string): Pr
     $,
     combineRings(rung.map(g => ringText(g.bell, g.file, g.old, g.content, g.replaced))),
     async () => {
-      // Back to the bookmark before the ring, size and hash together, so the next poll rings
-      // again. The kept one never moved for it. Still queued until rolled back: a poll between
-      // must not move the kept one past it.
+      // Back to the bookmark before the ring, size, hash and lines together (kit #57), so the
+      // next poll rings again. The kept one never moved for it. Still queued until rolled back: a
+      // poll between must not move the kept one past it.
       try {
         const nowSizes = await sizesOf($)
         const nowHashes = await hashesOf($)
+        const nowLines = await linesOf($)
         for (const g of rung) {
           nowSizes[g.key] = g.old
           if (g.oldHash === undefined) delete nowHashes[g.key]
           else nowHashes[g.key] = g.oldHash
+          if (g.oldHash === undefined || g.oldLines === undefined) delete nowLines[g.key]
+          else nowLines[g.key] = { hash: g.oldHash, lines: g.oldLines }
         }
         await $.state.set({ plugin: 'watch', key: 'bellSizes' }, nowSizes)
         await $.state.set({ plugin: 'watch', key: 'bellHashes' }, nowHashes)
+        await $.state.set({ plugin: 'watch', key: 'bellLines' }, nowLines)
       } finally {
         inFlight.delete(carried)
       }
@@ -331,7 +372,7 @@ async function doorbellCheck($: EngineInterface, home: string, conf: string): Pr
         if (tails.length === 0) return
         const nowKept = await keptOf($, home)
         if (nowKept === undefined) return
-        for (const g of tails) nowKept[g.key] = { size: g.content.length, hash: textHash(g.content) }
+        for (const g of tails) nowKept[g.key] = bookmarkFor(g.content)
         await keep($, home, nowKept)
       } finally {
         inFlight.delete(carried)

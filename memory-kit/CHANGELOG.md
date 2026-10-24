@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.1.0-alpha.21 -- 2026-10-24 -- a consume is not a message
+
+Plugin versions this release: obligations-pane 0.7.1, watch 0.7.1, kit-update 0.3.3.
+
+No data step.
+
+- **A replacement rings only when it adds a line** (kit #57, a regression from #52 in alpha.20):
+  a consumer that rewrites its inbox instead of deleting it (`[]`, or the teammate entries it
+  keeps, re-indented) rang an empty `was replaced.` turn after every consume. The watch now keeps
+  the hashes of the seen text's lines (trimmed, a trailing comma dropped, bracket-only lines
+  skipped) for files up to 64 KiB, and a replacement rings only when the new text has a line the
+  old one lacked: taking entries out stays silent, new mail still rings. Past the cap, or with a
+  bookmark an older watch kept, a replacement rings as in 0.7.0. Found by esl-suvekool (Tobi),
+  24.10.
+
 ## v0.1.0-alpha.20 -- 2026-10-22 -- doorbells that keep their place, one reading of every file
 
 Plugin versions this release: obligations-pane 0.7.1, watch 0.7.0, kit-update 0.3.3.
