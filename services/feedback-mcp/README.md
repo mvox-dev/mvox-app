@@ -51,6 +51,11 @@ sshd passes no environment to a forced command.
 
 Which dbs it lists is the deployer's choice. Never commit a config with keys.
 
+The keys are read-only. Each belongs to a seat-only Entu person with no grants ("feedback-mcp
+(read-only)"), which reads what Entu shares with the whole db (feedback is `domain`) and can write
+nothing. Crede's was made by `scripts/migrations/seed-1040-feedback-reader-crede-2026-10-24.mjs`; its
+key sits outside the repo, in the team's scratchpad, and goes to the host config by hand.
+
 ## Host steps (shipyard, Mihkel or Passepartout)
 
 Docker isn't available in the mvox container, so these run on shipyard.
