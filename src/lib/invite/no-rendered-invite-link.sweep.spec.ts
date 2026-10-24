@@ -138,8 +138,6 @@ describe('#360 tree sweep — no composed invite URL reaches rendered text, ever
 			[
 				// the one composer module (script only, exports pure builders)
 				'src/lib/invite/invite-links.ts :: script-compose',
-				// admin surface — composes in script, egress is the clipboard only
-				'src/lib/invite/InviteSurface.svelte :: script-compose',
 				// REDEEM PATH (owner's own hands — see boundary comment above):
 				// the landing page navigates/hrefs the token, never shows it as text
 				'src/routes/invite/[token]/+page.svelte :: script-compose',

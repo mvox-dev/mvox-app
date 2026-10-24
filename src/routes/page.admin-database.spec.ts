@@ -140,6 +140,7 @@ describe('/admin — the embedded InviteSurface targets the DATABASE entity (#16
 		await waitFor(() => {
 			expect(q(container, 'invite-admin-submit')).not.toBeNull();
 		});
+		await fireEvent.input(q(container, 'invite-email')!, { target: { value: 'mari@example.com' } });
 		await fireEvent.click(q(container, 'invite-admin-submit') as HTMLElement);
 
 		await waitFor(() => {
@@ -147,7 +148,7 @@ describe('/admin — the embedded InviteSurface targets the DATABASE entity (#16
 		});
 		expect(createInviteMock).toHaveBeenCalledWith(
 			expect.objectContaining({ db: 'sampledb' }),
-			{ dbEntityId: DB_ENTITY }
+			{ dbEntityId: DB_ENTITY, email: 'mari@example.com' }
 		);
 	});
 });

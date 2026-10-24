@@ -99,7 +99,8 @@ export function inviteDataModule(opts: { errors?: boolean } = {}) {
 		...(opts.errors ? { InviteCreateError } : {}),
 		resolvePersonParentId: resolveParentMock,
 		resolveInviteParentId: resolveInviteParentMock,
-		createInvite: createInviteMock
+		createInvite: createInviteMock,
+		sendInvite: sendInviteMock
 	};
 }
 
@@ -107,7 +108,8 @@ export async function inviteDataOverRealModule(importOriginal: () => Promise<unk
 	return {
 		...((await importOriginal()) as object),
 		resolvePersonParentId: resolveParentMock,
-		createInvite: createInviteMock
+		createInvite: createInviteMock,
+		sendInvite: sendInviteMock
 	};
 }
 

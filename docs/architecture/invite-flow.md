@@ -6,6 +6,8 @@
 - **Built from:** `entu-api` source @`82cb25b` and this repo `main` @`cf66173`, each claim verified `file:line` this session; slice-4 (onboarding, #21) as built. Live corrections from the T4.9 gate (#29, 2026-08-07) marked **[LIVE]** below.
 - **Companions:** `docs/architecture/entu-rights-and-visibility-model.md` (rights/visibility) · wiki [Runbook — Entu visibility](https://github.com/mvox-dev/mvox-app/wiki/Runbook-entu-visibility) §0 "where a `person` comes from".
 
+> **Changed by #1031 (2026-10-24).** The admin invite surface no longer mints or shows a link. A new person is created with the email the admin enters, then sent the invite by `send-invite`; an existing person is sent to the email on their person record (§8). §2–§4 still describe the mint that /profile's self-link uses.
+
 **Provenance discipline.** Every mechanics claim is **[SRC]** (traceable to `entu-api` source `file:line`), **[LIVE]** (empirically confirmed, with what was observed), or **[CONV]** (an mvox-app convention — true because we chose it, not because Entu enforces it). Unmarked is not established. **The invite path's anonymity and one-shot binding are Entu platform behaviours** — mvox uses the right field and reads the result; it does not re-implement them.
 
 ---
@@ -18,7 +20,7 @@ The admin's app puts a fixed trigger constant in a special field; **Entu swaps i
 
 ## 1. The admin clicks create
 
-The admin enters nothing about the invitee: no email (#34) and no name (#36 dropped the membership record's name). `CreateInviteInput` carries only the collective's database entity id · **[CONV]** `src/lib/invite/inviteCreate.ts:39-41`. The admin knows where to send the link; mvox and Entu never do (§2). Nothing has reached the invitee yet.
+The admin enters the invitee's email and no name (#36 dropped the membership record's name). `CreateInviteInput` carries the collective's database entity id and that email · **[CONV]** `src/lib/invite/inviteCreate.ts` `CreateInviteInput`. The email is written onto the new person and Entu sends the invite there (§8). Ruling (a), Mihkel 2026-10-24 (#1031), supersedes #34's "no email" for this surface. Until #1031 the admin entered nothing and mvox minted a link the admin passed on; §2–§4 describe that mint, which /profile's self-link still uses.
 
 ## 2. mvox creates the `person` — and Entu performs the swap
 
@@ -36,7 +38,7 @@ if (property.type === 'entu_user' && property.string) {
 - **The trigger is only "text in an `entu_user` field."** *Any* truthy string mints the token — there is no invite "mode." mvox exploits this to send a self-documenting constant instead of a person's data.
 - **The token carries no identity** — signed from `{ db, entityId }` only. The address appears nowhere in it. This is *why* the invite binds by possession, not identity.
 - **The string is deleted, not hidden** — `delete property.string`. Consumed to mint, then dropped; never stored on the person.
-- **The email never reaches Entu at all**, and this is now a **compile-time guarantee** · **[CONV]** #34: `CreateInviteInput` has no `email` field (`inviteCreate.ts:39-41`), so no caller *can* pass it — stronger than a runtime check. (Historically the real email was sent here and deleted; #34 removed even that transient exposure.)
+- **No email goes into the mint trigger** · **[CONV]** #34: the trigger is the fixed constant, never an address. (Historically the real email was sent here and deleted; #34 removed even that transient exposure.) This holds for the trigger only: since #1031 the admin surface writes the email as the person's own `email` property and mints nothing (§1, §8).
 - Choosing the constant `'trigger invite token'` deliberately avoids the literal `'send-invite'`, which is magic only on Entu's *update* endpoint (`POST /[db]/entity/[_id]`) where it fires the SES invite email · **[SRC]** `entu-api routes/[db]/entity/[_id]/index.post.js:122`. mvox's person-create hits the *create* endpoint (`POST /[db]/entity`), which reads only truthiness — so no email is ever sent by Entu, which is what we want (mvox delivers the link manually).
 
 ## 3. mvox reads the token back — its one and only chance
@@ -85,13 +87,15 @@ The mint stamps an `exp` (§2), but **nothing enforces it until redemption**, an
 
 ## 8. Minting onto an existing person, and withdrawing
 
-A member's own link for adding a sign-in on /profile, and the admin invite surface's pick of an existing person, mint onto a person who already exists · **[CONV]** `src/lib/invite/inviteSelfLink.ts` `mintSelfLinkInvite`. mvox first deletes the person's un-redeemed `entu_user` placeholders, because redemption takes the first value carrying `invite`, then POSTs the trigger constant (§2) onto the person. A value carrying `uid` is a bound identity and is never touched. Entu allows the mint on another person only for `_owner` · **[CONV]** as stated at `inviteSelfLink.ts:116`, not re-read in `entu-api` here; a person minting for herself needs her self-`_editor` (§3), and a 403 says it is missing. `withdrawInvite` deletes the un-redeemed placeholders and leaves no marker. What a failure midway leaves behind: `docs/property-writes.md`, row 6.
+A member's own link for adding a sign-in on /profile mints onto a person who already exists · **[CONV]** `src/lib/invite/inviteSelfLink.ts` `mintSelfLinkInvite`. mvox first deletes the person's un-redeemed `entu_user` placeholders, because redemption takes the first value carrying `invite`, then POSTs the trigger constant (§2) onto the person. A value without `invite` is a bound identity and is never touched (#1030). Entu allows the mint on another person only for `_owner` · **[CONV]** as stated at `inviteSelfLink.ts:116`, not re-read in `entu-api` here; a person minting for herself needs her self-`_editor` (§3), and a 403 says it is missing. `withdrawInvite` deletes the un-redeemed placeholders and leaves no marker. What a failure midway leaves behind: `docs/property-writes.md`, row 6.
 
 The roster's invite and resend mint nothing (#1003) · **[CONV]** `src/lib/invite/sendInvite.ts` `sendInvite`. mvox reads the person's own `email`; with none it sends nothing and says so. Otherwise it POSTs `send-invite` onto the person and Entu emails the link there, so no token reaches mvox. It sweeps no placeholders, so after a resend the earlier link stays valid until it expires (§7).
 
+The admin invite surface sends the same way (#1031) · **[CONV]** `src/lib/invite/inviteSurfaceOps.ts` `submitInvite`. For a new person, `createInvite` first writes `_type`, `_parent` and the entered `email`, with no trigger, then the self-`_editor` grant and the member; then `sendInvite` runs on the new id. If that send fails, the new person joins the surface's person list so a retry sends to them rather than creating a second person.
+
 ## Why this is safe
 
-- The invitee's email **never reaches Entu** — mvox sends a constant, so there is no server-side copy, not even a transient one in a request log (#34, compile-time-enforced).
+- The mint trigger carries no email — mvox sends a constant, so a minted token's request has no address in it (#34). The admin surface does store the invitee's email on their person record (ruling (a), 2026-10-24, #1031); that is a `person` property at the tier the schema sets, and Entu emails the invite there.
 - The token **names no one**; a leaked link exposes only *that one membership slot*, claimable once, expiring within a day on the live deployment (§7 — source says 7 days, observed live lifetime is 24h; either way, bounded).
 - **[LIVE]** who may mint an invite is governed by Entu's own create-time admin gate — creating a `person` with `_parent` set to the database entity requires the caller to hold `_expander` (or higher) on it; the mechanism is in `docs/architecture/entu-rights-and-visibility-model.md`. A non-admin account attempting `createInvite` gets a 400 there, confirmed live during the T4.9 gate. This makes the parent-expander list a de facto "who may invite" register — any future access-control change for inviting lives in Entu's admin configuration, not in mvox code.
 - The admin is the gate: entry is his deliberate act (create person + member + mint), never self-service — the counterpart to [Runbook §0](https://github.com/mvox-dev/mvox-app/wiki/Runbook-entu-visibility) "a new sign-in gets no `person`."

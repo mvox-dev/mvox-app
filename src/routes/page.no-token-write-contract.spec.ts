@@ -126,6 +126,7 @@ const ROWS: Record<string, Row> = {
 	'/admin/invite create': {
 		page: '/admin/invite',
 		write: async (c) => {
+			await fireEvent.input(must(c, 'invite-email'), { target: { value: 'mari@example.com' } });
 			await fireEvent.click(must(c, 'invite-admin-submit'));
 			await waitFor(() => must(c, 'session-expired'));
 			expect(q(c, 'invite-admin-error')).toBeNull();

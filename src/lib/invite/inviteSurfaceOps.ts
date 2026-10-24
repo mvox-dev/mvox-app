@@ -5,7 +5,7 @@ import { cfgFor } from '$lib/entu/cfg';
 import { isAuthExpiredError } from '$lib/entu/request';
 import { resolveDbRight, type DbRight } from '$lib/nav/dbRights';
 import { listJoinStates, type JoinState } from '$lib/profile/linkedIdentities';
-import { InviteCreateError, resolveInviteParentId, SelfLinkMintError } from './inviteData';
+import { InviteCreateError, resolveInviteParentId, type SendInviteResult } from './inviteData';
 
 type Cfg = { db: string; token: string };
 
@@ -52,51 +52,50 @@ export async function loadPrerequisites(targetDb: string): Promise<Prerequisites
 }
 
 export type SubmitResult =
-	| { kind: 'done'; refreshedJoinStates: Record<string, JoinState> }
+	| { kind: 'sent'; outcome: SendInviteResult; refreshedJoinStates: Record<string, JoinState> }
 	| { kind: 'session-expired' }
-	| { kind: 'person-error'; name: string; ownerOnly: boolean }
+	| { kind: 'send-error'; createdPersonId?: string }
 	| { kind: 'create-error'; personId?: string };
 
 export interface SubmitSeams {
-	createInvite: (cfg: Cfg, input: { dbEntityId: string }) => Promise<{ inviteToken: string }>;
-	mintSelfLinkInvite: (cfg: Cfg, personId: string) => Promise<{ inviteToken: string }>;
+	createInvite: (cfg: Cfg, input: { dbEntityId: string; email: string }) => Promise<{ personId: string }>;
+	sendInvite: (cfg: Cfg, personId: string) => Promise<SendInviteResult>;
 }
 
+async function refreshJoinState(cfg: Cfg, personId: string): Promise<Record<string, JoinState>> {
+	try {
+		return await listJoinStates(cfg, [personId]);
+	} catch (error) {
+		reportProblem({ area: 'admin/invite', action: 're-reading the join state after an invite', error });
+		return {};
+	}
+}
+
+// A new person is created with the email first, then both paths send through send-invite.
 export async function submitInvite(
 	cfg: Cfg,
-	target: { dbEntityId: string; personId: string; personName: string },
-	seams: SubmitSeams,
-	onToken: (inviteToken: string) => void
+	target: { dbEntityId: string; personId: string; email: string },
+	seams: SubmitSeams
 ): Promise<SubmitResult> {
-	if (target.personId) {
+	let personId = target.personId;
+	if (!personId) {
 		try {
-			const { inviteToken } = await seams.mintSelfLinkInvite(cfg, target.personId);
-			onToken(inviteToken);
-			let refreshedJoinStates: Record<string, JoinState> = {};
-			try {
-				refreshedJoinStates = await listJoinStates(cfg, [target.personId]);
-			} catch (refreshErr) {
-				reportProblem({
-					area: 'admin/invite',
-					action: 're-reading the join state after an invite',
-					error: refreshErr
-				});
-			}
-			return { kind: 'done', refreshedJoinStates };
+			const input = { dbEntityId: target.dbEntityId, email: target.email };
+			personId = (await seams.createInvite(cfg, input)).personId;
 		} catch (e) {
 			if (isAuthExpiredError(e)) return { kind: 'session-expired' };
-			console.error('admin/invite: person-targeted mint failed', e);
-			const ownerOnly = e instanceof SelfLinkMintError && e.reason === 'missing-self-editor';
-			return { kind: 'person-error', name: target.personName, ownerOnly };
+			console.error('admin/invite: create failed', e);
+			return { kind: 'create-error', personId: e instanceof InviteCreateError ? e.personId : undefined };
 		}
 	}
+	let outcome: SendInviteResult;
 	try {
-		const result = await seams.createInvite(cfg, { dbEntityId: target.dbEntityId });
-		onToken(result.inviteToken);
-		return { kind: 'done', refreshedJoinStates: {} };
-	} catch (e) {
-		if (isAuthExpiredError(e)) return { kind: 'session-expired' };
-		console.error('admin/invite: create failed', e);
-		return { kind: 'create-error', personId: e instanceof InviteCreateError ? e.personId : undefined };
+		outcome = await seams.sendInvite(cfg, personId);
+	} catch (error) {
+		if (isAuthExpiredError(error)) return { kind: 'session-expired' };
+		reportProblem({ area: 'admin/invite', action: 'sending an invite', error });
+		return { kind: 'send-error', createdPersonId: target.personId ? undefined : personId };
 	}
+	const refreshedJoinStates = target.personId ? await refreshJoinState(cfg, personId) : {};
+	return { kind: 'sent', outcome, refreshedJoinStates };
 }

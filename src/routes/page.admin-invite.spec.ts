@@ -7,6 +7,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/pages/adminCopy')).adminMessages()
 );
 
+vi.mock('$lib/problems/reportProblem', async () =>
+	(await import('$lib/testing/mocks/session')).reportProblemModule()
+);
 vi.mock('$lib/invite/inviteData', async () =>
 	(await import('$lib/testing/mocks/admin')).inviteDataModule({ errors: true })
 );
@@ -25,11 +28,12 @@ import {
 	InviteCreateError,
 	createInviteMock,
 	resolveInviteParentMock,
-	resolveParentMock
+	resolveParentMock,
+	sendInviteMock
 } from '$lib/testing/mocks/admin';
-import { jwt, resetInviteMocks, selectSampledb } from '$lib/testing/pages/admin';
-import { MINTED_TOKEN } from '$lib/testing/pages/adminInvite';
-import { cleanupReset } from '$lib/testing/pages/dom';
+import { reportProblem } from '$lib/testing/mocks/session';
+import { resetInviteMocks, selectSampledb } from '$lib/testing/pages/admin';
+import { cleanupReset, q } from '$lib/testing/pages/dom';
 
 function selectTwoCollectives() {
 	signIn({
@@ -46,14 +50,19 @@ function loadOk() {
 	resolveInviteParentMock.mockResolvedValue('org-1');
 }
 
-async function submitForm(container: HTMLElement) {
+async function submitForm(container: HTMLElement, email = 'mari@example.com') {
+	const input = q<HTMLInputElement>(container, 'invite-email');
+	if (input && email) await fireEvent.input(input, { target: { value: email } });
 	const submit = container.querySelector(
 		'[data-testid="invite-admin-submit"]'
 	) as HTMLButtonElement;
 	await fireEvent.click(submit);
 }
 
-beforeEach(resetInviteMocks);
+beforeEach(() => {
+	resetInviteMocks();
+	reportProblem.mockReset();
+});
 
 afterEach(cleanupReset);
 
@@ -86,7 +95,7 @@ describe('/admin/invite — prerequisites', () => {
 		expect(resolveParentMock).not.toHaveBeenCalled();
 	});
 
-	it('an HTTP/network prerequisite failure → generic localized error (not raw message); logs detail to console.error; retry works', async () => {
+	it('an HTTP/network prerequisite failure → generic localized error (not raw message); reports the detail; retry works', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		selectSampledb();
 		const failure = new InviteCreateError('resolve failed: 500', {
@@ -104,7 +113,7 @@ describe('/admin/invite — prerequisites', () => {
 		expect(container.textContent).toContain('Could not load invite prerequisites.');
 		expect(container.textContent).not.toContain('resolve failed: 500');
 
-		expect(consoleSpy).toHaveBeenCalledWith('admin/invite: load failed', failure);
+		expect(reportProblem).toHaveBeenCalledWith({ area: 'admin/invite', action: 'load', error: failure });
 
 		loadOk();
 		const retry = container.querySelector(
@@ -193,91 +202,86 @@ describe('/admin/invite — page heading', () => {
 	});
 });
 
-describe('/admin/invite — done (show-once link)', () => {
-	it('calls createInvite with the selected db + the internally-resolved org, shows the link + always-visible bearer warning, and the token NEVER touches storage', async () => {
+async function renderReady(): Promise<HTMLElement> {
+	const { container } = render(Page);
+	await waitFor(() => {
+		const submit = q<HTMLButtonElement>(container, 'invite-admin-submit');
+		expect(submit && !submit.disabled).toBe(true);
+	});
+	return container;
+}
+
+describe('#1031 /admin/invite — a new person is created with the email, then sent the invite', () => {
+	it('labels a native email input, creates with that email, sends to the new id, and says "Sent to"', async () => {
 		selectSampledb();
 		loadOk();
-		createInviteMock.mockResolvedValue({
-			personId: 'p1',
-			memberId: 'm1',
-			inviteToken: MINTED_TOKEN
-		});
+		createInviteMock.mockResolvedValue({ personId: 'p-new', memberId: 'm-new' });
+		sendInviteMock.mockResolvedValue({ sent: true, email: 'mari@example.com' });
+		const container = await renderReady();
 
-		const { container } = render(Page);
-		await waitFor(() => {
-			const submit = container.querySelector(
-				'[data-testid="invite-admin-submit"]'
-			) as HTMLButtonElement | null;
-			expect(submit && !submit.disabled).toBe(true);
-		});
+		const input = q<HTMLInputElement>(container, 'invite-email')!;
+		expect(input.tagName).toBe('INPUT');
+		expect(input.type).toBe('email');
+		expect(input.required).toBe(true);
+		expect(input.closest('label')!.textContent).toContain('Their email address');
+
 		await submitForm(container);
-
 		await waitFor(() => {
-			expect(container.querySelector('[data-testid="invite-admin-result"]')).not.toBeNull();
+			expect(q(container, 'invite-send-status')!.textContent).toContain('Sent to mari@example.com');
 		});
-
-		const [cfgArg, inputArg] = createInviteMock.mock.calls[0] as [
-			{ db: string; token: string },
-			{ dbEntityId: string; email?: string; memberName?: string }
-		];
+		expect(createInviteMock).toHaveBeenCalledTimes(1);
+		const [cfgArg, inputArg] = createInviteMock.mock.calls[0];
 		expect(cfgArg).toMatchObject({ db: 'sampledb', token: 'jwt-admin' });
-		expect(inputArg).toEqual({ dbEntityId: 'org-1' });
-		expect(inputArg).not.toHaveProperty('email');
-		expect(inputArg).not.toHaveProperty('memberName');
-
-		expect(container.querySelector('[data-testid="invite-link"]')).toBeNull();
-
-		const warning = container.querySelector('[data-testid="invite-bearer-warning"]');
-		expect(warning).not.toBeNull();
-		expect(warning!.textContent).toContain('Bearer secret');
-
-		const surface =
-			container.innerHTML +
-			Array.from(container.querySelectorAll('input'))
-				.map((i) => i.value)
-				.join('\n');
-		expect(surface.split(MINTED_TOKEN).length - 1).toBe(0);
-
-		for (let i = 0; i < localStorage.length; i++) {
-			const key = localStorage.key(i)!;
-			expect(localStorage.getItem(key)).not.toContain(MINTED_TOKEN);
-		}
-		for (let i = 0; i < sessionStorage.length; i++) {
-			const key = sessionStorage.key(i)!;
-			expect(sessionStorage.getItem(key)).not.toContain(MINTED_TOKEN);
-		}
+		expect(inputArg).toEqual({ dbEntityId: 'org-1', email: 'mari@example.com' });
+		expect(sendInviteMock).toHaveBeenCalledTimes(1);
+		expect(sendInviteMock.mock.calls[0][0]).toMatchObject({ db: 'sampledb', token: 'jwt-admin' });
+		expect(sendInviteMock.mock.calls[0][1]).toBe('p-new');
+		const status = q(container, 'invite-send-status')!;
+		expect(status.getAttribute('role')).toBe('status');
+		expect(status.getAttribute('aria-live')).toBe('polite');
+		expect(q<HTMLInputElement>(container, 'invite-email')!.value).toBe('');
+		expect(q(container, 'invite-copy')).toBeNull();
+		expect(container.textContent).not.toContain('/invite/');
 	});
 
-	it('#207 rule 7: the show-once expiry date renders as ISO YYYY-MM-DD', async () => {
+	it('an empty email sends nothing and asks for the address', async () => {
 		selectSampledb();
 		loadOk();
-		createInviteMock.mockResolvedValue({
-			personId: 'p1',
-			memberId: 'm1',
-			inviteToken: MINTED_TOKEN
-		});
-
-		const { container } = render(Page);
+		const container = await renderReady();
+		await submitForm(container, '');
 		await waitFor(() => {
-			const submit = container.querySelector(
-				'[data-testid="invite-admin-submit"]'
-			) as HTMLButtonElement | null;
-			expect(submit && !submit.disabled).toBe(true);
+			expect(q(container, 'invite-email-missing')!.textContent).toContain(
+				'Enter the email address to send the invite to.'
+			);
 		});
+		expect(createInviteMock).not.toHaveBeenCalled();
+		expect(sendInviteMock).not.toHaveBeenCalled();
+	});
+
+	it('a failed send after the create shows the plain error, reports once, and a retry sends to the same person', async () => {
+		selectSampledb();
+		loadOk();
+		createInviteMock.mockResolvedValue({ personId: 'p-new', memberId: 'm-new' });
+		sendInviteMock.mockRejectedValueOnce(new Error('send-invite refused: HTTP 403'));
+		const container = await renderReady();
 		await submitForm(container);
-
 		await waitFor(() => {
-			expect(container.querySelector('[data-testid="invite-admin-result"]')).not.toBeNull();
+			expect(q(container, 'invite-send-error')!.textContent).toContain(
+				"Couldn't send the invite. Please try again."
+			);
 		});
+		expect(reportProblem).toHaveBeenCalledTimes(1);
+		expect(container.textContent).not.toContain('HTTP 403');
+		expect(container.textContent).not.toContain('Invite creation failed.');
 
-		const isoExpiry = new Intl.DateTimeFormat('en-CA', {
-			year: 'numeric',
-			month: '2-digit',
-			day: '2-digit'
-		}).format(new Date(4_102_444_800_000));
-		expect(isoExpiry).toMatch(/^\d{4}-\d{2}-\d{2}$/); // oracle self-check
-		const warning = container.querySelector('[data-testid="invite-bearer-warning"]');
-		expect(warning?.textContent).toContain(`Shown only once. Expires on ${isoExpiry}.`);
+		sendInviteMock.mockResolvedValue({ sent: true, email: 'mari@example.com' });
+		await submitForm(container);
+		await waitFor(() => {
+			expect(q(container, 'invite-send-status')!.textContent).toContain('Sent to mari@example.com');
+		});
+		expect(createInviteMock).toHaveBeenCalledTimes(1);
+		expect(sendInviteMock.mock.calls.map((c) => c[1])).toEqual(['p-new', 'p-new']);
+		expect(q(container, 'invite-send-error')).toBeNull();
 	});
 });
 

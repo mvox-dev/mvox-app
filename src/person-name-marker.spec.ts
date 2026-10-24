@@ -32,12 +32,11 @@ const NAME_EXPRS: ReadonlyArray<[RegExp, string]> = [
 ];
 
 // Sentences with the name baked in must sit INSIDE a RedactedText (the invite
-// surface carries two: submitLabel, and the mint-error message).
+// surface carries one: submitLabel).
 const SENTENCE_EXPRS: ReadonlyArray<[RegExp, string]> = [
 	[/\{\s*m\.admin_roles_remove\(/g, 'admin_roles_remove'],
 	[/\{\s*m\.library_copy_lent_to\(/g, 'library_copy_lent_to'],
-	[/\{\s*submitLabel\s*\}/g, 'admin_invite_submit_person (submitLabel)'],
-	[/m\.admin_invite_mint_error\(/g, 'admin_invite_mint_error']
+	[/\{\s*submitLabel\s*\}/g, 'admin_invite_submit_person (submitLabel)']
 ];
 
 const SENTENCE_FILES = [
@@ -162,12 +161,11 @@ describe('#361 — name-bearing sentences sit whole inside a RedactedText', () =
 				}
 			}
 		}
-		// Non-vacuous: the sites exist (two Remove buttons, one lent-to badge, two invite sentences).
+		// Non-vacuous: the sites exist (two Remove buttons, one lent-to badge, one invite sentence).
 		expect(found).toEqual({
 			admin_roles_remove: 2,
 			library_copy_lent_to: 1,
-			'admin_invite_submit_person (submitLabel)': 1,
-			admin_invite_mint_error: 1
+			'admin_invite_submit_person (submitLabel)': 1
 		});
 		expect(bare).toEqual([]);
 	});

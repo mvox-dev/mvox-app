@@ -7,6 +7,7 @@ import {
 	addAdminMock,
 	addLibrarianMock,
 	createInviteMock,
+	sendInviteMock,
 	listAdminsMock,
 	listJoinStatesMock,
 	listLibrariansMock,
@@ -118,6 +119,7 @@ export function resetInviteMocks(): void {
 	resolveParentMock.mockReset();
 	resolveInviteParentMock.mockReset();
 	createInviteMock.mockReset();
+	sendInviteMock.mockReset();
 }
 
 export function authExpiredError(): Error {

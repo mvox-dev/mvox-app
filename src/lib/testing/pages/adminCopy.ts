@@ -40,23 +40,19 @@ export const ADMIN_COPY = {
 	admin_invite_db_label: () => 'Collective',
 	admin_invite_submit: () => 'Create invite',
 	admin_invite_creating: () => 'Creating…',
-	admin_invite_link_label: () => 'Invite link',
-	admin_invite_copy: () => 'Copy link',
-	admin_invite_copied: () => 'Copied',
-	admin_invite_bearer_warning: () => 'Bearer secret — send only to the invited person.',
-	admin_invite_show_once: (p: { date: string }) => `Shown only once. Expires on ${p.date}.`,
 	admin_invite_error: () => 'Invite creation failed.',
-	admin_invite_copy_error: () => "Couldn't copy the link.",
 	admin_invite_partial_failure: (p: { personId: string }) =>
-		`A person entity (${p.personId}) was already created and carries a live invite token.`,
-	admin_invite_create_another: () => 'Create another invite',
+		`A person entity (${p.personId}) was already created.`,
+	admin_invite_email_label: () => 'Their email address',
+	admin_invite_email_missing: () => 'Enter the email address to send the invite to.',
 	admin_invite_person_label: () => 'Who are you inviting?',
 	admin_invite_person_new: () => 'A new person',
 	admin_invite_submit_person: (p: { name: string }) => `Invite ${p.name}`,
 	admin_invite_person_list_error: () => 'Could not load the list of uninvited people.',
-	admin_invite_mint_error: (p: { name: string }) => `Could not invite ${p.name}.`,
-	admin_invite_mint_owner_only: () => 'Inviting an existing person requires owner rights.',
-	roster_member_invite_owner_only: () => 'Managing invites requires owner rights.'
+	roster_member_invite_owner_only: () => 'Managing invites requires owner rights.',
+	roster_member_invite_sent: (p: { email: string }) => `Sent to ${p.email}`,
+	roster_member_invite_no_email: () => 'This member has no email address, so no invite was sent.',
+	roster_member_invite_send_failed: () => "Couldn't send the invite. Please try again."
 } satisfies Copy;
 
 export function adminMessages(overrides: Partial<typeof ADMIN_COPY> = {}) {
