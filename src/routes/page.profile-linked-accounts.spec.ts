@@ -833,6 +833,24 @@ describe('provider display names (#218)', () => {
 		expect(rowText(emailRow)).toBe('E-mail — me@example.com');
 	});
 
+	it('ID-code providers show the provider only, never the personal code; Google keeps its email', async () => {
+		const ID_CARD = { _id: 'eu-4', provider: 'id-card', string: '38001085718' };
+		const MOBILE = { _id: 'eu-5', provider: 'mobile-id', string: '38001085718' };
+		h.listLinkedIdentitiesMock.mockResolvedValue({
+			identities: [GOOGLE_ID, SMART_ID, ID_CARD, MOBILE],
+			pendingInvites: 0
+		});
+		const container = await renderReady();
+		await waitFor(() =>
+			expect(qa(container, '[data-testid^="profile-linked-identity"]')).toHaveLength(4)
+		);
+		const rows = qa(container, '[data-testid^="profile-linked-identity"]');
+		const texts = rows.map((row) => row.textContent?.replace(/\s+/g, ' ').trim());
+		expect(texts).toEqual(['Google — me@example.com', 'Smart-ID', 'ID-card', 'Mobile-ID']);
+		const section = q(container, '[data-testid="profile-linked-accounts"]') as HTMLElement;
+		expect(section.textContent).not.toContain('38001085718');
+	});
+
 	// Break: filter passkey out of the picker list.
 	it('the link picker offers every provider, passkey last (#876)', async () => {
 		const container = await openPicker();
