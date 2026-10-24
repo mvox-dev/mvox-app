@@ -82,7 +82,8 @@ export async function runLinkCallbackExchange(
 
 	await hydrateCollectives();
 
-	// A re-link of a provider already held comes back as a duplicate entry (#219); best-effort.
+	// A re-link of an account already held comes back as a duplicate entry (#219); best-effort.
+	// Same provider and same non-empty string is the same account; anything else is kept (#1030).
 	if (state.linkedSnapshot) {
 		try {
 			const relinked = await listLinkedIdentities(
@@ -94,8 +95,9 @@ export async function runLinkCallbackExchange(
 			const newEntry = relinked.identities.find((i) => !snapshotIds.has(i._id));
 			const isDuplicate =
 				newEntry !== undefined &&
+				newEntry.string !== '' &&
 				state.linkedSnapshot.some(
-					(s) => s.uid === newEntry.uid && s.provider === newEntry.provider
+					(s) => s.provider === newEntry.provider && s.string === newEntry.string
 				);
 			if (newEntry && isDuplicate) {
 				const deleteRes = await entuFetch(

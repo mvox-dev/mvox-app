@@ -84,7 +84,7 @@ function sweep(root: Element): { found: string[]; unmarked: string[] } {
 beforeEach(() => {
 	resetSaveMocks();
 	linked.list.mockReset().mockResolvedValue({
-		identities: [{ _id: 'eu-1', uid: 'uid-g-1', provider: 'google', email: LINKED_EMAIL }],
+		identities: [{ _id: 'eu-1', provider: 'google', string: LINKED_EMAIL }],
 		pendingInvites: 0
 	});
 });

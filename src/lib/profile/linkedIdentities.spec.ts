@@ -35,8 +35,8 @@ describe('listLinkedIdentities — bound identities vs masked placeholders', () 
 				_id: PERSON_ID,
 				_viewer: ADMITTED,
 				entu_user: [
-					{ _id: 'eu-1', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' },
-					{ _id: 'eu-2', uid: '38510170212', provider: 'mobile-id', email: '38510170212' },
+					{ _id: 'eu-1', string: 'me@example.com', provider: 'google' },
+					{ _id: 'eu-2', string: '38510170212', provider: 'mobile-id' },
 					{ _id: 'eu-3', string: 'me@example.com', invite: true }
 				]
 			}
@@ -46,8 +46,8 @@ describe('listLinkedIdentities — bound identities vs masked placeholders', () 
 
 		expect(result).toEqual({
 			identities: [
-				{ _id: 'eu-1', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' },
-				{ _id: 'eu-2', uid: '38510170212', provider: 'mobile-id', email: '38510170212' }
+				{ _id: 'eu-1', provider: 'google', string: 'me@example.com' },
+				{ _id: 'eu-2', provider: 'mobile-id', string: '38510170212' }
 			],
 			pendingInvites: 1,
 			readable: true,
@@ -75,7 +75,7 @@ describe('listLinkedIdentities — the WITHHELD private bucket is not an observa
 
 	it('an entu_user payload arriving WITHOUT the rights tell is still readable:false — the tell decides, not the payload', async () => {
 		const fetchImpl = fetchReturning({
-			entity: { _id: PERSON_ID, entu_user: [{ _id: 'eu-1', uid: 'u', provider: 'p', email: 'e' }] }
+			entity: { _id: PERSON_ID, entu_user: [{ _id: 'eu-1', string: 'e', provider: 'p' }] }
 		});
 
 		const result = await listLinkedIdentities(cfg, PERSON_ID, fetchImpl);

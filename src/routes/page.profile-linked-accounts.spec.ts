@@ -87,11 +87,12 @@ import { selectSampledb } from '$lib/testing/pages/profile';
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
 const qa = (c: HTMLElement, sel: string) => Array.from(c.querySelectorAll(sel));
 
-const GOOGLE_ID = { _id: 'eu-1', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' };
-const EMAIL_ID = { _id: 'eu-2', uid: 'me@example.com', provider: 'e-mail', email: 'me@example.com' };
+// Entu's read shape (credentialMask): {_id, string, provider}, never uid or email (#1030).
+const GOOGLE_ID = { _id: 'eu-1', provider: 'google', string: 'me@example.com' };
+const EMAIL_ID = { _id: 'eu-2', provider: 'e-mail', string: 'me@example.com' };
 // #206 — binds the provider that currently LEADS the picker, so the focus-skip
 // test below has something to skip. See that test for why it needs its own.
-const SMART_ID = { _id: 'eu-3', uid: 'EE38001085718', provider: 'smart-id', email: '' };
+const SMART_ID = { _id: 'eu-3', provider: 'smart-id', string: 'PNOEE-38001085718' };
 
 async function renderReady(): Promise<HTMLElement> {
 	selectSampledb();
@@ -309,7 +310,7 @@ describe('/profile — "Link another account" flow (#193 AC2/AC3: native control
 		]);
 
 		// The OAuth state blob is the ONLY carrier — full shape. #219: the blob now
-		// also carries the pre-mint snapshot of the linked set ({_id, uid, provider}
+		// also carries the pre-mint snapshot of the linked set ({_id, provider, string}
 		// per identity), replayed by the callback's same-identity duplicate check.
 		await waitFor(() => expect(localStorage.getItem(OAUTH_STATE_KEY)).not.toBeNull());
 		expect(decodeState(localStorage.getItem(OAUTH_STATE_KEY)!)).toEqual({
@@ -319,7 +320,7 @@ describe('/profile — "Link another account" flow (#193 AC2/AC3: native control
 			provider: 'apple',
 			invite: { db: 'sampledb', token: 'tok.link.1' },
 			linkPersonId: 'person-p',
-			linkedSnapshot: [{ _id: 'eu-1', uid: 'uid-g-1', provider: 'google' }]
+			linkedSnapshot: [{ _id: 'eu-1', provider: 'google', string: 'me@example.com' }]
 		});
 
 		// Bearer hygiene: the token never enters any URL.
@@ -391,7 +392,7 @@ describe('/profile — already-linked providers stay offered (#219)', () => {
 		]);
 		expect(q(container, '[data-testid="profile-link-error"]')).toBeNull();
 
-		// Full blob shape, toEqual — the pre-mint snapshot ({_id, uid, provider} of
+		// Full blob shape, toEqual — the pre-mint snapshot ({_id, provider, string} of
 		// the CURRENT identities) is what the callback's duplicate check replays.
 		await waitFor(() => expect(localStorage.getItem(OAUTH_STATE_KEY)).not.toBeNull());
 		expect(decodeState(localStorage.getItem(OAUTH_STATE_KEY)!)).toEqual({
@@ -401,7 +402,7 @@ describe('/profile — already-linked providers stay offered (#219)', () => {
 			provider: 'google',
 			invite: { db: 'sampledb', token: 'tok.link.1' },
 			linkPersonId: 'person-p',
-			linkedSnapshot: [{ _id: 'eu-1', uid: 'uid-g-1', provider: 'google' }]
+			linkedSnapshot: [{ _id: 'eu-1', provider: 'google', string: 'me@example.com' }]
 		});
 
 		// The launch is real: the page navigated to the Entu OAuth init URL (link
@@ -413,20 +414,16 @@ describe('/profile — already-linked providers stay offered (#219)', () => {
 	});
 });
 
-// ── #219: the linked-identities list de-duplicates by uid+provider ──────────────
-// A same-identity re-link can leave two entries with equal uid+provider: one row, first
-// wins. Two different accounts at the same provider stay two rows.
+// ── #219/#1030: the linked-identities list de-duplicates by provider+string ─────
+// A same-account re-link leaves two entries with equal provider+string: one row, first wins.
+// Two accounts at one provider differ in string and stay two rows.
 
-describe('/profile — linked-identities list de-duplicates by uid+provider (#219)', () => {
-	const GOOGLE_DUP = { _id: 'eu-9', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' };
-	const GOOGLE_OTHER = {
-		_id: 'eu-10',
-		uid: 'uid-g-2',
-		provider: 'google',
-		email: 'other@example.com'
-	};
+describe('/profile — linked-identities list de-duplicates by provider+string (#219, #1030)', () => {
+	const GOOGLE_DUP = { _id: 'eu-9', provider: 'google', string: 'me@example.com' };
+	const GOOGLE_OTHER = { _id: 'eu-10', provider: 'google', string: 'other@example.com' };
+	const rowText = (row: Element) => row.textContent?.replace(/\s+/g, ' ').trim();
 
-	it('two entries with the SAME uid+provider render exactly ONE row — the first occurrence wins', async () => {
+	it('two entries with the SAME provider+string render exactly ONE row — the first occurrence wins', async () => {
 		h.listLinkedIdentitiesMock.mockResolvedValue({
 			identities: [GOOGLE_ID, GOOGLE_DUP],
 			pendingInvites: 0
@@ -443,9 +440,26 @@ describe('/profile — linked-identities list de-duplicates by uid+provider (#21
 		);
 	});
 
-	it('two entries with the same provider but DIFFERENT uids stay TWO rows — the key is uid+provider, not provider alone', async () => {
+	it('two Google accounts with different strings show as TWO rows, each with its own email', async () => {
 		h.listLinkedIdentitiesMock.mockResolvedValue({
 			identities: [GOOGLE_ID, GOOGLE_OTHER],
+			pendingInvites: 0
+		});
+		const container = await renderReady();
+
+		await waitFor(() =>
+			expect(qa(container, '[data-testid^="profile-linked-identity"]')).toHaveLength(2)
+		);
+		const rows = qa(container, '[data-testid^="profile-linked-identity"]');
+		expect(rows.map(rowText)).toEqual(['Google — me@example.com', 'Google — other@example.com']);
+	});
+
+	it('entries with no string are never merged: each stays its own row', async () => {
+		h.listLinkedIdentitiesMock.mockResolvedValue({
+			identities: [
+				{ _id: 'eu-1', provider: 'passkey', string: '' },
+				{ _id: 'eu-2', provider: 'passkey', string: '' }
+			],
 			pendingInvites: 0
 		});
 		const container = await renderReady();
@@ -766,7 +780,7 @@ describe('/profile — passkey is added from the picker (#876)', () => {
 			provider: 'passkey',
 			invite: { db: 'sampledb', token: 'tok.link.1' },
 			linkPersonId: 'person-p',
-			linkedSnapshot: [{ _id: 'eu-1', uid: 'uid-g-1', provider: 'google' }]
+			linkedSnapshot: [{ _id: 'eu-1', provider: 'google', string: 'me@example.com' }]
 		});
 		expect(window.location.href).toBe(
 			'https://api.entu-test.invalid/auth/passkey/register?next=http%3A%2F%2Flocalhost%2Fauth%2Fcallback%3Fkey%3D'
@@ -819,6 +833,24 @@ describe('provider display names (#218)', () => {
 		expect(rowText(emailRow)).toBe('E-mail — me@example.com');
 	});
 
+	it('ID-code providers show the provider only, never the personal code; Google keeps its email', async () => {
+		const ID_CARD = { _id: 'eu-4', provider: 'id-card', string: '38001085718' };
+		const MOBILE = { _id: 'eu-5', provider: 'mobile-id', string: '38001085718' };
+		h.listLinkedIdentitiesMock.mockResolvedValue({
+			identities: [GOOGLE_ID, SMART_ID, ID_CARD, MOBILE],
+			pendingInvites: 0
+		});
+		const container = await renderReady();
+		await waitFor(() =>
+			expect(qa(container, '[data-testid^="profile-linked-identity"]')).toHaveLength(4)
+		);
+		const rows = qa(container, '[data-testid^="profile-linked-identity"]');
+		const texts = rows.map((row) => row.textContent?.replace(/\s+/g, ' ').trim());
+		expect(texts).toEqual(['Google — me@example.com', 'Smart-ID', 'ID-card', 'Mobile-ID']);
+		const section = q(container, '[data-testid="profile-linked-accounts"]') as HTMLElement;
+		expect(section.textContent).not.toContain('38001085718');
+	});
+
 	// Break: filter passkey out of the picker list.
 	it('the link picker offers every provider, passkey last (#876)', async () => {
 		const container = await openPicker();
@@ -845,5 +877,5 @@ describe('provider display names (#218)', () => {
 });
 
 // (*MVOX:Tallis* — #193 RED: profile linked-accounts section + link flow wiring + i18n)
-// (*MVOX:Tallis* — #219 RED: link picker unblock, uid+provider list de-dup, neutral noop notice)
+// (*MVOX:Tallis* — #219 RED: link picker unblock, list de-dup, neutral noop notice)
 // (*MVOX:Tallis* — #218 RED: PROVIDER_LABELS deleted, providerLabel is the one source)

@@ -101,7 +101,7 @@ beforeEach(() => {
 			return Promise.resolve(
 				json({
 					entity: {
-						entu_user: [{ _id: 'eu-anna', uid: 'u-anna', provider: 'google', email: 'a@x.test' }]
+						entu_user: [{ _id: 'eu-anna', string: 'a@x.test', provider: 'google' }]
 					}
 				})
 			);

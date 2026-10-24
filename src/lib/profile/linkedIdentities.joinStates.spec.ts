@@ -9,9 +9,7 @@ const cfg = testCfg('sampledb', 'jwt-admin');
 type WireEntry = {
 	_id: string;
 	string?: string;
-	uid?: string;
 	provider?: string;
-	email?: string;
 	invite?: string | true;
 };
 
@@ -32,11 +30,11 @@ function personFetch(byId: Record<string, WireEntry[] | 'no-key' | 'withheld' | 
 	}) as unknown as typeof fetch;
 }
 
-const BOUND: WireEntry = { _id: 'eu-b', uid: 'google:123', provider: 'google', email: 'x@y.ee' };
+const BOUND: WireEntry = { _id: 'eu-b', string: 'x@y.ee', provider: 'google' };
 const PLACEHOLDER: WireEntry = { _id: 'eu-p', string: 'x@y.ee', invite: true };
 
 describe('listJoinStates — the three states, read from CONTENTS', () => {
-	it('joined — an entry carrying uid (and never invite) reads as joined', async () => {
+	it('joined — an entry carrying string and provider (and never invite) reads as joined', async () => {
 		const states = await listJoinStates(cfg, ['p-1'], personFetch({ 'p-1': [BOUND] }));
 		expect(states).toEqual<Record<string, JoinState>>({ 'p-1': 'joined' });
 	});

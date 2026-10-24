@@ -5,7 +5,7 @@ import { INVITE_MINT_TRIGGER } from './inviteConstants';
 import { inviteOf, isPendingInvite } from './inviteOf';
 
 // Redemption takes the FIRST value carrying `invite`, so stale placeholders go before a mint.
-// A value carrying `uid` is a bound identity and is never touched.
+// A value without `invite` is a bound identity and is never touched.
 
 type SelfLinkMintPhase = 'identity-read' | 'stale-invite-cleanup' | 'mint';
 type SelfLinkMintReason = 'http' | 'contract' | 'missing-self-editor';
@@ -24,9 +24,8 @@ export class SelfLinkMintError extends Error {
 
 interface StoredEntuUserEntry {
 	_id: string;
-	uid?: string;
 	provider?: string;
-	email?: string;
+	string?: string;
 	invite?: string | true;
 }
 

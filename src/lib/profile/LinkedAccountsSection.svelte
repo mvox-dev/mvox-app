@@ -8,7 +8,7 @@
 	import RedactedText from '$lib/components/RedactedText.svelte';
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import { listLinkedIdentities, type LinkedIdentity } from '$lib/profile/linkedIdentities';
-	import { AUTH_PROVIDERS, providerLabel } from '$lib/auth/providers';
+	import { AUTH_PROVIDERS, isIdCodeProvider, providerLabel } from '$lib/auth/providers';
 	import { createNonce } from '$lib/auth/state';
 	import { buildOAuthInitUrl } from '../../routes/auth/[provider]/build-oauth-init-url';
 	import type * as InviteData from '$lib/invite/inviteData';
@@ -94,12 +94,12 @@
 
 	const shownLinkError = $derived(linkError ?? returnLinkError);
 
-	// One row per uid+provider: a same-identity re-link can leave two entries.
+	// One row per provider+string: a same-account re-link can leave two entries. No string, no merge.
 	const dedupedLinkedIdentities = $derived.by(() => {
 		const seen = new Set<string>();
 		const out: LinkedIdentity[] = [];
 		for (const identity of linkedIdentities) {
-			const key = `${identity.uid} ${identity.provider}`;
+			const key = identity.string ? `${identity.provider} ${identity.string}` : identity._id;
 			if (seen.has(key)) continue;
 			seen.add(key);
 			out.push(identity);
@@ -187,10 +187,10 @@
 				nonce: createNonce(),
 				invite: { db: ctx.cfg.db, token: inviteToken },
 				linkPersonId: ctx.personId,
-				linkedSnapshot: linkedIdentities.map(({ _id, uid, provider }) => ({
+				linkedSnapshot: linkedIdentities.map(({ _id, provider, string }) => ({
 					_id,
-					uid,
-					provider
+					provider,
+					string
 				}))
 			});
 			window.location.href = url;
@@ -216,8 +216,9 @@
 			<ul class="flex flex-col gap-1">
 				{#each dedupedLinkedIdentities as identity (identity._id)}
 					<li data-testid={`profile-linked-identity-${identity._id}`} class="text-sm text-ink-2">
-						{providerLabel(identity.provider)}{#if identity.email}
-							&nbsp;— <RedactedText>{identity.email}</RedactedText>
+						{providerLabel(identity.provider)}{#if identity.string &&
+							!isIdCodeProvider(identity.provider)}
+							&nbsp;— <RedactedText>{identity.string}</RedactedText>
 						{/if}
 					</li>
 				{/each}

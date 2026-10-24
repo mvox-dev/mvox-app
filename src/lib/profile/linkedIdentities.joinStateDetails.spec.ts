@@ -15,9 +15,7 @@ const cfg = testCfg('sampledb', 'jwt-admin');
 type WireEntry = {
 	_id: string;
 	string?: string;
-	uid?: string;
 	provider?: string;
-	email?: string;
 	invite?: string | true;
 };
 
@@ -52,7 +50,7 @@ function routedFetch(
 	}) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
 }
 
-const BOUND: WireEntry = { _id: 'eu-b', uid: 'google:123', provider: 'google', email: 'x@y.ee' };
+const BOUND: WireEntry = { _id: 'eu-b', string: 'x@y.ee', provider: 'google' };
 const PLACEHOLDER: WireEntry = { _id: 'eu-p', string: 'x@y.ee', invite: true };
 const AT_INVITED = '2026-09-22T10:00:00.000Z';
 const AT_JOINED = '2026-09-10T12:00:00.000Z';
