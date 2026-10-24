@@ -94,6 +94,7 @@ import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
 	createInviteMock,
+	sendInviteMock,
 	resolveDbEditRightMock,
 	resolveCollectiveNameMarkerMock,
 	resolveInviteParentMock,
@@ -153,7 +154,7 @@ function loadOk() {
 	listSectionsMock.mockResolvedValue([]);
 	resolveParentMock.mockResolvedValue('parent-1');
 	resolveInviteParentMock.mockResolvedValue('org-1');
-	createInviteMock.mockResolvedValue({ inviteToken: 'tok-123' });
+	createInviteMock.mockResolvedValue({ personId: 'p-new', memberId: 'm-new' });
 	resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	updateCollectiveNameMock.mockResolvedValue(undefined);
 }
@@ -254,7 +255,8 @@ describe('#140 — the admin section carries BOTH role management AND invite fun
 		expect(inviteSection.querySelector('h3')).not.toBeNull();
 	});
 
-	it('the embedded invite surface is LIVE: submitting mints an invite via createInvite and surfaces the copy-only result panel', async () => {
+	it('the embedded invite surface is LIVE: submitting creates via createInvite, sends, and says where it went', async () => {
+		sendInviteMock.mockResolvedValue({ sent: true, email: 'mari@example.com' });
 		const { container } = await renderMergedReady();
 		const inviteSection = q<HTMLElement>(container, 'admin-invite-section')!;
 		const submit = q<HTMLButtonElement>(inviteSection, 'invite-admin-submit')!;
@@ -262,6 +264,7 @@ describe('#140 — the admin section carries BOTH role management AND invite fun
 			expect(submit.disabled).toBe(false);
 		});
 
+		await fireEvent.input(q(inviteSection, 'invite-email')!, { target: { value: 'mari@example.com' } });
 		await fireEvent.click(submit);
 
 		await waitFor(() => {
@@ -271,10 +274,9 @@ describe('#140 — the admin section carries BOTH role management AND invite fun
 			);
 		});
 		await waitFor(() => {
-			expect(q(container, 'invite-copy')).not.toBeNull();
+			expect(q(inviteSection, 'invite-send-status')?.textContent).toContain('[roster_member_invite_sent]');
 		});
-		expect(q(container, 'invite-link')).toBeNull();
-		expect(container.textContent).not.toContain('tok-123');
+		expect(q(container, 'invite-copy')).toBeNull();
 	});
 
 	it('non-admin: NO invite functionality renders on /profile either', async () => {
@@ -336,6 +338,7 @@ describe('#140 — embedded invite surface with MULTIPLE collectives', () => {
 			expect(submit.disabled).toBe(false);
 		});
 
+		await fireEvent.input(q(inviteSection, 'invite-email')!, { target: { value: 'mari@example.com' } });
 		await fireEvent.click(submit);
 
 		await waitFor(() => {

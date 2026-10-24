@@ -86,4 +86,7 @@ staging:
   - label: GOTCHA
     record: "Roster join-state fixtures: absent needs row.createdAt; an old invite created.at reads 'expired'"
     ref: "src/lib/roster/joinStateView.ts"
+  - label: GOTCHA
+    record: "InviteSurface's new-person path needs an email: any spec that submits it types invite-email first"
+    ref: "#1031"
 # (*MVOX:Josquin*)

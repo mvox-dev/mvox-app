@@ -1,10 +1,8 @@
-// The admin invite create: person with a minted invite, the self-_editor grant, then the member.
+// The admin invite create: the person with their email, the self-_editor grant, then the member.
 import { entuFetch } from '$lib/entu/request';
 import { resolveTypeId } from '$lib/seasons/entuSeasons';
 import type { EntuCfg } from '$lib/entu/cfg';
 import { resolveDatabaseEntityId, DatabaseEntityLookupError } from '$lib/collective/databaseEntity';
-import { INVITE_MINT_TRIGGER } from './inviteConstants';
-import { inviteOf } from './inviteOf';
 
 // Fail loud: partial failures name the orphaned person and are never rolled back,
 // since a compensating delete can itself fail and hide the true state.
@@ -14,7 +12,6 @@ type InviteCreatePhase =
 	| 'person-parent-resolve'
 	| 'org-resolve'
 	| 'person-create'
-	| 'invite-mint'
 	| 'editor-grant'
 	| 'member-create';
 
@@ -39,12 +36,12 @@ export class InviteCreateError extends Error {
 
 export interface CreateInviteInput {
 	dbEntityId: string;
+	email: string;
 }
 
 interface CreateInviteResult {
 	personId: string;
 	memberId: string;
-	inviteToken: string;
 }
 
 async function resolveDbEntityOrInviteFail(
@@ -108,6 +105,9 @@ export async function createInvite(
 	if (!input.dbEntityId) {
 		throw new Error('createInvite: dbEntityId must not be empty');
 	}
+	if (!input.email) {
+		throw new Error('createInvite: email must not be empty');
+	}
 
 	let personTypeId: string;
 	let memberTypeId: string;
@@ -125,10 +125,11 @@ export async function createInvite(
 
 	type Prop = { type: string; reference?: string; string?: string };
 
+	// No mint trigger: the invite goes out by send-invite to this email (#1031).
 	const personProps: Prop[] = [
 		{ type: '_type', reference: personTypeId },
 		{ type: '_parent', reference: personParentId },
-		{ type: 'entu_user', string: INVITE_MINT_TRIGGER }
+		{ type: 'email', string: input.email }
 	];
 	const personRes = await entuFetch(
 		cfg.db,
@@ -148,10 +149,7 @@ export async function createInvite(
 			reason: 'http'
 		});
 	}
-	const personBody = (await personRes.json()) as {
-		_id?: string;
-		properties?: Array<{ type?: string; invite?: string }>;
-	};
+	const personBody = (await personRes.json()) as { _id?: string };
 	if (!personBody._id) {
 		throw new InviteCreateError(
 			'person create returned 2xx without _id (apparent-success trap) — never treated as a completed create',
@@ -159,18 +157,6 @@ export async function createInvite(
 		);
 	}
 	const personId = personBody._id;
-
-	// The create response is the only read of the token; every later GET returns `invite: true`.
-	const inviteToken = (personBody.properties ?? [])
-		.filter((p) => p.type === 'entu_user')
-		.map(inviteOf)
-		.find((token) => token !== undefined);
-	if (!inviteToken) {
-		throw new InviteCreateError(
-			`person ${personId} was created but the create response carried no invite token — API contract drift; do not retry blindly, inspect the person entity`,
-			{ phase: 'invite-mint', reason: 'contract', personId }
-		);
-	}
 
 	// Parity with Entu's native auto-create; later creates need her in her own `_expander` set.
 	const grantRes = await entuFetch(
@@ -186,7 +172,7 @@ export async function createInvite(
 	);
 	if (!grantRes.ok) {
 		throw new InviteCreateError(
-			`self-_editor grant on person ${personId} failed: HTTP ${grantRes.status} — the person exists WITHOUT self-edit rights; repair in Entu before sending any link`,
+			`self-_editor grant on person ${personId} failed: HTTP ${grantRes.status} — the person exists WITHOUT self-edit rights; repair in Entu before sending any invite`,
 			{ phase: 'editor-grant', reason: 'http', personId }
 		);
 	}
@@ -210,7 +196,7 @@ export async function createInvite(
 	);
 	if (!memberRes.ok) {
 		throw new InviteCreateError(
-			`member create failed: HTTP ${memberRes.status} — person ${personId} already exists and carries a live invite token; repair or remove it in Entu before retrying`,
+			`member create failed: HTTP ${memberRes.status} — person ${personId} already exists without a member; repair or remove it in Entu before retrying`,
 			{ phase: 'member-create', reason: 'http', personId }
 		);
 	}
@@ -222,7 +208,7 @@ export async function createInvite(
 		);
 	}
 
-	return { personId, memberId: memberBody._id, inviteToken };
+	return { personId, memberId: memberBody._id };
 }
 
 // (*MVOX:Josquin*)

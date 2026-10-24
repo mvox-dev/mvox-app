@@ -6,10 +6,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 
-vi.mock('$lib/invite/inviteData', async () => {
-	const admin = await import('$lib/testing/mocks/admin');
-	return { ...admin.inviteDataModule({ errors: true }), mintSelfLinkInvite: admin.mintSelfLinkInviteMock };
-});
+vi.mock('$lib/invite/inviteData', async () =>
+	(await import('$lib/testing/mocks/admin')).inviteDataModule({ errors: true })
+);
 vi.mock('$lib/nav/dbRights', async (importOriginal) =>
 	(await import('$lib/testing/mocks/admin')).dbRightOverRealModule(importOriginal)
 );
@@ -32,7 +31,7 @@ import {
 	InviteCreateError,
 	createInviteMock,
 	listJoinStatesMock,
-	mintSelfLinkInviteMock,
+	sendInviteMock,
 	resolveInviteParentMock,
 	resolveDbRightMock,
 	resolveParentMock
@@ -42,7 +41,7 @@ import { cleanupReset } from '$lib/testing/pages/dom';
 
 beforeEach(() => {
 	resetInviteMocks();
-	for (const mock of [resolveDbRightMock, listJoinStatesMock, mintSelfLinkInviteMock]) {
+	for (const mock of [resolveDbRightMock, listJoinStatesMock, sendInviteMock]) {
 		mock.mockReset();
 	}
 });
@@ -65,6 +64,9 @@ describe('/admin/invite — session expired (#107 review F2)', () => {
 			expect(submit?.disabled).toBe(false);
 		});
 
+		await fireEvent.input(container.querySelector('[data-testid="invite-email"]')!, {
+			target: { value: 'mari@example.com' }
+		});
 		await fireEvent.click(
 			container.querySelector('[data-testid="invite-admin-submit"]') as HTMLButtonElement
 		);
@@ -75,10 +77,10 @@ describe('/admin/invite — session expired (#107 review F2)', () => {
 		expect(container.querySelector('[data-testid="invite-admin-error"]')).toBeNull();
 	});
 
-	it('an auth-expired person-targeted MINT shows the session-expired notice — not the person error', async () => {
+	it('an auth-expired person-targeted SEND shows the session-expired notice — not the send error', async () => {
 		resolveDbRightMock.mockResolvedValue('owner');
 		listJoinStatesMock.mockResolvedValue({ 'p-cilla': 'absent' });
-		mintSelfLinkInviteMock.mockRejectedValue(authExpiredError());
+		sendInviteMock.mockRejectedValue(authExpiredError());
 		selectSampledb();
 
 		const { container } = render(InviteSurface, {
@@ -103,8 +105,8 @@ describe('/admin/invite — session expired (#107 review F2)', () => {
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="session-expired"]')).not.toBeNull();
 		});
-		expect(mintSelfLinkInviteMock).toHaveBeenCalledTimes(1);
-		expect(container.querySelector('[data-testid="invite-mint-error"]')).toBeNull();
+		expect(sendInviteMock).toHaveBeenCalledTimes(1);
+		expect(container.querySelector('[data-testid="invite-send-error"]')).toBeNull();
 	});
 
 	it('a not-visible prerequisite shows no-access, not the session-expired notice', async () => {

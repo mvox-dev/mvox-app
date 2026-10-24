@@ -5,16 +5,13 @@
 	import { cfgFor } from '$lib/entu/cfg';
 	import { collectiveState } from '$lib/collectives/store';
 	import RedactedText from '$lib/components/RedactedText.svelte';
-	import { createInvite, mintSelfLinkInvite } from './inviteData';
+	import FormError from '$lib/components/FormError.svelte';
+	import { createInvite, sendInvite, type SendInviteResult } from './inviteData';
 	import { loadPersonInviteData, loadPrerequisites, submitInvite } from './inviteSurfaceOps';
-	import { buildInviteUrl } from '$lib/invite/invite-links';
-	import { parseInviteToken } from '$lib/invite/parse-invite-token';
-	import { createInviteLinkCopier } from '$lib/invite/copy-invite-link';
 	import type { DbRight } from '$lib/nav/dbRights';
 	import { writesAvailable } from '$lib/net/online';
 	import type { JoinState } from '$lib/profile/linkedIdentities';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
-	import { isoDateFormatter } from '$lib/preferences/timeFormat';
 	import type { RouteLoadStatus } from '$lib/loading/routeLoad';
 
 	type InvitablePerson = { personId: string; name: string };
@@ -44,7 +41,7 @@
 	const initialPresetDb = untrack(() => presetDb);
 	const initialPresetDbEntityId = untrack(() => presetDbEntityId);
 
-	type Status = RouteLoadStatus | 'no-access' | 'creating' | 'done' | 'create-error';
+	type Status = RouteLoadStatus | 'no-access' | 'creating' | 'create-error';
 
 	const availableDbs = $derived(
 		$collectiveState.status === 'ready' ? $collectiveState.collectives : []
@@ -60,13 +57,12 @@
 	let dbEntityId = $state(initialPresetDbEntityId);
 	let resolvedForDb = $state(initialPresetDb && initialPresetDbEntityId ? initialPresetDb : '');
 
-	const inviteExpiryDateFmt = isoDateFormatter();
-
-	let inviteLink = $state('');
-	let inviteExpiryDate = $state('');
-	let copied = $state(false);
-	let copyFailed = $state(false);
-	const copier = createInviteLinkCopier(() => inviteLink);
+	let email = $state('');
+	let emailMissing = $state(false);
+	let outcome = $state<SendInviteResult | null>(null);
+	let sendFailed = $state(false);
+	// Created, but the send failed: listed so a retry sends to them instead of creating again.
+	let createdPersons = $state<InvitablePerson[]>([]);
 
 	let createError = $state<{ personId?: string } | null>(null);
 
@@ -77,9 +73,11 @@
 	let joinStates = $state<Record<string, JoinState>>({});
 	let personListError = $state(false);
 	let selectedPersonId = $state('');
-	let personMintError = $state<{ name: string; ownerOnly: boolean } | null>(null);
 
-	const uninvitedPersons = $derived(roster.filter((p) => joinStates[p.personId] === 'absent'));
+	const uninvitedPersons = $derived([
+		...roster.filter((p) => joinStates[p.personId] === 'absent'),
+		...createdPersons
+	]);
 	const selectedPerson = $derived(
 		uninvitedPersons.find((p) => p.personId === selectedPersonId) ?? null
 	);
@@ -119,6 +117,8 @@
 	async function loadDbPrerequisites(targetDb: string): Promise<void> {
 		if (!hasShownForm) status = 'loading';
 		dbEntityId = '';
+		createdPersons = [];
+		selectedPersonId = '';
 		const result = await loadPrerequisites(targetDb);
 		if (result.status === 'ready') {
 			dbEntityId = result.dbEntityId;
@@ -167,64 +167,42 @@
 		}
 	});
 
-	function showInviteLink(inviteToken: string): void {
-		inviteLink = buildInviteUrl(window.location.origin, inviteToken);
-		const parsed = parseInviteToken(inviteToken, Date.now());
-		inviteExpiryDate =
-			parsed.status === 'invalid' ? '' : inviteExpiryDateFmt.format(new Date(parsed.expMs));
-		copied = false;
-		copyFailed = false;
-		selectedPersonId = '';
-	}
-
 	async function submit(): Promise<void> {
 		if (isOffline) return;
 		if (!dbId || !canSubmit || status === 'creating') return;
+		const target = selectedPerson;
+		emailMissing = !target && !/^[^\s@]+@[^\s@]+$/.test(email.trim());
+		if (emailMissing) return;
 		const cfg = cfgFor(dbId);
 		createError = null;
-		personMintError = null;
+		sendFailed = false;
+		outcome = null;
 		status = 'creating';
 		const result = await submitInvite(
 			cfg,
-			{ dbEntityId, personId: selectedPersonId, personName: selectedPerson?.name ?? '' },
-			{
-				createInvite: (c, input) => createInvite(c, input),
-				mintSelfLinkInvite: (c, personId) => mintSelfLinkInvite(c, personId)
-			},
-			showInviteLink
+			{ dbEntityId, personId: target?.personId ?? '', email: email.trim() },
+			{ createInvite: (c, input) => createInvite(c, input), sendInvite: (c, id) => sendInvite(c, id) }
 		);
-		if (result.kind === 'done') {
+		if (result.kind === 'sent') {
 			joinStates = { ...joinStates, ...result.refreshedJoinStates };
-			status = 'done';
+			createdPersons = createdPersons.filter((p) => p.personId !== target?.personId);
+			outcome = result.outcome;
+			selectedPersonId = '';
+			email = '';
+			status = 'ready';
 		} else if (result.kind === 'session-expired') {
 			status = 'session-expired';
-		} else if (result.kind === 'person-error') {
-			personMintError = { name: result.name, ownerOnly: result.ownerOnly };
+		} else if (result.kind === 'send-error') {
+			if (result.createdPersonId) {
+				createdPersons = [...createdPersons, { personId: result.createdPersonId, name: email.trim() }];
+				selectedPersonId = result.createdPersonId;
+			}
+			sendFailed = true;
 			status = 'create-error';
 		} else {
 			createError = { personId: result.personId };
 			status = 'create-error'; // form values stay — retry enabled
 		}
-	}
-
-	async function copyLink(): Promise<void> {
-		const pending = copier.copy();
-		copied = copier.copied;
-		copyFailed = copier.copyFailed;
-		await pending;
-		copied = copier.copied;
-		copyFailed = copier.copyFailed;
-	}
-
-	function createAnother(): void {
-		inviteLink = '';
-		inviteExpiryDate = '';
-		copied = false;
-		copyFailed = false;
-		createError = null;
-		selectedPersonId = '';
-		personMintError = null;
-		status = 'ready';
 	}
 </script>
 
@@ -260,40 +238,6 @@
 				{m.admin_invite_retry_load()}
 			</button>
 		</div>
-	{:else if status === 'done'}
-		<div data-testid="invite-admin-result" class="flex flex-col gap-3">
-			<p class="text-sm">{m.admin_invite_link_label()}</p>
-			<button
-				type="button"
-				data-testid="invite-copy"
-				class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
-				onclick={copyLink}
-			>
-				{m.admin_invite_copy()}
-			</button>
-			<p
-				data-testid="invite-copy-status"
-				role="status"
-				aria-live="polite"
-				class="min-h-[16px] text-xs leading-[16px] text-ink-2"
-			>
-				{#if copied}{m.admin_invite_copied()}{/if}
-			</p>
-			{#if copyFailed}
-				<p class="text-sm text-danger" role="alert">{m.admin_invite_copy_error()}</p>
-			{/if}
-			<p data-testid="invite-bearer-warning" class="text-sm text-danger">
-				{m.admin_invite_bearer_warning()}
-				{m.admin_invite_show_once({ date: inviteExpiryDate })}
-			</p>
-			<button
-				type="button"
-				class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
-				onclick={createAnother}
-			>
-				{m.admin_invite_create_another()}
-			</button>
-		</div>
 	{:else}
 		{#if createError}
 			<div data-testid="invite-admin-error" class="flex flex-col gap-1" role="alert">
@@ -307,16 +251,8 @@
 				{/if}
 			</div>
 		{/if}
-		{#if personMintError}
-			<div data-testid="invite-mint-error" class="flex flex-col gap-1" role="alert">
-				<p class="text-sm text-danger">
-					<RedactedText
-						>{personMintError.ownerOnly
-							? m.admin_invite_mint_owner_only()
-							: m.admin_invite_mint_error({ name: personMintError.name })}</RedactedText
-					>
-				</p>
-			</div>
+		{#if sendFailed}
+			<FormError data-testid="invite-send-error">{m.roster_member_invite_send_failed()}</FormError>
 		{/if}
 		<div class="flex flex-col gap-3">
 			{#if controlled}
@@ -353,7 +289,7 @@
 						onchange={(e) => {
 							selectedPersonId = e.currentTarget.value;
 							createError = null;
-							personMintError = null;
+							sendFailed = false;
 						}}
 						class="rounded-md border border-ink px-3 py-2"
 					>
@@ -367,6 +303,24 @@
 				<p data-testid="invite-owner-note" class="text-xs text-ink-2">
 					{m.roster_member_invite_owner_only()}
 				</p>
+			{/if}
+			{#if !selectedPerson}
+				<label class="flex flex-col gap-1 text-sm">
+					{m.admin_invite_email_label()}
+					<input
+						type="email"
+						data-testid="invite-email"
+						required
+						autocomplete="off"
+						disabled={isOffline}
+						bind:value={email}
+						oninput={() => (emailMissing = false)}
+						class="rounded-md border border-ink px-3 py-2"
+					/>
+				</label>
+				{#if emailMissing}
+					<FormError data-testid="invite-email-missing">{m.admin_invite_email_missing()}</FormError>
+				{/if}
 			{/if}
 			{#if rosterPartial && !personListError}
 				<p data-testid="invite-person-partial-notice" role="status" class="text-xs text-ink-2">
@@ -387,6 +341,15 @@
 			>
 				<RedactedText>{submitLabel}</RedactedText>
 			</button>
+			<p
+				data-testid="invite-send-status"
+				role="status"
+				aria-live="polite"
+				class="min-h-[16px] text-xs leading-[16px] text-ink-2"
+			>
+				{#if outcome?.sent}{m.roster_member_invite_sent({ email: outcome.email })}
+				{:else if outcome}{m.roster_member_invite_no_email()}{/if}
+			</p>
 		</div>
 	{/if}
 </div>

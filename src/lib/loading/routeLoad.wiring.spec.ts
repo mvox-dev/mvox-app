@@ -16,7 +16,7 @@ const ROUTE_CONSUMERS = [
 ] as const;
 
 const SUPERSET_EXTRAS: Record<string, readonly string[]> = {
-	'lib/invite/InviteSurface.svelte': ["'no-access'", "'creating'", "'done'", "'create-error'"],
+	'lib/invite/InviteSurface.svelte': ["'no-access'", "'creating'", "'create-error'"],
 	'routes/event/[id]/+page.svelte': ["'not-available'"]
 };
 

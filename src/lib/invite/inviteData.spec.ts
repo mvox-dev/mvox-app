@@ -1,4 +1,4 @@
-// createInvite and the invite reads: person + member mint, self-edit grant, link token.
+// createInvite and the invite reads: person with email, self-edit grant, member.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import type { EntuCfg } from '$lib/entu/cfg';
@@ -14,7 +14,8 @@ import { json, testCfg } from '$lib/testing/entuFetchKit';
 const cfg = testCfg('sampledb', 'jwt-admin');
 
 const INPUT: CreateInviteInput = {
-	dbEntityId: 'org-1'
+	dbEntityId: 'org-1',
+	email: 'mari@example.com'
 };
 
 beforeEach(() => {
@@ -46,11 +47,7 @@ function makeFetchMock(
 		personTypeResolve: () => json({ entities: [{ _id: 'person-type-1' }] }),
 		memberTypeResolve: () => json({ entities: [{ _id: 'member-type-1' }] }),
 		database: () => json({ entities: [{ _id: 'db-entity-1' }] }),
-		personCreate: () =>
-			json({
-				_id: 'p1',
-				properties: [{ _id: 'prop-eu-1', type: 'entu_user', invite: 'tok.abc.def' }]
-			}),
+		personCreate: () => json({ _id: 'p1', properties: [{ _id: 'eu-1', type: 'entu_user', invite: true }] }),
 		editorGrant: () => json({ _id: 'p1', properties: [] }),
 		memberCreate: () => json({ _id: 'm1' }),
 		...overrides
@@ -64,7 +61,7 @@ function makeFetchMock(
 			return Promise.resolve(json({ entities: [{ _id: 'org-1', name: [{ string: 'EFK' }] }] }));
 		if (/entity\/p1$/.test(u)) return Promise.resolve(d.editorGrant());
 		const body = JSON.parse(String(init?.body ?? '[]')) as Prop[];
-		if (body.some((p) => p.type === 'entu_user')) return Promise.resolve(d.personCreate());
+		if (body.some((p) => p.type === 'email')) return Promise.resolve(d.personCreate());
 		return Promise.resolve(d.memberCreate());
 	});
 }
@@ -82,7 +79,7 @@ function callsOf(fetchImpl: ReturnType<typeof makeFetchMock>) {
 const _omitsDbEntityId: CreateInviteInput = {};
 void _omitsDbEntityId;
 
-const _validInput: CreateInviteInput = { dbEntityId: 'o1' };
+const _validInput: CreateInviteInput = { dbEntityId: 'o1', email: 'a@b.c' };
 void _validInput;
 
 describe('resolvePersonParentId', () => {
@@ -174,39 +171,36 @@ describe('createInvite — input guards fire before any network call', () => {
 		await expect(createInvite(cfg, { ...INPUT, dbEntityId: '' }, fetchImpl)).rejects.toThrow(/dbEntityId/);
 		expect(fetchImpl).not.toHaveBeenCalled();
 	});
+
+	it('rejects an empty email, naming the field', async () => {
+		const fetchImpl = vi.fn();
+		await expect(createInvite(cfg, { ...INPUT, email: '' }, fetchImpl)).rejects.toThrow(/email/);
+		expect(fetchImpl).not.toHaveBeenCalled();
+	});
 });
 
 describe('createInvite — happy path', () => {
-	it('returns personId, memberId and the invite token captured from the person-create response', async () => {
+	it('returns personId and memberId; no invite token is read, even beside an `invite: true`', async () => {
 		const fetchImpl = makeFetchMock();
 		const result = await createInvite(cfg, INPUT, fetchImpl);
-		expect(result).toEqual({ personId: 'p1', memberId: 'm1', inviteToken: 'tok.abc.def' });
+		expect(result).toEqual({ personId: 'p1', memberId: 'm1' });
 	});
 
-	it('person payload is EXACTLY: _type ref, _parent=database entity _id, entu_user=mint-trigger constant, NO _sharing or _inheritrights (#133, #699: rights come from Entu) — and NO name/email props (prop-defs deleted in T4.3)', async () => {
+	it('#1031 person payload is EXACTLY: _type ref, _parent=database entity _id, the email; no entu_user mint trigger, no _sharing', async () => {
 		const fetchImpl = makeFetchMock();
 		await createInvite(cfg, INPUT, fetchImpl);
-		const personCall = callsOf(fetchImpl).find((c) => c.body?.some((p) => p.type === 'entu_user'));
+		const personCall = callsOf(fetchImpl).find((c) => c.body?.some((p) => p.type === 'email'));
 		expect(personCall).toBeDefined();
 		expect(personCall!.method).toBe('POST');
-		expect(personCall!.body).toEqual(
-			expect.arrayContaining([
-				{ type: '_type', reference: 'person-type-1' },
-				{ type: '_parent', reference: 'db-entity-1' },
-				{ type: 'entu_user', string: 'trigger invite token' }
-			])
-		);
-		expect(personCall!.body).toHaveLength(3);
-		expect(personCall!.body!.some((p) => p.type === 'name' || p.type === 'email')).toBe(false);
-		expect(personCall!.body!.some((p) => p.type === '_sharing')).toBe(false);
-	});
-
-	it("#34 — the invitee's real email NEVER reaches Entu: the person-create request body contains no occurrence of it, anywhere", async () => {
-		const fetchImpl = makeFetchMock();
-		await createInvite(cfg, INPUT, fetchImpl);
-		const personCall = callsOf(fetchImpl).find((c) => c.body?.some((p) => p.type === 'entu_user'));
-		expect(personCall).toBeDefined();
-		expect(JSON.stringify(personCall!.body)).not.toContain('mari@example.com');
+		expect(personCall!.url.split('?')[0]).toMatch(/\/entity$/);
+		expect(personCall!.body).toEqual([
+			{ type: '_type', reference: 'person-type-1' },
+			{ type: '_parent', reference: 'db-entity-1' },
+			{ type: 'email', string: 'mari@example.com' }
+		]);
+		for (const c of callsOf(fetchImpl)) {
+			expect(c.body?.some((p) => p.type === 'entu_user') ?? false).toBe(false);
+		}
 	});
 
 	it('member payload is EXACTLY: _type ref, _parent=dbEntityId, person ref, status:active, NO _sharing or _inheritrights (#133, #699: rights come from Entu) — NO name property (#36 — member carries no name, profiles are the sole name source), NO _viewer grant (domain sharing already covers her own read)', async () => {
@@ -280,16 +274,6 @@ describe('createInvite — every failure is loud, phased, and names the orphan w
 		const err = await captureError(createInvite(cfg, INPUT, fetchImpl));
 		expect(err.phase).toBe('person-create');
 		expect(err.message).toMatch(/_id/i);
-	});
-
-	it("throws phase 'invite-mint' (reason contract, personId set) when the create response carries no invite token — no link is ever fabricated", async () => {
-		const fetchImpl = makeFetchMock({
-			personCreate: () => json({ _id: 'p1', properties: [{ _id: 'x', type: 'entu_user' }] })
-		});
-		const err = await captureError(createInvite(cfg, INPUT, fetchImpl));
-		expect(err.phase).toBe('invite-mint');
-		expect(err.reason).toBe('contract');
-		expect(err.personId).toBe('p1');
 	});
 
 	it("throws phase 'editor-grant' with the orphaned personId when the self-_editor grant fails", async () => {

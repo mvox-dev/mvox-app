@@ -6,6 +6,8 @@
 - **Built from:** `entu-api` source @`82cb25b` and this repo `main` @`cf66173`, each claim verified `file:line` this session; slice-4 (onboarding, #21) as built. Live corrections from the T4.9 gate (#29, 2026-08-07) marked **[LIVE]** below.
 - **Companions:** `docs/architecture/entu-rights-and-visibility-model.md` (rights/visibility) · wiki [Runbook — Entu visibility](https://github.com/mvox-dev/mvox-app/wiki/Runbook-entu-visibility) §0 "where a `person` comes from".
 
+> **Changed by #1031 (2026-10-24).** The admin invite surface no longer mints or shows a link. A new person is created with the email the admin enters, then sent the invite by `send-invite`; an existing person is sent to the email on their person record (§8). §1–§4 still describe the mint that /profile's self-link uses.
+
 **Provenance discipline.** Every mechanics claim is **[SRC]** (traceable to `entu-api` source `file:line`), **[LIVE]** (empirically confirmed, with what was observed), or **[CONV]** (an mvox-app convention — true because we chose it, not because Entu enforces it). Unmarked is not established. **The invite path's anonymity and one-shot binding are Entu platform behaviours** — mvox uses the right field and reads the result; it does not re-implement them.
 
 ---
@@ -85,9 +87,11 @@ The mint stamps an `exp` (§2), but **nothing enforces it until redemption**, an
 
 ## 8. Minting onto an existing person, and withdrawing
 
-A member's own link for adding a sign-in on /profile, and the admin invite surface's pick of an existing person, mint onto a person who already exists · **[CONV]** `src/lib/invite/inviteSelfLink.ts` `mintSelfLinkInvite`. mvox first deletes the person's un-redeemed `entu_user` placeholders, because redemption takes the first value carrying `invite`, then POSTs the trigger constant (§2) onto the person. A value carrying `uid` is a bound identity and is never touched. Entu allows the mint on another person only for `_owner` · **[CONV]** as stated at `inviteSelfLink.ts:116`, not re-read in `entu-api` here; a person minting for herself needs her self-`_editor` (§3), and a 403 says it is missing. `withdrawInvite` deletes the un-redeemed placeholders and leaves no marker. What a failure midway leaves behind: `docs/property-writes.md`, row 6.
+A member's own link for adding a sign-in on /profile mints onto a person who already exists · **[CONV]** `src/lib/invite/inviteSelfLink.ts` `mintSelfLinkInvite`. mvox first deletes the person's un-redeemed `entu_user` placeholders, because redemption takes the first value carrying `invite`, then POSTs the trigger constant (§2) onto the person. A value carrying `uid` is a bound identity and is never touched. Entu allows the mint on another person only for `_owner` · **[CONV]** as stated at `inviteSelfLink.ts:116`, not re-read in `entu-api` here; a person minting for herself needs her self-`_editor` (§3), and a 403 says it is missing. `withdrawInvite` deletes the un-redeemed placeholders and leaves no marker. What a failure midway leaves behind: `docs/property-writes.md`, row 6.
 
 The roster's invite and resend mint nothing (#1003) · **[CONV]** `src/lib/invite/sendInvite.ts` `sendInvite`. mvox reads the person's own `email`; with none it sends nothing and says so. Otherwise it POSTs `send-invite` onto the person and Entu emails the link there, so no token reaches mvox. It sweeps no placeholders, so after a resend the earlier link stays valid until it expires (§7).
+
+The admin invite surface sends the same way (#1031) · **[CONV]** `src/lib/invite/inviteSurfaceOps.ts` `submitInvite`. For a new person, `createInvite` first writes `_type`, `_parent` and the entered `email`, with no trigger, then the self-`_editor` grant and the member; then `sendInvite` runs on the new id. If that send fails, the new person joins the surface's person list so a retry sends to them rather than creating a second person.
 
 ## Why this is safe
 
