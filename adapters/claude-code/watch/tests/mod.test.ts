@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 
-import { textHash } from '../hooks/watch'
+import { bookmarkFor, LINES_CAP, textHash } from '../hooks/watch'
 import { CWD, HOME, newSession, SESSION, typed, worldOf } from './fixtures/world'
 
 const NOW = Date.parse('2026-10-14T12:00:00Z')
@@ -233,6 +233,142 @@ describe('doorbells: ring on growth, never touch the file', () => {
   })
 })
 
+describe('a consumer that rewrites its inbox, as esl-suvekool does (kit #57)', () => {
+  // The courier writes the inbox as JSON with indent 1; the consumer (hub-consume.py) takes the
+  // hub mail and writes back what it leaves -- [] or the teammates' entries, with indent 2.
+  const HUB1 = { from: 'hub', text: 'mvox: the 06:37 delivery, with a long body', timestamp: '2026-10-24T06:37:00Z' }
+  const HUB2 = { from: 'hub', text: 'po: the 06:38 delivery', timestamp: '2026-10-24T06:38:00Z' }
+  const MATE = { from: 'poster', text: 'the poster is done', timestamp: '2026-10-24T06:36:00Z' }
+  const NEW = { from: 'hub', text: 'hi', timestamp: '2026-10-24T07:00:00Z' }
+  const courier = (...entries: object[]) => JSON.stringify(entries, null, 1)
+  const consumer = (...entries: object[]) => JSON.stringify(entries, null, 2)
+  const GREW = `[hub mail] ${INBOX} grew. consume the inbox or new messages won't land`
+  const REPLACED = `[hub mail] ${INBOX} was replaced. consume the inbox or new messages won't land`
+
+  test('consumed down to []: no ring; the next mail, shorter, rings as a replacement', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [INBOX]: courier(HUB1, HUB2) })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    expect(world.submitted).toEqual([GREW])
+    world.files.set(INBOX, '[]')
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([GREW])
+    world.files.set(INBOX, courier(NEW))
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([GREW, REPLACED])
+    await clock.advance(60_000)
+    expect(world.submitted).toHaveLength(2)
+  })
+
+  test("consumed down to a teammate's entry, re-indented: no ring; new mail beside it rings", async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [INBOX]: courier(HUB1, MATE) })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    world.files.set(INBOX, consumer(MATE))
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([GREW])
+    world.files.set(INBOX, courier(MATE, NEW))
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([GREW, REPLACED])
+  })
+
+  test('consumed and refilled with shorter mail between two polls still rings (kit #52)', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [INBOX]: courier(HUB1, HUB2) })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    world.files.set(INBOX, '[]')
+    world.files.set(INBOX, courier(NEW))
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([GREW, REPLACED])
+  })
+
+  test('a bookmark an older watch kept (no lines): a replacement rings as in watch 0.7.0; the next one is judged by lines', async ($, on) => {
+    const SEEN = courier(HUB1, HUB2)
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [INBOX]: '[]' })
+    // The plugin updated and reloaded mid-session, and the consumer ran before its first poll.
+    world.state.set('watch/bellSizes', { value: { [INBOX]: SEEN.length }, version: 1 })
+    world.state.set('watch/bellHashes', { value: { [INBOX]: textHash(SEEN) }, version: 1 })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    expect(world.submitted).toEqual([REPLACED])
+    world.files.set(INBOX, courier(NEW))
+    await clock.advance(5_000)
+    world.files.set(INBOX, '[]')
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([REPLACED, REPLACED])
+  })
+
+  test('a bookmark an older watch kept, of the text still there, takes its lines at the next poll', async ($, on) => {
+    const SEEN = courier(HUB1, MATE)
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [INBOX]: SEEN })
+    world.state.set('watch/bellSizes', { value: { [INBOX]: SEEN.length }, version: 1 })
+    world.state.set('watch/bellHashes', { value: { [INBOX]: textHash(SEEN) }, version: 1 })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    world.files.set(INBOX, consumer(MATE))
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([])
+  })
+
+  test('a file past the size cap keeps no lines: a replacement rings as in watch 0.7.0', async ($, on) => {
+    const BIG = { from: 'hub', text: 'x'.repeat(LINES_CAP), timestamp: '2026-10-24T06:37:00Z' }
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [INBOX]: courier(BIG, MATE) })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    world.files.set(INBOX, consumer(MATE))
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([GREW, REPLACED])
+    // Back under the cap, the bookmark keeps lines again.
+    world.files.set(INBOX, '[]')
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([GREW, REPLACED])
+  })
+
+  test('a refused replacement rolls back its lines too, and rings again once the refusal lifts', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [INBOX]: courier(HUB1, MATE) })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    world.refuse = 'another plugin holds prompts'
+    world.files.set(INBOX, courier(MATE, NEW))
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([GREW])
+    world.refuse = undefined
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([GREW, REPLACED])
+  })
+
+  test('a tail-style file: the kept bookmark carries the lines; cut to a part of itself, a new session rings nothing', async ($, on) => {
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [LINKS]: 'https://a\nhttps://b\n' })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(0)
+    expect(world.store.get(`bells:${CWD}`)).toEqual({ [LINKS]: bookmarkFor('https://a\nhttps://b\n') })
+    newSession(world)
+    world.files.set(LINKS, 'https://b\n')
+    await $.session.start(SESSION)
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([`[links.txt] ${LINKS} grew.\nhttps://a\nhttps://b`])
+    expect(world.store.get(`bells:${CWD}`)).toEqual({ [LINKS]: bookmarkFor('https://b\n') })
+  })
+
+  test('a tail-style bookmark an older watch kept in the store (no lines): a replacement rings as in watch 0.7.0', async ($, on) => {
+    const TWO = 'https://a\nhttps://b\n'
+    const world = worldOf(on, { 'memory-kit.conf': CONF, [LINKS]: 'https://b\n' }, { [`bells:${CWD}`]: { [LINKS]: { size: TWO.length, hash: textHash(TWO) } } })
+    const clock = mock.clock(on, { now: NOW })
+    await $.session.start(SESSION)
+    await clock.advance(5_000)
+    expect(world.submitted).toEqual([`[links.txt] ${LINKS} was replaced.\nhttps://b`])
+    expect(world.store.get(`bells:${CWD}`)).toEqual({ [LINKS]: bookmarkFor('https://b\n') })
+  })
+})
+
 describe('a tail-style bookmark outlives the session (kit #51)', () => {
   const BELLS = `bells:${CWD}`
   const TWO = 'https://a\nhttps://b\n'
@@ -284,7 +420,7 @@ describe('a tail-style bookmark outlives the session (kit #51)', () => {
     const clock = mock.clock(on, { now: NOW })
     await $.session.start(SESSION)
     await clock.advance(0)
-    expect(world.store.get(BELLS)).toEqual({ [LINKS]: { size: TWO.length, hash: textHash(TWO) } })
+    expect(world.store.get(BELLS)).toEqual({ [LINKS]: bookmarkFor(TWO) })
     expect([...world.files.keys()].sort()).toEqual([`${CWD}/memory-kit.conf`, LINKS])
   })
 
@@ -329,7 +465,7 @@ describe('a tail-style bookmark outlives the session (kit #51)', () => {
     await clock.advance(0)
     // A line arrives, and the other session's ring of it enters first, moving the kept bookmark.
     world.files.set(LINKS, TWO)
-    world.store.set(BELLS, { [LINKS]: { size: TWO.length, hash: textHash(TWO) } })
+    world.store.set(BELLS, { [LINKS]: bookmarkFor(TWO) })
     await clock.advance(5_000)
     expect(world.submitted).toEqual([`[links.txt] ${LINKS} grew.\nhttps://a`, `[links.txt] ${LINKS} grew.\nhttps://b`])
   })
@@ -373,11 +509,11 @@ describe('a tail-style bookmark outlives the session (kit #51)', () => {
     world.hold = true
     world.files.set(LINKS, TWO)
     await clock.advance(30_000)
-    expect(world.store.get(BELLS)).toEqual({ [LINKS]: { size: 'https://a\n'.length, hash: textHash('https://a\n') } })
+    expect(world.store.get(BELLS)).toEqual({ [LINKS]: bookmarkFor('https://a\n') })
     world.release()
     world.hold = false
     await clock.advance(0)
-    expect(world.store.get(BELLS)).toEqual({ [LINKS]: { size: TWO.length, hash: textHash(TWO) } })
+    expect(world.store.get(BELLS)).toEqual({ [LINKS]: bookmarkFor(TWO) })
     newSession(world)
     await $.session.start(SESSION)
     await clock.advance(30_000)
@@ -400,7 +536,7 @@ describe('a tail-style bookmark outlives the session (kit #51)', () => {
     await clock.advance(5_000)
     world.storeSetFails = false
     await clock.advance(5_000)
-    expect(world.store.get(BELLS)).toEqual({ [LINKS]: { size: TWO.length, hash: textHash(TWO) } })
+    expect(world.store.get(BELLS)).toEqual({ [LINKS]: bookmarkFor(TWO) })
   })
 
   test('a store that can be read but not written: the session keeps its own bookmark, each line rings once', async ($, on) => {
@@ -432,7 +568,7 @@ describe('a tail-style bookmark outlives the session (kit #51)', () => {
     world.storeFails = false
     await clock.advance(30_000)
     expect(world.submitted).toEqual([`[links.txt] ${LINKS} grew.\nhttps://a`, `[links.txt] ${LINKS} grew.\nhttps://b`])
-    expect(world.store.get(BELLS)).toEqual({ [LINKS]: { size: TWO.length, hash: textHash(TWO) } })
+    expect(world.store.get(BELLS)).toEqual({ [LINKS]: bookmarkFor(TWO) })
   })
 
   test('one file declared inbox-style, then tail-style: the first entry keeps it, one ring per new text', async ($, on) => {

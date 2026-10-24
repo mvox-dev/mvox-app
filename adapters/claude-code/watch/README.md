@@ -48,20 +48,24 @@ Every entry carries the same four fields, empty where unused:
   For short, line-shaped files (a spool of URLs, one-line mail summaries): the harness cuts very
   long lines, so a file of essays wants `inject: false` and a session that reads the file itself.
 
-**A ring is new text.** The watch remembers each file's last-seen size and a hash of its text
-(never the text). Text added past what was seen rings once, as growth. Other non-empty text in
-its place rings once, as a replacement, whatever its size: the file was consumed and refilled
-between two polls (kit #52); with `inject`, all of the new text rides along. Everything else only
-moves the bookmark: created at 0 bytes, emptied, deleted (it counts 0, so delete-then-write
-rings), or the same text written again. A file that sits unconsumed is not nagged: no new text,
-no new ring. All of one poll's rings go as **one**
-prompt. A ring the session's guards refuse rolls its bookmark back and rings again at a later
-poll.
+**A ring is new text.** The watch remembers each file's last-seen size, a hash of its text and,
+for a file up to 64 KiB, a hash of each of its lines (never the text). Text added past what was
+seen rings once, as growth. Other non-empty text in its place rings once, as a replacement,
+whatever its size, when it has a line the seen text did not have: the file was consumed and
+refilled between two polls (kit #52); with `inject`, all of the new text rides along. Lines are
+compared trimmed and without a trailing comma, and a line of only brackets, braces and commas
+does not count, so a consumer that writes back what it leaves -- `[]`, or the entries it did not
+take, even re-indented -- rings nothing (kit #57). A file past 64 KiB keeps no lines: any other
+text in its place rings, as in watch 0.7.0. Everything else only moves the bookmark: created at
+0 bytes, emptied, deleted (it counts 0, so delete-then-write rings), rewritten with no line it
+did not already have, or the same text written again. A file that sits unconsumed is not nagged:
+no new text, no new ring. All of one poll's rings go as **one** prompt. A ring the session's
+guards refuse rolls its bookmark back and rings again at a later poll.
 
 **Consuming is the home's own step.** An inbox-style file (`inject: false`) is consumed by
-reading it and then deleting or emptying it -- either resets the bookmark, so the next real write
-rings again. Its bookmark is the session's own: a new session (a restart, a `/clear`) rings an
-unconsumed inbox once more. A tail-style file (`inject: true`) needs no consuming: its bookmark
+reading it and then deleting it, emptying it, or writing back what it did not take (kit #57) --
+each resets the bookmark, so the next real write rings again. Its bookmark is the session's own:
+a new session (a restart, a `/clear`) rings an unconsumed inbox once more. A tail-style file (`inject: true`) needs no consuming: its bookmark
 advances and outlives the session (kit #51). The watch keeps it in the plugin's own store, per
 home, never in the home, and moves it only past what reached a turn: a new session rings only the
 lines no ring has brought in -- those written while no session ran, and those of a ring still
@@ -78,8 +82,8 @@ or the harness holds the lock, wait once and pass again; if something is still l
 at once, as the household's does, is not exposed.
 
 A ring reads `[hub mail] /home/u/kit/comms/inboxes/team-lead.json grew. consume the inbox or new
-messages won't land` -- `was replaced.` in place of `grew.` when other text took the file's
-place; with `inject`, the new lines follow, one per line.
+messages won't land` -- `was replaced.` in place of `grew.` when other text, with a new line,
+took the file's place; with `inject`, the new lines follow, one per line.
 
 **Never silently idle** (kit #14): a `watch_files` the watch cannot read, an entry without a
 path, an unknown field, an `inject` that is not true/false -- each is one visible notice (notify,
@@ -253,10 +257,16 @@ problem in the declaration, and the sensor marks.
 
 ## Limits
 
-- A ring is new text in what `$.fs.read` returns, compared only with itself, through a 32-bit
-  hash. Keeping no text, the watch cannot tell a file cut to a shorter part of itself from a new
-  message: that rings as a replacement. Two different texts with one hash (about one in four
+- A ring is new text in what `$.fs.read` returns, compared only with itself, through 32-bit
+  hashes of the text and of its lines. Two different texts with one hash (about one in four
   billion) would not ring.
+- A replacement must add a line to ring (kit #57). New text made only of lines the seen text
+  already had -- an entry written again word for word -- rings nothing, and a new line whose hash
+  equals a seen line's (among a few thousand, about one in a million) does not count. JSON written
+  on one line is one line: any rewrite of it that keeps something adds a line and rings.
+- The lines are kept up to 64 KiB (counted in characters, as the sizes are). Past it, and for a
+  bookmark an older watch kept until the watch has seen that text once, any other text in the
+  file's place rings as a replacement, as in watch 0.7.0, a consumer's write-back included.
 - The watch does not watch directories, only files (a `*` path is expanded per poll, so a new
   matching file is picked up then).
 - Two sessions in one home each keep their own bookmarks: both ring. Information is per session;

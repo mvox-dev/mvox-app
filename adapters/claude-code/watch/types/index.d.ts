@@ -10,6 +10,9 @@ declare module 'claude-code' {
       bellSizes: Record<string, number>
       /** Each watched file's last-seen text hash, by the same key: other text in its place rings (kit #52). */
       bellHashes: Record<string, number>
+      /** Each watched file's last-seen line hashes, by the same key, with the text hash they belong
+       *  to: other text in its place rings only when it adds a line (kit #57). None past the size cap. */
+      bellLines: Record<string, { hash: number; lines: number[] }>
       /** Context marks already reported this session: once per mark, reloads included. */
       reportedMarks: number[]
     }

@@ -1,6 +1,6 @@
 {
   "name": "watch",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "memory-kit watch: rings a doorbell in the session (idle-safe) when a file the home declares in memory-kit.conf (watch_files) grows or is replaced by other text, never touching the file, and reports, information only, idleness and context growth past the marks the home declares there",
   "author": {
     "name": "Mihkel Putrinš"
