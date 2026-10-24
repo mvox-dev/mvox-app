@@ -8,7 +8,7 @@
 	import RedactedText from '$lib/components/RedactedText.svelte';
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import { listLinkedIdentities, type LinkedIdentity } from '$lib/profile/linkedIdentities';
-	import { AUTH_PROVIDERS, providerLabel } from '$lib/auth/providers';
+	import { AUTH_PROVIDERS, isIdCodeProvider, providerLabel } from '$lib/auth/providers';
 	import { createNonce } from '$lib/auth/state';
 	import { buildOAuthInitUrl } from '../../routes/auth/[provider]/build-oauth-init-url';
 	import type * as InviteData from '$lib/invite/inviteData';
@@ -216,7 +216,8 @@
 			<ul class="flex flex-col gap-1">
 				{#each dedupedLinkedIdentities as identity (identity._id)}
 					<li data-testid={`profile-linked-identity-${identity._id}`} class="text-sm text-ink-2">
-						{providerLabel(identity.provider)}{#if identity.string}
+						{providerLabel(identity.provider)}{#if identity.string &&
+							!isIdCodeProvider(identity.provider)}
 							&nbsp;— <RedactedText>{identity.string}</RedactedText>
 						{/if}
 					</li>
