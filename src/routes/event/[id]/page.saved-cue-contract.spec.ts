@@ -12,7 +12,29 @@ const pageStub = vi.hoisted(() => ({
 	params: { id: 'ev1' } as Record<string, string>,
 	url: new URL('http://localhost/event/ev1')
 }));
-vi.mock('$app/state', () => ({ page: pageStub }));
+const nav = vi.hoisted(() => ({ tick: null as null | { get(k: string): unknown; set(k: string, v: number): unknown } }));
+vi.mock('$app/state', async () => {
+	const { SvelteMap } = await import('svelte/reactivity');
+	const tick = new SvelteMap<string, number>([['n', 0]]);
+	nav.tick = tick;
+	return {
+		page: {
+			get params() {
+				tick.get('n');
+				return pageStub.params;
+			},
+			get url() {
+				return pageStub.url;
+			}
+		}
+	};
+});
+
+function navigateTo(id: string): void {
+	pageStub.params = { id };
+	pageStub.url = new URL(`http://localhost/event/${id}`);
+	nav.tick!.set('n', Number(nav.tick!.get('n')) + 1);
+}
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
@@ -41,6 +63,7 @@ import { rowByName } from '$lib/testing/pages/seasonRepertoire';
 import { fill } from '$lib/testing/pages/seasonPanel';
 import { reaches } from '$lib/testing/pageReach';
 import { findSourceFiles } from '$lib/testing/soleLiteralGuard';
+import { keptProblems, useKeptProblems } from '$lib/testing/keptProblems';
 
 const SAVED = /\bm\.[a-z_]+_saved\(/;
 
@@ -55,6 +78,7 @@ type Surface = {
 	write: (container: HTMLElement) => Promise<unknown>;
 	status: string;
 	error: string;
+	report?: { area: string; action: string; detail: string };
 } & ({ saved: string } | { saved?: undefined; noSavedCue: string });
 
 const settled = async (write: Write, ok: () => Response) => {
@@ -118,7 +142,8 @@ const SURFACES: Record<string, Surface> = {
 		write: (c) => fireEvent.click(q(c, 'rsvp-btn-not_going')!),
 		status: 'rsvp-saved-status',
 		saved: '[rsvp_saved]',
-		error: 'rsvp-save-failed'
+		error: 'rsvp-save-failed',
+		report: { area: 'event', action: 'saving an answer', detail: 'Error: updateRsvpStatus POST failed: 500' }
 	},
 	attendance: {
 		component: 'src/lib/components/attendance/AttendanceSurface.svelte',
@@ -152,7 +177,8 @@ const SURFACES: Record<string, Surface> = {
 		write: (c) => fireEvent.click(q(c, 'attendance-toggle-m1-present')!),
 		status: 'attendance-saved-status-m1',
 		saved: '[attendance_saved]',
-		error: 'attendance-save-failed-m1'
+		error: 'attendance-save-failed-m1',
+		report: { area: 'event', action: 'saving attendance', detail: 'Error: createAttendance failed: 500' }
 	},
 	'event field': {
 		component: 'src/lib/events/EventFieldEdit.svelte',
@@ -168,7 +194,8 @@ const SURFACES: Record<string, Surface> = {
 		},
 		status: 'event-edit-status',
 		saved: '[event_edit_saved]',
-		error: 'event-edit-error-name'
+		error: 'event-edit-error-name',
+		report: { area: 'event', action: 'saving the event field event_name', detail: 'Error: updateEventField POST failed: 500' }
 	},
 	schedule: {
 		component: 'src/lib/events/EventScheduleSection.svelte',
@@ -193,7 +220,8 @@ const SURFACES: Record<string, Surface> = {
 		},
 		status: 'event-schedule-status',
 		saved: '[event_schedule_saved]',
-		error: 'event-schedule-error-si1'
+		error: 'event-schedule-error-si1',
+		report: { area: 'event', action: 'saving the schedule', detail: 'Error: updateScheduleItemField POST failed: 500' }
 	},
 	works: {
 		component: 'src/lib/events/EventWorksSection.svelte',
@@ -229,7 +257,8 @@ const SURFACES: Record<string, Surface> = {
 		write: (c) => fireEvent.click(q(rowByName(q(c, 'event-detail-works')!, 'Bogoróditse Djévo'), 'work-status-retired')!),
 		status: 'repertoire-manage-status',
 		saved: '[repertoire_manage_saved]',
-		error: 'repertoire-manage-error'
+		error: 'repertoire-manage-error',
+		report: { area: 'event', action: 'saving the event works', detail: 'Error: updateRepertoireStatus POST failed: 500' }
 	},
 	series: {
 		component: 'src/lib/events/EventSeriesPicker.svelte',
@@ -312,6 +341,11 @@ const statusText = (container: HTMLElement, surface: Surface) =>
 beforeEach(editorTokenAtNow);
 
 afterEach(cleanupRealTimersResetTypes);
+useKeptProblems();
+
+const keptWrites = async (identity?: { db: string; personId: string }) =>
+	(await keptProblems(identity)).filter((p) => p.action.startsWith('saving'));
+const SAMPLEDB = { db: 'sampledb', personId: 'p-viewer' };
 
 describe('the saved cue, on every write surface of the event page', () => {
 	it('the table covers every component on the event page that says saved', () => {
@@ -367,6 +401,30 @@ describe('the saved cue, on every write surface of the event page', () => {
 		expect(wire.mock.calls.some(([, init]) => (init?.method ?? 'GET') === 'POST')).toBe(true);
 		expect(statusText(container, surface)).toBe('');
 		if (surface.saved) expect(container.textContent).not.toContain(surface.saved);
+		if (!surface.report) return;
+		await vi.waitFor(async () => expect(await keptWrites()).toEqual([surface.report]));
+	});
+
+	const reporting = Object.keys(SURFACES).filter((name) => SURFACES[name].report);
+
+	it.each(reporting)('%s: a write failing after a collective switch shows nothing, reported under its own collective', async (name) => {
+		const surface = SURFACES[name];
+		const { container, write, wire } = renderSurface(surface, ['sampledb', 'other-choir']);
+		await surface.ready(container);
+		const held = deferred<void>();
+		write.hold = held.promise;
+		write.fail = true;
+		await surface.write(container);
+
+		selectedCollectiveDbStore.set('other-choir');
+		await waitFor(() => expect(wire.mock.calls.some(([url]) => String(url).includes('/other-choir/'))).toBe(true));
+		await surface.ready(container);
+		held.resolve();
+		await flushMicrotasks();
+
+		await vi.waitFor(async () => expect(await keptWrites(SAMPLEDB)).toEqual([surface.report]));
+		expect(q(container, surface.error)).toBeNull();
+		expect(await keptWrites()).toEqual([]);
 	});
 
 	it.each(saying)('%s: a write that settles after a collective switch never paints the cue', async (name) => {
@@ -385,6 +443,79 @@ describe('the saved cue, on every write surface of the event page', () => {
 
 		expect(statusText(container, surface)).toBe('');
 		expect(container.textContent).not.toContain(surface.saved!);
+	});
+
+	function onOtherChoir(name: string, own: Route): Surface {
+		const surface = SURFACES[name];
+		return {
+			...surface,
+			route: async (url, method, init, write) =>
+				(url.includes('/other-choir/') && method === 'GET' ? own(url, method, init, write) : undefined) ??
+				surface.route(url, method, init, write)
+		};
+	}
+
+	const otherChoirViews: [string, Surface, string][] = [
+		[
+			'event field',
+			onOtherChoir('event field', async (url) =>
+				url.includes('/entity/ev1')
+					? json({ entity: editableEvent({ event_name: [{ _id: 'val-b', string: 'Choir B Rehearsal' }] }) })
+					: undefined
+			),
+			'Choir B Rehearsal'
+		],
+		[
+			'schedule',
+			onOtherChoir('schedule', async (url) =>
+				url.includes('_type.string=schedule_item')
+					? json({ entities: [scheduleEntity('si1', 'choir B call', '2026-09-01T14:30:00.000Z')] })
+					: undefined
+			),
+			'choir B call'
+		]
+	];
+
+	it.each(otherChoirViews)('%s: a failed write rolled back after a switch leaves the new collective alone', async (_name, surface, own) => {
+		const { container, write, wire } = renderSurface(surface, ['sampledb', 'other-choir']);
+		await surface.ready(container);
+		const held = deferred<void>();
+		write.hold = held.promise;
+		write.fail = true;
+		await surface.write(container);
+
+		selectedCollectiveDbStore.set('other-choir');
+		await waitFor(() => expect(wire.mock.calls.some(([url]) => String(url).includes('/other-choir/'))).toBe(true));
+		await waitFor(() => expect(container.textContent).toContain(own));
+		held.resolve();
+		await vi.waitFor(async () => expect(await keptWrites(SAMPLEDB)).toHaveLength(1));
+
+		expect(container.textContent).toContain(own);
+	});
+
+	it('event field: a failed write rolled back after moving to another event leaves that event alone', async () => {
+		const field = SURFACES['event field'];
+		const surface: Surface = {
+			...field,
+			route: async (url, method, init, write) =>
+				url.includes('/entity/ev2') && method === 'GET'
+					? json({ entity: editableEvent({ _id: 'ev2', event_name: [{ _id: 'val-2', string: 'Second Rehearsal' }] }) })
+					: field.route(url, method, init, write)
+		};
+		const { container, write } = renderSurface(surface);
+		await surface.ready(container);
+		const held = deferred<void>();
+		write.hold = held.promise;
+		write.fail = true;
+		await surface.write(container);
+
+		navigateTo('ev2');
+		await waitFor(() => expect(container.textContent).toContain('Second Rehearsal'));
+		held.resolve();
+		await vi.waitFor(async () => expect(await keptWrites(SAMPLEDB)).toEqual([field.report]));
+
+		expect(container.textContent).toContain('Second Rehearsal');
+		expect(q(container, field.error)).toBeNull();
 	});
 
 	async function settledThenSwitch(name: string) {

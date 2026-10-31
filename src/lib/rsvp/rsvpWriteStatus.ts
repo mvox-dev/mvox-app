@@ -3,6 +3,7 @@ import type { RsvpChangeCallbacks } from '$lib/rsvp/rsvpChangeQueue';
 import type { RsvpEntry } from '$lib/rsvp/rsvpData';
 import type { WriteTokens } from '$lib/net/writeTokens';
 import type { MyRsvp } from '$lib/rsvp/rsvpData';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export function existingRsvp(entry: RsvpEntry | null | undefined, eventId: string): MyRsvp | null {
 	return entry ? { rsvpId: entry.rsvpId, eventId, status: entry.status } : null;
@@ -16,6 +17,7 @@ export interface RsvpWriteAccessors {
 }
 
 export interface RsvpWriteStatusDeps {
+	area: string;
 	accessors: RsvpWriteAccessors;
 	tokens: WriteTokens<string>;
 	onReconcile?(eventId: string, entry: RsvpEntry | null): void;
@@ -41,7 +43,8 @@ export function createRsvpWriteStatus(deps: RsvpWriteStatusDeps): RsvpChangeCall
 			a.setSaved(eventId, true);
 			deps.onReconcile?.(eventId, entry);
 		},
-		revert(eventId, before) {
+		revert(eventId, before, error, owner) {
+			reportProblem({ area: deps.area, action: 'saving an answer', error, owner });
 			if (!tokens.end(eventId)) return;
 			a.setEntry(eventId, before);
 			a.setFailed(eventId, true);

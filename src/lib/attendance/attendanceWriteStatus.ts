@@ -3,6 +3,7 @@ import type { AttendanceChangeCallbacks } from '$lib/attendance/attendanceChange
 import type { AttendanceEntry } from '$lib/attendance/attendanceData';
 import type { WriteTokens } from '$lib/net/writeTokens';
 import type { EventAttendance } from '$lib/attendance/attendanceData';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export function existingAttendance(
 	entry: AttendanceEntry | undefined,
@@ -21,6 +22,7 @@ export interface AttendanceWriteAccessors {
 }
 
 export interface AttendanceWriteStatusDeps {
+	area: string;
 	accessors: AttendanceWriteAccessors;
 	tokens: WriteTokens<string>;
 	onPending?(eventId: string, memberId: string): void;
@@ -56,7 +58,8 @@ export function createAttendanceWriteStatus(deps: AttendanceWriteStatusDeps): At
 			a.setEntry(memberId, entry);
 			a.setSaved(memberId, true);
 		},
-		revert(eventId, memberId, before) {
+		revert(eventId, memberId, before, error, owner) {
+			reportProblem({ area: deps.area, action: 'saving attendance', error, owner });
 			if (!tokens.end(attendanceWriteKey(eventId, memberId))) return;
 			deps.onRevert?.(eventId, memberId, before);
 			if (!a.shows(eventId)) return;

@@ -4,6 +4,7 @@
 	import { openPart } from '$lib/parts/openPart';
 	import { m } from '$lib/paraglide/messages.js';
 	import { cfgFor } from '$lib/entu/cfg';
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import { refetchSeasonRepertoire, refetchWorkRows } from '$lib/repertoire/refetchWorkRows';
 	import { unresolvedEditionWorkIds } from '$lib/repertoire/editionUnknown';
 	import {
@@ -124,8 +125,8 @@
 				if (key === ADD_WORK_KEY || key === ADD_PROGRAMME_KEY) void refreshWorks();
 				manageStatus = m.repertoire_manage_saved();
 			},
-			revert(key) {
-				console.error('event detail: repertoire write failed', key);
+			revert(key, error, owner) {
+				reportProblem({ area: 'event', action: 'saving the event works', error, owner });
 				if (!pendingMarks.settle(key)) return;
 				void refreshWorks();
 				manageError = true;

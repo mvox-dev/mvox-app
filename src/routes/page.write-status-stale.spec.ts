@@ -66,6 +66,8 @@ import {
 } from '$lib/testing/mocks/events';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { cleanupClearResetGate } from '$lib/testing/pages/agendaSummary';
+import { AuthExpiredError } from '$lib/entu/auth-expired';
+import { keptProblems, useKeptProblems } from '$lib/testing/keptProblems';
 
 function agendaItem(id: string, startDatetime: string) {
 	return {
@@ -144,6 +146,12 @@ async function openPanel(container: HTMLElement): Promise<void> {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
 
 afterEach(cleanupClearResetGate);
+useKeptProblems();
+
+// This world leaves the agenda's background reads unmocked; those reports are not under test.
+const keptWrites = async (identity?: { db: string; personId: string }) =>
+	(await keptProblems(identity)).filter((p) => p.action.startsWith('saving'));
+const SAMPLEDB = { db: 'sampledb', personId: 'person-p' };
 
 describe('#554 — agenda RSVP: a write settling after a collective switch changes nothing', () => {
 	it('a stale success leaves the new collective’s answer and saved cue alone, and pending clears', async () => {
@@ -166,7 +174,7 @@ describe('#554 — agenda RSVP: a write settling after a collective switch chang
 		expect(rsvpButton(container, 'going')?.disabled).toBe(false);
 	});
 
-	it('a stale failure adds no failure to the new collective, and pending clears', async () => {
+	it('a stale failure adds no failure to the new collective, pending clears, and it is reported under its own collective', async () => {
 		setWorld();
 		const held = deferred<{ rsvpId: string }>();
 		applyRsvpChangeMock.mockReturnValue(held.promise);
@@ -183,11 +191,17 @@ describe('#554 — agenda RSVP: a write settling after a collective switch chang
 		const failed = q(container, '[data-testid="agenda-row-e1"] [data-testid="rsvp-save-failed"]');
 		expect(failed).toBeNull();
 		expect(rsvpButton(container, 'going')?.disabled).toBe(false);
+		await vi.waitFor(async () =>
+			expect(await keptWrites(SAMPLEDB)).toEqual([
+				{ area: 'agenda', action: 'saving an answer', detail: 'Error: save failed' }
+			])
+		);
+		expect(await keptWrites()).toEqual([]);
 	});
 });
 
 describe('#554 — agenda attendance: a write settling after a collective switch changes nothing', () => {
-	it('a stale failure adds no failure to the new collective’s panel, and pending clears', async () => {
+	it('a stale failure adds no failure to the new collective’s panel, pending clears, and it is reported under its own collective', async () => {
 		setWorld();
 		const held = deferred<{ attendanceId: string | null }>();
 		applyAttendanceChangeMock.mockReturnValue(held.promise);
@@ -203,6 +217,12 @@ describe('#554 — agenda attendance: a write settling after a collective switch
 		expect(q(container, '[data-testid="attendance-save-failed-m2"]')).toBeNull();
 		const toggle = q(container, '[data-testid="attendance-toggle-m2-present"]') as HTMLButtonElement;
 		expect(toggle.getAttribute('aria-disabled')).not.toBe('true');
+		await vi.waitFor(async () =>
+			expect(await keptWrites(SAMPLEDB)).toEqual([
+				{ area: 'agenda', action: 'saving attendance', detail: 'Error: save failed' }
+			])
+		);
+		expect(await keptWrites()).toEqual([]);
 	});
 
 	it('a stale success leaves the new collective’s own attendance alone', async () => {
@@ -219,6 +239,60 @@ describe('#554 — agenda attendance: a write settling after a collective switch
 
 		expect(q(container, '[data-testid="attendance-badge-past-1"]')?.getAttribute('data-status')).toBe(
 			'not-recorded'
+		);
+	});
+});
+
+describe('#1049 — an agenda RSVP or attendance failure that shows sends one report', () => {
+	it('a failed answer shows its message and keeps one report with the error', async () => {
+		setWorld();
+		applyRsvpChangeMock.mockRejectedValue(new Error('HTTP 500'));
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(rsvpButton(container, 'going')?.disabled).toBe(false);
+		});
+		await fireEvent.click(rsvpButton(container, 'going')!);
+
+		await waitFor(() => {
+			expect(q(container, '[data-testid="agenda-row-e1"] [data-testid="rsvp-save-failed"]')).not.toBeNull();
+		});
+		await vi.waitFor(async () =>
+			expect(await keptWrites()).toEqual([
+				{ area: 'agenda', action: 'saving an answer', detail: 'Error: HTTP 500' }
+			])
+		);
+	});
+
+	it('an answer refused for an expired session sends no report', async () => {
+		setWorld();
+		applyRsvpChangeMock.mockRejectedValue(new AuthExpiredError());
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(rsvpButton(container, 'going')?.disabled).toBe(false);
+		});
+		await fireEvent.click(rsvpButton(container, 'going')!);
+		await waitFor(() => {
+			expect(rsvpButton(container, 'going')?.disabled).toBe(false);
+		});
+		await settle();
+
+		expect(await keptWrites()).toEqual([]);
+	});
+
+	it('a failed attendance mark shows its message and keeps one report with the error', async () => {
+		setWorld();
+		applyAttendanceChangeMock.mockRejectedValue(new Error('HTTP 403'));
+		const { container } = render(Page);
+		await openPanel(container);
+		await fireEvent.click(q(container, '[data-testid="attendance-toggle-m2-present"]')!);
+
+		await waitFor(() => {
+			expect(q(container, '[data-testid="attendance-save-failed-m2"]')).not.toBeNull();
+		});
+		await vi.waitFor(async () =>
+			expect(await keptWrites()).toEqual([
+				{ area: 'agenda', action: 'saving attendance', detail: 'Error: HTTP 403' }
+			])
 		);
 	});
 });

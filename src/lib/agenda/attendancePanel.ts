@@ -27,6 +27,7 @@ export function attendanceQueueHandlers(
 	tokens: WriteTokens<string>
 ): AttendanceChangeCallbacks {
 	return createAttendanceWriteStatus({
+		area: 'agenda',
 		tokens,
 		accessors: {
 			shows: (eventId) => eventId === ag.attendanceItem?.id,

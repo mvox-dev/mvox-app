@@ -92,6 +92,9 @@ import {
 	setAuthed,
 	type EntityRaw
 } from '$lib/testing/pages/seasonRepertoire';
+import { keptProblems, useKeptProblems } from '$lib/testing/keptProblems';
+
+useKeptProblems();
 
 const RI_ACTIVE: EntityRaw = {
 	_id: 'ri-1',
@@ -288,6 +291,10 @@ async function expectFailureSurfaced(section: HTMLElement): Promise<HTMLElement>
 	expect(alert.getAttribute('role')).toBe('alert');
 	expect(alert.textContent).toContain('[repertoire_manage_error]');
 	expect(q(section, 'season-manage-repertoire-error')).toBeNull();
+	const detail = expect.stringMatching(/^Error: \w+ (POST )?failed: 500$/);
+	const report = { area: 'agenda', action: 'saving the season repertoire', detail };
+	const writes = async () => (await keptProblems()).filter((p) => p.action.startsWith('saving'));
+	await vi.waitFor(async () => expect(await writes()).toEqual([report]));
 	return alert;
 }
 

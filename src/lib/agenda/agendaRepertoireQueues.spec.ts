@@ -21,6 +21,8 @@ import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { reportProblem } from '$lib/testing/mocks/session';
+import { setProblemOwner } from '$lib/problems/problemLog';
+import { selectedCollectiveIdentityStore } from '$lib/collectives/store';
 
 const RI_1: RepertoireItem = { id: 'ri-1', workId: 'work-1', editionId: '', status: 'active', name: 'A' };
 const RI_2: RepertoireItem = { id: 'ri-2', workId: 'work-2', editionId: '', status: 'active', name: 'B' };
@@ -61,10 +63,13 @@ function setup(listRepertoireItems = vi.fn(NEVER)) {
 }
 
 beforeEach(() => {
+	reportProblem.mockClear();
+	setProblemOwner(selectedCollectiveIdentityStore);
 	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }, { db: 'crede', name: 'Crede', personId: 'person-p' }] });
 });
 
 afterEach(() => {
+	setProblemOwner(null);
 	resetAppState();
 });
 
@@ -99,12 +104,24 @@ describe('#605 — the season-manage panel writes through the agenda queue', () 
 		]);
 	});
 
-	it('a panel write rejected after a collective switch is not rolled back', async () => {
+	it('a panel write rejected after a collective switch is not rolled back, and is reported under its own collective', async () => {
 		const t = setup();
 		t.queues.handlePanelStatusChange('ri-1', 'retired');
 		selectedCollectiveDbStore.set('crede');
-		t.write.reject(new Error('nope'));
+		const nope = new Error('nope');
+		t.write.reject(nope);
 		await settle();
 		expect(t.ag.panelRepertoire.map((i) => i.status)).toEqual(['retired', 'active']);
+		expect(t.panel.manageError).toBe(false);
+		expect(reportProblem.mock.calls).toEqual([
+			[
+				{
+					area: 'agenda',
+					action: 'saving the season repertoire',
+					error: nope,
+					owner: { db: 'sampledb', personId: 'person-p' }
+				}
+			]
+		]);
 	});
 });

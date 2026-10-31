@@ -52,6 +52,7 @@ export function createAgendaPageHandlers(ag: AgendaLoadState, deps: AgendaPageHa
 
 	const rsvpQueue = createRsvpChangeQueue(
 		createRsvpWriteStatus({
+			area: 'agenda',
 			tokens: collectiveTokens(),
 			accessors: {
 				setEntry(eventId, entry) {

@@ -139,6 +139,7 @@
 	const attendanceQueue = untrack(() =>
 		actions.createAttendanceChangeQueue(
 			createAttendanceWriteStatus({
+				area: 'event',
 				tokens: createWriteTokens(() => generation()),
 				accessors: {
 					shows: (evId) => evId === detail?.id,

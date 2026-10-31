@@ -1,5 +1,7 @@
 import { entuFetch } from '$lib/entu/request';
 import { reportProblem } from '$lib/problems/reportProblem';
+import { problemOwnerNow } from '$lib/problems/problemLog';
+import type { CollectiveIdentity } from '$lib/collectives/store';
 import { referenceIds } from '$lib/entu/references';
 import { replaceEntityProperty } from '$lib/entu/replaceProperty';
 import { resolveTypeId } from '$lib/seasons/entuSeasons';
@@ -245,7 +247,7 @@ export interface RepertoireWriteQueueCallbacks {
 	/** The write for `key` failed. Fires AFTER the request's own `rollback`, so
 	 *  the local state is already back to its pre-tap value by the time this
 	 *  runs — this is the place to surface the failure, not to undo it. */
-	revert(key: string): void;
+	revert(key: string, error: unknown, owner: CollectiveIdentity | null): void;
 }
 
 export interface OptimisticHooks {
@@ -274,6 +276,7 @@ export function createRepertoireWriteQueue(callbacks: RepertoireWriteQueueCallba
 			if (pending.has(key)) return;
 
 			pending.add(key);
+			const owner = problemOwnerNow();
 			callbacks.setPending(key, true);
 			// Before the write, not after: the row changes on tap.
 			hooks?.apply?.();
@@ -284,13 +287,13 @@ export function createRepertoireWriteQueue(callbacks: RepertoireWriteQueueCallba
 					callbacks.setPending(key, false);
 					callbacks.reconcile(key);
 				})
-				.catch(() => {
+				.catch((error) => {
 					pending.delete(key);
 					callbacks.setPending(key, false);
 					// Undo the optimistic mutation FIRST, so `revert` observes (and the
 					// user sees) the pre-tap state, not the lie.
 					hooks?.rollback?.();
-					callbacks.revert(key);
+					callbacks.revert(key, error, owner);
 				});
 		},
 		isPending(key) {

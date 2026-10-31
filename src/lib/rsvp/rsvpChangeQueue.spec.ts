@@ -61,7 +61,7 @@ describe('createRsvpChangeQueue — a single tap, start to finish', () => {
 		await vi.waitFor(() => {
 			expect(cb.setPending).toHaveBeenLastCalledWith('e1', false);
 		});
-		expect(cb.revert).toHaveBeenCalledWith('e1', { rsvpId: 'rsvp-1', status: 'going' });
+		expect(cb.revert).toHaveBeenCalledWith('e1', { rsvpId: 'rsvp-1', status: 'going' }, new Error('403'), null);
 	});
 
 	it('after a write settles, the SAME event can be tapped again — a fresh request fires a new write (re-enabled, not stuck)', async () => {
@@ -140,8 +140,8 @@ describe('createRsvpChangeQueue — two DIFFERENT events tapped concurrently', (
 		await vi.waitFor(() => {
 			expect(cb.revert).toHaveBeenCalledTimes(1);
 		});
-		expect(cb.revert).toHaveBeenCalledWith('e1', null);
-		expect(cb.revert).not.toHaveBeenCalledWith('e2', expect.anything());
+		expect(cb.revert).toHaveBeenCalledWith('e1', null, new Error('403'), null);
+		expect(cb.revert.mock.calls.map(([eventId]) => eventId)).toEqual(['e1']);
 		expect(cb.setPending).not.toHaveBeenCalledWith('e2', false);
 	});
 });
@@ -175,7 +175,7 @@ describe('createRsvpChangeQueue — resolveMemberId (the write-time member looku
 
 		queue.request({ cfg, personId: 'person-p', memberId: null, resolveMemberId, eventId: 'e1', existing: null, newStatus: 'going' });
 
-		await vi.waitFor(() => expect(cb.revert).toHaveBeenCalledWith('e1', null));
+		await vi.waitFor(() => expect(cb.revert).toHaveBeenCalledWith('e1', null, new Error('500'), null));
 		expect(cb.setPending).toHaveBeenLastCalledWith('e1', false);
 		expect(applyRsvpChangeMock).not.toHaveBeenCalled();
 	});

@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { cfgFor } from '$lib/entu/cfg';
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import { tallinnLocalToUtcIso, toTallinnLocalInputValue } from '$lib/preferences/timeFormat';
 	import type { EditableEventField } from '$lib/events/eventFieldEdit';
@@ -61,13 +62,21 @@
 				settleFieldFocus(key as EditableEventField);
 				if (startedUnder === generation()) editStatus = m.event_edit_saved();
 			},
-			revert(key) {
+			revert(key, error, owner) {
+				const startedUnder = editWriteGenerations.get(key);
 				editWriteGenerations.delete(key);
-				edit.errors = { ...edit.errors, [key as EditableEventField]: true };
+				reportProblem({ area: 'event', action: `saving the event field ${key}`, error, owner });
+				const shown = startedUnder === generation();
+				if (shown) edit.errors = { ...edit.errors, [key as EditableEventField]: true };
 				settleFieldFocus(key as EditableEventField);
 			}
 		})
 	);
+
+	// A rollback after the page moved on would write the old event's value onto the new one.
+	function rollBack(field: EditableEventField, before: string | number): void {
+		if (editWriteGenerations.get(field) === generation()) patchDetail(field, before);
+	}
 
 	function fieldValue(d: EventDetail, field: EditableEventField): string | number {
 		switch (field) {
@@ -181,14 +190,10 @@
 			const evId = detail.id;
 			editWriteQueue.request(
 				field,
-				() =>
-					actions.updateEventField(cfg, evId, field, raw, fetch).catch((e) => {
-						console.error('event detail: field edit failed', field, e);
-						throw e;
-					}),
+				() => actions.updateEventField(cfg, evId, field, raw, fetch),
 				{
 					apply: () => patchDetail(field, raw),
-					rollback: () => patchDetail(field, before)
+					rollback: () => rollBack(field, before)
 				}
 			);
 			return;
@@ -204,14 +209,10 @@
 		const evId = detail.id;
 		editWriteQueue.request(
 			field,
-			() =>
-				actions.updateEventField(cfg, evId, field, value, fetch).catch((e) => {
-					console.error('event detail: field edit failed', field, e);
-					throw e;
-				}),
+			() => actions.updateEventField(cfg, evId, field, value, fetch),
 			{
 				apply: () => patchDetail(field, value),
-				rollback: () => patchDetail(field, before)
+				rollback: () => rollBack(field, before)
 			}
 		);
 	}

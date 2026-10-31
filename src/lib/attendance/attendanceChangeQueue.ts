@@ -1,6 +1,8 @@
 // The attendance optimistic write queue: one write per (event, member) tap.
 import { applyAttendanceChange, type AttendanceChangeInput } from './attendanceOptimistic';
 import type { AttendanceEntry } from './attendanceData';
+import { problemOwnerNow } from '$lib/problems/problemLog';
+import type { CollectiveIdentity } from '$lib/collectives/store';
 
 export interface AttendanceChangeCallbacks {
 	/** Apply the optimistic value for exactly this event+member, synchronously. */
@@ -9,7 +11,13 @@ export interface AttendanceChangeCallbacks {
 	setPending(eventId: string, memberId: string, pending: boolean): void;
 	reconcile(eventId: string, memberId: string, entry: AttendanceEntry | null): void;
 	/** A write failed — restore exactly this event+member's PRE-tap value. Nothing else. */
-	revert(eventId: string, memberId: string, before: AttendanceEntry | null): void;
+	revert(
+		eventId: string,
+		memberId: string,
+		before: AttendanceEntry | null,
+		error: unknown,
+		owner: CollectiveIdentity | null
+	): void;
 }
 
 export interface AttendanceChangeQueue {
@@ -56,6 +64,7 @@ export function createAttendanceChangeQueue(callbacks: AttendanceChangeCallbacks
 					? { attendanceId: existing?.attendanceId ?? '__optimistic__', status: newStatus }
 					: null;
 			pending.set(key, optimisticEntry);
+			const owner = problemOwnerNow();
 			callbacks.setPending(eventId, memberId, true);
 			callbacks.setOptimistic(eventId, memberId, optimisticEntry);
 
@@ -67,13 +76,13 @@ export function createAttendanceChangeQueue(callbacks: AttendanceChangeCallbacks
 						newStatus !== null ? { attendanceId: result.attendanceId ?? '', status: newStatus } : null;
 					callbacks.reconcile(eventId, memberId, reconciled);
 				})
-				.catch(() => {
+				.catch((error) => {
 					pending.delete(key);
 					callbacks.setPending(eventId, memberId, false);
 					const before: AttendanceEntry | null = existing
 						? { attendanceId: existing.attendanceId, status: existing.status }
 						: null;
-					callbacks.revert(eventId, memberId, before);
+					callbacks.revert(eventId, memberId, before, error, owner);
 				});
 		}
 	};

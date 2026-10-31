@@ -755,7 +755,7 @@ describe('createRepertoireWriteQueue', () => {
 		const d = deferred();
 		queue.request('rep-item-1', () => d.promise);
 		d.reject(new Error('403'));
-		await vi.waitFor(() => expect(callbacks.revert).toHaveBeenCalledWith('rep-item-1'));
+		await vi.waitFor(() => expect(callbacks.revert).toHaveBeenCalledWith('rep-item-1', new Error('403'), null));
 		expect(callbacks.setPending).toHaveBeenLastCalledWith('rep-item-1', false);
 		expect(queue.isPending('rep-item-1')).toBe(false);
 		expect(callbacks.reconcile).not.toHaveBeenCalled();
@@ -837,7 +837,7 @@ describe('createRepertoireWriteQueue', () => {
 		queue.request('rep-item-fail', () => failing.promise);
 		queue.request('rep-item-alive', () => inFlight.promise);
 		failing.reject(new Error('500'));
-		await vi.waitFor(() => expect(callbacks.revert).toHaveBeenCalledWith('rep-item-fail'));
+		await vi.waitFor(() => expect(callbacks.revert).toHaveBeenCalledWith('rep-item-fail', new Error('500'), null));
 		expect(queue.isPending('rep-item-alive')).toBe(true);
 		expect(callbacks.revert).toHaveBeenCalledTimes(1);
 		expect(callbacks.setPending).not.toHaveBeenCalledWith('rep-item-alive', false);

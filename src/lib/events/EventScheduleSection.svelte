@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { reportProblem } from '$lib/problems/reportProblem';
+	import type { OptimisticHooks } from '$lib/repertoire/repertoireActions';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { cfgFor } from '$lib/entu/cfg';
@@ -92,14 +93,26 @@
 				}
 				if (startedUnder === generation()) scheduleStatus = m.event_schedule_saved();
 			},
-			revert(key) {
+			revert(key, error, owner) {
+				const startedUnder = scheduleWriteGenerations.get(key);
 				scheduleWriteGenerations.delete(key);
-				console.error('event detail: schedule write failed', key);
+				reportProblem({ area: 'event', action: 'saving the schedule', error, owner });
+				if (startedUnder !== generation()) return;
 				if (key === SCHEDULE_ADD_KEY) scheduleAddErrorField = null;
 				setScheduleError(key, m.event_schedule_save_error);
 			}
 		})
 	);
+
+	// A rollback after the page moved on would write the old event's row onto the new page.
+	function requestScheduleWrite(key: string, write: () => Promise<void>, hooks: OptimisticHooks = {}): void {
+		scheduleQueue.request(key, write, {
+			apply: hooks.apply,
+			rollback: () => {
+				if (scheduleWriteGenerations.get(key) === generation()) hooks.rollback?.();
+			}
+		});
+	}
 
 	function setScheduleError(key: string, msg: () => string): void {
 		scheduleErrors = { ...scheduleErrors, [key]: msg };
@@ -227,7 +240,7 @@
 		clearScheduleError(`schedule-edit-name-${id}`);
 		if (value === row.name) return;
 		const before = row.name;
-		scheduleQueue.request(`schedule-edit-name-${id}`, () => actions.updateScheduleItemField(cfg, id, 'name', value), {
+		requestScheduleWrite(`schedule-edit-name-${id}`, () => actions.updateScheduleItemField(cfg, id, 'name', value), {
 			apply: () => patchScheduleRow(id, { name: value }),
 			rollback: () => patchScheduleRow(id, { name: before })
 		});
@@ -242,7 +255,7 @@
 		const iso = tallinnLocalToUtcIso(`${scheduleEditDate}T${scheduleEditTime}`);
 		if (iso === '' || new Date(iso).getTime() === new Date(row.datetime).getTime()) return;
 		const before = row.datetime;
-		scheduleQueue.request(
+		requestScheduleWrite(
 			`schedule-edit-datetime-${id}`,
 			() => actions.updateScheduleItemField(cfg, id, 'datetime', iso),
 			{
@@ -295,7 +308,7 @@
 		const row = ev.scheduleRows.find((r) => r.id === id);
 		if (!cfg || !row) return;
 		scheduleRemoveArmedId = null;
-		scheduleQueue.request(`schedule-remove-${id}`, () => actions.removeScheduleItem(cfg, id), {
+		requestScheduleWrite(`schedule-remove-${id}`, () => actions.removeScheduleItem(cfg, id), {
 			apply: () => dropScheduleRow(id),
 			rollback: () => restoreScheduleRow(row)
 		});

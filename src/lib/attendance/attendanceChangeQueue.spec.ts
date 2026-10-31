@@ -78,7 +78,7 @@ describe('createAttendanceChangeQueue — a single tap, start to finish', () => 
 		await vi.waitFor(() => {
 			expect(cb.setPending).toHaveBeenLastCalledWith('e1', 'm1', false);
 		});
-		expect(cb.revert).toHaveBeenCalledWith('e1', 'm1', { attendanceId: 'att-1', status: 'present' });
+		expect(cb.revert).toHaveBeenCalledWith('e1', 'm1', { attendanceId: 'att-1', status: 'present' }, new Error('403'), null);
 	});
 
 	it('newStatus null (tap active to clear) → optimistic null and reconcile null — the delete path', async () => {
@@ -172,8 +172,8 @@ describe('createAttendanceChangeQueue — two DIFFERENT members tapped concurren
 		await vi.waitFor(() => {
 			expect(cb.revert).toHaveBeenCalledTimes(1);
 		});
-		expect(cb.revert).toHaveBeenCalledWith('e1', 'm1', null);
-		expect(cb.revert).not.toHaveBeenCalledWith('e1', 'm2', expect.anything());
+		expect(cb.revert).toHaveBeenCalledWith('e1', 'm1', null, new Error('403'), null);
+		expect(cb.revert.mock.calls.map(([, memberId]) => memberId)).toEqual(['m1']);
 		expect(cb.setPending).not.toHaveBeenCalledWith('e1', 'm2', false);
 	});
 });

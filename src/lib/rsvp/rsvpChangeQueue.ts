@@ -1,5 +1,7 @@
 import { applyRsvpChange } from './rsvpOptimistic';
 import type { EntuCfg } from '$lib/entu/cfg';
+import { problemOwnerNow } from '$lib/problems/problemLog';
+import type { CollectiveIdentity } from '$lib/collectives/store';
 import type { MyRsvp, RsvpEntry, RsvpStatus } from './rsvpData';
 
 // One RSVP write per event (#15). The caller disables the event's control in flight: a second
@@ -10,7 +12,7 @@ export interface RsvpChangeCallbacks {
 	setOptimistic(eventId: string, entry: RsvpEntry | null): void;
 	setPending(eventId: string, pending: boolean): void;
 	reconcile(eventId: string, entry: RsvpEntry | null): void;
-	revert(eventId: string, before: RsvpEntry | null): void;
+	revert(eventId: string, before: RsvpEntry | null, error: unknown, owner: CollectiveIdentity | null): void;
 }
 
 export interface RequestRsvpChangeInput {
@@ -39,6 +41,7 @@ export function createRsvpChangeQueue(callbacks: RsvpChangeCallbacks): RsvpChang
 			if (pending.has(eventId)) return; // a backstop: the caller disables the control too
 
 			pending.add(eventId);
+			const owner = problemOwnerNow();
 			callbacks.setPending(eventId, true);
 
 			const optimisticEntry: RsvpEntry | null =
@@ -61,11 +64,11 @@ export function createRsvpChangeQueue(callbacks: RsvpChangeCallbacks): RsvpChang
 						newStatus !== null ? { rsvpId: result.rsvpId ?? '', status: newStatus } : null;
 					callbacks.reconcile(eventId, reconciled);
 				})
-				.catch(() => {
+				.catch((error) => {
 					pending.delete(eventId);
 					callbacks.setPending(eventId, false);
 					const before: RsvpEntry | null = existing ? { rsvpId: existing.rsvpId, status: existing.status } : null;
-					callbacks.revert(eventId, before);
+					callbacks.revert(eventId, before, error, owner);
 				});
 		}
 	};

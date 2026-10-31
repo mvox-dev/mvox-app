@@ -114,9 +114,18 @@ export function setProblemKept(listener: typeof kept): void {
 	kept = listener;
 }
 
+/** Whose log a failure goes to if it names no owner; a write takes this when it starts. */
+export function problemOwnerNow(): CollectiveIdentity | null {
+	return (owner && get(owner)) ?? null;
+}
+
 /** False when nothing was kept: no one is selected, or there is no log on this device. */
-export function keepProblem(area: string, action: string, detail: string): boolean {
-	const identity = owner && get(owner);
+export function keepProblem(
+	area: string,
+	action: string,
+	detail: string,
+	identity: CollectiveIdentity | null = problemOwnerNow()
+): boolean {
 	const log = getProblemLog();
 	if (!identity || !log) return false;
 	void log

@@ -85,7 +85,8 @@ export function createAgendaRepertoireQueues(
 			void deps.refreshWorksAfterWrite();
 			panel.manageStatus = m.repertoire_manage_saved();
 		},
-		revert(key) {
+		revert(key, error, owner) {
+			reportProblem({ area: 'agenda', action: 'saving the season repertoire', error, owner });
 			if (!repertoirePending.settle(key)) return;
 			void refreshPanelRepertoire();
 			panel.manageError = true;

@@ -60,6 +60,7 @@
 	const rsvpQueue = untrack(() =>
 		actions.createRsvpChangeQueue(
 			createRsvpWriteStatus({
+				area: 'event',
 				tokens: createWriteTokens((evId: string) => (evId === detail?.id ? generation() : null)),
 				accessors: {
 					setEntry: (_evId, entry) => (myRsvp = entry),
