@@ -21,6 +21,8 @@ export const ALLOWED_PATHS: ReadonlyArray<RegExp> = [
 	/^docs\/design\//,
 	/^teams\/mvox-dev\/docs\/health-report-.*\.md$/,
 	/^docs\/superpowers\//,
+	// The roadmap's data: issue titles and leads as filed, written by the shipyard timer.
+	/^roadmap\//,
 	// polyphony.uk referent (legacy web app, colour anchors) on lines without the '.uk' token.
 	/^docs\/runbook\/provisioning\.md$/,
 	/^src\/app\.css$/,

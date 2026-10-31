@@ -1,39 +1,61 @@
-// The build's only network step: fetches this repo's issues (PRs excluded, paginated) with epics'
-// sub-issues, writes the RoadmapIssue[] JSON render.ts reads. Env: GITHUB_TOKEN, GITHUB_REPOSITORY.
-// CLI: node --import tsx scripts/roadmap/fetch-issues.ts --out <issues.json> (*MVOX:Palestrina*)
-import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { kindOf } from './issue-model';
-import { elapsedLabel, type RoadmapIssue, type RoadmapLabel } from './render';
+// Reads the forge's issues into the RoadmapIssue[] JSON render.ts reads; a shipyard timer runs it.
+// CLI: node --import tsx scripts/roadmap/fetch-issues.ts --out <file> [--strip-motion-labels]
+// Env: FORGE_TOKEN (read:issue, or write:issue with the strip), FORGE_API, FORGE_REPO. (*PO:Gama*)
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { field } from './issue-model';
+import { elapsedLabel, parseFrontmatter, type RoadmapIssue, type RoadmapLabel } from './render';
 
-const API_BASE = 'https://api.github.com';
-const DEFAULT_REPO = 'mvox-dev/mvox-app';
-const PER_PAGE = 100;
+const DEFAULT_API = 'http://forge/api/v1';
+const DEFAULT_REPO = 'mvox/mvox-app';
+/** The forge's own page-size ceiling; asking for more still returns 50. */
+const PER_PAGE = 50;
 /** Hard ceiling so a pagination bug fails loud instead of looping forever. */
-const MAX_PAGES = 50;
+const MAX_PAGES = 100;
+const ARCHIVE_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'roadmap', 'github-archive.json');
 
-interface GitHubLabel {
+/** A closed issue is out of the queue: these come off it (Mihkel, 2026-10-10). */
+export const MOTION_LABELS = ['ready', 'in research', 'researched', 'prepped', 'in process', 'in human review'];
+
+interface ForgeLabel {
+	id?: number;
 	name?: string;
 	color?: string;
 }
 
-interface GitHubIssue {
+interface ForgeIssue {
 	number: number;
 	title: string;
 	state: string;
 	state_reason?: string | null;
-	labels: (string | GitHubLabel)[];
+	labels: (string | ForgeLabel)[];
 	body: string | null;
 	pull_request?: unknown;
 	closed_at?: string | null;
 	updated_at?: string | null;
 	html_url: string;
-	/** Native issue type (#373). REST reports an object; pre-type issues carry null. */
-	type?: { name?: string | null } | null;
 }
 
-/** Extract the `rel="next"` URL from a GitHub `Link` response header, or null when absent. */
+/** What GitHub knew about an issue that the forge does not carry. */
+export interface ArchiveEntry {
+	type?: string;
+	stateReason?: 'completed' | 'not_planned';
+	subIssues?: number[];
+	researchMs?: number;
+	buildMs?: number;
+	reviewMs?: number;
+}
+
+export interface Archive {
+	/** Label history on the forge starts here; an issue not updated since has none to read. */
+	forgeSince: string;
+	issues: Record<string, ArchiveEntry>;
+}
+
+export const EMPTY_ARCHIVE: Archive = { forgeSince: '1970-01-01T00:00:00Z', issues: {} };
+
+/** Extract the `rel="next"` URL from a `Link` response header, or null when absent. */
 export function parseNextLink(linkHeader: string | null): string | null {
 	if (!linkHeader) return null;
 	for (const part of linkHeader.split(',')) {
@@ -43,12 +65,26 @@ export function parseNextLink(linkHeader: string | null): string | null {
 	return null;
 }
 
-/** Normalize one GitHub REST issue payload into the renderer's `RoadmapIssue` shape. */
-export function normalizeIssue(raw: GitHubIssue): RoadmapIssue {
+// The body cut to what the page shows, slugline and lead: the GitHub mirror makes the file public.
+export function publicBody(body: string | null): string | null {
+	const pick = (key: string): string | null => {
+		const fromFrontmatter = parseFrontmatter(body)?.[key];
+		const value = field(body ?? '', key) ?? fromFrontmatter;
+		return typeof value === 'string' && value.length > 0 ? value : null;
+	};
+	const parts = [
+		['Slugline', pick('slugline')],
+		['Lead', pick('lead')]
+	].flatMap(([heading, value]) => (value ? [`### ${heading}\n\n${value}`] : []));
+	return parts.length > 0 ? parts.join('\n\n') : null;
+}
+
+/** Normalize one forge REST issue payload into the renderer's `RoadmapIssue` shape. */
+export function normalizeIssue(raw: ForgeIssue): RoadmapIssue {
 	const state = raw.state === 'closed' ? 'closed' : 'open';
 	const stateReason =
 		raw.state_reason === 'completed' || raw.state_reason === 'not_planned' ? raw.state_reason : null;
-	// Label colour stays as GitHub reports it, without '#'; render.ts adds the '#'.
+	// Label colour stays as the API reports it, without '#'; render.ts adds the '#'.
 	const labels: RoadmapLabel[] = raw.labels
 		.map((l) => (typeof l === 'string' ? { name: l, color: null } : { name: l.name ?? '', color: l.color ?? null }))
 		.filter((l): l is RoadmapLabel => l.name.length > 0);
@@ -58,62 +94,58 @@ export function normalizeIssue(raw: GitHubIssue): RoadmapIssue {
 		state,
 		stateReason,
 		labels,
-		body: raw.body,
+		body: publicBody(raw.body),
 		closedAt: raw.closed_at ?? null,
-		// #403: GitHub moves this on an edit, comment, label or close, not on a reference.
+		// #403: moves on an edit, comment, label or close, not on a reference.
 		updatedAt: raw.updated_at ?? null,
 		htmlUrl: raw.html_url,
 		subIssues: [],
-		// #373: only the type's NAME crosses this seam — the REST `type` object
-		// (ids, colours, timestamps) is a raw GitHub shape and stays in this file.
-		issueType: raw.type?.name ?? null
+		// #373: the forge has no issue types; the archive supplies GitHub's.
+		issueType: null
 	};
 }
 
-async function githubFetch(url: string, token: string, fetchImpl: typeof fetch): Promise<Response> {
+async function forgeFetch(
+	url: string,
+	token: string,
+	fetchImpl: typeof fetch,
+	method = 'GET'
+): Promise<Response> {
 	const res = await fetchImpl(url, {
-		headers: {
-			Authorization: `Bearer ${token}`,
-			Accept: 'application/vnd.github+json',
-			'X-GitHub-Api-Version': '2022-11-28'
-		}
+		method,
+		headers: { Authorization: `token ${token}`, Accept: 'application/json' }
 	});
 	if (!res.ok) {
-		throw new Error(`GitHub API request failed: ${res.status} ${res.statusText} (${url})`);
+		throw new Error(`forge API request failed: ${res.status} ${res.statusText} (${method} ${url})`);
 	}
 	return res;
 }
 
-/** Every open+closed issue on the repo (PRs excluded), following Link-header pagination. */
-async function fetchAllIssues(repo: string, token: string, fetchImpl: typeof fetch): Promise<GitHubIssue[]> {
-	const issues: GitHubIssue[] = [];
-	let url: string | null = `${API_BASE}/repos/${repo}/issues?state=all&per_page=${PER_PAGE}`;
-	for (let page = 0; url && page < MAX_PAGES; page++) {
-		const res = await githubFetch(url, token, fetchImpl);
-		const body = (await res.json()) as GitHubIssue[];
-		for (const item of body) {
-			if (!('pull_request' in item) || item.pull_request == null) issues.push(item);
-		}
-		url = parseNextLink(res.headers.get('link'));
+async function fetchPaged<T>(url: string, token: string, fetchImpl: typeof fetch): Promise<T[]> {
+	const items: T[] = [];
+	let next: string | null = url;
+	for (let page = 0; next && page < MAX_PAGES; page++) {
+		const res = await forgeFetch(next, token, fetchImpl);
+		items.push(...((await res.json()) as T[]));
+		next = parseNextLink(res.headers.get('link'));
 	}
-	return issues;
+	if (next) throw new Error(`forge API: more than ${MAX_PAGES} pages (${url})`);
+	return items;
 }
 
-// One parent's direct sub-issues. per_page=100 covers a parent in full (GitHub caps it at 100;
-// the default 30 would leave the rest flat at top level).
-async function fetchSubIssues(
+/** Every open+closed issue on the repo (PRs excluded). */
+async function fetchAllIssues(
+	api: string,
 	repo: string,
 	token: string,
-	issueNumber: number,
 	fetchImpl: typeof fetch
-): Promise<RoadmapIssue[]> {
-	const res = await githubFetch(
-		`${API_BASE}/repos/${repo}/issues/${issueNumber}/sub_issues?per_page=${PER_PAGE}`,
+): Promise<ForgeIssue[]> {
+	const items = await fetchPaged<ForgeIssue>(
+		`${api}/repos/${repo}/issues?state=all&type=issues&limit=${PER_PAGE}`,
 		token,
 		fetchImpl
 	);
-	const body = (await res.json()) as GitHubIssue[];
-	return body.map(normalizeIssue);
+	return items.filter((item) => item.pull_request == null);
 }
 
 export interface LabelEvent {
@@ -158,148 +190,78 @@ export function labelSpanMs(history: LabelEvent[], label: string): number | null
 	return ended > 0 ? total : null;
 }
 
-const HISTORY_QUERY = `query($owner: String!, $name: String!, $after: String) {
-  repository(owner: $owner, name: $name) {
-    issues(first: 25, after: $after) {
-      pageInfo { hasNextPage endCursor }
-      nodes {
-        number
-        timelineItems(first: 100, itemTypes: [LABELED_EVENT, UNLABELED_EVENT, CLOSED_EVENT, REOPENED_EVENT]) {
-          pageInfo { hasNextPage }
-          nodes {
-            __typename
-            ... on LabeledEvent { createdAt label { name } }
-            ... on UnlabeledEvent { createdAt label { name } }
-            ... on ClosedEvent { createdAt }
-            ... on ReopenedEvent { createdAt }
-          }
-        }
-      }
-    }
-  }
-}`;
-
-interface TimelineNode {
-	__typename: string;
-	createdAt: string;
-	label?: { name: string };
-}
-
-interface HistoryResponse {
-	data?: {
-		repository?: {
-			issues?: {
-				pageInfo: { hasNextPage: boolean; endCursor: string | null };
-				nodes: { number: number; timelineItems: { pageInfo: { hasNextPage: boolean }; nodes: TimelineNode[] } }[];
-			};
-		};
-	};
-}
-
-const KINDS: Record<string, LabelEvent['kind']> = {
-	LabeledEvent: 'labeled',
-	UnlabeledEvent: 'unlabeled',
-	ClosedEvent: 'closed',
-	ReopenedEvent: 'reopened'
-};
-
-export function toLabelEvents(nodes: TimelineNode[]): LabelEvent[] {
-	return nodes
-		.filter((n) => KINDS[n.__typename])
-		.map((n) => ({ kind: KINDS[n.__typename], label: n.label?.name, at: n.createdAt }));
-}
-
-interface RestEvent {
-	event?: string;
+interface TimelineEvent {
+	type?: string;
+	body?: string;
 	created_at?: string;
-	label?: { name?: string };
+	label?: { name?: string } | null;
 }
 
-async function restHistory(repo: string, token: string, n: number, fetchImpl: typeof fetch): Promise<LabelEvent[]> {
+/** Forge timeline → label events. A `label` event's body is "1" when added, empty when removed. */
+export function toLabelEvents(timeline: TimelineEvent[]): LabelEvent[] {
 	const events: LabelEvent[] = [];
-	let url: string | null = `${API_BASE}/repos/${repo}/issues/${n}/events?per_page=${PER_PAGE}`;
-	for (let page = 0; url && page < MAX_PAGES; page++) {
-		const res = await githubFetch(url, token, fetchImpl);
-		for (const e of (await res.json()) as RestEvent[]) {
-			const kind = e.event as LabelEvent['kind'];
-			if (Object.values(KINDS).includes(kind) && e.created_at) {
-				events.push({ kind, label: e.label?.name, at: e.created_at });
-			}
+	for (const e of timeline) {
+		if (!e.created_at) continue;
+		if (e.type === 'label' && e.label?.name) {
+			events.push({ kind: e.body === '1' ? 'labeled' : 'unlabeled', label: e.label.name, at: e.created_at });
+		} else if (e.type === 'close') {
+			events.push({ kind: 'closed', at: e.created_at });
+		} else if (e.type === 'reopen') {
+			events.push({ kind: 'reopened', at: e.created_at });
 		}
-		url = parseNextLink(res.headers.get('link'));
 	}
 	return events;
 }
 
-// Pages of 25: at 60 or more, GitHub silently answers some timelines empty (seen 2026-10-07).
-// A labeled issue whose timeline still comes back empty is read again over REST.
-export async function fetchHistories(
+async function fetchHistory(
+	api: string,
 	repo: string,
 	token: string,
-	labeled: Set<number>,
+	n: number,
 	fetchImpl: typeof fetch
-): Promise<Map<number, LabelEvent[]>> {
-	const [owner, name] = repo.split('/');
-	const histories = new Map<number, LabelEvent[]>();
-	let after: string | null = null;
-	for (let page = 0; page < MAX_PAGES; page++) {
-		const res = await fetchImpl(`${API_BASE}/graphql`, {
-			method: 'POST',
-			headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-			body: JSON.stringify({ query: HISTORY_QUERY, variables: { owner, name, after } })
-		});
-		if (!res.ok) throw new Error(`GitHub GraphQL request failed: ${res.status} ${res.statusText}`);
-		const body = (await res.json()) as HistoryResponse;
-		const issues = body.data?.repository?.issues;
-		if (!issues) throw new Error('GitHub GraphQL: no issues in the history response');
-		for (const node of issues.nodes) {
-			histories.set(
-				node.number,
-				node.timelineItems.pageInfo.hasNextPage ||
-					(node.timelineItems.nodes.length === 0 && labeled.has(node.number))
-					? await restHistory(repo, token, node.number, fetchImpl)
-					: toLabelEvents(node.timelineItems.nodes)
-			);
-		}
-		if (!issues.pageInfo.hasNextPage) break;
-		after = issues.pageInfo.endCursor;
-	}
-	return histories;
+): Promise<LabelEvent[]> {
+	const timeline = await fetchPaged<TimelineEvent>(
+		`${api}/repos/${repo}/issues/${n}/timeline?limit=${PER_PAGE}`,
+		token,
+		fetchImpl
+	);
+	return toLabelEvents(timeline);
 }
 
-/** Fetch the full board: all issues, with sub-issues resolved for every `epic`-labeled issue. */
+/** Fetch the full board, with types, sub-issues and pre-move times from the archive. */
 export async function fetchBoard(
 	repo: string,
 	token: string,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	archive: Archive = EMPTY_ARCHIVE,
+	api: string = DEFAULT_API
 ): Promise<RoadmapIssue[]> {
-	const rawIssues = await fetchAllIssues(repo, token, fetchImpl);
-	const issues = rawIssues.map(normalizeIssue);
-	const labeled = new Set(issues.filter((i) => i.labels.length > 0).map((i) => i.number));
-	const histories = await fetchHistories(repo, token, labeled, fetchImpl);
+	const issues = (await fetchAllIssues(api, repo, token, fetchImpl)).map(normalizeIssue);
+	const since = Date.parse(archive.forgeSince);
 	for (const issue of issues) {
-		const history = histories.get(issue.number) ?? [];
+		const old = archive.issues[String(issue.number)];
+		if (old?.type) issue.issueType = old.type;
+		if (issue.state === 'closed' && issue.stateReason == null) issue.stateReason = old?.stateReason ?? null;
+		// An archived issue untouched since the move has no forge history to read.
+		const touched = !old || Date.parse(issue.updatedAt ?? '') >= since;
+		const history = touched ? await fetchHistory(api, repo, token, issue.number, fetchImpl) : [];
 		const label = elapsedLabel(issue);
 		if (label) issue.statusSince = labelSince(history, label);
-		issue.researchMs = labelSpanMs(history, 'in research');
+		issue.researchMs = labelSpanMs(history, 'in research') ?? old?.researchMs ?? null;
 		if (issue.state === 'closed') {
-			issue.buildMs = labelSpanMs(history, 'in process');
-			issue.reviewMs = labelSpanMs(history, 'in human review');
+			issue.buildMs = labelSpanMs(history, 'in process') ?? old?.buildMs ?? null;
+			issue.reviewMs = labelSpanMs(history, 'in human review') ?? old?.reviewMs ?? null;
 		}
 	}
 	const byNumber = new Map(issues.map((issue) => [issue.number, issue]));
 	const childNumbers = new Set<number>();
 	for (const issue of issues) {
-		// #373: native type first, the `epic` label only for the pre-type archive.
-		if (kindOf(issue.issueType, issue.labels.map((l) => l.name)) === 'epic') {
-			const fetched = await fetchSubIssues(repo, token, issue.number, fetchImpl);
-			// Nest the top-level object, not the sub_issues copy, so grandchildren resolve
-			// onto the same object whatever the loop order.
-			issue.subIssues = fetched.map((sub) => byNumber.get(sub.number) ?? sub);
-			for (const sub of issue.subIssues) childNumbers.add(sub.number);
-		}
+		const subs = archive.issues[String(issue.number)]?.subIssues ?? [];
+		// Nest the top-level object, so grandchildren resolve onto the same object whatever the order.
+		issue.subIssues = subs.flatMap((n) => byNumber.get(n) ?? []);
+		for (const sub of issue.subIssues) childNumbers.add(sub.number);
 	}
-	// Sub-issues also came back at top level; drop those, or each renders twice.
+	// Children are also at top level; drop those, or each renders twice.
 	const roots = issues.filter((issue) => !childNumbers.has(issue.number));
 
 	// A parent cycle would drop its whole ring above; anything the roots miss goes back on top.
@@ -313,23 +275,54 @@ export async function fetchBoard(
 	return [...roots, ...issues.filter((issue) => !reachable.has(issue.number))];
 }
 
+/** Take the motion labels off every closed issue; returns how many labels came off. */
+export async function stripMotionLabels(
+	repo: string,
+	token: string,
+	fetchImpl: typeof fetch = fetch,
+	api: string = DEFAULT_API
+): Promise<number> {
+	const closed = await fetchPaged<ForgeIssue>(
+		`${api}/repos/${repo}/issues?state=closed&type=issues&limit=${PER_PAGE}`,
+		token,
+		fetchImpl
+	);
+	let removed = 0;
+	for (const issue of closed) {
+		for (const label of issue.labels) {
+			if (typeof label === 'string' || label.id == null || !MOTION_LABELS.includes(label.name ?? '')) continue;
+			await forgeFetch(`${api}/repos/${repo}/issues/${issue.number}/labels/${label.id}`, token, fetchImpl, 'DELETE');
+			removed++;
+		}
+	}
+	return removed;
+}
+
 async function main(): Promise<void> {
 	const args = process.argv.slice(2);
 	const outIndex = args.indexOf('--out');
 	const outPath = outIndex !== -1 ? args[outIndex + 1] : undefined;
 	if (!outPath) {
-		throw new Error('usage: fetch-issues.ts --out <issues.json>');
+		throw new Error('usage: fetch-issues.ts --out <issues.json> [--strip-motion-labels]');
 	}
-	const token = process.env.GITHUB_TOKEN;
+	const token = process.env.FORGE_TOKEN;
 	if (!token) {
-		throw new Error('fetch-issues.ts: GITHUB_TOKEN is not set — the Action must pass its own token');
+		throw new Error('fetch-issues.ts: FORGE_TOKEN is not set');
 	}
-	const repo = process.env.GITHUB_REPOSITORY ?? DEFAULT_REPO;
+	const api = process.env.FORGE_API ?? DEFAULT_API;
+	const repo = process.env.FORGE_REPO ?? DEFAULT_REPO;
 
-	const issues = await fetchBoard(repo, token);
+	// Strip first, so the board read below already sees the labels gone.
+	if (args.includes('--strip-motion-labels')) {
+		const removed = await stripMotionLabels(repo, token, fetch, api);
+		console.log(`fetch-issues: took ${removed} motion labels off closed issues`);
+	}
+
+	const archive = JSON.parse(await readFile(ARCHIVE_PATH, 'utf-8')) as Archive;
+	const issues = await fetchBoard(repo, token, fetch, archive, api);
 
 	await mkdir(dirname(outPath), { recursive: true });
-	await writeFile(outPath, JSON.stringify(issues, null, 2), 'utf-8');
+	await writeFile(outPath, `${JSON.stringify(issues, null, 2)}\n`, 'utf-8');
 	console.log(`fetch-issues: wrote ${issues.length} issues to ${outPath}`);
 }
 

@@ -1,17 +1,7 @@
-/**
- * #305 — roadmap fetch-step unit tests.
- *
- * Only the pure, no-network pieces of fetch-issues.ts are unit-tested here
- * (Link-header pagination parsing, GitHub-issue → RoadmapIssue normalization).
- * The networked functions (fetchAllIssues/fetchSubIssues/fetchBoard/main) are
- * plumbing around those two and are reviewed, not unit-tested — vitest's
- * global fetch guard (src/lib/testing/networkGuard.setup.ts) means any spec
- * that tried to exercise them for real would fail loudly on the first call.
- *
- * (*MVOX:Palestrina*)
- */
+// #305 — the fetch step's no-network pieces: pagination, normalization, forge timeline events,
+// and the motion-label strip over a stub. (*MVOX:Palestrina*, forge: *PO:Gama*)
 import { describe, expect, it } from 'vitest';
-import { normalizeIssue, parseNextLink } from './fetch-issues';
+import { normalizeIssue, parseNextLink, publicBody, stripMotionLabels, toLabelEvents } from './fetch-issues';
 
 describe('parseNextLink', () => {
 	it('returns null for a null header (last page)', () => {
@@ -33,10 +23,8 @@ describe('parseNextLink', () => {
 });
 
 describe('normalizeIssue', () => {
-	// #307: labels carry name AND colour. GitHub reports the colour as a hex
-	// string WITHOUT the leading '#' ("The hexadecimal color code for the
-	// label, without the leading #") — normalize stores it exactly as
-	// reported; '#' is prepended at render time only.
+	// #307: labels carry name AND colour. The API reports the colour without a leading '#';
+	// normalize stores it as reported, and '#' is added at render time only.
 	it('maps GitHub REST label objects to name+colour pairs, hex kept without a leading #', () => {
 		const result = normalizeIssue({
 			number: 305,
@@ -247,5 +235,67 @@ describe('normalizeIssue', () => {
 				html_url: 'https://github.com/mvox-dev/mvox-app/issues/403'
 			}).updatedAt
 		).toBe('2026-09-18T11:53:00Z');
+	});
+});
+
+describe('toLabelEvents', () => {
+	it('reads label add/remove, close and reopen off the forge timeline, and skips the rest', () => {
+		expect(
+			toLabelEvents([
+				{ type: 'comment', body: 'hi', created_at: 'T0' },
+				{ type: 'label', body: '1', label: { name: 'ready' }, created_at: 'T1' },
+				{ type: 'label', body: '', label: { name: 'ready' }, created_at: 'T2' },
+				{ type: 'close', body: '', created_at: 'T3' },
+				{ type: 'reopen', body: '', created_at: 'T4' }
+			])
+		).toEqual([
+			{ kind: 'labeled', label: 'ready', at: 'T1' },
+			{ kind: 'unlabeled', label: 'ready', at: 'T2' },
+			{ kind: 'closed', at: 'T3' },
+			{ kind: 'reopened', at: 'T4' }
+		]);
+	});
+});
+
+describe('stripMotionLabels', () => {
+	it('deletes only motion labels, by id, and only from the closed issues it lists', async () => {
+		const calls: string[] = [];
+		const closed = [
+			{
+				number: 7,
+				title: 't',
+				state: 'closed',
+				labels: [
+					{ id: 1, name: 'task' },
+					{ id: 2, name: 'in process' },
+					{ id: 3, name: 'ready' }
+				],
+				body: null,
+				html_url: 'x'
+			}
+		];
+		const stub = (async (input: RequestInfo | URL, init?: RequestInit) => {
+			calls.push(`${init?.method ?? 'GET'} ${String(input)}`);
+			return new Response(init?.method === 'DELETE' ? null : JSON.stringify(closed), { status: init?.method === 'DELETE' ? 204 : 200 });
+		}) as unknown as typeof fetch;
+		expect(await stripMotionLabels('mvox/mvox-app', 't', stub, 'http://forge/api/v1')).toBe(2);
+		expect(calls).toEqual([
+			'GET http://forge/api/v1/repos/mvox/mvox-app/issues?state=closed&type=issues&limit=50',
+			'DELETE http://forge/api/v1/repos/mvox/mvox-app/issues/7/labels/2',
+			'DELETE http://forge/api/v1/repos/mvox/mvox-app/issues/7/labels/3'
+		]);
+	});
+});
+
+describe('publicBody', () => {
+	it('keeps only the slugline and lead of a form body; the rest stays on the forge', () => {
+		const body = '### Slugline\n\nLühike\n\n### Lead\n\nÜks lause.\n\n### What\n\nmari@example.test\n\n(*PO:Gama*)';
+		expect(publicBody(body)).toBe('### Slugline\n\nLühike\n\n### Lead\n\nÜks lause.');
+	});
+
+	it('reads frontmatter too, and gives null when neither field is there', () => {
+		expect(publicBody('---\nslugline: "Vana"\n---\n\nsecret')).toBe('### Slugline\n\nVana');
+		expect(publicBody('plain secret body')).toBeNull();
+		expect(publicBody(null)).toBeNull();
 	});
 });

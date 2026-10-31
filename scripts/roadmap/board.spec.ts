@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
 // The roadmap board's fetch and render seam.
 import { describe, expect, it } from 'vitest';
-import { fetchBoard } from './fetch-issues';
+import { EMPTY_ARCHIVE, fetchBoard, type Archive } from './fetch-issues';
 import { renderBoard } from './render';
 import { json } from '$lib/testing/entuFetchKit';
 
 const GENERATED_AT = '2026-09-10T12:34:56Z';
-const REPO = 'mvox-dev/mvox-app';
+const REPO = 'mvox/mvox-app';
 
 interface RawIssue {
 	number: number;
@@ -39,23 +39,27 @@ function raw(number: number, labels: string[], overrides: Partial<RawIssue> = {}
 		labels: labels.map((name) => ({ name, color: PALETTE[name] ?? 'cccccc' })),
 		body: null,
 		closed_at: null,
-		html_url: `https://github.com/mvox-dev/mvox-app/issues/${number}`,
+		html_url: `http://forge/mvox/mvox-app/issues/${number}`,
 		...overrides
 	};
 }
 
-const EMPTY_HISTORY = { data: { repository: { issues: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } } } };
 const JSON_HEADERS = { 'content-type': 'application/json' };
 
-function githubStub(list: RawIssue[], subs: Record<number, RawIssue[]> = {}): typeof fetch {
+function forgeStub(list: RawIssue[]): typeof fetch {
 	return (async (input: RequestInfo | URL) => {
 		const url = String(input);
-		const match = /\/issues\/(\d+)\/sub_issues/.exec(url);
-		if (match) return json(subs[Number(match[1])] ?? [], 200, JSON_HEADERS);
+		if (url.includes('/timeline')) return json([], 200, JSON_HEADERS);
 		if (url.includes('/issues?')) return json(list, 200, JSON_HEADERS);
-		if (url.endsWith('/graphql')) return json(EMPTY_HISTORY, 200, JSON_HEADERS);
 		throw new Error(`unexpected request: ${url}`);
 	}) as unknown as typeof fetch;
+}
+
+/** Sub-issues come from the GitHub archive; the forge has none. */
+function archiveOf(subs: Record<number, RawIssue[]>): Archive {
+	const issues: Archive['issues'] = {};
+	for (const [parent, children] of Object.entries(subs)) issues[parent] = { subIssues: children.map((c) => c.number) };
+	return { ...EMPTY_ARCHIVE, issues };
 }
 
 function parse(html: string): Document {
@@ -63,7 +67,7 @@ function parse(html: string): Document {
 }
 
 function board(list: RawIssue[], subs: Record<number, RawIssue[]> = {}) {
-	return fetchBoard(REPO, 'test-token', githubStub(list, subs));
+	return fetchBoard(REPO, 'test-token', forgeStub(list), archiveOf(subs));
 }
 
 describe('fetchBoard → renderBoard — one level', () => {
@@ -116,9 +120,9 @@ describe('fetchBoard → renderBoard — two levels', () => {
 });
 
 describe('fetchBoard — request shape', () => {
-	it('asks for a parent\'s whole 100-sub-issue ceiling in one page', async () => {
+	it('asks the forge for issues only, open and closed, at its 50-per-page ceiling', async () => {
 		const urls: string[] = [];
-		const inner = githubStub([raw(289, ['epic']), raw(290, ['task'])], { 289: [raw(290, ['task'])] });
+		const inner = forgeStub([raw(305, ['task'])]);
 		const recording = (async (input: RequestInfo | URL, init?: RequestInit) => {
 			urls.push(String(input));
 			return inner(input, init);
@@ -126,9 +130,8 @@ describe('fetchBoard — request shape', () => {
 
 		await fetchBoard(REPO, 'test-token', recording);
 
-		const subUrl = urls.find((u) => u.includes('/sub_issues')) ?? '';
-		expect(subUrl, 'no sub_issues request was made').not.toBe('');
-		expect(new URL(subUrl).searchParams.get('per_page')).toBe('100');
+		const params = new URL(urls[0]).searchParams;
+		expect([params.get('state'), params.get('type'), params.get('limit')]).toEqual(['all', 'issues', '50']);
 	});
 });
 
@@ -210,16 +213,16 @@ describe('fetchBoard → renderBoard — #309 card links ride the real pipeline'
 		);
 		const doc = parse(html);
 		expect(
-			doc.querySelector('[data-issue="305"] a[href="https://github.com/mvox-dev/mvox-app/issues/305"]'),
+			doc.querySelector('[data-issue="305"] a[href="http://forge/mvox/mvox-app/issues/305"]'),
 			'top-level card carries no link to its issue'
 		).not.toBeNull();
 		expect(
-			doc.querySelector('[data-issue="289"] a[href="https://github.com/mvox-dev/mvox-app/issues/289"]'),
+			doc.querySelector('[data-issue="289"] a[href="http://forge/mvox/mvox-app/issues/289"]'),
 			'epic card carries no link of its own'
 		).not.toBeNull();
 		expect(
 			doc.querySelector(
-				'[data-issue="289"] [data-issue="290"] a[href="https://github.com/mvox-dev/mvox-app/issues/290"]'
+				'[data-issue="289"] [data-issue="290"] a[href="http://forge/mvox/mvox-app/issues/290"]'
 			),
 			'nested child card carries no link of its own'
 		).not.toBeNull();

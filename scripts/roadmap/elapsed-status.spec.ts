@@ -2,7 +2,7 @@
 // Open `in process` / `in research` cards count time since that label in the browser; cards also
 // show how long research and building took, and an epic sums its sub-issues'. (*PO:Gama*)
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchBoard, labelSince, labelSpanMs, type LabelEvent } from './fetch-issues';
+import { fetchBoard, labelSince, labelSpanMs, type Archive, type LabelEvent } from './fetch-issues';
 import { formatClock, formatElapsed, renderBoard, type RoadmapIssue } from './render';
 
 const GENERATED_AT = '2026-10-06T18:00:00.000Z';
@@ -175,63 +175,51 @@ describe('researched in · built in', () => {
 		expect(spans({ researchMs: null, buildMs: null })).toBeNull();
 	});
 
-	it('the fetch step fills both from the label history', async () => {
-		const list = [
-			{
-				number: 809,
-				title: 't',
-				state: 'closed',
-				state_reason: 'completed',
-				labels: [],
-				body: null,
-				closed_at: H(9),
-				updated_at: H(9),
-				html_url: 'https://github.com/mvox-dev/mvox-app/issues/809'
-			}
-		];
-		const nodes = [
-			{ __typename: 'LabeledEvent', createdAt: H(1), label: { name: 'in research' } },
-			{ __typename: 'UnlabeledEvent', createdAt: H(2), label: { name: 'in research' } },
-			{ __typename: 'LabeledEvent', createdAt: H(4), label: { name: 'in process' } },
-			{ __typename: 'ClosedEvent', createdAt: H(9) }
-		];
-		const issues = {
-			pageInfo: { hasNextPage: false, endCursor: null },
-			nodes: [{ number: 809, timelineItems: { pageInfo: { hasNextPage: false }, nodes } }]
-		};
-		const history = { data: { repository: { issues } } };
-		const stub = (async (input: RequestInfo | URL) => {
-			const body = String(input).endsWith('/graphql') ? history : list;
+	const closed809 = {
+		number: 809,
+		title: 't',
+		state: 'closed',
+		labels: [],
+		body: null,
+		closed_at: H(9),
+		updated_at: H(9),
+		html_url: 'http://forge/mvox/mvox-app/issues/809'
+	};
+	const stubWith = (list: unknown[], timeline: unknown[]) =>
+		(async (input: RequestInfo | URL) => {
+			const body = String(input).includes('/timeline') ? timeline : list;
 			return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
 		}) as unknown as typeof fetch;
-		const [fetched] = await fetchBoard('mvox-dev/mvox-app', 'test-token', stub);
+
+	it('the fetch step fills both from the forge timeline', async () => {
+		const timeline = [
+			{ type: 'comment', body: 'x', created_at: H(0) },
+			{ type: 'label', body: '1', label: { name: 'in research' }, created_at: H(1) },
+			{ type: 'label', body: '', label: { name: 'in research' }, created_at: H(2) },
+			{ type: 'label', body: '1', label: { name: 'in process' }, created_at: H(4) },
+			{ type: 'close', body: '', created_at: H(9) }
+		];
+		const [fetched] = await fetchBoard('mvox/mvox-app', 'test-token', stubWith([closed809], timeline));
 		expect(fetched.researchMs).toBe(3600000);
 		expect(fetched.buildMs).toBe(5 * 3600000);
 	});
 
-	it('a labeled issue whose GraphQL timeline comes back empty is read again over REST', async () => {
-		const list = [
-			{
-				number: 809,
-				title: 't',
-				state: 'open',
-				labels: [{ name: 'in process' }],
-				body: null,
-				html_url: 'https://github.com/mvox-dev/mvox-app/issues/809'
-			}
-		];
-		const issues = {
-			pageInfo: { hasNextPage: false, endCursor: null },
-			nodes: [{ number: 809, timelineItems: { pageInfo: { hasNextPage: false }, nodes: [] } }]
+	it('an issue untouched since the move keeps its GitHub times and costs no timeline read', async () => {
+		const archive: Archive = {
+			forgeSince: '2026-10-24T00:00:00Z',
+			issues: { '809': { type: 'Task', stateReason: 'completed', researchMs: 60000, buildMs: 120000 } }
 		};
-		const events = [{ event: 'labeled', label: { name: 'in process' }, created_at: H(4) }];
 		const stub = (async (input: RequestInfo | URL) => {
-			const url = String(input);
-			const body = url.endsWith('/graphql') ? { data: { repository: { issues } } } : url.includes('/events') ? events : list;
-			return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+			if (String(input).includes('/timeline')) throw new Error('timeline read for an untouched issue');
+			return new Response(JSON.stringify([closed809]), { headers: { 'content-type': 'application/json' } });
 		}) as unknown as typeof fetch;
-		const [fetched] = await fetchBoard('mvox-dev/mvox-app', 'test-token', stub);
-		expect(fetched.statusSince).toBe(H(4));
+		const [fetched] = await fetchBoard('mvox/mvox-app', 'test-token', stub, archive);
+		expect([fetched.issueType, fetched.stateReason, fetched.researchMs, fetched.buildMs]).toEqual([
+			'Task',
+			'completed',
+			60000,
+			120000
+		]);
 	});
 });
 

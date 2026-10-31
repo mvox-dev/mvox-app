@@ -1,12 +1,11 @@
 // @vitest-environment happy-dom
 // The board reads each issue's kind from its native GitHub issue type.
 import { describe, expect, it } from 'vitest';
-import { fetchBoard, normalizeIssue } from './fetch-issues';
+import { EMPTY_ARCHIVE, fetchBoard, type Archive } from './fetch-issues';
 import { kindFromLabels, kindFromType, kindOf } from './issue-model';
 import { displayLead, displayTitle, renderBoard, type RoadmapIssue, type RoadmapLabel } from './render';
 import { json } from '$lib/testing/entuFetchKit';
 
-const EMPTY_HISTORY = { data: { repository: { issues: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } } } };
 const JSON_HEADERS = { 'content-type': 'application/json' };
 
 const GENERATED_AT = '2026-09-18T09:00:00.000Z';
@@ -88,27 +87,6 @@ describe('#373 — the model derives kind: type first, kind label as fallback', 
 		expect(kindOf('Bug', ['task', 'ready'])).toBe('bug');
 		expect(kindOf(null, ['task', 'ready'])).toBe('task');
 		expect(kindOf(null, ['ready'])).toBeNull();
-	});
-});
-
-describe('#373 — fetch normalizes the REST `type` object; downstream never sees it', () => {
-	const rest = {
-		number: 400,
-		title: 'Typed, unlabeled',
-		state: 'open',
-		state_reason: null,
-		labels: [],
-		body: null,
-		html_url: 'https://github.com/mvox-dev/mvox-app/issues/400'
-	};
-
-	it("carries the type's name through as issueType", () => {
-		expect(normalizeIssue({ ...rest, type: { name: 'Task' } }).issueType).toBe('Task');
-	});
-
-	it('normalizes a null or missing type to issueType: null — the pre-type archive', () => {
-		expect(normalizeIssue({ ...rest, type: null }).issueType).toBeNull();
-		expect(normalizeIssue(rest).issueType).toBeNull();
 	});
 });
 
@@ -293,46 +271,34 @@ describe('#373 — the #340 staleness predicate treats a typed Task like a task-
 	});
 });
 
-describe('#373 — fetchBoard resolves sub-issues for a typed Epic with no labels', () => {
-	interface RestIssue {
-		number: number;
-		title: string;
-		state: string;
-		state_reason: null;
-		labels: { name: string; color: string }[];
-		body: null;
-		closed_at: null;
-		html_url: string;
-		type?: { name: string } | null;
-	}
-	const rest = (number: number, type: string | null, labels: RoadmapLabel[] = []): RestIssue => ({
+describe('#373 — the forge has no types: fetchBoard takes the type and the sub-issues from the archive', () => {
+	const rest = (number: number, labels: RoadmapLabel[] = []) => ({
 		number,
 		title: `Issue ${number}`,
 		state: 'open',
-		state_reason: null,
 		labels: labels.map((l) => ({ name: l.name, color: l.color ?? 'cccccc' })),
 		body: null,
 		closed_at: null,
-		html_url: `https://github.com/mvox-dev/mvox-app/issues/${number}`,
-		...(type !== null ? { type: { name: type } } : {})
+		html_url: `http://forge/mvox/mvox-app/issues/${number}`
 	});
-	const githubStub =
-		(list: RestIssue[], subs: Record<number, RestIssue[]>): typeof fetch =>
+	const forgeStub = (list: unknown[]): typeof fetch =>
 		(async (input: RequestInfo | URL) => {
 			const url = String(input);
-			const match = /\/issues\/(\d+)\/sub_issues/.exec(url);
-			if (match) return json(subs[Number(match[1])] ?? [], 200, JSON_HEADERS);
+			if (url.includes('/timeline')) return json([], 200, JSON_HEADERS);
 			if (url.includes('/issues?')) return json(list, 200, JSON_HEADERS);
-			if (url.endsWith('/graphql')) return json(EMPTY_HISTORY, 200, JSON_HEADERS);
 			throw new Error(`unexpected request: ${url}`);
 		}) as unknown as typeof fetch;
 
-	it('nests a typed, unlabeled epic\'s children — and a pre-type epic-labeled one still nests too', async () => {
-		const list = [rest(410, 'Epic'), rest(411, 'Task'), rest(289, null, [EPIC]), rest(290, null, [TASK])];
-		const subs = { 410: [rest(411, 'Task')], 289: [rest(290, null, [TASK])] };
-		const result = await fetchBoard('mvox-dev/mvox-app', 'test-token', githubStub(list, subs));
+	it('a typed, unlabeled epic gets its type and children back — and an epic-labeled one nests too', async () => {
+		const list = [rest(410), rest(411), rest(289, [EPIC]), rest(290, [TASK])];
+		const archive: Archive = {
+			...EMPTY_ARCHIVE,
+			issues: { '410': { type: 'Epic', subIssues: [411] }, '411': { type: 'Task' }, '289': { subIssues: [290] } }
+		};
+		const result = await fetchBoard('mvox/mvox-app', 'test-token', forgeStub(list), archive);
 		expect(result.map((i) => i.number)).toEqual([410, 289]);
-		expect(result[0].subIssues?.map((s) => s.number)).toEqual([411]);
+		expect(result[0].issueType).toBe('Epic');
+		expect(result[0].subIssues?.map((s) => [s.number, s.issueType])).toEqual([[411, 'Task']]);
 		expect(result[1].subIssues?.map((s) => s.number)).toEqual([290]);
 	});
 });
