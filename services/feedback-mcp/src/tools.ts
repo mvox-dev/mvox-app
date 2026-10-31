@@ -41,7 +41,7 @@ export const TOOL_DEFINITIONS = [
 	{
 		name: 'list_feedback',
 		description:
-			'Summaries of mvox feedback reports, newest first, from every db or one. Dbs that fail are listed under errors.',
+			'Summaries of mvox feedback reports, newest first, from every db or one. Dbs that fail, and reports with no creation time, are listed under errors. createdFrom says where created came from: _created, or id (the second Entu made the report).',
 		inputSchema: { type: 'object', properties: FILTER_PROPERTIES, additionalProperties: false }
 	},
 	{
@@ -130,11 +130,18 @@ async function reportsFor(ctx: Ctx, f: Filter) {
 		f.db === undefined
 			? await ctx.reader.listAll()
 			: { results: [{ db: f.db, entities: await ctx.reader.listFeedback(f.db) }], errors: [] };
-	const reports = found.results
-		.flatMap(({ db, entities }) => entities.map((e) => toReport(db, e)))
+	const all = found.results.flatMap(({ db, entities }) => entities.map((e) => toReport(db, e)));
+	const untimed = all
+		.filter((r) => r.created === null)
+		.map((r) => ({
+			db: r.db,
+			id: r.id,
+			message: `${r.id}: created unknown: no _created, id is no ObjectId`
+		}));
+	const reports = all
 		.filter((r) => matches(r, f))
-		.sort((a, b) => b.created.localeCompare(a.created));
-	return { reports, errors: found.errors };
+		.sort((a, b) => (b.created ?? '').localeCompare(a.created ?? ''));
+	return { reports, errors: [...found.errors, ...untimed] };
 }
 
 async function listFeedback(ctx: Ctx, args: Record<string, unknown>): Promise<ToolResult> {
@@ -144,6 +151,7 @@ async function listFeedback(ctx: Ctx, args: Record<string, unknown>): Promise<To
 		db: r.db,
 		id: r.id,
 		created: r.created,
+		createdFrom: r.createdFrom,
 		page: r.page,
 		kind: r.kind,
 		firstError: r.firstError,

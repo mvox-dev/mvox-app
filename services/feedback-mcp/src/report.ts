@@ -3,7 +3,8 @@ import type { RawEntity } from './entu.ts';
 export type Report = {
 	db: string;
 	id: string;
-	created: string;
+	created: string | null;
+	createdFrom: '_created' | 'id' | null;
 	name: string | null;
 	page: string | null;
 	kind: 'automatic' | 'singer';
@@ -61,6 +62,17 @@ const problemsOf = (metadata: unknown): Problem[] =>
 		? metadata.problems.filter(isRecord)
 		: [];
 
+const OBJECT_ID = /^[0-9a-f]{24}$/;
+
+// Entu serves the server's person the domain view, which has no _created; the id holds the second.
+function createdOf(e: RawEntity): Pick<Report, 'created' | 'createdFrom'> {
+	const served = values(e, '_created')[0]?.datetime;
+	if (served) return { created: served, createdFrom: '_created' };
+	if (!OBJECT_ID.test(e._id)) return { created: null, createdFrom: null };
+	const seconds = parseInt(e._id.slice(0, 8), 16);
+	return { created: new Date(seconds * 1000).toISOString(), createdFrom: 'id' };
+}
+
 export function toReport(db: string, e: RawEntity): Report {
 	const name = values(e, 'name')[0]?.string ?? null;
 	const description = values(e, 'description')[0]?.string ?? '';
@@ -71,7 +83,7 @@ export function toReport(db: string, e: RawEntity): Report {
 	return {
 		db,
 		id: e._id,
-		created: values(e, '_created')[0]?.datetime ?? '',
+		...createdOf(e),
 		name,
 		page: text(metadata?.route) ?? (name === null ? null : name.split(' ')[0]),
 		kind: description.startsWith(AUTOMATIC) ? 'automatic' : 'singer',
@@ -103,8 +115,8 @@ const contains = (hay: string | null, needle: string) =>
 // `since` is inclusive and `until` exclusive, so a day's reports sit under one of them.
 export function matches(r: Report, f: Filter): boolean {
 	if (f.db !== undefined && r.db !== f.db) return false;
-	if (f.since !== undefined && !(Date.parse(r.created) >= time(f.since))) return false;
-	if (f.until !== undefined && !(Date.parse(r.created) < time(f.until))) return false;
+	if (f.since !== undefined && !(Date.parse(r.created ?? '') >= time(f.since))) return false;
+	if (f.until !== undefined && !(Date.parse(r.created ?? '') < time(f.until))) return false;
 	if (f.page !== undefined && !contains(r.page, f.page)) return false;
 	if (f.appVersion !== undefined) {
 		if (!r.appVersion?.toLowerCase().startsWith(f.appVersion.toLowerCase())) return false;

@@ -80,6 +80,7 @@ describe('callTool', () => {
 				db: 'mvox_b',
 				id: ID_B,
 				created: '2026-10-02T10:00:00.000Z',
+				createdFrom: '_created',
 				page: '/event',
 				kind: 'singer',
 				firstError: null,
@@ -90,6 +91,7 @@ describe('callTool', () => {
 				db: 'mvox_a',
 				id: ID_A,
 				created: '2026-10-01T10:00:00.000Z',
+				createdFrom: '_created',
 				page: '/event',
 				kind: 'singer',
 				firstError: null,
@@ -323,5 +325,39 @@ describe('callTool', () => {
 		expect((list.reports as { id: string }[]).map((r) => r.id)).toEqual([ID_A]);
 		const count = textOf(await callTool(c, 'count_feedback', { by: 'action' }));
 		expect(count.errors).toEqual(errors);
+	});
+
+	describe('a report served without _created', () => {
+		const ID_SENT = '6ae5b1be0000000000000001';
+		const ID_ODD = 'odd-id';
+		const noCreated = { _created: undefined };
+		const world = () => ({
+			a: [entity(ID_SENT, noCreated), entity(ID_ODD, noCreated), entity(ID_A)],
+			b: []
+		});
+
+		it('list gives the id time and its source, and names the one with no time', async () => {
+			const body = textOf(await callTool(ctx(world()).c, 'list_feedback', {}));
+			const reports = body.reports as { id: string; created: unknown; createdFrom: unknown }[];
+			const by = (id: string) => reports.find((r) => r.id === id);
+			expect(by(ID_SENT)).toMatchObject({ created: '2026-10-31T09:15:42.000Z', createdFrom: 'id' });
+			expect(by(ID_ODD)).toMatchObject({ created: null, createdFrom: null });
+			expect(body.errors).toEqual([
+				{ db: 'mvox_a', id: ID_ODD, message: expect.stringContaining('created') }
+			]);
+		});
+
+		it('since and until find it by the id time', async () => {
+			const { c } = ctx(world());
+			const args = { since: '2026-10-31', until: '2026-11-01' };
+			const body = textOf(await callTool(c, 'list_feedback', args));
+			expect((body.reports as { id: string }[]).map((r) => r.id)).toEqual([ID_SENT]);
+		});
+
+		it('get gives created and its source', async () => {
+			const { c } = ctx(world());
+			const sent = textOf(await callTool(c, 'get_feedback', { db: 'mvox_a', id: ID_SENT }));
+			expect(sent).toMatchObject({ created: '2026-10-31T09:15:42.000Z', createdFrom: 'id' });
+		});
 	});
 });

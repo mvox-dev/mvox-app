@@ -52,6 +52,7 @@ describe('toReport', () => {
 			db: 'mvox_a',
 			id: 'f00000000000000000000001',
 			created: '2026-10-01T10:00:00.000Z',
+			createdFrom: '_created',
 			name: '/event 2026-10-01',
 			page: '/agenda',
 			kind: 'automatic',
@@ -84,7 +85,8 @@ describe('toReport', () => {
 	it('a bare entity lists with nulls and empty lists', () => {
 		const r = toReport('mvox_a', { _id: 'f00000000000000000000009' });
 		expect(r).toMatchObject({
-			created: '',
+			created: '2097-08-05T09:04:00.000Z',
+			createdFrom: 'id',
 			name: null,
 			page: null,
 			description: '',
@@ -100,6 +102,46 @@ describe('toReport', () => {
 	it('firstError falls back to the description', () => {
 		const r = toReport('mvox_a', auto({ metadata: undefined }));
 		expect(r.firstError).toBe('TypeError');
+	});
+});
+
+describe('created', () => {
+	const ID_2026 = '6ae5b1be0000000000000001';
+
+	it('takes _created when the wire has it', () => {
+		const r = toReport('mvox_a', raw({ _id: ID_2026 }));
+		expect([r.created, r.createdFrom]).toEqual(['2026-10-01T10:00:00.000Z', '_created']);
+	});
+
+	it('falls back to the second in the id, and says so', () => {
+		const r = toReport('mvox_a', raw({ _id: ID_2026, _created: undefined }));
+		expect([r.created, r.createdFrom]).toEqual(['2026-10-31T09:15:42.000Z', 'id']);
+	});
+
+	it('never reads the device clock in metadata.time', () => {
+		const metadata = str(JSON.stringify({ time: '2026-10-20T00:00:00.000Z' }));
+		const r = toReport('mvox_a', raw({ _id: ID_2026, _created: undefined, metadata }));
+		expect(r.created).toBe('2026-10-31T09:15:42.000Z');
+	});
+
+	it('an id that is no ObjectId and no _created leaves created null, not ""', () => {
+		for (const _id of ['not-an-object-id', 'ZZZZZZZZZZZZZZZZZZZZZZZZ', '6ae5b1be']) {
+			const r = toReport('mvox_a', raw({ _id, _created: undefined }));
+			expect([r.created, r.createdFrom]).toEqual([null, null]);
+		}
+	});
+
+	it('such a report matches no since or until', () => {
+		const r = toReport('mvox_a', raw({ _id: 'nope', _created: undefined }));
+		expect(matches(r, { since: '2000-01-01' })).toBe(false);
+		expect(matches(r, { until: '2100-01-01' })).toBe(false);
+		expect(matches(r, {})).toBe(true);
+	});
+
+	it('since and until use the id time when _created is absent', () => {
+		const r = toReport('mvox_a', raw({ _id: ID_2026, _created: undefined }));
+		expect(matches(r, { since: '2026-10-31', until: '2026-11-01' })).toBe(true);
+		expect(matches(r, { until: '2026-10-31' })).toBe(false);
 	});
 });
 

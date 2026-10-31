@@ -11,6 +11,11 @@ and serves three tools:
   (`isError`). The description comes back under `user_submitted`.
 - `count_feedback`: the same filters, grouped by first error, action or app version.
 
+Each report's `created` comes from its `_created` when Entu serves it, else from the entity id
+(`createdFrom: "id"`, the second Entu created the report; never the device clock in `metadata.time`).
+A report with neither has `created: null` and is named under `errors`; since/until skip it.
+Nothing here changes the server person's rights.
+
 The only Entu calls are `GET`s. A db that fails (a revoked key, say) is named under `errors`;
 the other dbs still answer. Every call writes one log line (time, team, tool, args) and never the
 report text.
