@@ -2,25 +2,23 @@
   {
     "number": 1052,
     "title": "The app says when a newer version is available and updates on Refresh",
-    "state": "open",
+    "state": "closed",
     "stateReason": null,
     "labels": [
-      {
-        "name": "ready",
-        "color": "0e8a16"
-      },
       {
         "name": "task",
         "color": "1d76db"
       }
     ],
     "body": "### Slugline\n\nRakendus ütleb, kui uuem versioon on olemas, ja uuendab nupuvajutusega\n\n### Lead\n\nKui seadmes töötab vanem versioon kui serveris, näeb kasutaja teadet \"Uuem versioon on olemas\" ja nuppu Värskenda, mis toob uue versiooni.",
-    "closedAt": null,
-    "updatedAt": "2026-10-31T18:50:41Z",
+    "closedAt": "2026-10-31T19:58:42Z",
+    "updatedAt": "2026-10-31T20:02:01Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1052",
     "subIssues": [],
     "issueType": null,
-    "researchMs": null
+    "researchMs": null,
+    "buildMs": null,
+    "reviewMs": null
   },
   {
     "number": 1049,
@@ -39,7 +37,7 @@
     ],
     "body": "### Slugline\n\nIga kasutajale näidatud viga saadab probleemiteate\n\n### Lead\n\nKui rakendus näitab kasutajale viga, saab meeskond sellest probleemiteate koos veaga. Kasutaja näeb sama teadet nagu praegu.",
     "closedAt": null,
-    "updatedAt": "2026-10-31T18:50:40Z",
+    "updatedAt": "2026-10-31T19:58:43Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1049",
     "subIssues": [],
     "issueType": null,
@@ -5358,7 +5356,7 @@
         ],
         "body": "### Slugline\n\nFailibaidid jäävad seadmesse: teine avamine ei küsi võrku\n\n### Lead\n\nAllkirjastatud link elab 60 sekundit, nii et hoiule läheb fail ise, mitte link. Pluss kontroll, et asendatud faili ei serveeritaks igavesti vanana.",
         "closedAt": "2026-09-12T17:07:45Z",
-        "updatedAt": "2026-10-31T18:52:31Z",
+        "updatedAt": "2026-10-31T19:58:43Z",
         "htmlUrl": "http://forge/mvox/mvox-app/issues/343",
         "subIssues": [],
         "issueType": null,
