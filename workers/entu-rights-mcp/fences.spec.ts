@@ -38,9 +38,9 @@ describe('the static app is untouched', () => {
 	});
 
 	it('vite.config.ts is unchanged (vitest.config.ts is NOT pinned — its include glob legitimately grows workers/**)', () => {
-		// Repinned for #347 and #442, both sanctioned changes outside this slice.
+		// Repinned for #347, #442 and #1048, all sanctioned changes outside this slice.
 		expect(sha256('vite.config.ts')).toBe(
-			'63d38d3c144303ef0b00ba32aef6993fb225cf7ba0a06c3c0c859560206e96f5'
+			'8c41e02009b18fc3705079b74411ac7aff74d2fcd567156766fa47db42be3566'
 		);
 	});
 });

@@ -72,6 +72,7 @@ export const PROFILE_COPY = {
 		`That sign-in now works for ${p.collective}.`,
 	profile_link_noop_same_identity: () => 'That sign-in was already linked. Nothing changed.',
 	profile_link_cancel: () => 'Cancel',
+	profile_running_build: (p: { commit: string }) => `mvox version ${p.commit}`,
 	auth_provider_smart_id: () => 'Smart-ID',
 	auth_provider_mobile_id: () => 'Mobile-ID',
 	auth_provider_id_card: () => 'ID-card',

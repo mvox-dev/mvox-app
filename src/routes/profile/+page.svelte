@@ -33,6 +33,7 @@
 	import ProfileStorageSection from '$lib/profile/ProfileStorageSection.svelte';
 	import CollectiveAdminSection from '$lib/profile/CollectiveAdminSection.svelte';
 	import SeasonAttendanceSection from '$lib/profile/SeasonAttendanceSection.svelte';
+	import { runningCommit } from '$lib/runningBuild';
 
 	const LEVELS: readonly Level[] = ['public', 'domain', 'private'];
 
@@ -318,4 +319,9 @@
 			}}
 		/>
 	</div>
+
+	<!-- #1048 — outside the status gate: the build is worth naming most when loading fails. -->
+	<p data-testid="profile-running-build" class="mx-auto mt-8 w-full max-w-md text-xs text-ink-2">
+		{m.profile_running_build({ commit: runningCommit })}
+	</p>
 </main>

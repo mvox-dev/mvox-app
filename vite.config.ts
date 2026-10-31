@@ -2,44 +2,21 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
+import { runningBuild } from './src/routes/version.json/running-build';
 
 export default defineConfig({
 	plugins: [
 		tailwindcss(),
-		// Plain @inlang/paraglide-js, not @inlang/paraglide-sveltekit: the
-		// -sveltekit package's locale routing and language detection assume a
-		// server (hooks.server.ts + paraglideMiddleware). This app has ssr = false
-		// and no server code at all, so locale detection is resolved entirely in
-		// the browser via the strategy list below.
 		paraglideVitePlugin({
 			project: './project.inlang',
 			outdir: './src/lib/paraglide',
-			// #123 — 'cookie' ahead of 'preferredLanguage' so an explicit selection
-			// (LanguageSelector → setLocale) persists across reloads and beats
-			// browser-language detection; baseLocale is the final fallback.
-			//
-			// 'localStorage' is deliberately absent (#442). The generated runtime
-			// reads it unguarded while resolving a locale and writes it on the
-			// first resolve of every page load, so in a browser told not to store
-			// site data EVERY m.*() call threw — including the notice that exists
-			// to explain that browser. The cookie already carries the explicit
-			// pick (setLocale has written it on every load since #123); a browser
-			// refusing cookies too falls through to preferredLanguage.
+			// No 'localStorage' (#442): its unguarded read threw in a browser that stores nothing.
 			strategy: ['cookie', 'preferredLanguage', 'baseLocale'],
 		}),
 		sveltekit(),
+		runningBuild(),
 	],
-	// #347 — the Spaces bucket's GET allowlist admits exactly
-	// http://localhost:3000 and no other local origin (Argo's convention, an
-	// external contract, not a preference). strictPort matters more than the
-	// port number itself: Vite's default is to silently increment to the next
-	// free port when 3000 is taken, which would surface as a confusing CORS
-	// error instead of a port error — a fallback that looks like success.
+	// #347: bucket GET allowlist is http://localhost:3000 only; see docs/architecture/build-config.md
 	server: { port: 3000, strictPort: true },
-	// Vitest needs the 'browser' export condition or `svelte` resolves to its
-	// server-side (SSR) build, which has no `mount` — @testing-library/svelte
-	// then throws "mount(...) is not available on the server". Standard fix
-	// per Svelte's own Vitest testing guide; scoped to `process.env.VITEST` so
-	// it doesn't affect `vite build`/`vite dev`.
 	resolve: process.env.VITEST ? { conditions: ['browser'] } : undefined,
 });
