@@ -18,6 +18,7 @@ export type Ctx = {
 	team: string;
 	log: (line: string) => void;
 	resize: (png: Uint8Array, maxBytes: number) => Promise<Uint8Array>;
+	compose: (png: Uint8Array, strokesJson: string) => Promise<Uint8Array>;
 };
 
 const MAX_TEXT = 10000;

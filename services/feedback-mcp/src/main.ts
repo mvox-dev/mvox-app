@@ -5,7 +5,7 @@ import { createInterface } from 'node:readline';
 import { parseArgs } from 'node:util';
 import { loadConfig } from './config.ts';
 import { EntuReader } from './entu.ts';
-import { downscaleToFit } from './image.ts';
+import { composeDrawing, downscaleToFit } from './image.ts';
 import { answerLine } from './stdio.ts';
 import type { Ctx } from './tools.ts';
 
@@ -38,7 +38,8 @@ const ctx: Ctx = {
 	dbs,
 	team: values.team,
 	log,
-	resize: downscaleToFit
+	resize: downscaleToFit,
+	compose: composeDrawing
 };
 
 let queue = Promise.resolve();

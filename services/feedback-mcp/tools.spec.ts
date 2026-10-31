@@ -32,7 +32,8 @@ type World = {
 
 function ctx(
 	world: World = {},
-	resize = vi.fn(async (png: Uint8Array, _maxBytes: number) => png.slice(0, 4))
+	resize = vi.fn(async (png: Uint8Array, _maxBytes: number) => png.slice(0, 4)),
+	compose = vi.fn(async (_png: Uint8Array, _strokes: string) => new Uint8Array([9, 9, 9, 9]))
 ) {
 	const a = world.a ?? [entity(ID_A)];
 	const b = world.b ?? [entity(ID_B, { _created: [{ datetime: '2026-10-02T10:00:00.000Z' }] })];
@@ -57,9 +58,10 @@ function ctx(
 		dbs,
 		team: 'po-team',
 		log: (line) => lines.push(line),
-		resize
+		resize,
+		compose
 	};
-	return { c, lines, resize };
+	return { c, lines, resize, compose };
 }
 
 const textOf = (r: { content: { type: string; text?: string }[] }) =>
@@ -106,7 +108,10 @@ describe('callTool', () => {
 
 	it('get returns report then image', async () => {
 		const shot = new Uint8Array([137, 80, 78, 71]);
-		const { c, resize } = ctx({ a: [entity(ID_A, { screenshot: [{ _id: SHOT }] })], shot });
+		const { c, resize, compose } = ctx({
+			a: [entity(ID_A, { screenshot: [{ _id: SHOT }] })],
+			shot
+		});
 		const res = await callTool(c, 'get_feedback', { db: 'mvox_a', id: ID_A });
 		expect(res.isError).toBeUndefined();
 		expect(res.content).toHaveLength(2);
@@ -120,6 +125,64 @@ describe('callTool', () => {
 			mimeType: 'image/png'
 		});
 		expect(resize).not.toHaveBeenCalled();
+	});
+
+	it('a report with a drawing returns the composed image and keeps the stroke JSON', async () => {
+		const shot = new Uint8Array([137, 80, 78, 71]);
+		const layer = '{"v":1,"strokes":[]}';
+		const a = [entity(ID_A, { screenshot: [{ _id: SHOT }], doodle_layer: str(layer) })];
+		const { c, compose } = ctx({ a, shot });
+		const res = await callTool(c, 'get_feedback', { db: 'mvox_a', id: ID_A });
+		expect(res.isError).toBeUndefined();
+		expect(res.content).toHaveLength(2);
+		expect(textOf(res).doodleLayer).toBe(layer);
+		expect(compose).toHaveBeenCalledTimes(1);
+		expect([...compose.mock.calls[0][0]]).toEqual([...shot]);
+		expect(compose.mock.calls[0][1]).toBe(layer);
+		expect(res.content[1]).toEqual({
+			type: 'image',
+			data: Buffer.from([9, 9, 9, 9]).toString('base64'),
+			mimeType: 'image/png'
+		});
+	});
+
+	it('the 1 MB check runs on the composed image', async () => {
+		const a = [entity(ID_A, { screenshot: [{ _id: SHOT }], doodle_layer: str('{}') })];
+		const big = vi.fn(async () => new Uint8Array(1048577));
+		const { c, resize } = ctx({ a, shot: new Uint8Array([1, 2, 3, 4]) }, undefined, big);
+		const res = await callTool(c, 'get_feedback', { db: 'mvox_a', id: ID_A });
+		expect(resize).toHaveBeenCalledTimes(1);
+		expect(resize.mock.calls[0][0].length).toBe(1048577);
+		expect(res.content[1]).toMatchObject({ type: 'image' });
+	});
+
+	it('a drawing that cannot be drawn returns the plain screenshot, a note and isError', async () => {
+		const shot = new Uint8Array([137, 80, 78, 71]);
+		const a = [entity(ID_A, { screenshot: [{ _id: SHOT }], doodle_layer: str('nope') })];
+		const broken = vi.fn(async () => {
+			throw new Error('strokes: not valid JSON');
+		});
+		const { c } = ctx({ a, shot }, undefined, broken);
+		const res = await callTool(c, 'get_feedback', { db: 'mvox_a', id: ID_A });
+		expect(res.isError).toBe(true);
+		expect(res.content).toHaveLength(3);
+		expect(res.content[1]).toEqual({
+			type: 'image',
+			data: Buffer.from(shot).toString('base64'),
+			mimeType: 'image/png'
+		});
+		expect(res.content[2]).toEqual({
+			type: 'text',
+			text: 'drawing not drawn: strokes: not valid JSON'
+		});
+	});
+
+	it('a drawing without a screenshot returns text only', async () => {
+		const a = [entity(ID_A, { doodle_layer: str('{"v":1,"strokes":[]}') })];
+		const { c, compose } = ctx({ a });
+		const res = await callTool(c, 'get_feedback', { db: 'mvox_a', id: ID_A });
+		expect(res.content).toHaveLength(1);
+		expect(compose).not.toHaveBeenCalled();
 	});
 
 	it('no screenshot returns text only', async () => {

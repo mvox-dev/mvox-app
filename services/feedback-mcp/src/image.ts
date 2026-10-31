@@ -21,3 +21,7 @@ export async function downscaleToFit(png: Uint8Array, maxBytes: number): Promise
 	if (out.length > maxBytes) throw new Error(`screenshot still over ${maxBytes} bytes`);
 	return out;
 }
+
+export async function composeDrawing(_png: Uint8Array, _strokesJson: string): Promise<Uint8Array> {
+	throw new Error('composeDrawing: not implemented');
+}
