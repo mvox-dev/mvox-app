@@ -1,4 +1,5 @@
 import { entuFetch } from '$lib/entu/request';
+import { isAuthExpiredError } from '$lib/entu/auth-expired';
 import { resolveTypeId } from '$lib/seasons/entuSeasons';
 import type { EntuCfg } from '$lib/entu/cfg';
 import { localDayKey } from '$lib/preferences/timeFormat';
@@ -101,7 +102,7 @@ export interface BulkCheckoutPayload {
 
 export interface BulkResult {
 	succeeded: Lending[];
-	failed: Array<{ copyId: string; error: string }>;
+	failed: Array<{ copyId: string; error: string; expired?: true }>;
 }
 
 // allSettled: a partial failure must not abort the other checkouts.
@@ -130,7 +131,7 @@ export async function bulkCheckout(
 	const eligibleMembers = payload.memberIds.filter((id) => !membersAlreadyHolding.has(id));
 
 	// Step 2: fail excess members who have no available copy
-	const failed: Array<{ copyId: string; error: string }> = [];
+	const failed: BulkResult['failed'] = [];
 	for (const memberId of payload.memberIds) {
 		if (membersAlreadyHolding.has(memberId)) {
 			failed.push({ copyId: '', error: `Member ${memberId} already holds a copy of this edition` });
@@ -160,7 +161,8 @@ export async function bulkCheckout(
 		} else {
 			failed.push({
 				copyId: copies[i].id,
-				error: result.reason instanceof Error ? result.reason.message : String(result.reason)
+				error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+				...(isAuthExpiredError(result.reason) ? { expired: true as const } : {})
 			});
 		}
 	});

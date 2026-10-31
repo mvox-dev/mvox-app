@@ -1,6 +1,8 @@
 // The shared route-load machine (#232); routeLoad.spec.ts pins its contract.
 import { createLatest } from '$lib/async/latest';
+import { get } from 'svelte/store';
 import { getToken } from '$lib/auth/storage';
+import { authStore } from '$lib/auth/session';
 import { cfgFor } from '$lib/entu/cfg';
 import { isAuthExpiredError } from '$lib/entu/auth-expired';
 import { reportProblem } from '$lib/problems/reportProblem';
@@ -89,9 +91,12 @@ export function createRouteLoadMachine<TSelected extends { db: string }>(
 
 		const token = getToken();
 		if (!token) {
-			console.error(`${opts.name}: no auth token in storage on a protected route`);
 			opts.onNoToken?.();
 			opts.setStatus('load-error');
+			// An ended session (401 recovery, sign-out) leaves no token by design: not a fault.
+			if (get(authStore).status === 'anonymous') return;
+			const reason = 'no auth token in storage on a protected route';
+			reportProblem({ area: opts.name, action: 'load', reason });
 			return;
 		}
 

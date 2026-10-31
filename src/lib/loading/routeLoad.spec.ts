@@ -21,6 +21,8 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
+import { endSession } from '$lib/auth/session';
+import { keptProblems, useKeptProblems } from '$lib/testing/keptProblems';
 
 type InviteStatus = RouteLoadStatus | 'no-access' | 'creating' | 'done' | 'create-error';
 const _extends: InviteStatus = 'session-expired' satisfies RouteLoadStatus;
@@ -99,6 +101,8 @@ function harness(opts?: {
 	return { machine, statuses, events, loadCalls };
 }
 
+useKeptProblems();
+
 beforeEach(() => {
 	vi.spyOn(console, 'error').mockImplementation(() => {});
 });
@@ -132,7 +136,7 @@ describe('routeLoad — transitions', () => {
 		expect(h.events).toEqual(['reset:switch', 'status:no-collective', 'no-collective-hook']);
 	});
 
-	it('collective selected but no token → exactly [load-error], loud console.error, body never runs; the no-token hook precedes the status write (roster drops currentCfg BEFORE erroring)', async () => {
+	it('collective selected but no token → exactly [load-error], one report, body never runs; the no-token hook precedes the status write (roster drops currentCfg BEFORE erroring)', async () => {
 		setCollectives(SAMPLEDB);
 		const h = harness({ name: 'roster' });
 
@@ -141,9 +145,23 @@ describe('routeLoad — transitions', () => {
 		expect(h.statuses).toEqual(['load-error']);
 		expect(h.loadCalls).toEqual([]);
 		expect(h.events).toEqual(['reset:switch', 'no-token-hook', 'status:load-error']);
-		expect(console.error).toHaveBeenCalledWith(
-			'roster: no auth token in storage on a protected route'
+		await vi.waitFor(async () =>
+			expect(await keptProblems(SAMPLEDB)).toEqual([
+				{ area: 'roster', action: 'load', detail: 'no auth token in storage on a protected route' }
+			])
 		);
+	});
+
+	it('no token because the session has ended (401 recovery, sign-out): load-error, and no report', async () => {
+		setCollectives(SAMPLEDB);
+		endSession({ preserveProvider: true });
+		const h = harness({ name: 'library' });
+
+		await h.machine.loadForSelected();
+		await new Promise((resolve) => setTimeout(resolve, 50));
+
+		expect(h.statuses).toEqual(['load-error']);
+		expect(await keptProblems(SAMPLEDB)).toEqual([]);
 	});
 
 	it("happy path → 'loading' set before the body runs; the body receives the full context shape (cfg, selected, g, isCurrent)", async () => {

@@ -45,6 +45,11 @@ export const LIBRARY_COPY = {
 	library_inline_checkout_placeholder: () => 'Select member',
 	library_inline_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
 	library_inline_checkout_error: () => 'Checkout failed',
+	library_return_error: () => 'Return failed',
+	library_bulk_checkout_error: () => 'Bulk checkout failed',
+	library_bulk_checkout_partial: (p: { failed: number; total: number }) =>
+		`Some checkouts failed: ${p.failed} of ${p.total}.`,
+	library_lendings_refresh_error: () => 'The loan list could not be refreshed. Reload the page.',
 	library_copy_sort_label: () => 'Sort copies by',
 	library_copy_sort_nr: () => 'Nr',
 	library_copy_sort_member: () => 'Member',

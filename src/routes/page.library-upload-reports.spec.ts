@@ -119,6 +119,9 @@ afterEach(() => {
 	resetAppState();
 });
 
+// The background IndexedDB write must have had its chance before "nothing kept" means anything.
+const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+
 async function kept() {
 	const rows = await getProblemLog()!.list(get(selectedCollectiveIdentityStore)!);
 	return rows.map(({ area, action, detail }) => ({ area, action, detail }));
@@ -242,6 +245,7 @@ describe('#1049 a failed library upload sends one report per error shown, with i
 		const container = await attach(['Epitaaf202.pdf']);
 
 		await waitFor(() => expect(container.textContent).toContain('Could not attach files.'));
+		await settle();
 		expect(await kept()).toEqual([]);
 	});
 
@@ -258,6 +262,7 @@ describe('#1049 a failed library upload sends one report per error shown, with i
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="library-edition-file-prop-new-1"]')).not.toBeNull()
 		);
+		await settle();
 		expect(await kept()).toEqual([]);
 	});
 });

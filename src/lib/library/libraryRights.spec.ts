@@ -1,5 +1,5 @@
 // Specs for resolveLibraryEditRight and the librarian store.
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import {
 	libraryEditRight,
@@ -8,6 +8,8 @@ import {
 	resolveMyLibraryId
 } from './libraryRights';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
+import { keptProblems, useKeptProblems } from '$lib/testing/keptProblems';
+import { collectiveState, selectedCollectiveDbStore } from '$lib/collectives/store';
 
 const cfg = testCfg('sampledb', 'test-token');
 const personId = 'person-123';
@@ -150,6 +152,40 @@ describe('resolveLibraryEditRight', () => {
 		});
 		const result = await resolveLibraryEditRight(cfg, personId, fetchImpl);
 		expect(result).toEqual({ state: 'error', libraryId: null });
+	});
+
+	describe('#1049 a rights read answering with no entity', () => {
+		useKeptProblems();
+		afterEach(() => {
+			collectiveState.set({ status: 'loading' });
+			selectedCollectiveDbStore.set(null);
+		});
+
+		it('returns error and keeps one report saying the body had no entity', async () => {
+			collectiveState.set({
+				status: 'ready',
+				collectives: [{ db: 'sampledb', name: 'Sampledb', personId }],
+				erroredDbs: []
+			});
+			selectedCollectiveDbStore.set('sampledb');
+			const fetchImpl = mockFetch({
+				database: databaseBody(DB_ENTITY),
+				libraryByOrg: { entities: [{ _id: 'library-1' }] }
+			});
+
+			const result = await resolveLibraryEditRight(cfg, personId, fetchImpl);
+
+			expect(result).toEqual({ state: 'error', libraryId: null });
+			await vi.waitFor(async () =>
+				expect(await keptProblems()).toEqual([
+					{
+						area: 'library',
+						action: 'reading the librarian rights',
+						detail: 'the rights read answered with no entity'
+					}
+				])
+			);
+		});
 	});
 
 	it('returns error with null libraryId on network exception', async () => {

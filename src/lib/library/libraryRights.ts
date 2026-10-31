@@ -94,7 +94,11 @@ export async function resolveLibraryEditRight(
 			};
 		};
 		const lib = body.entity;
-		if (!lib) return { state: 'error', libraryId: null };
+		if (!lib) {
+			const reason = 'the rights read answered with no entity';
+			reportProblem({ area: 'library', action: 'reading the librarian rights', reason });
+			return { state: 'error', libraryId: null };
+		}
 
 		const isOwner = (lib._owner ?? []).some((p) => p.reference === personId);
 		const isEditor = (lib._editor ?? []).some((p) => p.reference === personId);

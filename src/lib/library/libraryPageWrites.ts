@@ -4,13 +4,20 @@ import { cfgFor, type EntuCfg } from '$lib/entu/cfg';
 import type { Collective } from '$lib/collectives/types';
 import type { RouteLoadMachine } from '$lib/loading/routeLoad';
 import { refreshLibraryLendings, resolveWriteLibraryId } from '$lib/library/libraryPageData';
-import { createLending, returnLending, bulkCheckout } from '$lib/library/lendingActions';
+import {
+	bulkCheckout,
+	createLending,
+	returnLending,
+	type BulkResult
+} from '$lib/library/lendingActions';
+import type { CollectiveIdentity } from '$lib/collectives/store';
 import { createWork, createEdition } from '$lib/entity/entityCreate';
 import { uploadEditionFiles } from '$lib/library/editionFiles';
 import { isActiveLending } from '$lib/library/libraryData';
 import { without } from '$lib/collections/immutable';
 import { localDayKey } from '$lib/preferences/timeFormat';
 import { reportProblem } from '$lib/problems/reportProblem';
+import { problemOwnerNow } from '$lib/problems/problemLog';
 import {
 	applyLendings,
 	applyUploadFailures,
@@ -51,9 +58,10 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 		return libraryId;
 	}
 
-	async function refreshLendings(cfg: EntuCfg): Promise<void> {
+	// Loans read for one collective never land on another's page.
+	async function refreshLendings(cfg: EntuCfg, g: number): Promise<void> {
 		const refreshed = await refreshLibraryLendings(cfg);
-		ctx.setLendingsPartial(applyLendings(lib, refreshed));
+		if (routeLoad.isCurrent(g)) ctx.setLendingsPartial(applyLendings(lib, refreshed));
 	}
 
 	async function submitCreateWork(): Promise<void> {
@@ -63,7 +71,8 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 		ctx.workForm().status = '';
 		const current = ctx.selected();
 		if (!current) {
-			console.error('library: create work with no collective');
+			const reason = 'no collective is selected';
+			reportProblem({ area: 'library', action: 'creating a work', reason });
 			ctx.workForm().error = m.library_create_work_error;
 			return;
 		}
@@ -75,6 +84,8 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 		const composer = ctx.workForm().composer.trim();
 		const cfg = cfgFor(current.db);
 
+		const g = routeLoad.generation;
+		const owner = problemOwnerNow();
 		let newId: string;
 		ctx.workForm().pending = true;
 		try {
@@ -82,13 +93,14 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 			const libraryId = await requireWriteLibraryId(cfg, 'submitCreateWork');
 			newId = await createWork(cfg, { name, composer, libraryEntityId: libraryId });
 		} catch (e) {
-			console.error('library: create work failed', name, e);
-			ctx.workForm().error = m.library_create_work_error;
+			reportProblem({ area: 'library', action: 'creating a work', error: e, owner });
+			if (routeLoad.isCurrent(g)) ctx.workForm().error = m.library_create_work_error;
 			return;
 		} finally {
 			ctx.workForm().pending = false;
 		}
 
+		if (!routeLoad.isCurrent(g)) return;
 		lib.works = [...lib.works, { id: newId, name, composer }];
 		ctx.workForm().status = m.library_create_work_created({ name });
 		closeWorkForm(ctx.workForm());
@@ -101,7 +113,8 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 		ctx.editionDrafts().statuses = new Map(ctx.editionDrafts().statuses).set(workId, '');
 		const current = ctx.selected();
 		if (!current) {
-			console.error('library: create edition with no collective', { workId });
+			const reason = 'no collective is selected';
+			reportProblem({ area: 'library', action: 'creating an edition', reason });
 			setEditionDraftError(ctx.editionDrafts(), workId, m.library_create_edition_error);
 			return;
 		}
@@ -115,14 +128,17 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 
 		// A collective switch during the create must not insert into the new collective's tree.
 		const g = routeLoad.generation;
+		const owner = problemOwnerNow();
 
 		let newId: string;
 		setEditionDraftPending(ctx.editionDrafts(), workId, true);
 		try {
 			newId = await createEdition(cfg, { name, publisher, workId });
 		} catch (e) {
-			console.error('library: create edition failed', workId, name, e);
-			setEditionDraftError(ctx.editionDrafts(), workId, m.library_create_edition_error);
+			reportProblem({ area: 'library', action: 'creating an edition', error: e, owner });
+			if (routeLoad.isCurrent(g)) {
+				setEditionDraftError(ctx.editionDrafts(), workId, m.library_create_edition_error);
+			}
 			return;
 		} finally {
 			setEditionDraftPending(ctx.editionDrafts(), workId, false);
@@ -205,6 +221,8 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 		const current = ctx.selected();
 		if (!current) return;
 		const cfg = cfgFor(current.db);
+		const g = routeLoad.generation;
+		const owner = problemOwnerNow();
 		try {
 			const libraryId = await requireWriteLibraryId(cfg, 'handleInlineCheckout');
 			await createLending(cfg, libraryId, {
@@ -212,13 +230,34 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 				memberId,
 				assignedAt: localDayKey(new Date())
 			});
-			// Stores without serving: the live answer or a rejection, never pre-write availability.
-			await refreshLendings(cfg);
 		} catch (e) {
-			console.error('library: inline checkout failed', copyId, e);
-			const errNext = new Map(lib.inlineCheckoutErrors);
-			errNext.set(copyId, e instanceof Error ? e.message : m.library_inline_checkout_error());
-			lib.inlineCheckoutErrors = errNext;
+			reportProblem({ area: 'library', action: 'checking out a copy', error: e, owner });
+			if (routeLoad.isCurrent(g)) setInlineCheckoutError(copyId, m.library_inline_checkout_error());
+			return;
+		}
+		// Stores without serving: the live answer or a rejection, never pre-write availability.
+		if (!(await refreshAfterWrite(cfg, owner, g)) && routeLoad.isCurrent(g)) {
+			setInlineCheckoutError(copyId, m.library_lendings_refresh_error());
+		}
+	}
+
+	function setInlineCheckoutError(copyId: string, message: string): void {
+		lib.inlineCheckoutErrors = new Map(lib.inlineCheckoutErrors).set(copyId, message);
+	}
+
+	// The write landed: a failed re-read must not read as a failed write, or a retry lends twice.
+	async function refreshAfterWrite(
+		cfg: EntuCfg,
+		owner: CollectiveIdentity | null,
+		g: number
+	): Promise<boolean> {
+		if (!routeLoad.isCurrent(g)) return true;
+		try {
+			await refreshLendings(cfg, g);
+			return true;
+		} catch (e) {
+			reportProblem({ area: 'library', action: 'refreshing the loans', error: e, owner });
+			return false;
 		}
 	}
 
@@ -228,13 +267,31 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 		const current = ctx.selected();
 		if (!current) return;
 		const cfg = cfgFor(current.db);
+		const g = routeLoad.generation;
+		const owner = problemOwnerNow();
 		try {
 			await returnLending(cfg, lendingId);
-			await refreshLendings(cfg);
 		} catch (e) {
-			console.error('library: return failed', e);
-			ctx.setReturnError(e instanceof Error ? e.message : 'Return failed');
+			reportProblem({ area: 'library', action: 'returning a copy', error: e, owner });
+			if (routeLoad.isCurrent(g)) ctx.setReturnError(m.library_return_error());
+			return;
 		}
+		if (!(await refreshAfterWrite(cfg, owner, g)) && routeLoad.isCurrent(g)) {
+			ctx.setReturnError(m.library_lendings_refresh_error());
+		}
+	}
+
+	function reportBulkFailures(
+		failed: BulkResult['failed'],
+		total: number,
+		owner: CollectiveIdentity | null
+	): void {
+		const reasons = failed
+			.filter((f) => !f.expired)
+			.map((f) => (f.copyId ? `${f.copyId}: ${f.error}` : f.error));
+		if (reasons.length === 0) return;
+		const reason = `${failed.length} of ${total} checkouts failed: ${reasons.join('; ')}`;
+		reportProblem({ area: 'library', action: 'checking out copies', reason, owner });
 	}
 
 	async function handleBulkCheckout(): Promise<void> {
@@ -245,23 +302,39 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 		if (!ctx.bulk().editionId || ctx.bulk().members.size === 0) return;
 		const cfg = cfgFor(current.db);
 		const activeLendings = lib.lendings.filter(isActiveLending);
+		const memberIds = [...ctx.bulk().members];
+		const g = routeLoad.generation;
+		const owner = problemOwnerNow();
+		let result: BulkResult;
 		try {
 			const libraryId = await requireWriteLibraryId(cfg, 'handleBulkCheckout');
-			const result = await bulkCheckout(cfg, libraryId, {
+			result = await bulkCheckout(cfg, libraryId, {
 				editionId: ctx.bulk().editionId,
-				memberIds: [...ctx.bulk().members],
+				memberIds,
 				assignedAt: localDayKey(new Date()),
 				...(ctx.bulk().dueDate ? { assignedUntil: ctx.bulk().dueDate } : {})
 			}, activeLendings);
-			if (result.failed.length > 0) {
-				ctx.bulk().error = `${result.failed.length} checkout(s) failed`;
-			}
-			await refreshLendings(cfg);
+		} catch (e) {
+			reportProblem({ area: 'library', action: 'checking out copies', error: e, owner });
+			if (routeLoad.isCurrent(g)) ctx.bulk().error = m.library_bulk_checkout_error();
+			return;
+		}
+		let partial = '';
+		if (result.failed.length > 0) {
+			const counts = { failed: result.failed.length, total: memberIds.length };
+			partial = m.library_bulk_checkout_partial(counts);
+			reportBulkFailures(result.failed, memberIds.length, owner);
+		}
+		if (!routeLoad.isCurrent(g)) return;
+		ctx.bulk().error = partial;
+		const refreshed = await refreshAfterWrite(cfg, owner, g);
+		if (!routeLoad.isCurrent(g)) return;
+		// A failed re-read is its own fact, said after any partial one.
+		if (refreshed) {
 			ctx.bulk().members = new Set();
 			ctx.bulk().dueDate = '';
-		} catch (e) {
-			console.error('library: bulk checkout failed', e);
-			ctx.bulk().error = e instanceof Error ? e.message : 'Bulk checkout failed';
+		} else {
+			ctx.bulk().error = [partial, m.library_lendings_refresh_error()].filter(Boolean).join(' ');
 		}
 	}
 
