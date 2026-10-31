@@ -11,7 +11,8 @@ const ctx = (): Ctx => ({
 	dbs,
 	team: 'mvox',
 	log: () => {},
-	resize: async (png) => png
+	resize: async (png) => png,
+	compose: async (png) => png
 });
 const rpc = (method: string, params?: unknown, id: number | string = 1) => ({
 	jsonrpc: '2.0' as const,

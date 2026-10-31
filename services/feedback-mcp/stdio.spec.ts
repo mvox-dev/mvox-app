@@ -11,7 +11,8 @@ const ctx = (log: (line: string) => void = () => {}): Ctx => ({
 	dbs,
 	team: 'mvox',
 	log,
-	resize: async (png) => png
+	resize: async (png) => png,
+	compose: async (png) => png
 });
 const call = (id: number) =>
 	JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'list_feedback' } });
