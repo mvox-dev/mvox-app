@@ -202,7 +202,7 @@ describe('#275 — step-1 parsing is grounded on the LIVE envelope, and an unrea
 
 		expect(result).toEqual({
 			uploaded: [],
-			failed: [{ propertyId: null, filename: 'a.pdf', cleanup: 'not-created' }]
+			failed: [{ propertyId: null, filename: 'a.pdf', cleanup: 'not-created', reason: 'step 1 answered with no properties list' }]
 		});
 		expect(callsOf(impl, 'PUT')).toHaveLength(0);
 		expect(callsOf(impl, 'DELETE')).toHaveLength(0);
@@ -222,8 +222,8 @@ describe('#275 — step-1 parsing is grounded on the LIVE envelope, and an unrea
 		expect(result).toEqual({
 			uploaded: [],
 			failed: [
-				{ propertyId: null, filename: 'a.pdf', cleanup: 'not-created' },
-				{ propertyId: null, filename: 'b.mp3', cleanup: 'not-created' }
+				{ propertyId: null, filename: 'a.pdf', cleanup: 'not-created', reason: 'step 1 answered with no properties list' },
+				{ propertyId: null, filename: 'b.mp3', cleanup: 'not-created', reason: 'step 1 answered with no properties list' }
 			]
 		});
 		expect(callsOf(impl, 'PUT')).toHaveLength(0);
@@ -292,7 +292,7 @@ describe('#275 — step-1 parsing is grounded on the LIVE envelope, and an unrea
 
 		expect(result).toEqual({
 			uploaded: [],
-			failed: [{ propertyId: 'prop-1', filename: 'a.pdf', cleanup: 'deleted' }]
+			failed: [{ propertyId: 'prop-1', filename: 'a.pdf', cleanup: 'deleted', reason: 'step 1 gave no upload url' }]
 		});
 		expect(callsOf(impl, 'PUT')).toHaveLength(0);
 		const dels = callsOf(impl, 'DELETE');
@@ -397,7 +397,7 @@ describe('#275 — a failed PUT deletes its phantom property (DELETE /property/{
 				{ propertyId: 'prop-1', filename: 'a.pdf', filesize: 3, filetype: 'application/pdf' },
 				{ propertyId: 'prop-3', filename: 'c.pdf', filesize: 7, filetype: 'application/pdf' }
 			],
-			failed: [{ propertyId: 'prop-2', filename: 'b.mp3', cleanup: 'deleted' }]
+			failed: [{ propertyId: 'prop-2', filename: 'b.mp3', cleanup: 'deleted', reason: 'the PUT answered HTTP 403' }]
 		});
 
 		const dels = callsOf(impl, 'DELETE');
@@ -426,7 +426,7 @@ describe('#275 — a failed PUT deletes its phantom property (DELETE /property/{
 
 		expect(result).toEqual({
 			uploaded: [],
-			failed: [{ propertyId: 'prop-1', filename: 'a.pdf', cleanup: 'deleted' }]
+			failed: [{ propertyId: 'prop-1', filename: 'a.pdf', cleanup: 'deleted', reason: 'the PUT threw Error: network down' }]
 		});
 		expect(callsOf(impl, 'DELETE')).toHaveLength(1);
 	});
@@ -452,7 +452,7 @@ describe('#275 — a failed PUT deletes its phantom property (DELETE /property/{
 
 		expect(result).toEqual({
 			uploaded: [],
-			failed: [{ propertyId: 'prop-1', filename: 'a.pdf', cleanup: 'delete-failed' }]
+			failed: [{ propertyId: 'prop-1', filename: 'a.pdf', cleanup: 'delete-failed', reason: 'the PUT answered HTTP 500; the cleanup DELETE answered HTTP 500' }]
 		});
 	});
 
@@ -477,8 +477,34 @@ describe('#275 — a failed PUT deletes its phantom property (DELETE /property/{
 
 		expect(result).toEqual({
 			uploaded: [],
-			failed: [{ propertyId: 'prop-1', filename: 'a.pdf', cleanup: 'delete-failed' }]
+			failed: [{ propertyId: 'prop-1', filename: 'a.pdf', cleanup: 'delete-failed', reason: 'the PUT answered HTTP 500; the cleanup DELETE threw Error: network down' }]
 		});
+	});
+});
+
+describe('#1049 — an expired session during the cleanup is named plainly in the reason', () => {
+	it('a cleanup DELETE answered 401 is "delete-failed", and the reason says the session expired', async () => {
+		const upA = uploadFor('a.pdf', 3, 'application/pdf', 1);
+		const impl = makeFetchImpl({
+			post: json(
+				step1Response([
+					{ id: 'prop-1', name: 'a.pdf', size: 3, type: 'application/pdf', upload: upA }
+				])
+			),
+			put: { [upA.url]: new Response('', { status: 500 }) },
+			del: { 'prop-1': json({}, 401) }
+		});
+
+		const result = await uploadEditionFiles(cfg, 'edition-1', [makeFile('a.pdf', 3, 'application/pdf')], impl);
+
+		expect(result.failed).toEqual([
+			{
+				propertyId: 'prop-1',
+				filename: 'a.pdf',
+				cleanup: 'delete-failed',
+				reason: 'the PUT answered HTTP 500; the cleanup DELETE could not run: the session expired'
+			}
+		]);
 	});
 });
 
@@ -504,7 +530,7 @@ describe('#275 — returned entries are reconciled with the local files, and eve
 			uploaded: [
 				{ propertyId: 'prop-1', filename: 'a.pdf', filesize: 3, filetype: 'application/pdf' }
 			],
-			failed: [{ propertyId: null, filename: 'b.mp3', cleanup: 'not-created' }]
+			failed: [{ propertyId: null, filename: 'b.mp3', cleanup: 'not-created', reason: 'step 1 returned no property for this file' }]
 		});
 		expect(callsOf(impl, 'PUT')).toHaveLength(1);
 		expect(callsOf(impl, 'DELETE')).toHaveLength(0);
@@ -533,7 +559,7 @@ describe('#275 — returned entries are reconciled with the local files, and eve
 			uploaded: [
 				{ propertyId: 'prop-1', filename: 'a.pdf', filesize: 3, filetype: 'application/pdf' }
 			],
-			failed: [{ propertyId: 'prop-ghost', filename: 'ghost.pdf', cleanup: 'deleted' }]
+			failed: [{ propertyId: 'prop-ghost', filename: 'ghost.pdf', cleanup: 'deleted', reason: 'step 1 returned a property for no chosen file' }]
 		});
 		const puts = callsOf(impl, 'PUT');
 		expect(puts).toHaveLength(1);

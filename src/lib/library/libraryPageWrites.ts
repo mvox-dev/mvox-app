@@ -10,6 +10,7 @@ import { uploadEditionFiles } from '$lib/library/editionFiles';
 import { isActiveLending } from '$lib/library/libraryData';
 import { without } from '$lib/collections/immutable';
 import { localDayKey } from '$lib/preferences/timeFormat';
+import { reportProblem } from '$lib/problems/reportProblem';
 import {
 	applyLendings,
 	applyUploadFailures,
@@ -147,7 +148,8 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 		const files = Array.from(fileList);
 		const current = ctx.selected();
 		if (!current) {
-			console.error('library: attach files with no collective', { editionId });
+			const reason = 'no collective is selected';
+			reportProblem({ area: 'library', action: 'attaching files', reason });
 			markUploadBatchError(fileUploads, editionId);
 			return;
 		}
@@ -161,8 +163,10 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 		try {
 			result = await uploadEditionFiles(cfg, editionId, files);
 		} catch (e) {
-			console.error('library: attach files failed', editionId, e);
-			if (routeLoad.isCurrent(g)) markUploadBatchError(fileUploads, editionId);
+			if (routeLoad.isCurrent(g)) {
+				reportProblem({ area: 'library', action: 'attaching files', error: e });
+				markUploadBatchError(fileUploads, editionId);
+			} else console.error('library: attach files failed', editionId, e);
 			return;
 		} finally {
 			endUpload(fileUploads, editionId);
@@ -186,6 +190,9 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 					filenames: result.uploaded.map((u) => u.filename).join(', ')
 				})
 			);
+		}
+		for (const { reason } of result.failed) {
+			reportProblem({ area: 'library', action: 'attaching a file', reason });
 		}
 		applyUploadFailures(fileUploads, editionId, result.failed);
 	}

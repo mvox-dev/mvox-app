@@ -31,12 +31,15 @@ const STORE = 'people';
 const EMAIL = /[^\s"'<>(),;:]+@[^\s"'<>(),;:]+\.[^\s"'<>(),;:]+/g;
 const REFERENCE_STRING = /"string"\s*:\s*"(?:[^"\\]|\\.)*"/g;
 
-// Only an Error's name and message are kept, with every reference .string and email cut (ER-26).
+// Every reference .string and email is cut from what is kept (ER-26).
+export function redactText(text: string): string {
+	return text.replace(REFERENCE_STRING, '"string":"[redacted]"').replace(EMAIL, '[email]');
+}
+
+/** Only an Error's name and message are kept. */
 export function redactError(error: unknown): string {
 	if (!(error instanceof Error)) return `not an Error (${typeof error})`;
-	return `${error.name}: ${error.message}`
-		.replace(REFERENCE_STRING, '"string":"[redacted]"')
-		.replace(EMAIL, '[email]');
+	return redactText(`${error.name}: ${error.message}`);
 }
 
 export function createProblemLog(factory?: IDBFactory): ProblemLog {
@@ -112,12 +115,12 @@ export function setProblemKept(listener: typeof kept): void {
 }
 
 /** False when nothing was kept: no one is selected, or there is no log on this device. */
-export function keepProblem(area: string, action: string, error: unknown): boolean {
+export function keepProblem(area: string, action: string, detail: string): boolean {
 	const identity = owner && get(owner);
 	const log = getProblemLog();
 	if (!identity || !log) return false;
 	void log
-		.add(identity, { area, action, detail: redactError(error) })
+		.add(identity, { area, action, detail })
 		.then(() => kept?.())
 		.catch((e) => console.error('keeping a failure for feedback failed', e));
 	return true;

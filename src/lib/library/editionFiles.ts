@@ -1,7 +1,12 @@
 // Attaches files to an edition: one append POST creates every file property, then one S3 PUT each.
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/entu/cfg';
-import { deletePhantomProperty, putUploadBytes, type UploadObject } from '$lib/files/entuUpload';
+import {
+	deletePhantomProperty,
+	putUploadBytes,
+	thrownText,
+	type UploadObject
+} from '$lib/files/entuUpload';
 
 // No url: download urls live 60 seconds and are signed at click time by signFileUrl.
 export interface UploadedEditionFile {
@@ -13,9 +18,10 @@ export interface UploadedEditionFile {
 
 // 'delete-failed': a broken attachment may remain server-side and the UI must say so.
 // 'not-created': step 1 returned no property for this file, so there is no id to delete.
-export type FailedEditionFile =
-	| { propertyId: string; filename: string; cleanup: 'deleted' | 'delete-failed' }
-	| { propertyId: null; filename: string; cleanup: 'not-created' };
+export type FailedEditionFile = { filename: string; reason: string } & (
+	| { propertyId: string; cleanup: 'deleted' | 'delete-failed' }
+	| { propertyId: null; cleanup: 'not-created' }
+);
 
 export interface UploadEditionFilesResult {
 	uploaded: UploadedEditionFile[];
@@ -42,6 +48,21 @@ function isFileEntry(value: unknown): value is StepOnePropertyEntry {
 	if (typeof value !== 'object' || value === null) return false;
 	const entry = value as Partial<StepOnePropertyEntry>;
 	return entry.type === 'file' && typeof entry._id === 'string';
+}
+
+// Null once the bytes landed, else why they did not.
+async function putBytes(
+	upload: UploadObject | undefined,
+	file: File,
+	fetchImpl: typeof fetch
+): Promise<string | null> {
+	if (!upload || typeof upload.url !== 'string') return 'step 1 gave no upload url';
+	try {
+		const res = await putUploadBytes(upload, file, fetchImpl);
+		return res.ok ? null : `the PUT answered HTTP ${res.status}`;
+	} catch (e) {
+		return `the PUT threw ${thrownText(e)}`;
+	}
 }
 
 // Only a failed step-1 POST throws. After that every failure is reported per file, and a
@@ -86,7 +107,8 @@ export async function uploadEditionFiles(
 			failed: files.map((f) => ({
 				propertyId: null,
 				filename: f.name,
-				cleanup: 'not-created' as const
+				cleanup: 'not-created' as const,
+				reason: 'step 1 answered with no properties list'
 			}))
 		};
 	}
@@ -110,43 +132,38 @@ export async function uploadEditionFiles(
 		const entry = entries[i];
 		const file = claimFileFor(entry, i);
 
-		const upload = entry.upload;
-		let putOk: boolean;
-		if (file === null || !upload || typeof upload.url !== 'string') {
-			putOk = false;
-		} else {
-			try {
-				const putRes = await putUploadBytes(upload, file, fetchImpl);
-				putOk = putRes.ok;
-			} catch {
-				putOk = false;
+		let failure = 'step 1 returned a property for no chosen file';
+		if (file !== null) {
+			const putFailure = await putBytes(entry.upload, file, fetchImpl);
+			if (putFailure === null) {
+				uploaded.push({
+					propertyId: entry._id,
+					filename: file.name,
+					filesize: file.size,
+					filetype: entry.filetype ?? file.type
+				});
+				continue;
 			}
+			failure = putFailure;
 		}
 
-		if (putOk && file !== null) {
-			uploaded.push({
-				propertyId: entry._id,
-				filename: file.name,
-				filesize: file.size,
-				filetype: entry.filetype ?? file.type
-			});
-			continue;
-		}
-
-		const cleanup: FailedEditionFile['cleanup'] = (await deletePhantomProperty(cfg, entry._id, fetchImpl))
-			? 'deleted'
-			: 'delete-failed';
-
+		const cleanupFailure = await deletePhantomProperty(cfg, entry._id, fetchImpl);
 		failed.push({
 			propertyId: entry._id,
 			filename: file?.name ?? entry.filename ?? entry._id,
-			cleanup
+			cleanup: cleanupFailure === null ? 'deleted' : 'delete-failed',
+			reason: cleanupFailure === null ? failure : `${failure}; ${cleanupFailure}`
 		});
 	}
 
 	for (const leftover of pool) {
 		if (leftover.taken) continue;
-		failed.push({ propertyId: null, filename: leftover.file.name, cleanup: 'not-created' });
+		failed.push({
+			propertyId: null,
+			filename: leftover.file.name,
+			cleanup: 'not-created',
+			reason: 'step 1 returned no property for this file'
+		});
 	}
 
 	return { uploaded, failed };
@@ -154,4 +171,4 @@ export async function uploadEditionFiles(
 
 export { formatFileSize } from '$lib/files/fileSize';
 
-// (*MVOX:Tallis*) (*MVOX:Palestrina*)
+// (*MVOX:Tallis*) (*MVOX:Palestrina*) (*MVOX:Josquin*)

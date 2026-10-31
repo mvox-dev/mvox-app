@@ -1,4 +1,5 @@
 // Shared Entu two-step-upload pieces (see editionFiles.ts for the full wire contract).
+import { isAuthExpiredError } from '$lib/entu/auth-expired';
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/entu/cfg';
 
@@ -21,18 +22,23 @@ export function putUploadBytes(
 	});
 }
 
-// Never throws: a cleanup failure must not mask the caller's real error.
+export function thrownText(e: unknown): string {
+	return e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+}
+
+// Never throws: a cleanup failure must not mask the caller's real error. Null once it is gone.
 export async function deletePhantomProperty(
 	cfg: EntuCfg,
 	propertyId: string,
 	fetchImpl: typeof fetch
-): Promise<boolean> {
+): Promise<string | null> {
 	try {
 		const res = await entuFetch(cfg.db, `property/${propertyId}`, cfg.token, { method: 'DELETE' }, fetchImpl);
-		return res.ok;
-	} catch {
-		return false;
+		return res.ok ? null : `the cleanup DELETE answered HTTP ${res.status}`;
+	} catch (e) {
+		if (isAuthExpiredError(e)) return 'the cleanup DELETE could not run: the session expired';
+		return `the cleanup DELETE threw ${thrownText(e)}`;
 	}
 }
 
-// (*MVOX:Palestrina*)
+// (*MVOX:Palestrina*) (*MVOX:Josquin*)

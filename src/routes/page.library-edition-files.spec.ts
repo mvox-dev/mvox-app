@@ -657,7 +657,7 @@ describe('#275 — a failed file is reported by NAME and never renders as an att
 				{ propertyId: 'prop-new-1', filename: 'new-a.pdf', filesize: 2048, filetype: 'application/pdf' },
 				{ propertyId: 'prop-new-3', filename: 'new-c.pdf', filesize: 2048, filetype: 'application/pdf' }
 			],
-			failed: [{ propertyId: 'prop-new-2', filename: 'new-b.pdf', cleanup: 'deleted' }]
+			failed: [{ propertyId: 'prop-new-2', filename: 'new-b.pdf', cleanup: 'deleted', reason: 'the PUT answered HTTP 403' }]
 		});
 
 		const container = await renderWithEditionOpen('edition-2');
@@ -709,7 +709,7 @@ describe('#275 — a failed file is reported by NAME and never renders as an att
 			uploaded: [
 				{ propertyId: 'prop-new-1', filename: 'new-a.pdf', filesize: 2048, filetype: 'application/pdf' }
 			],
-			failed: [{ propertyId: null, filename: 'new-b.pdf', cleanup: 'not-created' }]
+			failed: [{ propertyId: null, filename: 'new-b.pdf', cleanup: 'not-created', reason: 'step 1 returned no property for this file' }]
 		});
 
 		const container = await renderWithEditionOpen('edition-2');
@@ -747,7 +747,7 @@ describe('#275 — a failed file is reported by NAME and never renders as an att
 		mockLibrarian();
 		uploadEditionFilesMock.mockResolvedValue({
 			uploaded: [],
-			failed: [{ propertyId: 'prop-new-1', filename: 'new-a.pdf', cleanup: 'delete-failed' }]
+			failed: [{ propertyId: 'prop-new-1', filename: 'new-a.pdf', cleanup: 'delete-failed', reason: 'the PUT answered HTTP 403; the cleanup DELETE answered HTTP 500' }]
 		});
 
 		const container = await renderWithEditionOpen('edition-2');
@@ -861,7 +861,7 @@ describe('#275 — success-apply AND failure-apply are generation-guarded', () =
 			uploaded: [
 				{ propertyId: 'prop-new-1', filename: 'new-a.pdf', filesize: 2048, filetype: 'application/pdf' }
 			],
-			failed: [{ propertyId: 'prop-new-2', filename: 'new-b.pdf', cleanup: 'deleted' }]
+			failed: [{ propertyId: 'prop-new-2', filename: 'new-b.pdf', cleanup: 'deleted', reason: 'the PUT answered HTTP 403' }]
 		});
 		await new Promise((r) => setTimeout(r, 0));
 

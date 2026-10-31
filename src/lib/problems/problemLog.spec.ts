@@ -82,6 +82,23 @@ describe('#684 reportProblem keeps each failure for feedback', () => {
 		await vi.waitFor(async () => expect((await listP()).map((p) => p.detail)).toEqual(['not an Error (object)']));
 	});
 
+	it('a failure with no Error keeps its reason as the detail, with names and emails cut (#1049)', async () => {
+		signIn({ collectives: [P] });
+		const reason = 'the PUT answered HTTP 403 {"string":"Mari Maasikas"} for kati@example.ee';
+
+		reportProblem({ area: 'library', action: 'attaching a file', reason });
+
+		await vi.waitFor(async () =>
+			expect((await listP()).map(({ area, action, detail }) => ({ area, action, detail }))).toEqual([
+				{
+					area: 'library',
+					action: 'attaching a file',
+					detail: 'the PUT answered HTTP 403 {"string":"[redacted]"} for [email]'
+				}
+			])
+		);
+	});
+
 	it('two failures reported at once are both kept', async () => {
 		signIn({ collectives: [P] });
 

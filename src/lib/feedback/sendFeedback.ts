@@ -31,9 +31,12 @@ interface SendDeps {
 
 export const FIRST_RETRY_MS = 15_000;
 const MAX_RETRY_MS = 5 * 60_000;
+// A send Entu answers but refuses is tried this often on the backoff, then waits on the device.
+export const SEND_ATTEMPTS = 5;
 
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let retryMs = FIRST_RETRY_MS;
+const refusedTries = new Map<string, number>();
 
 // The online flag can stay true with no uplink, so a send that got no answer retries on a backoff.
 function retryLater(deps: SendDeps): void {
@@ -50,6 +53,7 @@ export function cancelSavedFeedbackRetry(): void {
 	if (retryTimer) clearTimeout(retryTimer);
 	retryTimer = null;
 	retryMs = FIRST_RETRY_MS;
+	refusedTries.clear();
 }
 
 function liveToken(): string | null {
@@ -144,8 +148,12 @@ export async function sendSavedFeedback({
 					if (isAuthExpiredError(e)) return;
 					if (e instanceof TypeError) return retryLater({ fetchImpl, store });
 					console.error('a saved feedback could not be sent; it stays on the device', e);
+					const tries = (refusedTries.get(item.id) ?? 0) + 1;
+					refusedTries.set(item.id, tries);
+					if (tries < SEND_ATTEMPTS) retryLater({ fetchImpl, store });
 					continue;
 				}
+				refusedTries.delete(item.id);
 				await store.delete({ ...identity, id: item.id });
 			}
 		}

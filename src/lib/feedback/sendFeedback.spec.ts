@@ -25,9 +25,10 @@ import {
 	feedbackEntu,
 	prop
 } from '$lib/testing/feedbackEntu';
-import { createSavedFeedbackStore, type SavedFeedbackStore } from './savedFeedback';
+import { SEND_LOCK, createSavedFeedbackStore, type SavedFeedbackStore } from './savedFeedback';
 import {
 	FIRST_RETRY_MS,
+	SEND_ATTEMPTS,
 	cancelSavedFeedbackRetry,
 	sendFeedback,
 	sendSavedFeedback
@@ -250,6 +251,59 @@ describe('#611 a send cut off part-way', () => {
 		await vi.waitFor(async () => expect(await store.list({ db: 'sampledb', personId: 'person-p' })).toEqual([]));
 		expect([...entu.state.shot]).toEqual(['fb-1']);
 		expect(navigator.onLine).toBe(true);
+	});
+});
+
+describe('#1046 a saved send Entu refuses is retried on the backoff, then waits on the device', () => {
+	const refused = () => json({ error: 'boom' }, 500);
+	const kept = () => store.list({ db: 'sampledb', personId: 'person-p' });
+	const tries = (entu: ReturnType<typeof feedbackEntu>) => createBodies(entu.fetchImpl).length;
+	// A run holds the send lock to its end, so taking it after a run means that run is over.
+	const runOver = () => navigator.locks.request(SEND_LOCK, async () => {});
+
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it('a refused send is tried again with no new signal, and the try that lands clears it', async () => {
+		signInP();
+		let refuse = true;
+		const entu = feedbackEntu({ create: () => (refuse ? refused() : undefined) });
+		await saveOffline(entu);
+
+		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, store });
+		expect(await kept()).toHaveLength(1);
+		refuse = false;
+		await vi.advanceTimersByTimeAsync(FIRST_RETRY_MS);
+		await runOver();
+
+		expect(await kept()).toEqual([]);
+		expect(tries(entu)).toBe(2);
+		expect([...entu.state.live]).toEqual(['fb-1']);
+	});
+
+	it(`after ${SEND_ATTEMPTS} refused tries it stops retrying and the feedback stays saved`, async () => {
+		signInP(24 * 60 * 60_000);
+		const entu = feedbackEntu({ create: refused });
+		await saveOffline(entu);
+
+		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, store });
+		for (let n = 2; n <= SEND_ATTEMPTS; n++) {
+			await vi.advanceTimersByTimeAsync(FIRST_RETRY_MS * 2 ** (n - 2));
+			await runOver();
+			expect(tries(entu)).toBe(n);
+		}
+		await vi.advanceTimersByTimeAsync(60 * 60_000);
+		await runOver();
+
+		expect(tries(entu)).toBe(SEND_ATTEMPTS);
+		expect(vi.getTimerCount()).toBe(0);
+		expect((await kept()).map((f) => f.description)).toEqual(['typed']);
 	});
 });
 

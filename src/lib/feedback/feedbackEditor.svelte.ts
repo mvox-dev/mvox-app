@@ -54,6 +54,7 @@ export function createFeedbackEditor() {
 			shot = { ...taken, url: URL.createObjectURL(taken.blob), pagePath };
 			notice = null;
 		} catch (e) {
+			// Not reported (#1049, PO): the editor's own errors would loop into the feedback it sends.
 			console.error('feedback screenshot failed', e);
 			shot = null;
 			notice = 'capture-failed';
@@ -129,6 +130,7 @@ export function createFeedbackEditor() {
 			await copyInked(stage, shot.width * window.devicePixelRatio);
 			notice = 'copied';
 		} catch (e) {
+			// Not reported (#1049, PO): the editor's own errors would loop into the feedback it sends.
 			console.error('feedback copy failed', e);
 			notice = e instanceof ClipboardImageUnsupported ? 'copy-unsupported' : 'copy-failed';
 		}
@@ -159,6 +161,7 @@ export function createFeedbackEditor() {
 			savedForLater = outcome === 'saved';
 			close();
 		} catch (e) {
+			// Not reported (#1049, PO): the editor's own errors would loop into the feedback it sends.
 			console.error('feedback send failed', e);
 			notice = 'send-failed';
 		}
