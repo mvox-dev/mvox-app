@@ -1,5 +1,105 @@
 [
   {
+    "number": 1049,
+    "title": "Every error the app shows a user sends a problem report",
+    "state": "open",
+    "stateReason": null,
+    "labels": [
+      {
+        "name": "prepped",
+        "color": "c5def5"
+      },
+      {
+        "name": "ready",
+        "color": "0e8a16"
+      },
+      {
+        "name": "task",
+        "color": "1d76db"
+      }
+    ],
+    "body": "### Slugline\n\nIga kasutajale näidatud viga saadab probleemiteate\n\n### Lead\n\nKui rakendus näitab kasutajale viga, saab meeskond sellest probleemiteate koos veaga. Kasutaja näeb sama teadet nagu praegu.",
+    "closedAt": null,
+    "updatedAt": "2026-10-31T14:47:40Z",
+    "htmlUrl": "http://forge/mvox/mvox-app/issues/1049",
+    "subIssues": [],
+    "issueType": null,
+    "researchMs": null
+  },
+  {
+    "number": 1048,
+    "title": "The profile page shows the running build",
+    "state": "open",
+    "stateReason": null,
+    "labels": [
+      {
+        "name": "prepped",
+        "color": "c5def5"
+      },
+      {
+        "name": "ready",
+        "color": "0e8a16"
+      },
+      {
+        "name": "task",
+        "color": "1d76db"
+      }
+    ],
+    "body": "### Slugline\n\nProfiilileht näitab rakenduse versiooni\n\n### Lead\n\nProfiililehel on näha, milline rakenduse versioon seadmes töötab.",
+    "closedAt": null,
+    "updatedAt": "2026-10-31T14:36:15Z",
+    "htmlUrl": "http://forge/mvox/mvox-app/issues/1048",
+    "subIssues": [],
+    "issueType": null,
+    "researchMs": null
+  },
+  {
+    "number": 1047,
+    "title": "A part PDF stored on the device opens on Android 8.1 (LineageOS 15.1)",
+    "state": "open",
+    "stateReason": null,
+    "labels": [
+      {
+        "name": "bug",
+        "color": "d73a4a"
+      },
+      {
+        "name": "ready",
+        "color": "0e8a16"
+      }
+    ],
+    "body": "### Slugline\n\nPartii PDF avaneb Androidi tahvlis\n\n### Lead\n\nSeadmesse salvestatud partii avaneb Androidi tahvli paigaldatud rakenduses.",
+    "closedAt": null,
+    "updatedAt": "2026-10-31T14:31:54Z",
+    "htmlUrl": "http://forge/mvox/mvox-app/issues/1047",
+    "subIssues": [],
+    "issueType": null,
+    "researchMs": null
+  },
+  {
+    "number": 1046,
+    "title": "PDF-open failures reach Entu as problem reports",
+    "state": "open",
+    "stateReason": null,
+    "labels": [
+      {
+        "name": "bug",
+        "color": "d73a4a"
+      },
+      {
+        "name": "ready",
+        "color": "0e8a16"
+      }
+    ],
+    "body": "### Slugline\n\nPartii avamise viga jõuab probleemiteatena kohale\n\n### Lead\n\nKui partii PDF ei avane, saab meeskond sellest probleemiteate. Kui saatmine ebaõnnestub, proovitakse uuesti.",
+    "closedAt": null,
+    "updatedAt": "2026-10-31T14:34:38Z",
+    "htmlUrl": "http://forge/mvox/mvox-app/issues/1046",
+    "subIssues": [],
+    "issueType": null,
+    "researchMs": null
+  },
+  {
     "number": 1044,
     "title": "Season start-date inline save test fails on main",
     "state": "open",
@@ -20,7 +120,7 @@
     ],
     "body": null,
     "closedAt": null,
-    "updatedAt": "2026-10-31T08:05:42Z",
+    "updatedAt": "2026-10-31T14:47:33Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1044",
     "subIssues": [],
     "issueType": null,
@@ -43,7 +143,7 @@
     ],
     "body": "### Slugline\n\nTagasiside ekraanipilt tuleb koos laulja joonistusega\n\n### Lead\n\nTagasiside serverist teate lugeja näeb ekraanipilti koos laulja joonistusega ühel pildil. Rakendus ei muutu.",
     "closedAt": null,
-    "updatedAt": "2026-10-31T08:09:47Z",
+    "updatedAt": "2026-10-31T14:50:30Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1043",
     "subIssues": [],
     "issueType": null,
@@ -180,7 +280,7 @@
         "labels": [],
         "body": "### Slugline\n\nVaikselt alla neelatud vead jõuavad probleemiteatesse\n\n### Lead\n\nKui noodifaili nime salvestamine, lugemine või kustutamine ebaõnnestub, saadab rakendus probleemiteate. Kasutaja töö ei peatu.",
         "closedAt": "2026-10-22T16:02:16Z",
-        "updatedAt": "2026-10-22T16:02:34Z",
+        "updatedAt": "2026-10-31T14:34:08Z",
         "htmlUrl": "http://forge/mvox/mvox-app/issues/1022",
         "subIssues": [],
         "issueType": null,
@@ -828,7 +928,7 @@
     "labels": [],
     "body": "### Slugline\n\nProbleemiteated jõuavad meieni ka siis, kui laulja tagasisidet ei saada\n\n### Lead\n\nRakendus saadab probleemiteated ise Entusse, tagasisidena ilma ekraanipildita, lühikese ingliskeelse kokkuvõttega. Rakenduses ei muutu midagi nähtavat.",
     "closedAt": "2026-10-17T13:23:04Z",
-    "updatedAt": "2026-10-17T13:23:23Z",
+    "updatedAt": "2026-10-31T14:35:16Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/948",
     "subIssues": [],
     "issueType": null,
@@ -892,7 +992,7 @@
     "labels": [],
     "body": "### Slugline\n\nNoodivaatur võib jääda mustaks\n\n### Lead\n\nÜks kasutaja nägi noodivaaturis musta ekraani; alumine rida töötas.",
     "closedAt": "2026-10-16T16:06:01Z",
-    "updatedAt": "2026-10-16T16:06:09Z",
+    "updatedAt": "2026-10-31T14:28:26Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/938",
     "subIssues": [],
     "issueType": "Bug",
