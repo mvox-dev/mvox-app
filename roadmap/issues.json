@@ -33,10 +33,6 @@
     "stateReason": null,
     "labels": [
       {
-        "name": "prepped",
-        "color": "c5def5"
-      },
-      {
         "name": "ready",
         "color": "0e8a16"
       },
@@ -47,7 +43,7 @@
     ],
     "body": "### Slugline\n\nProfiilileht näitab rakenduse versiooni\n\n### Lead\n\nProfiililehel on näha, milline rakenduse versioon seadmes töötab.",
     "closedAt": null,
-    "updatedAt": "2026-10-31T14:36:15Z",
+    "updatedAt": "2026-10-31T15:29:41Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1048",
     "subIssues": [],
     "issueType": null,
@@ -102,52 +98,44 @@
   {
     "number": 1044,
     "title": "Season start-date inline save test fails on main",
-    "state": "open",
+    "state": "closed",
     "stateReason": null,
     "labels": [
       {
         "name": "bug",
         "color": "d73a4a"
-      },
-      {
-        "name": "prepped",
-        "color": "c5def5"
-      },
-      {
-        "name": "ready",
-        "color": "0e8a16"
       }
     ],
     "body": null,
-    "closedAt": null,
-    "updatedAt": "2026-10-31T14:47:33Z",
+    "closedAt": "2026-10-31T15:29:04Z",
+    "updatedAt": "2026-10-31T16:01:27Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1044",
     "subIssues": [],
     "issueType": null,
-    "researchMs": null
+    "researchMs": null,
+    "buildMs": null,
+    "reviewMs": null
   },
   {
     "number": 1043,
     "title": "get_feedback returns the screenshot with the drawing on it",
-    "state": "open",
+    "state": "closed",
     "stateReason": null,
     "labels": [
-      {
-        "name": "ready",
-        "color": "0e8a16"
-      },
       {
         "name": "task",
         "color": "1d76db"
       }
     ],
     "body": "### Slugline\n\nTagasiside ekraanipilt tuleb koos laulja joonistusega\n\n### Lead\n\nTagasiside serverist teate lugeja näeb ekraanipilti koos laulja joonistusega ühel pildil. Rakendus ei muutu.",
-    "closedAt": null,
-    "updatedAt": "2026-10-31T14:50:30Z",
+    "closedAt": "2026-10-31T15:05:02Z",
+    "updatedAt": "2026-10-31T16:01:27Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1043",
     "subIssues": [],
     "issueType": null,
-    "researchMs": null
+    "researchMs": null,
+    "buildMs": null,
+    "reviewMs": null
   },
   {
     "number": 1042,
