@@ -27,6 +27,10 @@
     "stateReason": null,
     "labels": [
       {
+        "name": "in process",
+        "color": "95ea29"
+      },
+      {
         "name": "ready",
         "color": "0e8a16"
       },
@@ -37,10 +41,11 @@
     ],
     "body": "### Slugline\n\nIga kasutajale näidatud viga saadab probleemiteate\n\n### Lead\n\nKui rakendus näitab kasutajale viga, saab meeskond sellest probleemiteate koos veaga. Kasutaja näeb sama teadet nagu praegu.",
     "closedAt": null,
-    "updatedAt": "2026-10-31T20:48:14Z",
+    "updatedAt": "2026-10-31T21:51:30Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1049",
     "subIssues": [],
     "issueType": null,
+    "statusSince": "2026-10-31T21:09:20Z",
     "researchMs": null
   },
   {
@@ -77,15 +82,19 @@
       {
         "name": "ready",
         "color": "0e8a16"
+      },
+      {
+        "name": "researched",
+        "color": "c5def5"
       }
     ],
     "body": "### Slugline\n\nPartii PDF avaneb Androidi tahvlis\n\n### Lead\n\nSeadmesse salvestatud partii avaneb Androidi tahvli paigaldatud rakenduses.",
     "closedAt": null,
-    "updatedAt": "2026-10-31T17:03:58Z",
+    "updatedAt": "2026-10-31T21:09:54Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1047",
     "subIssues": [],
     "issueType": null,
-    "researchMs": null
+    "researchMs": 15000
   },
   {
     "number": 1046,
@@ -100,15 +109,19 @@
       {
         "name": "ready",
         "color": "0e8a16"
+      },
+      {
+        "name": "researched",
+        "color": "c5def5"
       }
     ],
     "body": "### Slugline\n\nPartii avamise viga jõuab probleemiteatena kohale\n\n### Lead\n\nKui partii PDF ei avane, saab meeskond sellest probleemiteate. Kui saatmine ebaõnnestub, proovitakse uuesti.",
     "closedAt": null,
-    "updatedAt": "2026-10-31T18:07:23Z",
+    "updatedAt": "2026-10-31T21:09:53Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1046",
     "subIssues": [],
     "issueType": null,
-    "researchMs": null
+    "researchMs": 14000
   },
   {
     "number": 1044,
@@ -163,8 +176,8 @@
         "color": "d73a4a"
       },
       {
-        "name": "prepped",
-        "color": "c5def5"
+        "name": "in process",
+        "color": "95ea29"
       },
       {
         "name": "ready",
@@ -173,10 +186,11 @@
     ],
     "body": "### Slugline\n\nTagasiside serveri teadetel on taas loomise aeg\n\n### Lead\n\nTagasiside server näitab iga teate loomise aega, nii et ajavahemiku filter leiab teated üles. Rakendus ei muutu.",
     "closedAt": null,
-    "updatedAt": "2026-10-31T20:43:45Z",
+    "updatedAt": "2026-10-31T21:57:08Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1042",
     "subIssues": [],
     "issueType": null,
+    "statusSince": "2026-10-31T21:51:43Z",
     "researchMs": null
   },
   {
@@ -1476,7 +1490,7 @@
     "labels": [],
     "body": "### Slugline\n\nÜkski ebaõnnestunud lugemine ei kao jäljetult\n\n### Lead\n\nMõni vaade jätab nimekirja tühjaks, kui lugemine ebaõnnestub, ja viga kaob. Edaspidi läheb iga selline viga probleemide käsitlejale.",
     "closedAt": "2026-10-06T06:47:00Z",
-    "updatedAt": "2026-10-31T20:31:19Z",
+    "updatedAt": "2026-10-31T21:51:20Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/756",
     "subIssues": [],
     "issueType": "Task",
