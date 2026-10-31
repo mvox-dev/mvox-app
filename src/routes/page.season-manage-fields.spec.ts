@@ -93,11 +93,11 @@ describe('agenda — season fields edit inline (event/[id] per-field pattern)', 
 		expect(input.type).toBe('date');
 		expect(input.value).toBe(SEASON_START);
 
-		await fireEvent.input(input, { target: { value: '2026-10-01' } });
+		await fireEvent.input(input, { target: { value: isoDate(-20) } });
 		await fireEvent.keyDown(input, { key: 'Enter' });
 
 		await waitFor(() => {
-			expect(updateSeasonFieldMock).toHaveBeenCalledWith(CFG, SEASON_ID, 'start_date', '2026-10-01');
+			expect(updateSeasonFieldMock).toHaveBeenCalledWith(CFG, SEASON_ID, 'start_date', isoDate(-20));
 		});
 	});
 
@@ -113,11 +113,11 @@ describe('agenda — season fields edit inline (event/[id] per-field pattern)', 
 		expect(input.type).toBe('date');
 		expect(input.value).toBe(SEASON_END);
 
-		await fireEvent.input(input, { target: { value: '2027-06-30' } });
+		await fireEvent.input(input, { target: { value: isoDate(100) } });
 		await fireEvent.keyDown(input, { key: 'Enter' });
 
 		await waitFor(() => {
-			expect(updateSeasonFieldMock).toHaveBeenCalledWith(CFG, SEASON_ID, 'end_date', '2027-06-30');
+			expect(updateSeasonFieldMock).toHaveBeenCalledWith(CFG, SEASON_ID, 'end_date', isoDate(100));
 		});
 	});
 
