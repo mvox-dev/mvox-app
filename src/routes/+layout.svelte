@@ -53,6 +53,7 @@
 	import { createFeedbackEditor } from '$lib/feedback/feedbackEditor.svelte';
 	import FeedbackEditor from '$lib/components/feedback/FeedbackEditor.svelte';
 	import FeedbackEditorBar from '$lib/components/feedback/FeedbackEditorBar.svelte';
+	import NewerVersionNotice from '$lib/sw/NewerVersionNotice.svelte';
 
 	let { children } = $props();
 
@@ -212,5 +213,6 @@
 			{m.membership_not_active_notice({ collective: $selectedCollectiveStore.name })}
 		</p>
 	{/if}
+	<NewerVersionNotice />
 	{@render children?.()}
 </NavShell>

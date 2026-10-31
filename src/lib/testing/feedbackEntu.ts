@@ -1,10 +1,12 @@
 // A fake Entu and build stamp for a feedback send: the reads and the three writes it makes.
 import { vi } from 'vitest';
 import { json } from './entuFetchKit';
+import { runningBuildCommit } from '$lib/runningBuild';
 
 export const API = 'https://api.entu-test.invalid/';
 export const TYPE_ID = 'type-feedback-1';
-export const COMMIT = '0123456789abcdef0123456789abcdef01234567';
+// The running build, so a layout spec on this fake shows no newer-version notice (#1052).
+export const COMMIT = runningBuildCommit;
 export const UPLOAD_URL = 'https://s3.example.invalid/bucket/screenshot?signature=sig-1';
 
 export interface FeedbackEntuOpts {

@@ -13,7 +13,8 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 const updateForcing = vi.hoisted(() => ({ starts: 0 }));
-vi.mock('$lib/sw/swUpdate', () => ({
+vi.mock('$lib/sw/swUpdate', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/sw/swUpdate')>()),
 	startUpdateForcing: () => {
 		updateForcing.starts += 1;
 	}
