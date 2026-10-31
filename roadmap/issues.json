@@ -1,5 +1,28 @@
 [
   {
+    "number": 1052,
+    "title": "The app says when a newer version is available and updates on Refresh",
+    "state": "open",
+    "stateReason": null,
+    "labels": [
+      {
+        "name": "ready",
+        "color": "0e8a16"
+      },
+      {
+        "name": "task",
+        "color": "1d76db"
+      }
+    ],
+    "body": "### Slugline\n\nRakendus ütleb, kui uuem versioon on olemas, ja uuendab nupuvajutusega\n\n### Lead\n\nKui seadmes töötab vanem versioon kui serveris, näeb kasutaja teadet \"Uuem versioon on olemas\" ja nuppu Värskenda, mis toob uue versiooni.",
+    "closedAt": null,
+    "updatedAt": "2026-10-31T18:01:14Z",
+    "htmlUrl": "http://forge/mvox/mvox-app/issues/1052",
+    "subIssues": [],
+    "issueType": null,
+    "researchMs": null
+  },
+  {
     "number": 1049,
     "title": "Every error the app shows a user sends a problem report",
     "state": "open",
@@ -16,7 +39,7 @@
     ],
     "body": "### Slugline\n\nIga kasutajale näidatud viga saadab probleemiteate\n\n### Lead\n\nKui rakendus näitab kasutajale viga, saab meeskond sellest probleemiteate koos veaga. Kasutaja näeb sama teadet nagu praegu.",
     "closedAt": null,
-    "updatedAt": "2026-10-31T16:47:55Z",
+    "updatedAt": "2026-10-31T17:54:06Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1049",
     "subIssues": [],
     "issueType": null,
@@ -35,7 +58,7 @@
     ],
     "body": "### Slugline\n\nProfiilileht näitab rakenduse versiooni\n\n### Lead\n\nProfiililehel on näha, milline rakenduse versioon seadmes töötab.",
     "closedAt": "2026-10-31T16:46:52Z",
-    "updatedAt": "2026-10-31T17:02:01Z",
+    "updatedAt": "2026-10-31T17:03:58Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1048",
     "subIssues": [],
     "issueType": null,
@@ -60,7 +83,7 @@
     ],
     "body": "### Slugline\n\nPartii PDF avaneb Androidi tahvlis\n\n### Lead\n\nSeadmesse salvestatud partii avaneb Androidi tahvli paigaldatud rakenduses.",
     "closedAt": null,
-    "updatedAt": "2026-10-31T14:31:54Z",
+    "updatedAt": "2026-10-31T17:03:58Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1047",
     "subIssues": [],
     "issueType": null,
@@ -83,7 +106,7 @@
     ],
     "body": "### Slugline\n\nPartii avamise viga jõuab probleemiteatena kohale\n\n### Lead\n\nKui partii PDF ei avane, saab meeskond sellest probleemiteate. Kui saatmine ebaõnnestub, proovitakse uuesti.",
     "closedAt": null,
-    "updatedAt": "2026-10-31T14:34:38Z",
+    "updatedAt": "2026-10-31T17:18:15Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1046",
     "subIssues": [],
     "issueType": null,
@@ -1455,7 +1478,7 @@
     "labels": [],
     "body": "### Slugline\n\nÜkski ebaõnnestunud lugemine ei kao jäljetult\n\n### Lead\n\nMõni vaade jätab nimekirja tühjaks, kui lugemine ebaõnnestub, ja viga kaob. Edaspidi läheb iga selline viga probleemide käsitlejale.",
     "closedAt": "2026-10-06T06:47:00Z",
-    "updatedAt": "2026-10-14T15:42:21Z",
+    "updatedAt": "2026-10-31T17:18:15Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/756",
     "subIssues": [],
     "issueType": "Task",
