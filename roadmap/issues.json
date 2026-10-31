@@ -1,7 +1,34 @@
 [
   {
-    "number": 1040,
-    "title": "The feedback MCP server reads Entu with read-only keys",
+    "number": 1044,
+    "title": "Season start-date inline save test fails on main",
+    "state": "open",
+    "stateReason": null,
+    "labels": [
+      {
+        "name": "bug",
+        "color": "d73a4a"
+      },
+      {
+        "name": "prepped",
+        "color": "c5def5"
+      },
+      {
+        "name": "ready",
+        "color": "0e8a16"
+      }
+    ],
+    "body": null,
+    "closedAt": null,
+    "updatedAt": "2026-10-31T08:05:42Z",
+    "htmlUrl": "http://forge/mvox/mvox-app/issues/1044",
+    "subIssues": [],
+    "issueType": null,
+    "researchMs": null
+  },
+  {
+    "number": 1043,
+    "title": "get_feedback returns the screenshot with the drawing on it",
     "state": "open",
     "stateReason": null,
     "labels": [
@@ -14,13 +41,61 @@
         "color": "1d76db"
       }
     ],
-    "body": "### Slugline\n\nTagasiside server loeb Entut ainult lugemisõigusega võtmega\n\n### Lead\n\nTagasiside server kasutab praegu andmebaasi juurvõtmeid. Edaspidi kasutab ta võtit, millega saab ainult lugeda. Rakendus ei muutu.",
+    "body": "### Slugline\n\nTagasiside ekraanipilt tuleb koos laulja joonistusega\n\n### Lead\n\nTagasiside serverist teate lugeja näeb ekraanipilti koos laulja joonistusega ühel pildil. Rakendus ei muutu.",
     "closedAt": null,
-    "updatedAt": "2026-10-24T20:49:37Z",
-    "htmlUrl": "http://forge/mvox/mvox-app/issues/1040",
+    "updatedAt": "2026-10-31T08:03:56Z",
+    "htmlUrl": "http://forge/mvox/mvox-app/issues/1043",
     "subIssues": [],
     "issueType": null,
     "researchMs": null
+  },
+  {
+    "number": 1042,
+    "title": "The feedback MCP fills created on every report",
+    "state": "open",
+    "stateReason": null,
+    "labels": [
+      {
+        "name": "bug",
+        "color": "d73a4a"
+      },
+      {
+        "name": "prepped",
+        "color": "c5def5"
+      },
+      {
+        "name": "ready",
+        "color": "0e8a16"
+      }
+    ],
+    "body": "### Slugline\n\nTagasiside serveri teadetel on taas loomise aeg\n\n### Lead\n\nTagasiside server näitab iga teate loomise aega, nii et ajavahemiku filter leiab teated üles. Rakendus ei muutu.",
+    "closedAt": null,
+    "updatedAt": "2026-10-31T08:04:49Z",
+    "htmlUrl": "http://forge/mvox/mvox-app/issues/1042",
+    "subIssues": [],
+    "issueType": null,
+    "researchMs": null
+  },
+  {
+    "number": 1040,
+    "title": "The feedback MCP server reads Entu with read-only keys",
+    "state": "closed",
+    "stateReason": null,
+    "labels": [
+      {
+        "name": "task",
+        "color": "1d76db"
+      }
+    ],
+    "body": "### Slugline\n\nTagasiside server loeb Entut ainult lugemisõigusega võtmega\n\n### Lead\n\nTagasiside server kasutab praegu andmebaasi juurvõtmeid. Edaspidi kasutab ta võtit, millega saab ainult lugeda. Rakendus ei muutu.",
+    "closedAt": "2026-10-24T21:24:03Z",
+    "updatedAt": "2026-10-31T08:07:58Z",
+    "htmlUrl": "http://forge/mvox/mvox-app/issues/1040",
+    "subIssues": [],
+    "issueType": null,
+    "researchMs": null,
+    "buildMs": null,
+    "reviewMs": null
   },
   {
     "number": 1031,
