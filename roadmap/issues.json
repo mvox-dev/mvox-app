@@ -43,7 +43,7 @@
     ],
     "body": "### Slugline\n\nTagasiside ekraanipilt tuleb koos laulja joonistusega\n\n### Lead\n\nTagasiside serverist teate lugeja näeb ekraanipilti koos laulja joonistusega ühel pildil. Rakendus ei muutu.",
     "closedAt": null,
-    "updatedAt": "2026-10-31T08:03:56Z",
+    "updatedAt": "2026-10-31T08:09:47Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1043",
     "subIssues": [],
     "issueType": null,
