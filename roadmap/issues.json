@@ -6,10 +6,6 @@
     "stateReason": null,
     "labels": [
       {
-        "name": "prepped",
-        "color": "c5def5"
-      },
-      {
         "name": "ready",
         "color": "0e8a16"
       },
@@ -20,7 +16,7 @@
     ],
     "body": "### Slugline\n\nIga kasutajale näidatud viga saadab probleemiteate\n\n### Lead\n\nKui rakendus näitab kasutajale viga, saab meeskond sellest probleemiteate koos veaga. Kasutaja näeb sama teadet nagu praegu.",
     "closedAt": null,
-    "updatedAt": "2026-10-31T14:47:40Z",
+    "updatedAt": "2026-10-31T16:47:55Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1049",
     "subIssues": [],
     "issueType": null,
@@ -29,25 +25,23 @@
   {
     "number": 1048,
     "title": "The profile page shows the running build",
-    "state": "open",
+    "state": "closed",
     "stateReason": null,
     "labels": [
-      {
-        "name": "ready",
-        "color": "0e8a16"
-      },
       {
         "name": "task",
         "color": "1d76db"
       }
     ],
     "body": "### Slugline\n\nProfiilileht näitab rakenduse versiooni\n\n### Lead\n\nProfiililehel on näha, milline rakenduse versioon seadmes töötab.",
-    "closedAt": null,
-    "updatedAt": "2026-10-31T15:29:41Z",
+    "closedAt": "2026-10-31T16:46:52Z",
+    "updatedAt": "2026-10-31T17:02:01Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1048",
     "subIssues": [],
     "issueType": null,
-    "researchMs": null
+    "researchMs": null,
+    "buildMs": null,
+    "reviewMs": null
   },
   {
     "number": 1047,
@@ -4286,7 +4280,7 @@
     "labels": [],
     "body": "### Slugline\n\nSisselogimislehel on hoiatus, kui brauser andmeid ei salvesta\n\n### Lead\n\nMõni brauser on seatud veebilehtede andmeid mitte salvestama. Sisselogimisleht ütleb selle välja.",
     "closedAt": "2026-09-21T22:51:11Z",
-    "updatedAt": "2026-09-21T22:51:58Z",
+    "updatedAt": "2026-10-31T16:46:54Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/442",
     "subIssues": [],
     "issueType": "Feature",
@@ -5104,7 +5098,7 @@
     ],
     "body": "### Slugline\n\nArendusserver kolib pordile 3000 — ja kukub valjult, kui port on hõivatud\n\n### Lead\n\nArgo lubas ämbris ainult localhost:3000. Vite vaikeport on 5173, ja hõivatud pordi puhul libiseb ta vaikselt edasi — mis annaks segase CORS-vea.",
     "closedAt": "2026-09-14T07:06:05Z",
-    "updatedAt": "2026-09-19T05:09:46Z",
+    "updatedAt": "2026-10-31T16:46:54Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/347",
     "subIssues": [],
     "issueType": null,
@@ -10214,7 +10208,7 @@
         ],
         "body": null,
         "closedAt": "2026-08-14T12:32:30Z",
-        "updatedAt": "2026-10-14T15:47:28Z",
+        "updatedAt": "2026-10-31T16:35:37Z",
         "htmlUrl": "http://forge/mvox/mvox-app/issues/123",
         "subIssues": [],
         "issueType": null,
