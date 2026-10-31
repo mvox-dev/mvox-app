@@ -6,7 +6,8 @@ and serves three tools:
 - `list_feedback`: summaries, newest first, with filters for db, since/until, page, app version,
   error name, kind (`automatic` or `singer`) and untriaged (no linked issue yet).
 - `get_feedback`: one report in full, with its screenshot as an image (downscaled when over 1 MB)
-  and its doodle layer as stroke JSON. The description comes back under `user_submitted`.
+  and its doodle layer as stroke JSON. A report with a drawing gets one image with the strokes
+  drawn on it; a drawing that cannot be drawn comes back as the plain screenshot plus a note (`isError`). The description comes back under `user_submitted`.
 - `count_feedback`: the same filters, grouped by first error, action or app version.
 
 The only Entu calls are `GET`s. A db that fails (a revoked key, say) is named under `errors`;
@@ -37,8 +38,8 @@ pnpm exec tsx services/feedback-mcp/src/main.ts --team mvox --config <config.jso
 
 Or build first with `pnpm exec tsc -p services/feedback-mcp/tsconfig.build.json` and run
 `node services/feedback-mcp/dist/main.js` with the same flags. It reads newline-delimited JSON-RPC
-on stdin. `sharp` isn't installed in the repo, so a screenshot over 1 MB comes back as a note (`isError`)
-instead of an image there.
+on stdin. `sharp` isn't installed in the repo, so a screenshot over 1 MB or with a drawing comes back
+as a note (`isError`) instead of the image there.
 
 ## Config
 

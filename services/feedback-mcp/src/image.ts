@@ -1,6 +1,9 @@
+import { strokesSvg } from './drawing.ts';
+
 // sharp is a service-only dependency: a computed specifier keeps tsc and vitest from resolving it.
 type SharpImage = {
-	metadata(): Promise<{ width?: number }>;
+	metadata(): Promise<{ width?: number; height?: number }>;
+	composite(layers: { input: Uint8Array }[]): SharpImage;
 	resize(options: { width: number }): SharpImage;
 	png(options: { compressionLevel: number }): SharpImage;
 	toBuffer(): Promise<Uint8Array>;
@@ -22,6 +25,10 @@ export async function downscaleToFit(png: Uint8Array, maxBytes: number): Promise
 	return out;
 }
 
-export async function composeDrawing(_png: Uint8Array, _strokesJson: string): Promise<Uint8Array> {
-	throw new Error('composeDrawing: not implemented');
+export async function composeDrawing(png: Uint8Array, strokesJson: string): Promise<Uint8Array> {
+	const sharp = ((await import(SHARP)) as { default: Sharp }).default;
+	const { width, height } = await sharp(png).metadata();
+	if (!width || !height) throw new Error('screenshot has no readable size');
+	const svg = Buffer.from(strokesSvg(strokesJson, width, height));
+	return sharp(png).composite([{ input: svg }]).png({ compressionLevel: 9 }).toBuffer();
 }
