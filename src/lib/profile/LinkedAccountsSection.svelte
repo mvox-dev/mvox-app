@@ -3,6 +3,7 @@
 	reset() through bind:this. -->
 <script lang="ts">
 	import { reportProblem } from '$lib/problems/reportProblem';
+	import { writeOwner } from '$lib/problems/writeOwner';
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
 	import RedactedText from '$lib/components/RedactedText.svelte';
@@ -172,6 +173,8 @@
 		}
 		const ctx = activeContext();
 		if (!ctx) return;
+		const g = generation();
+		const owner = writeOwner(ctx.cfg);
 		linkBusy = true;
 		linkError = null;
 		returnLinkError = null;
@@ -195,7 +198,8 @@
 			});
 			window.location.href = url;
 		} catch (e) {
-			console.error('profile: self-link mint failed', e);
+			reportProblem({ area: 'profile', action: 'preparing to link another account', error: e, owner });
+			if (g !== generation()) return;
 			linkBusy = false;
 			linkError = mintErrorMessage(e);
 		}

@@ -494,7 +494,8 @@ describe('/admin invite — a failed read is reported (#756)', () => {
 		expect(reportProblem).toHaveBeenCalledWith({
 			area: 'admin/invite',
 			action: 're-reading the join state after an invite',
-			error: boom
+			error: boom,
+			owner: { db: 'sampledb', personId: 'admin-p' }
 		});
 	});
 });

@@ -37,8 +37,9 @@ export async function applyProfileSave(
 		const profileId = await createOwnProfile(cfg, personId, level, fetchImpl);
 		try {
 			await saveProfileFields(cfg, profileId, fields, fetchImpl);
-		} catch {
-			throw new ProfileSaveError('profile field save failed after create', profileId);
+		} catch (e) {
+			const cause = e instanceof Error ? e.message : String(e);
+			throw new ProfileSaveError(`profile field save failed after create: ${cause}`, profileId);
 		}
 		// The read-back can fail once the shell exists too: carry the id, or a retry duplicates it.
 		try {

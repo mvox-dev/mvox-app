@@ -2,6 +2,7 @@
 	bind:this, so the generation-guarded read keeps the page's load order. -->
 <script lang="ts">
 	import { reportProblem } from '$lib/problems/reportProblem';
+	import { writeOwner } from '$lib/problems/writeOwner';
 	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { dbEditRight } from '$lib/nav/dbRights';
@@ -64,13 +65,19 @@
 		}
 		const ctx = activeContext();
 		const dbEntityId = rosterDbEntityId;
+		const action = 'saving the roster names setting';
 		if (!ctx || !dbEntityId) {
+			const reason = ctx
+				? 'no roster names setting entity is known for this collective'
+				: 'no collective is selected';
+			reportProblem({ area: 'profile', action, reason });
 			selectEl.value = rosterShowRealNames ? 'real' : 'profile';
 			rosterStatus = '';
 			rosterError = m.profile_roster_names_error();
 			return;
 		}
 		const g = generation();
+		const owner = writeOwner(ctx.cfg);
 		const preWriteValue = rosterShowRealNames;
 		rosterStatus = '';
 		rosterError = null;
@@ -83,8 +90,8 @@
 			rosterBusy = false;
 			rosterStatus = m.profile_roster_names_saved();
 		} catch (err) {
+			reportProblem({ area: 'profile', action, error: err, owner });
 			if (g !== generation()) return;
-			console.error('profile: roster-names write failed', err);
 			rosterShowRealNames = preWriteValue;
 			selectEl.value = preWriteValue ? 'real' : 'profile';
 			rosterBusy = false;

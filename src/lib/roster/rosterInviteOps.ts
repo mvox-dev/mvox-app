@@ -3,6 +3,7 @@ import type { RosterRow } from '$lib/roster/rosterData';
 import type { EntuCfg } from '$lib/entu/cfg';
 import { isAuthExpiredError } from '$lib/entu/request';
 import { reportProblem } from '$lib/problems/reportProblem';
+import { writeOwner } from '$lib/problems/writeOwner';
 import { bareJoinStates } from '$lib/roster/joinStateView';
 import { withEntry } from '$lib/collections/immutable';
 import type { MemberOpsDeps } from '$lib/roster/rosterMemberOps';
@@ -31,24 +32,28 @@ export function createInviteOps<Halves>(deps: MemberOpsDeps<Halves>) {
 		if (!cfg) return;
 		mo.inviteActionPending = true;
 		const g = generation();
+		const owner = writeOwner(cfg);
+		let step = action;
 		try {
 			const result = await write(cfg);
 			if (!isCurrent(g)) return;
 			mo[errorKey] = withEntry(mo[errorKey], row.memberId, null);
 			onDone(result);
+			step = `${action}: re-reading the join state`;
 			await refreshJoinState(cfg, row.personId, g);
 		} catch (e) {
+			// Before the generation check: a failure after a switch still reports, under its own.
+			reportProblem({ area: 'roster', action: step, error: e, owner });
 			if (!isCurrent(g)) return;
 			if (isAuthExpiredError(e)) {
 				deps.sessionExpired();
 				return;
 			}
-			reportProblem({ area: 'roster', action, error: e });
 			mo[errorKey] = withEntry(mo[errorKey], row.memberId, true);
 			// Nothing was pending: the row was stale, so read its state again (#1026).
 			if (e instanceof InviteWithdrawError && e.phase === 'no-pending-invite') {
 				await refreshJoinState(cfg, row.personId, g).catch((error: unknown) =>
-					reportProblem({ area: 'roster', action: 'reading join state', error })
+					reportProblem({ area: 'roster', action: 'reading join state', error, owner })
 				);
 			}
 		} finally {

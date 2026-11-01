@@ -31,8 +31,14 @@ vi.mock('$lib/nav/dbRights', async (importOriginal) =>
 );
 vi.mock('$lib/profile/linkedIdentities', async (importOriginal) => ({
 	...((await importOriginal()) as object),
-	listJoinStateDetails: async () => ({})
+	listJoinStateDetails: async () => ({
+		'p-ada': { state: 'invited', at: new Date().toISOString() },
+		'p-bea': { state: 'absent' }
+	})
 }));
+vi.mock('$lib/invite/inviteData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).inviteWritesModule(importOriginal, { withdraw: true })
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -53,7 +59,7 @@ import { deferred } from '$lib/testing/entuFetchKit';
 import { keptProblems, useKeptProblems } from '$lib/testing/keptProblems';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
-import { resolveDbRightMock } from '$lib/testing/mocks/admin';
+import { resolveDbRightMock, sendInviteMock, withdrawInviteMock } from '$lib/testing/mocks/admin';
 import {
 	createMemberRecordMock,
 	deactivateMemberMock,
@@ -130,6 +136,8 @@ beforeEach(() => {
 	loadMemberRecordMock.mockResolvedValue({ state: 'none' });
 	createMemberRecordMock.mockResolvedValue('rec-new');
 	updateMemberRecordMock.mockResolvedValue(undefined);
+	sendInviteMock.mockResolvedValue({ sent: true, email: 'bea@x.com' });
+	withdrawInviteMock.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -215,6 +223,18 @@ async function saveAdaRecord(c: HTMLElement): Promise<void> {
 	await openAdaRecord(c);
 	await fireEvent.input(q(c, 'roster-record-name') as HTMLElement, { target: { value: 'Ada King' } });
 	await click(c, 'roster-record-save');
+}
+
+async function openBea(c: HTMLElement): Promise<void> {
+	await openGroup(c, 'unassigned', 'roster-row-m-bea');
+	await openCard(c, 'm-bea');
+	await shown(c, 'roster-member-invite-m-bea');
+}
+
+async function openAda(c: HTMLElement): Promise<void> {
+	await openGroup(c, 'sec-sop', 'roster-row-m-ada');
+	await openCard(c, 'm-ada');
+	await shown(c, 'roster-member-withdraw-m-ada');
 }
 
 type Fail = () => Promise<never>;
@@ -430,6 +450,32 @@ const ROWS: Row[] = [
 		error: 'roster-record-save-error',
 		action: 'saving a member record',
 		reveal: openAdaRecord
+	},
+	{
+		site: 'rosterInviteOps: send an invite',
+		view: 'groups',
+		arm: failNext(sendInviteMock),
+		act: async (c) => {
+			await openBea(c);
+			await click(c, 'roster-member-invite-m-bea');
+		},
+		write: sendInviteMock,
+		error: 'roster-invite-error-m-bea',
+		action: 'sending an invite',
+		reveal: openBea
+	},
+	{
+		site: 'rosterInviteOps: withdraw an invite',
+		view: 'groups',
+		arm: failNext(withdrawInviteMock),
+		act: async (c) => {
+			await openAda(c);
+			await click(c, 'roster-member-withdraw-m-ada');
+		},
+		write: withdrawInviteMock,
+		error: 'roster-withdraw-error-m-ada',
+		action: 'withdrawing an invite',
+		reveal: openAda
 	}
 ];
 

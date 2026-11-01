@@ -7,6 +7,8 @@
 	import type { CollectiveNameMarker } from '$lib/collectives/collectiveName';
 	import { focusAfterRender, focusOnMount } from '$lib/a11y/focusable';
 	import EditActivator from '$lib/components/EditActivator.svelte';
+	import { reportProblem } from '$lib/problems/reportProblem';
+	import { writeOwner } from '$lib/problems/writeOwner';
 
 	interface Props {
 		nameMarker: CollectiveNameMarker | null;
@@ -80,6 +82,7 @@
 		nameDraft = '';
 		const isLoadCurrent = loadCurrent();
 		const writeCfg = cfgFor(cfg.db);
+		const owner = writeOwner(writeCfg);
 		nameWritePending = true;
 		try {
 			await updateCollectiveName(writeCfg, before.markerId, draft);
@@ -88,8 +91,8 @@
 			renameCollectiveInStore(writeCfg.db, draft);
 			nameError = false;
 		} catch (e) {
+			reportProblem({ area: 'admin', action: 'renaming the collective', error: e, owner });
 			if (!isLoadCurrent()) return;
-			console.error('admin collective name: write failed', e);
 			nameError = true;
 		} finally {
 			if (isLoadCurrent()) {

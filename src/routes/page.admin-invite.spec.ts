@@ -286,8 +286,7 @@ describe('#1031 /admin/invite — a new person is created with the email, then s
 });
 
 describe('/admin/invite — create-error', () => {
-	it('renders a generic localized error (not the raw thrown message); logs detail to console.error; with a personId attached, the orphaned-person warning — form values preserved for retry', async () => {
-		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+	it('renders a generic localized error (not the raw thrown message); reports the detail; with a personId attached, the orphaned-person warning — form values preserved for retry', async () => {
 		selectSampledb();
 		loadOk();
 		createInviteMock.mockRejectedValue(
@@ -315,12 +314,12 @@ describe('/admin/invite — create-error', () => {
 		expect(errorBlock.textContent).not.toContain('member-create');
 		expect(errorBlock.textContent).not.toContain('member create failed: 500');
 
-		expect(consoleSpy).toHaveBeenCalled();
-		const loggedArgs = consoleSpy.mock.calls.flat();
-		const loggedDetail = loggedArgs.some(
-			(arg) => arg instanceof Error && arg.message === 'member create failed: 500'
-		);
-		expect(loggedDetail).toBe(true);
+		expect(reportProblem).toHaveBeenCalledTimes(1);
+		expect(reportProblem.mock.calls[0][0]).toMatchObject({
+			area: 'admin/invite',
+			action: 'creating an invite',
+			error: expect.objectContaining({ message: 'member create failed: 500' })
+		});
 
 		const partial = container.querySelector('[data-testid="invite-partial-failure"]');
 		expect(partial).not.toBeNull();
@@ -328,8 +327,6 @@ describe('/admin/invite — create-error', () => {
 
 		const select = container.querySelector('[data-testid="invite-db"]') as HTMLSelectElement;
 		expect(select.value).toBe('sampledb');
-
-		consoleSpy.mockRestore();
 	});
 
 	it('an error WITHOUT a personId (nothing created yet) shows the phased error but NO orphan warning', async () => {

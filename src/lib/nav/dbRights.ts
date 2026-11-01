@@ -17,6 +17,7 @@ export function resetDbEditRight(): void {
 async function readDbRightsLists(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch,
+	action: string,
 	dbEntityId?: string
 ): Promise<{ owners: string[]; editors: string[] } | 'error'> {
 	const { entuFetch } = await import('$lib/entu/request');
@@ -25,7 +26,10 @@ async function readDbRightsLists(
 	if (!resolvedDbEntityId) {
 		const { resolveDatabaseEntityId } = await import('$lib/collective/databaseEntity');
 		const resolved = await resolveDatabaseEntityId(cfg, fetchImpl);
-		if (!resolved) return 'error';
+		if (!resolved) {
+			reportProblem({ area: 'admin', action, reason: 'no database entity is visible in this collective' });
+			return 'error';
+		}
 		resolvedDbEntityId = resolved;
 	}
 
@@ -49,7 +53,11 @@ async function readDbRightsLists(
 		};
 	};
 	const dbEntity = body.entity;
-	if (!dbEntity) return 'error';
+	if (!dbEntity) {
+		const reason = 'the database entity rights read came back without an entity';
+		reportProblem({ area: 'admin', action, reason });
+		return 'error';
+	}
 
 	// No `_owner`/`_editor` visible is itself the answer: rights live in the private bucket.
 	return {
@@ -68,14 +76,15 @@ export async function resolveDbEditRight(
 	fetchImpl: typeof fetch = fetch,
 	dbEntityId?: string
 ): Promise<EditRightState> {
+	const action = 'reading the admin rights';
 	try {
-		const rights = await readDbRightsLists(cfg, fetchImpl, dbEntityId);
+		const rights = await readDbRightsLists(cfg, fetchImpl, action, dbEntityId);
 		if (rights === 'error') return 'error';
 		const isOwner = rights.owners.includes(personId);
 		const isEditor = rights.editors.includes(personId);
 		return isOwner || isEditor ? 'editor' : 'not-editor';
 	} catch (e) {
-		reportProblem({ area: 'admin', action: 'reading the admin rights', error: e });
+		reportProblem({ area: 'admin', action, error: e });
 		return 'error';
 	}
 }
@@ -89,14 +98,15 @@ export async function resolveDbRight(
 	fetchImpl: typeof fetch = fetch,
 	dbEntityId?: string
 ): Promise<DbRight> {
+	const action = 'reading the owner tier';
 	try {
-		const rights = await readDbRightsLists(cfg, fetchImpl, dbEntityId);
+		const rights = await readDbRightsLists(cfg, fetchImpl, action, dbEntityId);
 		if (rights === 'error') return 'error';
 		if (rights.owners.includes(personId)) return 'owner';
 		if (rights.editors.includes(personId)) return 'editor';
 		return 'none';
 	} catch (e) {
-		reportProblem({ area: 'admin', action: 'reading the owner tier', error: e });
+		reportProblem({ area: 'admin', action, error: e });
 		return 'error';
 	}
 }

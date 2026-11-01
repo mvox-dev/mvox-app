@@ -54,6 +54,7 @@ describe('applyProfileSave — first save into a level (existingId === null)', (
 		);
 		expect(err).toBeInstanceOf(ProfileSaveError);
 		expect((err as ProfileSaveError).createdProfileId).toBe('new-prof-9');
+		expect((err as ProfileSaveError).message).toBe('profile field save failed after create: save failed: 500');
 	});
 
 	it('create itself rejects → propagates the create error (no createdProfileId), and never attempts the field write', async () => {

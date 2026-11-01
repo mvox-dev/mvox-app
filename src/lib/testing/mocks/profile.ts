@@ -6,6 +6,7 @@ export { listMyProfilesMock };
 export const applyProfileSaveMock = vi.fn();
 export const applyFieldMoveMock = vi.fn();
 export const applyConflictResolutionMock = vi.fn();
+export const applyDuplicateRepairMock = vi.fn();
 
 export class ProfileSaveError extends Error {
 	readonly createdProfileId?: string;
@@ -54,6 +55,16 @@ export function applyProfileSaveModule(error: 'shared' | 'bare') {
 
 export async function fieldMoveModule(importOriginal: Real) {
 	return { ...(await real(importOriginal)), applyFieldMove: applyFieldMoveMock };
+}
+
+// Every profile field write a handle: move, duplicate repair and conflict resolution.
+export async function fieldWritesModule(importOriginal: Real) {
+	return {
+		...(await real(importOriginal)),
+		applyFieldMove: applyFieldMoveMock,
+		applyDuplicateRepair: applyDuplicateRepairMock,
+		applyConflictResolution: applyConflictResolutionMock
+	};
 }
 
 export async function conflictResolutionModule() {

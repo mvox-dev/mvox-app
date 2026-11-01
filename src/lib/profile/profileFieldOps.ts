@@ -13,6 +13,8 @@ import { createAutosave } from '$lib/profile/autosave';
 import { withItem } from '$lib/collections/immutable';
 import type { FieldResolution, Level, MyProfile } from '$lib/profile/profileData';
 import type { EntuCfg } from '$lib/entu/cfg';
+import { reportProblem } from '$lib/problems/reportProblem';
+import { writeOwner } from '$lib/problems/writeOwner';
 
 export const FIELDS: readonly FieldKey[] = ['name', 'email'];
 const otherField = (f: FieldKey): FieldKey => (f === 'name' ? 'email' : 'name');
@@ -268,6 +270,7 @@ export function createProfileFieldOps(pf: ProfileFieldState, deps: ProfileFieldD
 		const ctx = activeContext();
 		if (!ctx) return;
 		pf.busy = true;
+		const owner = writeOwner(ctx.cfg);
 		applyConflictResolution({ cfg: ctx.cfg, field, value: chosenValue, sync })
 			.then(async () => {
 				pf.busy = false;
@@ -277,7 +280,7 @@ export function createProfileFieldOps(pf: ProfileFieldState, deps: ProfileFieldD
 			})
 			.catch((e) => {
 				pf.busy = false;
-				console.error('profile: conflict resolution failed', e);
+				reportProblem({ area: 'profile', action: 'resolving a profile field conflict', error: e, owner });
 			});
 	}
 

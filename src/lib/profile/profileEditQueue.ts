@@ -1,3 +1,5 @@
+import { reportProblem } from '$lib/problems/reportProblem';
+import { writeOwner } from '$lib/problems/writeOwner';
 import { applyProfileSave, ProfileSaveError, type ApplyProfileSaveInput } from './applyProfileSave';
 import type { Level } from './profileData';
 
@@ -31,6 +33,7 @@ export function createProfileEditQueue(
 			if (pending.has(level)) return;
 
 			const gen = getGeneration();
+			const owner = writeOwner(cfg);
 			pending.add(level);
 			cb.setPending(level, true);
 
@@ -43,6 +46,7 @@ export function createProfileEditQueue(
 				})
 				.catch((e: unknown) => {
 					pending.delete(level);
+					reportProblem({ area: 'profile', action: 'saving a profile field', error: e, owner });
 					if (getGeneration() !== gen) return;
 					cb.setPending(level, false);
 					if (e instanceof ProfileSaveError && e.createdProfileId) {

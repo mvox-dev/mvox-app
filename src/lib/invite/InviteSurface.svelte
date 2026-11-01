@@ -183,6 +183,8 @@
 			{ dbEntityId, personId: target?.personId ?? '', email: email.trim() },
 			{ createInvite: (c, input) => createInvite(c, input), sendInvite: (c, id) => sendInvite(c, id) }
 		);
+		// The form moved to another collective meanwhile: this result is not about it.
+		if (dbId !== cfg.db) return;
 		if (result.kind === 'sent') {
 			joinStates = { ...joinStates, ...result.refreshedJoinStates };
 			createdPersons = createdPersons.filter((p) => p.personId !== target?.personId);

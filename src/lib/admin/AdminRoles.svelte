@@ -12,6 +12,8 @@
 	import RedactedText from '$lib/components/RedactedText.svelte';
 	import RosterPersonSelect from '$lib/roster/RosterPersonSelect.svelte';
 	import { pickerPromptText } from '$lib/roster/pickerPrompt';
+	import { reportProblem } from '$lib/problems/reportProblem';
+	import { writeOwner } from '$lib/problems/writeOwner';
 
 	type RoleWrites = Pick<
 		typeof RoleManagement,
@@ -117,7 +119,7 @@
 		kind: RoleKind,
 		personId: string | null,
 		write: (cfg: EntuCfg, entityId: string, personId: string) => Promise<void>,
-		label: string
+		action: string
 	): Promise<void> {
 		// Before the attempt-start clears, so a refused pick keeps the last real error.
 		if (isOffline) return;
@@ -126,17 +128,20 @@
 		const entityId = kind === 'admin' ? dbEntityId : libraryId;
 		if (!personId || !cfg || !entityId) return;
 		const isLoadCurrent = loadCurrent();
+		const owner = writeOwner(cfg);
+		let step = action;
 		actionError = false;
 		rolesStatus = '';
 		rolesPending = true;
 		try {
 			await write(cfgFor(cfg.db), entityId, personId);
+			step = `${action}: re-reading the list`;
 			await refreshRole(kind, isLoadCurrent);
 			if (!isLoadCurrent()) return;
 			rolesStatus = m.admin_roles_saved();
 		} catch (e) {
+			reportProblem({ area: 'admin', action: step, error: e, owner });
 			if (!isLoadCurrent()) return;
-			console.error(label, e);
 			actionError = true;
 		} finally {
 			if (isLoadCurrent()) rolesPending = false;
@@ -144,29 +149,19 @@
 	}
 
 	function onPickAdmin(selection: { id: string | null; label: string }): Promise<void> {
-		return runRoleWrite('admin', selection.id, writes.addAdmin, 'admin roles: add admin failed');
+		return runRoleWrite('admin', selection.id, writes.addAdmin, 'adding an administrator');
 	}
 
 	function onPickLibrarian(selection: { id: string | null; label: string }): Promise<void> {
-		return runRoleWrite(
-			'librarian',
-			selection.id,
-			writes.addLibrarian,
-			'admin roles: add librarian failed'
-		);
+		return runRoleWrite('librarian', selection.id, writes.addLibrarian, 'adding a librarian');
 	}
 
 	function onRemoveAdmin(personId: string): Promise<void> {
-		return runRoleWrite('admin', personId, writes.removeAdmin, 'admin roles: remove admin failed');
+		return runRoleWrite('admin', personId, writes.removeAdmin, 'removing an administrator');
 	}
 
 	function onRemoveLibrarian(personId: string): Promise<void> {
-		return runRoleWrite(
-			'librarian',
-			personId,
-			writes.removeLibrarian,
-			'admin roles: remove librarian failed'
-		);
+		return runRoleWrite('librarian', personId, writes.removeLibrarian, 'removing a librarian');
 	}
 </script>
 

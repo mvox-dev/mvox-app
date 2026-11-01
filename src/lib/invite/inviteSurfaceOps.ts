@@ -1,5 +1,9 @@
 // The async reads and the submit of InviteSurface, as results the component turns into state.
+import { get } from 'svelte/store';
 import { reportProblem } from '$lib/problems/reportProblem';
+import { writeOwner } from '$lib/problems/writeOwner';
+import { authStore } from '$lib/auth/session';
+import type { CollectiveIdentity } from '$lib/collectives/store';
 import { getToken } from '$lib/auth/storage';
 import { cfgFor } from '$lib/entu/cfg';
 import { isAuthExpiredError } from '$lib/entu/request';
@@ -38,7 +42,11 @@ export type PrerequisitesResult =
 export async function loadPrerequisites(targetDb: string): Promise<PrerequisitesResult> {
 	const token = getToken();
 	if (!token) {
-		console.error('admin/invite: no auth token in storage on a protected route');
+		// An ended session (401 recovery, sign-out) leaves no token by design: not a fault.
+		if (get(authStore).status !== 'anonymous') {
+			const reason = 'no auth token in storage on a protected route';
+			reportProblem({ area: 'admin/invite', action: 'load', reason });
+		}
 		return { status: 'load-error' };
 	}
 	try {
@@ -62,11 +70,16 @@ export interface SubmitSeams {
 	sendInvite: (cfg: Cfg, personId: string) => Promise<SendInviteResult>;
 }
 
-async function refreshJoinState(cfg: Cfg, personId: string): Promise<Record<string, JoinState>> {
+async function refreshJoinState(
+	cfg: Cfg,
+	personId: string,
+	owner: CollectiveIdentity | null
+): Promise<Record<string, JoinState>> {
 	try {
 		return await listJoinStates(cfg, [personId]);
 	} catch (error) {
-		reportProblem({ area: 'admin/invite', action: 're-reading the join state after an invite', error });
+		const action = 're-reading the join state after an invite';
+		reportProblem({ area: 'admin/invite', action, error, owner });
 		return {};
 	}
 }
@@ -77,6 +90,7 @@ export async function submitInvite(
 	target: { dbEntityId: string; personId: string; email: string },
 	seams: SubmitSeams
 ): Promise<SubmitResult> {
+	const owner = writeOwner(cfg);
 	let personId = target.personId;
 	if (!personId) {
 		try {
@@ -84,7 +98,7 @@ export async function submitInvite(
 			personId = (await seams.createInvite(cfg, input)).personId;
 		} catch (e) {
 			if (isAuthExpiredError(e)) return { kind: 'session-expired' };
-			console.error('admin/invite: create failed', e);
+			reportProblem({ area: 'admin/invite', action: 'creating an invite', error: e, owner });
 			return { kind: 'create-error', personId: e instanceof InviteCreateError ? e.personId : undefined };
 		}
 	}
@@ -93,9 +107,9 @@ export async function submitInvite(
 		outcome = await seams.sendInvite(cfg, personId);
 	} catch (error) {
 		if (isAuthExpiredError(error)) return { kind: 'session-expired' };
-		reportProblem({ area: 'admin/invite', action: 'sending an invite', error });
+		reportProblem({ area: 'admin/invite', action: 'sending an invite', error, owner });
 		return { kind: 'send-error', createdPersonId: target.personId ? undefined : personId };
 	}
-	const refreshedJoinStates = target.personId ? await refreshJoinState(cfg, personId) : {};
+	const refreshedJoinStates = target.personId ? await refreshJoinState(cfg, personId, owner) : {};
 	return { kind: 'sent', outcome, refreshedJoinStates };
 }

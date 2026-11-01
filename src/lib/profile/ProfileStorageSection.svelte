@@ -123,46 +123,33 @@
 		await focusTestIdAfterRender('profile-storage-remove-all');
 	}
 
-	// Clears exactly the signed-in partition. A failed removal is shown, since nothing
-	// was deleted; joinNames: false because a removal only shrinks the held-id set.
-	async function confirmStorageRemoveMine(): Promise<void> {
+	// "mine" clears exactly the signed-in partition; "all" is the device-wide wipe, never a sweep
+	// of the partitions this page knows about. joinNames: false, since removing only shrinks.
+	async function confirmStorageRemove(which: 'mine' | 'all'): Promise<void> {
 		const ctx = activeContext();
 		if (!ctx) return;
-		storageError = null;
-		storageRemoveMinePending = true;
+		const g = generation();
 		const mine = { db: ctx.cfg.db, personId: ctx.personId };
-		try {
-			await getAppByteStore().clearPartition(mine);
-			await load(ctx.cfg, mine, generation(), {
-				joinNames: false
-			});
-		} catch (err) {
-			console.error('profile: remove-downloaded-parts (this account) failed', err);
-			storageError = m.profile_storage_remove_error();
-		} finally {
-			storageRemoveMinePending = false;
-		}
-		await disarmStorageRemoveMine();
-	}
-
-	// The device-wide wipe, never a sweep of the partitions this page knows about.
-	async function confirmStorageRemoveAll(): Promise<void> {
-		const ctx = activeContext();
-		if (!ctx) return;
 		storageError = null;
-		storageRemoveAllPending = true;
+		if (which === 'mine') storageRemoveMinePending = true;
+		else storageRemoveAllPending = true;
 		try {
-			await getAppByteStore().clearAllPartitions();
-			await load(ctx.cfg, { db: ctx.cfg.db, personId: ctx.personId }, generation(), {
-				joinNames: false
-			});
+			const store = getAppByteStore();
+			await (which === 'mine' ? store.clearPartition(mine) : store.clearAllPartitions());
+			await load(ctx.cfg, mine, g, { joinNames: false });
 		} catch (err) {
-			console.error('profile: remove-everything-downloaded failed', err);
-			storageError = m.profile_storage_remove_error();
-		} finally {
-			storageRemoveAllPending = false;
+			const action = which === 'mine' ? 'removing this account’s downloaded parts' : 'removing everything downloaded';
+			reportProblem({ area: 'profile', action, error: err, owner: mine });
+			if (g === generation()) storageError = m.profile_storage_remove_error();
 		}
-		await disarmStorageRemoveAll();
+		if (g !== generation()) return;
+		if (which === 'mine') {
+			storageRemoveMinePending = false;
+			await disarmStorageRemoveMine();
+		} else {
+			storageRemoveAllPending = false;
+			await disarmStorageRemoveAll();
+		}
 	}
 </script>
 
@@ -221,7 +208,7 @@
 						disabled={storageRemoveMinePending}
 						aria-busy={storageRemoveMinePending}
 						class="rounded-md border border-danger px-4 py-2 text-sm text-danger hover:bg-danger hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
-						onclick={confirmStorageRemoveMine}
+						onclick={() => confirmStorageRemove('mine')}
 					>
 						{m.profile_storage_remove_mine_confirm()}
 					</button>
@@ -267,7 +254,7 @@
 						disabled={storageRemoveAllPending}
 						aria-busy={storageRemoveAllPending}
 						class="rounded-md border border-danger px-4 py-2 text-sm text-danger hover:bg-danger hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
-						onclick={confirmStorageRemoveAll}
+						onclick={() => confirmStorageRemove('all')}
 					>
 						{m.profile_storage_remove_all_confirm()}
 					</button>

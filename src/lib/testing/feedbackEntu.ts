@@ -8,6 +8,7 @@ export const TYPE_ID = 'type-feedback-1';
 // The running build, so a layout spec on this fake shows no newer-version notice (#1052).
 export const COMMIT = runningBuildCommit;
 export const UPLOAD_URL = 'https://s3.example.invalid/bucket/screenshot?signature=sig-1';
+export const DB_ENTITY = 'db-entity-1';
 
 export interface FeedbackEntuOpts {
 	/** member id per person id; a person missing here has no active member row. */
@@ -39,6 +40,11 @@ export function feedbackEntu(opts: FeedbackEntuOpts = {}) {
 		if (method === 'GET' && url.includes('_type.string=entity&name.string=')) {
 			return json({ entities: [{ _id: TYPE_ID }] });
 		}
+		// The layout reads the edit right off the database entity: a plain member's answer.
+		if (method === 'GET' && url.includes('_type.string=database')) {
+			return json({ entities: [{ _id: DB_ENTITY }] });
+		}
+		if (method === 'GET' && url.includes(`/entity/${DB_ENTITY}?`)) return json({ entity: { _id: DB_ENTITY } });
 		if (method === 'GET' && url.includes('_type.string=member&person.reference=')) {
 			const person = decodeURIComponent(url.match(/person\.reference=([^&]+)/)![1]);
 			return json({ entities: members[person] ? [{ _id: members[person] }] : [] });
