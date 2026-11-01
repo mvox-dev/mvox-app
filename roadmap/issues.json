@@ -23,30 +23,23 @@
   {
     "number": 1049,
     "title": "Every error the app shows a user sends a problem report",
-    "state": "open",
+    "state": "closed",
     "stateReason": null,
     "labels": [
-      {
-        "name": "in process",
-        "color": "95ea29"
-      },
-      {
-        "name": "ready",
-        "color": "0e8a16"
-      },
       {
         "name": "task",
         "color": "1d76db"
       }
     ],
     "body": "### Slugline\n\nIga kasutajale näidatud viga saadab probleemiteate\n\n### Lead\n\nKui rakendus näitab kasutajale viga, saab meeskond sellest probleemiteate koos veaga. Kasutaja näeb sama teadet nagu praegu.",
-    "closedAt": null,
-    "updatedAt": "2026-11-01T07:00:29Z",
+    "closedAt": "2026-11-01T07:35:07Z",
+    "updatedAt": "2026-11-01T08:01:50Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1049",
     "subIssues": [],
     "issueType": null,
-    "statusSince": "2026-10-31T21:09:20Z",
-    "researchMs": null
+    "researchMs": null,
+    "buildMs": 37547000,
+    "reviewMs": null
   },
   {
     "number": 1048,
@@ -1483,7 +1476,7 @@
     "labels": [],
     "body": "### Slugline\n\nÜkski ebaõnnestunud lugemine ei kao jäljetult\n\n### Lead\n\nMõni vaade jätab nimekirja tühjaks, kui lugemine ebaõnnestub, ja viga kaob. Edaspidi läheb iga selline viga probleemide käsitlejale.",
     "closedAt": "2026-10-06T06:47:00Z",
-    "updatedAt": "2026-11-01T07:00:28Z",
+    "updatedAt": "2026-11-01T07:34:43Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/756",
     "subIssues": [],
     "issueType": "Task",
