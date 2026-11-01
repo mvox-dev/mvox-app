@@ -2,30 +2,23 @@
   {
     "number": 1066,
     "title": "A collective link cannot run script",
-    "state": "open",
+    "state": "closed",
     "stateReason": null,
     "labels": [
       {
         "name": "bug",
         "color": "d73a4a"
-      },
-      {
-        "name": "in process",
-        "color": "95ea29"
-      },
-      {
-        "name": "ready",
-        "color": "0e8a16"
       }
     ],
     "body": "### Slugline\n\nKollektiivi link ei saa käivitada skripti\n\n### Lead\n\nLingina saab salvestada ja avada ainult veebiaadressi, e-posti aadressi või telefoninumbrit. Muu aadress lükatakse tagasi ja sellest antakse teada.",
-    "closedAt": null,
-    "updatedAt": "2026-11-01T17:00:11Z",
+    "closedAt": "2026-11-01T17:12:03Z",
+    "updatedAt": "2026-11-01T18:00:33Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1066",
     "subIssues": [],
     "issueType": null,
-    "statusSince": "2026-11-01T15:18:34Z",
-    "researchMs": null
+    "researchMs": null,
+    "buildMs": 6809000,
+    "reviewMs": null
   },
   {
     "number": 1063,
