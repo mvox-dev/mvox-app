@@ -53,3 +53,16 @@ describe('NavShell — a toolbar and an overlay replace the nav', () => {
 		expect(page.closest('.nav-content')?.hasAttribute('inert')).toBe(false);
 	});
 });
+
+describe('NavShell — navHidden (#1063, the landing)', () => {
+	it('drops the nav but keeps the toolbar, so the feedback editor still opens', async () => {
+		const { rerender } = render(NavShell, {
+			props: { children, entries, activeRoute: '/', navHidden: true }
+		});
+		expect(screen.queryByRole('navigation')).toBeNull();
+		expect(screen.getByTestId('page-content')).toBeTruthy();
+
+		await rerender({ toolbar, toolbarLabel: 'Tools' });
+		expect(screen.getByRole('toolbar', { name: 'Tools' })).toBeTruthy();
+	});
+});

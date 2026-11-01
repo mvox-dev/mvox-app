@@ -114,6 +114,7 @@ type Row = { page: string; write: (container: HTMLElement) => Promise<unknown> }
 const library = (write: Row['write']): Row => ({ page: '/library', write });
 
 const ROWS: Record<string, Row> = {
+	'/ rsvp': { page: '/', write: (c) => fireEvent.click(must(c, 'landing-going-e1')) },
 	'/agenda rsvp': {
 		page: '/agenda',
 		write: (c) =>

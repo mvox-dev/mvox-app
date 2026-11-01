@@ -754,5 +754,17 @@
 	"feedback_send_failed": "Atsauksmi neizdevās nosūtīt.",
 	"feedback_saved_send_later": "Atsauksme saglabāta šajā ierīcē. Tā tiks nosūtīta, kad atjaunosies signāls.",
 	"feedback_send_after_sign_in": "Atsauksme saglabāta. Tā tiks nosūtīta pēc pierakstīšanās.",
-	"feedback_problems_legend": "Kļūmes, ko nosūtīt kopā ar šo atsauksmi"
+	"feedback_problems_legend": "Kļūmes, ko nosūtīt kopā ar šo atsauksmi",
+	"landing_waiting_heading": "Gaida tavu atbildi · {count}",
+	"landing_learning_heading": "Šobrīd mācāmies",
+	"landing_links_heading": "Saites",
+	"landing_sheet": "Notis",
+	"landing_all_agenda": "Visa darba kārtība",
+	"landing_all_library": "Visa bibliotēka",
+	"landing_everything_else": "Viss pārējais: dalībnieki, sezonas",
+	"landing_change_answer": "Mainīt atbildi",
+	"landing_more_answers": "Citas atbildes",
+	"landing_event_programme": "programma un notis",
+	"landing_answers_error": "Neizdevās ielādēt tavas atbildes.",
+	"landing_not_answered": "Vēl neatbildēts"
 }

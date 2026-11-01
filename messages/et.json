@@ -753,5 +753,17 @@
 	"feedback_send_failed": "Tagasisidet ei õnnestunud saata.",
 	"feedback_saved_send_later": "Tagasiside on sellesse seadmesse salvestatud. See saadetakse, kui signaal taastub.",
 	"feedback_send_after_sign_in": "Tagasiside on salvestatud. See saadetakse pärast sisselogimist.",
-	"feedback_problems_legend": "Tõrked, mis saadetakse koos selle tagasisidega"
+	"feedback_problems_legend": "Tõrked, mis saadetakse koos selle tagasisidega",
+	"landing_waiting_heading": "Ootab sinu vastust · {count}",
+	"landing_learning_heading": "Praegu õpime",
+	"landing_links_heading": "Lingid",
+	"landing_sheet": "Noot",
+	"landing_all_agenda": "Kogu päevakord",
+	"landing_all_library": "Kogu noodikogu",
+	"landing_everything_else": "Kõik muu: liikmed, hooajad",
+	"landing_change_answer": "Muuda vastust",
+	"landing_more_answers": "Muud vastused",
+	"landing_event_programme": "kava ja noodid",
+	"landing_answers_error": "Sinu vastuseid ei õnnestunud laadida.",
+	"landing_not_answered": "Ei ole vastanud"
 }

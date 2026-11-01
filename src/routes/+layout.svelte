@@ -188,6 +188,7 @@
 <NavShell
 	entries={NAV_ENTRIES}
 	activeRoute={page.url.pathname}
+	navHidden={page.url.pathname === '/'}
 	completionLocked={$completionGateStore === 'incomplete'}
 	anonymous={$authStore.status !== 'authenticated'}
 	toolbar={feedbackEditor.open ? feedbackBar : undefined}

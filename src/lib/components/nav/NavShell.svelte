@@ -10,6 +10,7 @@
 		activeRoute,
 		completionLocked = false,
 		anonymous = false,
+		navHidden = false,
 		// No NAV_ENTRIES entry reads this now; it stays as NavContext's second visibility
 		// axis so a future entry can gate on it without re-threading the shell.
 		hasMultipleCollectives = false,
@@ -22,6 +23,7 @@
 		activeRoute: string;
 		completionLocked?: boolean;
 		anonymous?: boolean;
+		navHidden?: boolean;
 		hasMultipleCollectives?: boolean;
 		toolbar?: Snippet;
 		toolbarLabel?: string;
@@ -43,7 +45,6 @@
 	// Route matching is segment-aware and longest-wins: '/roster' must not match
 	// '/rosters-archive', and a deeper route beats its parent when two entries share a prefix.
 	function matchLength(route: string): number {
-		if (route === '/') return activeRoute === '/' ? 1 : 0;
 		return activeRoute === route || activeRoute.startsWith(route + '/') ? route.length : 0;
 	}
 
@@ -106,7 +107,7 @@
 			>
 				{@render toolbar()}
 			</div>
-		{:else}
+		{:else if !navHidden}
 			<nav
 				role="navigation"
 				aria-label={m.nav_main_label()}

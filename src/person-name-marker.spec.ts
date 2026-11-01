@@ -181,6 +181,13 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/routes/agenda/+page.svelte': {
 		'selected.name': 'the selected collective'
 	},
+	'src/lib/landing/LandingHeading.svelte': { 'selected.name': 'the selected collective' },
+	'src/lib/landing/LandingLearning.svelte': {
+		'work.name': 'a repertoire work',
+		'sheet.filename': 'a sheet file name'
+	},
+	'src/lib/landing/LandingLinks.svelte': { 'link.name': 'a link in the collective link list' },
+	'src/lib/landing/LandingNextEvent.svelte': { 'event.name': 'the event name' },
 	'src/lib/agenda/SeasonCardHeader.svelte': {
 		'ms.name': 'a season',
 		seasonManageDeleteName: 'the season being deleted'

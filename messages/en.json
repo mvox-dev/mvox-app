@@ -753,5 +753,17 @@
 	"feedback_send_failed": "The feedback could not be sent.",
 	"feedback_saved_send_later": "Feedback saved on this device. It will be sent when the signal returns.",
 	"feedback_send_after_sign_in": "Feedback saved. It will be sent after you sign in.",
-	"feedback_problems_legend": "Failures to send with this feedback"
+	"feedback_problems_legend": "Failures to send with this feedback",
+	"landing_waiting_heading": "Waiting for your answer · {count}",
+	"landing_learning_heading": "Now learning",
+	"landing_links_heading": "Links",
+	"landing_sheet": "Score",
+	"landing_all_agenda": "Full agenda",
+	"landing_all_library": "Whole library",
+	"landing_everything_else": "Everything else: members, seasons",
+	"landing_change_answer": "Change answer",
+	"landing_more_answers": "Other answers",
+	"landing_event_programme": "programme and scores",
+	"landing_answers_error": "Couldn't load your answers.",
+	"landing_not_answered": "Not responded"
 }

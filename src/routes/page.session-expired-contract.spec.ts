@@ -25,6 +25,7 @@ vi.mock('$app/navigation', async () =>
 );
 
 import AgendaPage from './agenda/+page.svelte';
+import LandingPage from './+page.svelte';
 import InvitePage from './admin/invite/+page.svelte';
 import EventPage from './event/[id]/+page.svelte';
 import LibraryPage from './library/+page.svelte';
@@ -45,6 +46,7 @@ import { signIn } from '$lib/testing/session';
 type Row = { Page: Component; loadError: string; retry: string; route?: string; arrange?: () => void };
 
 const PAGES: Record<string, Row> = {
+	'/': { Page: LandingPage, loadError: 'landing-agenda-error', retry: 'landing-retry' },
 	'/agenda': { Page: AgendaPage, loadError: 'agenda-error', retry: 'agenda-retry' },
 	'/admin/invite': {
 		Page: InvitePage,

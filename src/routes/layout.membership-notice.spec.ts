@@ -71,6 +71,7 @@ describe('+layout — the deactivated-member notice (done-when 6)', () => {
 	it('NO nav lock: the nav shell still renders alongside the notice (she keeps the domain-readable app)', async () => {
 		resolveGateMock.mockResolvedValue('complete');
 		resolveMembershipMock.mockResolvedValue('inactive');
+		pageStub.url = new URL('http://localhost/agenda'); // the landing on `/` has no nav (#1063)
 		render(Layout);
 		setAuthedWithOneCollective();
 
