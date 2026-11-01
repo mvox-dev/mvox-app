@@ -178,7 +178,7 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/lib/admin/CollectiveNameEditor.svelte': {
 		'nameMarker.name': 'the collective name'
 	},
-	'src/routes/+page.svelte': {
+	'src/routes/agenda/+page.svelte': {
 		'selected.name': 'the selected collective'
 	},
 	'src/lib/agenda/SeasonCardHeader.svelte': {

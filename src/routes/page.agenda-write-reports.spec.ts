@@ -65,7 +65,7 @@ vi.mock('$lib/files/appByteStore', async () =>
 	(await import('$lib/testing/mocks/files')).fakeAppByteStoreModule()
 );
 
-import Page from './+page.svelte';
+import Page from './agenda/+page.svelte';
 import { AuthExpiredError } from '$lib/entu/auth-expired';
 import { selectedCollectiveDbStore, selectedCollectiveIdentityStore } from '$lib/collectives/store';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';

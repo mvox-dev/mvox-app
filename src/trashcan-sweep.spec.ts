@@ -140,8 +140,8 @@ describe('#237 — no colour-emoji glyph anywhere in markup', () => {
 // ── 6. stale-pointer fence ─────────────────────────────────────────────────────
 
 describe('#237 — no stale gear-for-#237 breadcrumb survives', () => {
-	it('routes/+page.svelte carries no "left for #237" / "#237 to pick up" pointer (the gear died in #261)', () => {
-		const source = readFileSync(join(SRC_ROOT, 'routes/+page.svelte'), 'utf-8');
+	it('routes/agenda/+page.svelte carries no "left for #237" / "#237 to pick up" pointer (the gear died in #261)', () => {
+		const source = readFileSync(join(SRC_ROOT, 'routes/agenda/+page.svelte'), 'utf-8');
 		expect(source).not.toMatch(/left for #237|#237 to pick up|for #237 to pick/i);
 	});
 });

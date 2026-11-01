@@ -16,7 +16,7 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-import Page from './+page.svelte';
+import Page from './agenda/+page.svelte';
 import { collapseSeasonCard } from '$lib/testing/seasonCard';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { loadFullAgendaMock } from '$lib/testing/moduleHandles';

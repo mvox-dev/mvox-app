@@ -81,7 +81,7 @@ vi.mock('$lib/roster/memberLifecycle', async (importOriginal) => ({
 	loadActiveAndArchivedRosters: (await import('$lib/testing/mocks/roster')).loadActiveAndArchivedRostersMock
 }));
 
-import AgendaPage from './+page.svelte';
+import AgendaPage from './agenda/+page.svelte';
 import EventPage from './event/[id]/+page.svelte';
 import ProfilePage from './profile/+page.svelte';
 import LibraryPage from './library/+page.svelte';
@@ -161,8 +161,8 @@ const libraryReady = (c: HTMLElement) =>
 	waitFor(() => expect(q(c, 'library-work-toggle-work-1')).not.toBeNull());
 
 const ROWS: Record<string, Row> = {
-	'/ own answers': {
-		route: '/',
+	'/agenda own answers': {
+		route: '/agenda',
 		Page: AgendaPage,
 		notice: 'rsvp-partial-notice',
 		key: 'rsvp_partial_notice',
@@ -171,8 +171,8 @@ const ROWS: Record<string, Row> = {
 		ready: agendaReady,
 		switches: true
 	},
-	'/ own attendance': {
-		route: '/',
+	'/agenda own attendance': {
+		route: '/agenda',
 		Page: AgendaPage,
 		notice: 'attendance-partial-notice',
 		key: 'attendance_partial_notice',
@@ -211,8 +211,8 @@ const ROWS: Record<string, Row> = {
 		ready: (c) => waitFor(() => expect(q(c, 'section-toggle-unassigned')).not.toBeNull()),
 		switches: true
 	},
-	'/ season series': {
-		route: '/',
+	'/agenda season series': {
+		route: '/agenda',
 		Page: AgendaPage,
 		notice: 'season-manage-partial-notice',
 		key: 'season_manage_partial_notice',

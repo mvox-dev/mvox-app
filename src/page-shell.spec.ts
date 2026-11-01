@@ -1,55 +1,16 @@
-// #341 RED — the Links page shipped with NO page shell and nobody noticed
-// until Mihkel opened it on a phone — twice; two commits touched the file
-// before a human saw it. unclassed-controls.spec.ts closes that gap for form
-// controls; this closes it one level up, for the page itself: every route's
-// +page.svelte contains the house shell string
-//
-//   <main class="min-h-screen bg-paper px-6 py-10 text-ink">
-//
-// or its route is a NAMED exception on the allowlist below, with its reason
-// written where you are reading now. The allowlist is the chokepoint and it
-// fails CLOSED: a new route with no shell and no entry is a violation until
-// someone either gives it the shell or writes its line here.
-//
-// THE LIMIT, stated where you meet it: this asserts the shell is PRESENT, not
-// that it is the root element or wraps everything. That is a decision, not a
-// shortcut. Enumerating the thirteen routes at HEAD found two where the root
-// is not the first markup in the file: roster declares four {#snippet} blocks
-// before its root (the shell sits near line 4489), and the agenda's root is a
-// conditional ({#if auth.status === 'authenticated'}). A root-element check
-// would false-fail both — and a guard wrong about two of thirteen routes gets
-// switched off. Presence is exactly strong enough for the defect that
-// happened: Links had the shell NOWHERE, for two commits.
-//
-// Presence-not-structure has one trap: a naive contains() is satisfied by a
-// commented-out shell. Both prior sweeps on #335 were bitten by exactly that
-// comment blindness (the retracted InviteSurface "finding"), so the checker
-// strips HTML comments — and <script>/<style> blocks, where tag-looking prose
-// lives in // comments — BEFORE matching: a commented shell does NOT count.
-// Pinned below.
-//
-// The checker is a pure EXPORTED function in ./page-shell (route files in,
-// violations out) and its behaviour is pinned with INLINE STRING fixtures —
-// never fixture .svelte files under src/ (this guard walks src/routes, and a
-// shell-less fixture route would trip the guard itself forever), never counts
-// over the live tree (pin the instrument, not the tree you are about to
-// change — Gama's ruling on #335).
-//
-// Sibling invariant, NOT here: the `dependencies: {}` question is guarded in
-// workers/entu-rights-mcp/fences.spec.ts already; no package.json assertion
-// lives in this file.
+// Every route's +page.svelte carries the house shell, or its route is a named exception below.
+// Presence only, not root position: the agenda's root is conditional, roster's follows snippets.
+// It strips comments, <script> and <style> first. Why: docs/architecture/guards.md.
+
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { HOUSE_SHELL, findShellViolations, type RouteFile } from './page-shell';
 
-// ── the allowlist: seven routes, each with its reason where you meet it ──────
-// A route earns a line here by being a DIFFERENT page shape on purpose — not
-// by missing its shell. If you are adding a route and reaching for this map,
-// first ask whether the page should simply carry the house shell.
+// ── the allowlist: a route is listed for a different page shape, never a missing shell ──
 const ALLOWLIST: ReadonlyMap<string, string> = new Map([
 	[
-		'/',
+		'/agenda',
 		'agenda — its root is conditional ({#if auth.status === …}), with a separate centered <main> for the no-collectives state'
 	],
 	[

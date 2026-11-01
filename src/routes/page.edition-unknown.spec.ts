@@ -32,7 +32,7 @@ vi.mock('$lib/attendance/attendanceData', async () =>
 	(await import('$lib/testing/moduleStubs')).attendanceModule({ lists: 'bare' })
 );
 
-import Page from './+page.svelte';
+import Page from './agenda/+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { listMyRsvpsMock, loadFullAgendaMock } from '$lib/testing/moduleHandles';
 import { cleanupUnstubResetAgendaRsvps, future } from '$lib/testing/pages/agendaWorks';

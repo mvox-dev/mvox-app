@@ -1,7 +1,7 @@
-// Root page render for the season-manage specs whose sign-in comes from seasonManage.
+// The agenda page render for the season-manage specs whose sign-in comes from seasonManage.
 import { render, waitFor } from '@testing-library/svelte';
 import { expect } from 'vitest';
-import Page from '../../../routes/+page.svelte';
+import Page from '../../../routes/agenda/+page.svelte';
 import { q } from './dom';
 import { setAuthedWithOneCollective } from './seasonManage';
 

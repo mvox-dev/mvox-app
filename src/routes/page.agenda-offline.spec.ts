@@ -22,7 +22,7 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-import Page from './+page.svelte';
+import Page from './agenda/+page.svelte';
 import { clearAll } from '$lib/auth/storage';
 import { collectiveState, hydrateCollectives } from '$lib/collectives/store';
 import {

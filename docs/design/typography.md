@@ -29,7 +29,7 @@ arbitrary. State it plainly:
   page's own chrome.
 - **`text-xs`** — the dense tier. Anything that is a *row in a list of many*,
   or the internals of a panel/popover/form stacked inside another surface: the
-  agenda desk (`routes/+page.svelte`), attendance rows, library tree nodes,
+  agenda desk (`routes/agenda/+page.svelte`), attendance rows, library tree nodes,
   season-manage panel fields.
 
 A page is allowed to hold both — the library page is `text-sm` at the page

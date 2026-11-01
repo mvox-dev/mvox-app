@@ -12,7 +12,7 @@ import {
 
 const MAX_LINES = 1500;
 const ROOT = process.cwd();
-const PAGE = resolve(ROOT, 'src/routes/+page.svelte');
+const PAGE = resolve(ROOT, 'src/routes/agenda/+page.svelte');
 const DIRS = [resolve(ROOT, 'src/lib/components/agenda'), resolve(ROOT, 'src/lib/agenda')];
 
 function walk(dir: string): string[] {

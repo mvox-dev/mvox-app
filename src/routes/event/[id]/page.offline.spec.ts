@@ -26,7 +26,7 @@ const pageStub = vi.hoisted(() => ({
 vi.mock('$app/state', () => ({ page: pageStub }));
 
 import EventPage from './+page.svelte';
-import AgendaPage from '../../+page.svelte';
+import AgendaPage from '../../agenda/+page.svelte';
 import { collectiveState, hydrateCollectives } from '$lib/collectives/store';
 import { flushReadCache } from '$lib/entu/readCache';
 import { isoDateFormatter, tallinnHHMM } from '$lib/preferences/timeFormat';

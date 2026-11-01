@@ -122,13 +122,13 @@ describe('/event/[id] — description', () => {
 });
 
 describe('/event/[id] — back link', () => {
-	it('renders a back link to the agenda (/)', async () => {
+	it('renders a back link to the agenda (/agenda)', async () => {
 		const { container } = renderEventPage();
 		await waitFor(() => {
 			const back = container.querySelector('[data-testid="event-detail-back"]');
 			expect(back).not.toBeNull();
 			expect(back!.tagName).toBe('A');
-			expect(back!.getAttribute('href')).toBe('/');
+			expect(back!.getAttribute('href')).toBe('/agenda');
 		});
 	});
 

@@ -249,7 +249,7 @@
 	<div class="mx-auto flex w-full max-w-md flex-col gap-4">
 		<a
 			data-testid="event-detail-back"
-			href="/"
+			href="/agenda"
 			class="flex w-fit items-baseline gap-1 text-xs text-ink-2 underline"
 		>
 			<span aria-hidden="true">←</span>

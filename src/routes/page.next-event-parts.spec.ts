@@ -51,7 +51,7 @@ vi.mock('$lib/files/appLabelStore', async () =>
 	(await import('$lib/testing/mocks/files')).appLabelStoreModule()
 );
 
-import Page from './+page.svelte';
+import Page from './agenda/+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
 import { resetRetentionForTests } from '$lib/files/retention';

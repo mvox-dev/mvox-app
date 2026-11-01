@@ -202,7 +202,7 @@ describe('#916 — NavShell × real NAV_ENTRIES', () => {
 	])('renders the same 5 top-level entries for %s', (_who, hasMultipleCollectives) => {
 		const { container, queryByText } = renderShell({ hasMultipleCollectives });
 		expect(navAnchors(container).map((a) => a.getAttribute('href'))).toEqual([
-			'/',
+			'/agenda',
 			'/roster',
 			'/profile',
 			'/library',
@@ -220,6 +220,12 @@ describe('#916 — NavShell × real NAV_ENTRIES', () => {
 			expect(active.map((a) => a.getAttribute('href'))).toEqual(['/profile']);
 		}
 	);
+
+	it('highlights the Agenda tab on /agenda', () => {
+		const { container } = renderShell({ activeRoute: '/agenda' });
+		const active = Array.from(container.querySelectorAll('a[aria-current="page"]'));
+		expect(active.map((a) => a.getAttribute('href'))).toEqual(['/agenda']);
+	});
 
 	it('does not highlight Profile on a sibling route sharing a string prefix', () => {
 		const { container } = renderShell({ activeRoute: '/administrivia' });

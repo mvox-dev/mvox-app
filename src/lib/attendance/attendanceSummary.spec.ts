@@ -197,7 +197,7 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 	(await import('$lib/testing/mocks/files')).fileUrlsModule()
 );
 
-import Page from '../../routes/+page.svelte';
+import Page from '../../routes/agenda/+page.svelte';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';

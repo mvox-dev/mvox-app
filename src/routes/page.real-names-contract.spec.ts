@@ -79,7 +79,7 @@ vi.mock('$lib/library/libraryData', async (importOriginal) => {
 	};
 });
 
-import AgendaPage from './+page.svelte';
+import AgendaPage from './agenda/+page.svelte';
 import ProfilePage from './profile/+page.svelte';
 import EventPage from './event/[id]/+page.svelte';
 import LibraryPage from './library/+page.svelte';
@@ -157,8 +157,8 @@ async function openAttendancePanel(container: HTMLElement, calls: () => number) 
 }
 
 const ROWS: Record<string, Row> = {
-	'/ attendance panel': {
-		route: '/',
+	'/agenda attendance panel': {
+		route: '/agenda',
 		Page: AgendaPage,
 		members: ['m1', 'm2'],
 		arrange: () => {

@@ -47,7 +47,7 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 	(await import('$lib/testing/mocks/files')).fileUrlsModule()
 );
 
-import Page from './+page.svelte';
+import Page from './agenda/+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken } from '$lib/auth/storage';
 import { get } from 'svelte/store';

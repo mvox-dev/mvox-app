@@ -24,7 +24,7 @@ vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
 
-import AgendaPage from './+page.svelte';
+import AgendaPage from './agenda/+page.svelte';
 import InvitePage from './admin/invite/+page.svelte';
 import EventPage from './event/[id]/+page.svelte';
 import LibraryPage from './library/+page.svelte';
@@ -45,7 +45,7 @@ import { signIn } from '$lib/testing/session';
 type Row = { Page: Component; loadError: string; retry: string; route?: string; arrange?: () => void };
 
 const PAGES: Record<string, Row> = {
-	'/': { Page: AgendaPage, loadError: 'agenda-error', retry: 'agenda-retry' },
+	'/agenda': { Page: AgendaPage, loadError: 'agenda-error', retry: 'agenda-retry' },
 	'/admin/invite': {
 		Page: InvitePage,
 		loadError: 'invite-admin-load-error',

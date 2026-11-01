@@ -67,7 +67,7 @@ vi.mock('$lib/attendance/attendanceData', async () =>
 	(await import('$lib/testing/moduleStubs')).attendanceModule()
 );
 
-import Page from './+page.svelte';
+import Page from './agenda/+page.svelte';
 import { createFakeByteStore } from '$lib/testing/byteStoreFakes';
 import type { Season } from '$lib/seasons/types';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';

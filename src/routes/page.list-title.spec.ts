@@ -22,7 +22,7 @@ vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
 
-import AgendaPage from './+page.svelte';
+import AgendaPage from './agenda/+page.svelte';
 import LibraryPage from './library/+page.svelte';
 import LinksPage from './links/+page.svelte';
 import RosterPage from './roster/+page.svelte';
@@ -48,7 +48,7 @@ const DISCOVERY: Record<Discovery, CollectiveState> = {
 // The agenda with rows is in page.agenda-filter.spec.ts: an event needs more than one ROW.
 type ListPage = { Page: Component; title: string; shown: Partial<Record<State, string>> };
 const PAGES: Record<string, ListPage> = {
-	'/': {
+	'/agenda': {
 		Page: AgendaPage,
 		title: 'nav_agenda',
 		shown: {

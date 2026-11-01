@@ -3,7 +3,7 @@ import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import type { Component } from 'svelte';
 import { readFileSync } from 'node:fs';
 import { expect, vi } from 'vitest';
-import AgendaPage from '../../../routes/+page.svelte';
+import AgendaPage from '../../../routes/agenda/+page.svelte';
 import InvitePage from '../../../routes/admin/invite/+page.svelte';
 import EventPage from '../../../routes/event/[id]/+page.svelte';
 import LibraryPage from '../../../routes/library/+page.svelte';
@@ -198,8 +198,8 @@ function eventWire(url: string): unknown {
 }
 
 export const WRITE_PAGES: Record<string, WritePage> = {
-	'/': {
-		path: '/',
+	'/agenda': {
+		path: '/agenda',
 		Page: AgendaPage,
 		arrange: arrangeAgenda,
 		ready: (c) =>

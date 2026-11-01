@@ -62,7 +62,7 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 	(await import('$lib/testing/mocks/seasons')).repertoireDataModule('handle')
 );
 
-import Page from './+page.svelte';
+import Page from './agenda/+page.svelte';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { Season } from '$lib/seasons/types';
 import type { WorkRow } from '$lib/repertoire/types';

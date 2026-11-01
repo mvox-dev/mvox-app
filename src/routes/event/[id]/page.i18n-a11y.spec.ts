@@ -281,11 +281,11 @@ describe('#105 — a11y: landmarks and headings', () => {
 });
 
 describe('#105 — a11y: back link', () => {
-	it('is a real <a href="/"> whose accessible text comes from event_detail_back, with the arrow glyph aria-hidden', async () => {
+	it('is a real <a href="/agenda"> whose accessible text comes from event_detail_back, with the arrow glyph aria-hidden', async () => {
 		const { container } = renderEventPage();
 		const back = await waitForTestid(container, 'event-detail-back');
 		expect(back.tagName).toBe('A');
-		expect(back.getAttribute('href')).toBe('/');
+		expect(back.getAttribute('href')).toBe('/agenda');
 		expect(back.textContent).toContain('[event_detail_back]');
 		const arrow = [...back.querySelectorAll('span')].find((s) => s.textContent?.includes('←'));
 		expect(arrow, 'the ← glyph must live in its own aria-hidden span').not.toBeUndefined();

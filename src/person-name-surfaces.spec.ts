@@ -61,7 +61,7 @@ const NOT_A_PERSONS_NAME: Reasons = {
 	'src/lib/library/BulkCheckoutPanel.svelte': { 'edition.name': 'a catalogue edition' },
 	'src/lib/sections/SectionArrangeRow.svelte': { 'row.name': 'a section' },
 	'src/lib/sections/SectionPicker.svelte': { 'node.name': 'a section' },
-	'src/routes/+page.svelte': { 'c.name': 'a collective' }
+	'src/routes/agenda/+page.svelte': { 'c.name': 'a collective' }
 };
 
 function read(file: string): string {

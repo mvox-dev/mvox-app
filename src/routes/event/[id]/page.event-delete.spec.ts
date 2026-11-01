@@ -192,7 +192,7 @@ describe('event detail — #203 delete is a TWO-step confirm, never a single tap
 		expect(q(container, 'event-detail-delete')).toBeNull();
 	});
 
-	it('confirm calls deleteEvent(cfg, eventId) exactly ONCE and navigates home', async () => {
+	it('confirm calls deleteEvent(cfg, eventId) exactly ONCE and navigates to the agenda', async () => {
 		deleteEventMock.mockResolvedValue(undefined);
 		const { container } = renderPage(editorEvent());
 		const { confirm } = await arm(container);
@@ -202,7 +202,7 @@ describe('event detail — #203 delete is a TWO-step confirm, never a single tap
 		});
 		expect(deleteEventMock).toHaveBeenCalledWith(CFG, 'ev1');
 		await waitFor(() => {
-			expect(gotoMock).toHaveBeenCalledWith('/');
+			expect(gotoMock).toHaveBeenCalledWith('/agenda');
 		});
 	});
 

@@ -56,7 +56,7 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 	(await import('$lib/testing/mocks/files')).fileUrlsModule()
 );
 
-import Page from './+page.svelte';
+import Page from './agenda/+page.svelte';
 import { collectiveState, selectedCollectiveDbStore } from '$lib/collectives/store';
 import { completionGateStore } from '$lib/profile/completionGate';
 import { toListRead } from '$lib/testing/listReadFixtures.js';

@@ -56,7 +56,7 @@
 		const g = generation();
 		try {
 			await actions.deleteEvent(cfg, detail.id);
-			if (g === generation()) goto('/');
+			if (g === generation()) goto('/agenda');
 		} catch (e) {
 			reportProblem({ area: 'event', action: 'deleting the event', error: e, owner });
 			if (g !== generation()) return;

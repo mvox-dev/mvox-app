@@ -29,7 +29,7 @@ export const NAV_ENTRIES: NavEntry[] = [
 	{
 		key: 'agenda',
 		label: () => m.nav_agenda(),
-		route: '/',
+		route: '/agenda',
 		icon: agendaIcon,
 		visible: () => true,
 	},

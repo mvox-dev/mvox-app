@@ -165,7 +165,7 @@ vi.mock('$lib/invite/inviteData', async (importOriginal) => {
 	};
 });
 
-import Page from './+page.svelte';
+import Page from './agenda/+page.svelte';
 import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import {
 	goOffline,

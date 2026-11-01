@@ -22,7 +22,7 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-import Page from './+page.svelte';
+import Page from './agenda/+page.svelte';
 import type { CreateEventInput } from '$lib/entity/entityCreate';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { signIn } from '$lib/testing/session';

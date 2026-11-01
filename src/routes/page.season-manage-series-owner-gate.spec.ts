@@ -53,7 +53,7 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 	(await import('$lib/testing/mocks/seasons')).repertoireDataModule('empty')
 );
 
-import Page from './+page.svelte';
+import Page from './agenda/+page.svelte';
 import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import type { Season } from '$lib/seasons/types';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';

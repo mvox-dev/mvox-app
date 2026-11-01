@@ -4,7 +4,7 @@ import { expect } from 'vitest';
 import type { AgendaItem } from '$lib/agenda/types';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
-import Page from '../../../routes/+page.svelte';
+import Page from '../../../routes/agenda/+page.svelte';
 import { setAuthedWithOneCollective } from './agenda';
 
 export async function renderAgenda(

@@ -84,7 +84,7 @@ vi.mock('$lib/files/appLabelStore', async () =>
 	(await import('$lib/testing/mocks/files')).appLabelStoreModule()
 );
 
-import Page from './+page.svelte';
+import Page from './agenda/+page.svelte';
 import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import type { Season } from '$lib/seasons/types';
