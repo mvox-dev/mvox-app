@@ -4,6 +4,8 @@ import type { SectionNode } from '$lib/sections/sectionData';
 import { formKeydown } from '$lib/a11y/formKeys';
 import { findSectionNode, flattenSections, insertSectionNode } from '$lib/sections/sectionTree';
 import type { ArrangeOpsDeps } from '$lib/sections/sectionArrangeOps';
+import { reportProblem } from '$lib/problems/reportProblem';
+import { NO_CFG, writeOwner } from '$lib/roster/rosterProblems';
 
 export function createPageCreateOps(deps: ArrangeOpsDeps) {
 	const { roster, arrange: a, actions, generation, isOffline } = deps;
@@ -46,18 +48,19 @@ export function createPageCreateOps(deps: ArrangeOpsDeps) {
 
 		const cfg = deps.cfg();
 		if (!cfg) {
-			console.error('roster: page-level section create with no cfg', name, parentId);
+			reportProblem({ area: 'roster', action: 'creating a section', reason: NO_CFG });
 			a.pageCreateError = m.roster_section_create_failed;
 			return;
 		}
 		const g = generation();
+		const owner = writeOwner(cfg);
 		const dbEntityId = deps.currentDbEntityId();
 
 		let newId: string;
 		try {
 			newId = await actions.createSection(cfg, { name, parentId, dbEntityId });
 		} catch (e) {
-			console.error('roster: page-level section create failed', name, parentId, e);
+			reportProblem({ area: 'roster', action: 'creating a section', error: e, owner });
 			if (g !== generation()) return;
 			a.pageCreateError = m.roster_section_create_failed;
 			return;

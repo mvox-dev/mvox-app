@@ -209,6 +209,9 @@ describe('updateMemberRecord — replaceEntityProperty per changed field, no del
 		expect(err).toBeInstanceOf(MemberRecordPartialSaveError);
 		expect((err as MemberRecordPartialSaveError).landedFields).toEqual(['name', 'phone']);
 		expect((err as MemberRecordPartialSaveError).failedField).toBe('email');
+		expect((err as Error).message).toBe(
+			'member record save incomplete: email failed (replaceEntityProperty POST failed: 500); landed: name, phone'
+		);
 	});
 
 	it('birthdate wire: the date input\'s YYYY-MM-DD becomes { type: "birthdate", datetime: "<date>T00:00:00.000Z" } (UTC-midnight anchor)', async () => {

@@ -1,7 +1,6 @@
 // The section tree editor's reorder, indent and unindent writes.
 import { m } from '$lib/paraglide/messages.js';
 import type { SectionNode } from '$lib/sections/sectionData';
-import { isSectionParentDamaged } from '$lib/sections/sectionErrors';
 import {
 	applyReparent,
 	applySiblingOrder,
@@ -13,6 +12,8 @@ import { createRestoreSections } from '$lib/sections/sectionArrangeRestore';
 import { isStructuralWritePending } from '$lib/sections/sectionArrangeState';
 import type { ArrangeOpsDeps } from '$lib/sections/sectionArrangeOps';
 import { createArrangeRights } from '$lib/sections/sectionRights';
+import { reportProblem } from '$lib/problems/reportProblem';
+import { NO_CFG, writeOwner } from '$lib/roster/rosterProblems';
 
 export function createReorderOps(deps: ArrangeOpsDeps) {
 	const { roster, arrange: a, actions, generation, isOffline } = deps;
@@ -36,12 +37,13 @@ export function createReorderOps(deps: ArrangeOpsDeps) {
 		if (!rights.mayReorder(movedId)) return false;
 		const cfg = deps.cfg();
 		if (!cfg) {
-			console.error('roster: section reorder with no cfg', afterIds);
+			reportProblem({ area: 'roster', action: 'reordering the sections', reason: NO_CFG });
 			a.reorderError = true;
 			a.reparentPartial = false;
 			return false;
 		}
 		const g = generation();
+		const owner = writeOwner(cfg);
 		a.reorderPending = true;
 		a.reorderError = false;
 		a.reparentPartial = false;
@@ -57,7 +59,7 @@ export function createReorderOps(deps: ArrangeOpsDeps) {
 			});
 			return true;
 		} catch (e) {
-			console.error('roster: section reorder failed', e);
+			reportProblem({ area: 'roster', action: 'reordering the sections', error: e, owner });
 			if (g !== generation()) return false;
 			a.reorderError = true;
 			await restoreSections(
@@ -91,18 +93,20 @@ export function createReorderOps(deps: ArrangeOpsDeps) {
 		node: SectionNode,
 		target: ReparentTarget,
 		insertAfterId: string | null,
-		announce: () => string
+		announce: () => string,
+		what: string
 	): Promise<boolean> {
 		if (structuralWritePending()) return false;
 		if (isOffline()) return false;
 		const cfg = deps.cfg();
 		if (!cfg) {
-			console.error('roster: section reparent with no cfg', node.id);
+			reportProblem({ area: 'roster', action: what, reason: NO_CFG });
 			a.reorderError = true;
 			a.reparentPartial = false;
 			return false;
 		}
 		const g = generation();
+		const owner = writeOwner(cfg);
 		a.reorderPending = true;
 		a.reorderError = false;
 		a.reparentPartial = false;
@@ -121,12 +125,8 @@ export function createReorderOps(deps: ArrangeOpsDeps) {
 			a.reorderStatus = announce();
 			return true;
 		} catch (e) {
-			console.error(
-				isSectionParentDamaged(e)
-					? 'roster: section reparent refused — parent data damaged, nothing written'
-					: 'roster: section reparent failed',
-				e
-			);
+			const action = moveLanded ? 'reordering the sections after a move' : what;
+			reportProblem({ area: 'roster', action, error: e, owner });
 			if (g !== generation()) return false;
 			a.reorderError = true;
 			a.reparentPartial = moveLanded;
@@ -142,8 +142,12 @@ export function createReorderOps(deps: ArrangeOpsDeps) {
 		const prevId = prevSiblingId(node.id);
 		if (prevId === null) return;
 		const parentName = findSectionNode(roster.sections, prevId)?.name ?? '';
-		await performReparent(node, { kind: 'section', sectionId: prevId }, null, () =>
-			m.roster_section_indented({ name: node.name, parentName })
+		await performReparent(
+			node,
+			{ kind: 'section', sectionId: prevId },
+			null,
+			() => m.roster_section_indented({ name: node.name, parentName }),
+			'moving a section under another'
 		);
 	}
 
@@ -154,20 +158,29 @@ export function createReorderOps(deps: ArrangeOpsDeps) {
 		if (parent.parentId === null) {
 			const dbEntityId = parent.dbEntityId ?? deps.currentDbEntityId();
 			if (!dbEntityId) {
-				console.error('roster: unindent to top level with no known collective (database entity) id', node.id);
+				const reason = 'no collective (database entity) id is known';
+				reportProblem({ area: 'roster', action: 'moving a section to the top level', reason });
 				a.reorderError = true;
 				a.reparentPartial = false;
 				return;
 			}
-			await performReparent(node, { kind: 'org', dbEntityId }, parent.id, () =>
-				m.roster_section_unindented_top({ name: node.name })
+			await performReparent(
+				node,
+				{ kind: 'org', dbEntityId },
+				parent.id,
+				() => m.roster_section_unindented_top({ name: node.name }),
+				'moving a section to the top level'
 			);
 			return;
 		}
 		const grandParentId = parent.parentId;
 		const grandParentName = findSectionNode(roster.sections, grandParentId)?.name ?? '';
-		await performReparent(node, { kind: 'section', sectionId: grandParentId }, parent.id, () =>
-			m.roster_section_unindented({ name: node.name, parentName: grandParentName })
+		await performReparent(
+			node,
+			{ kind: 'section', sectionId: grandParentId },
+			parent.id,
+			() => m.roster_section_unindented({ name: node.name, parentName: grandParentName }),
+			'moving a section out of its parent'
 		);
 	}
 

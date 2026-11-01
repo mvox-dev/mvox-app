@@ -8,6 +8,8 @@ import { without } from '$lib/collections/immutable';
 import { createRestoreSections } from '$lib/sections/sectionArrangeRestore';
 import { isStructuralWritePending } from '$lib/sections/sectionArrangeState';
 import type { ArrangeOpsDeps } from '$lib/sections/sectionArrangeOps';
+import { reportProblem } from '$lib/problems/reportProblem';
+import { NO_CFG, writeOwner } from '$lib/roster/rosterProblems';
 
 export function createRemoveOps(deps: ArrangeOpsDeps) {
 	const { roster, arrange: a, actions, generation, isOffline } = deps;
@@ -75,12 +77,13 @@ export function createRemoveOps(deps: ArrangeOpsDeps) {
 		const name = findSectionNode(roster.sections, id)?.name ?? id;
 		const cfg = deps.cfg();
 		if (!cfg) {
-			console.error('roster: section remove with no cfg', id);
+			reportProblem({ area: 'roster', action: 'removing a section', reason: NO_CFG });
 			a.removeError = { name, kind: 'write' };
 			if (ownsFocus) await placeFocusAfterFailedRemove(id);
 			return;
 		}
 		const g = generation();
+		const owner = writeOwner(cfg);
 		const before = roster.sections;
 		let failedRemoveId: string | null = null;
 		a.removePending = true;
@@ -95,7 +98,9 @@ export function createRemoveOps(deps: ArrangeOpsDeps) {
 			a.removeStatus = m.roster_section_removed({ name });
 			if (ownsFocus) await placeFocusAfterRemove(fallbackId);
 		} catch (e) {
-			console.error('roster: section remove failed', id, e);
+			// A section that still has members is refused, and shown as such: nothing failed.
+			const action = 'removing a section';
+			if (!isSectionNotEmpty(e)) reportProblem({ area: 'roster', action, error: e, owner });
 			if (!(await restoreSections(cfg, g, () => before, 'remove'))) return;
 			a.removeError = { name, kind: isSectionNotEmpty(e) ? 'not-empty' : 'write' };
 			failedRemoveId = id;

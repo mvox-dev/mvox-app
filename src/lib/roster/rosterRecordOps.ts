@@ -6,6 +6,7 @@ import { isValidIdCode } from '$lib/roster/idCode';
 import { emptyRecordForm } from '$lib/roster/rosterPageState';
 import type { MemberOpsDeps } from '$lib/roster/rosterMemberOps';
 import { reportProblem } from '$lib/problems/reportProblem';
+import { writeOwner } from '$lib/roster/rosterProblems';
 
 export function createRecordOps<Halves>(deps: MemberOpsDeps<Halves>) {
 	const { mo, actions, generation, isCurrent, isOffline } = deps;
@@ -87,9 +88,11 @@ export function createRecordOps<Halves>(deps: MemberOpsDeps<Halves>) {
 			return;
 		}
 		const g = generation();
+		const owner = writeOwner(cfg);
 		const holder = {};
 		lockHolder = holder;
 		mo.recordSavingMemberId = memberId;
+		let action = 'saving a member record: reading it first';
 		try {
 			const fresh = await actions.loadMemberRecord(cfg, row.personId);
 			if (!isCurrent(g) || mo.recordEditorMemberId !== memberId) return;
@@ -98,6 +101,7 @@ export function createRecordOps<Halves>(deps: MemberOpsDeps<Halves>) {
 				return;
 			}
 			const current = mo.recordForm;
+			action = 'saving a member record';
 			if (fresh.state === 'none') {
 				const dbEntityId = row.dbEntityId ?? deps.currentDbEntityId();
 				if (!dbEntityId) {
@@ -130,15 +134,14 @@ export function createRecordOps<Halves>(deps: MemberOpsDeps<Halves>) {
 			mo.recordEditorOriginal = null;
 			mo.recordStatus = m.roster_record_saved();
 		} catch (e) {
+			reportProblem({ area: 'roster', action, error: e, owner });
 			if (!isCurrent(g) || mo.recordEditorMemberId !== memberId) return;
 			if (actions.isPartialSaveError(e)) {
-				console.error('roster: member record save incomplete', memberId, e.failedField);
 				mo.recordSaveError =
 					e.landedFields.length > 0
 						? { memberId, kind: 'partial', savedFields: e.landedFields }
 						: { memberId, kind: 'failed' };
 			} else {
-				console.error('roster: member record save failed', memberId, e);
 				mo.recordSaveError = { memberId, kind: 'failed' };
 			}
 		} finally {

@@ -8,6 +8,7 @@ import {
 } from '$lib/a11y/focusable';
 import type { MemberOpsDeps } from '$lib/roster/rosterMemberOps';
 import { reportProblem } from '$lib/problems/reportProblem';
+import { writeOwner } from '$lib/roster/rosterProblems';
 
 export function createDeactivateOps<Halves>(deps: MemberOpsDeps<Halves>) {
 	const { roster, mo, actions, generation, isCurrent, isOffline } = deps;
@@ -34,6 +35,8 @@ export function createDeactivateOps<Halves>(deps: MemberOpsDeps<Halves>) {
 		if (!cfg) return;
 		const ownsFocus = ownsFocusOf(`member-deactivate-confirm-${row.memberId}`);
 		const gEntry = generation();
+		const owner = writeOwner(cfg);
+		let action = 'deactivating a member';
 		mo.deactivatePending = true;
 		mo.deactivateRefusal = null;
 		mo.deactivateActionError = null;
@@ -42,19 +45,23 @@ export function createDeactivateOps<Halves>(deps: MemberOpsDeps<Halves>) {
 			if (!dbEntityId) {
 				throw new Error(`roster: cannot resolve the database entity id for member ${row.memberId}`);
 			}
+			action = 'deactivating a member: finding the library';
 			const libraryId = await actions.resolveMyLibraryId(cfg, undefined, dbEntityId);
+			action = 'deactivating a member: checking what blocks it';
 			const blockers = await actions.listDeactivateBlockers(cfg, row.personId, dbEntityId, libraryId);
 			if (blockers.length > 0) {
 				if (gEntry !== generation()) return;
 				mo.deactivateRefusal = { memberId: row.memberId, blockers };
 				return;
 			}
+			action = 'deactivating a member';
 			await actions.deactivateMember(cfg, row.memberId);
 			if (gEntry !== generation()) return;
 			mo.pendingDeactivateId = null;
+			action = 'deactivating a member: reloading the roster';
 			await deps.loadForSelected();
 		} catch (e) {
-			console.error('roster: deactivate failed', row.memberId, e);
+			reportProblem({ area: 'roster', action, error: e, owner });
 			if (gEntry !== generation()) return;
 			mo.deactivateActionError = { memberId: row.memberId, kind: 'deactivate' };
 		} finally {
@@ -95,13 +102,16 @@ export function createDeactivateOps<Halves>(deps: MemberOpsDeps<Halves>) {
 		const cfg = deps.cfg();
 		if (!cfg) return;
 		const gEntry = generation();
+		const owner = writeOwner(cfg);
 		mo.reinstatePending = memberId;
 		mo.deactivateActionError = null;
+		let action = 'reinstating a member';
 		try {
 			await actions.reinstateMember(cfg, memberId);
+			action = 'reinstating a member: reloading the roster';
 			await deps.loadForSelected();
 		} catch (e) {
-			console.error('roster: reinstate failed', memberId, e);
+			reportProblem({ area: 'roster', action, error: e, owner });
 			if (gEntry !== generation()) return;
 			mo.deactivateActionError = { memberId, kind: 'reinstate' };
 		} finally {

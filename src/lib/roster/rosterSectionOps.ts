@@ -1,6 +1,8 @@
 // The roster rows' section assign, unassign and move handlers.
 import { isSectionMembershipMissing } from '$lib/sections/sectionErrors';
 import type { MemberOpsDeps } from '$lib/roster/rosterMemberOps';
+import { reportProblem } from '$lib/problems/reportProblem';
+import { NO_CFG, writeOwner } from '$lib/roster/rosterProblems';
 
 export function createSectionOps<Halves>(deps: MemberOpsDeps<Halves>) {
 	const { roster, mo, actions, generation, isOffline } = deps;
@@ -28,17 +30,18 @@ export function createSectionOps<Halves>(deps: MemberOpsDeps<Halves>) {
 		mo.sectionWriteError = null;
 		const cfg = deps.cfg();
 		if (!cfg) {
-			console.error('roster: section assign with no cfg', memberId, sectionId);
+			reportProblem({ area: 'roster', action: 'assigning a member to a section', reason: NO_CFG });
 			mo.sectionWriteError = { memberId };
 			return;
 		}
 		const g = generation();
+		const owner = writeOwner(cfg);
 		mo.sectionBusyIds.add(memberId);
 		patchMemberSectionIds(memberId, [...currentSectionIds(memberId), sectionId]);
 		try {
 			await actions.assignMemberSection(cfg, memberId, sectionId);
 		} catch (e) {
-			console.error('roster: section assign failed', memberId, sectionId, e);
+			reportProblem({ area: 'roster', action: 'assigning a member to a section', error: e, owner });
 			if (g !== generation()) return;
 			dropBack(memberId, sectionId);
 			mo.sectionWriteError = { memberId };
@@ -52,20 +55,24 @@ export function createSectionOps<Halves>(deps: MemberOpsDeps<Halves>) {
 		mo.sectionWriteError = null;
 		const cfg = deps.cfg();
 		if (!cfg) {
-			console.error('roster: section unassign with no cfg', memberId, sectionId);
+			reportProblem({ area: 'roster', action: 'taking a member out of a section', reason: NO_CFG });
 			mo.sectionWriteError = { memberId };
 			return;
 		}
 		const g = generation();
+		const owner = writeOwner(cfg);
 		mo.sectionBusyIds.add(memberId);
 		try {
 			await actions.unassignMemberSection(cfg, memberId, sectionId);
 			if (g !== generation()) return;
 			dropBack(memberId, sectionId);
 		} catch (e) {
-			console.error('roster: section unassign failed', memberId, sectionId, e);
+			// Already out of the section is what the user asked for: nothing failed.
+			const missing = isSectionMembershipMissing(e);
+			const action = 'taking a member out of a section';
+			if (!missing) reportProblem({ area: 'roster', action, error: e, owner });
 			if (g !== generation()) return;
-			if (isSectionMembershipMissing(e)) {
+			if (missing) {
 				dropBack(memberId, sectionId);
 			} else {
 				mo.sectionWriteError = { memberId };
@@ -80,17 +87,19 @@ export function createSectionOps<Halves>(deps: MemberOpsDeps<Halves>) {
 		mo.sectionWriteError = null;
 		const cfg = deps.cfg();
 		if (!cfg) {
-			console.error('roster: section move with no cfg', memberId, fromId, toId);
+			reportProblem({ area: 'roster', action: 'moving a member', reason: NO_CFG });
 			mo.sectionWriteError = { memberId };
 			return;
 		}
 		const g = generation();
+		const owner = writeOwner(cfg);
 		mo.sectionBusyIds.add(memberId);
 		try {
 			try {
 				await actions.assignMemberSection(cfg, memberId, toId);
 			} catch (e) {
-				console.error('roster: move — assigning the new section failed', memberId, fromId, toId, e);
+				const action = 'moving a member: adding the new section';
+				reportProblem({ area: 'roster', action, error: e, owner });
 				if (g !== generation()) return;
 				mo.sectionWriteError = { memberId };
 				return;
@@ -100,15 +109,11 @@ export function createSectionOps<Halves>(deps: MemberOpsDeps<Halves>) {
 			try {
 				await actions.unassignMemberSection(cfg, memberId, fromId);
 			} catch (e) {
-				console.error(
-					'roster: move — unassigning the old section failed',
-					memberId,
-					fromId,
-					toId,
-					e
-				);
+				const missing = isSectionMembershipMissing(e);
+				const action = 'moving a member: leaving the old section';
+				if (!missing) reportProblem({ area: 'roster', action, error: e, owner });
 				if (g !== generation()) return;
-				if (isSectionMembershipMissing(e)) {
+				if (missing) {
 					dropBack(memberId, fromId);
 					return;
 				}

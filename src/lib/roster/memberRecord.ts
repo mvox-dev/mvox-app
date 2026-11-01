@@ -33,8 +33,10 @@ export interface CreateMemberRecordInput {
 export class MemberRecordPartialSaveError extends Error {
 	landedFields: string[];
 	failedField: string;
-	constructor(landedFields: string[], failedField: string) {
-		super('member record save incomplete');
+	constructor(landedFields: string[], failedField: string, cause?: unknown) {
+		const why = cause instanceof Error ? cause.message : String(cause);
+		const landed = landedFields.join(', ') || 'none';
+		super(`member record save incomplete: ${failedField} failed (${why}); landed: ${landed}`, { cause });
 		this.name = 'MemberRecordPartialSaveError';
 		this.landedFields = landedFields;
 		this.failedField = failedField;
@@ -157,8 +159,8 @@ export async function updateMemberRecord(
 				);
 			}
 			landed.push(field);
-		} catch {
-			throw new MemberRecordPartialSaveError(landed, field);
+		} catch (cause) {
+			throw new MemberRecordPartialSaveError(landed, field, cause);
 		}
 	}
 }

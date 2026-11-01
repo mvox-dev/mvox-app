@@ -7,6 +7,8 @@ import { findSectionNode, renameSectionNode } from '$lib/sections/sectionTree';
 import { createRestoreSections } from '$lib/sections/sectionArrangeRestore';
 import { isStructuralWritePending } from '$lib/sections/sectionArrangeState';
 import type { ArrangeOpsDeps } from '$lib/sections/sectionArrangeOps';
+import { reportProblem } from '$lib/problems/reportProblem';
+import { NO_CFG, writeOwner } from '$lib/roster/rosterProblems';
 
 export function createRenameOps(deps: ArrangeOpsDeps) {
 	const { roster, arrange: a, actions, generation, isOffline } = deps;
@@ -58,11 +60,12 @@ export function createRenameOps(deps: ArrangeOpsDeps) {
 		}
 		const cfg = deps.cfg();
 		if (!cfg) {
-			console.error('roster: section rename with no cfg', id);
+			reportProblem({ area: 'roster', action: 'renaming a section', reason: NO_CFG });
 			a.renameError = { id, name };
 			return;
 		}
 		const g = opts?.generation ?? generation();
+		const owner = writeOwner(cfg);
 		const before = roster.sections;
 		a.renamePending = true;
 		a.renamingSectionId = null;
@@ -72,7 +75,7 @@ export function createRenameOps(deps: ArrangeOpsDeps) {
 			if (g !== generation()) return;
 			a.renameStatus = m.roster_section_renamed({ name });
 		} catch (e) {
-			console.error('roster: section rename failed', id, e);
+			reportProblem({ area: 'roster', action: 'renaming a section', error: e, owner });
 			if (!(await restoreSections(cfg, g, () => before, 'rename'))) return;
 			a.renameError = { id, name };
 		} finally {

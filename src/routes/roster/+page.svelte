@@ -8,6 +8,7 @@
 	import type { ListRead } from '$lib/entu/listRead';
 	import { listJoinStateDetails } from '$lib/profile/linkedIdentities';
 	import { resolveDbRight } from '$lib/nav/dbRights';
+	import { settledDbRight } from '$lib/roster/rosterProblems';
 	import { loadActiveAndArchivedRosters } from '$lib/roster/memberLifecycle';
 	import { listSections, groupBySection } from '$lib/sections/sectionData';
 	import { dbEditRight } from '$lib/nav/dbRights';
@@ -112,7 +113,7 @@
 			}
 			applyRosterHalves(rowResult.value);
 
-			roster.dbRight = dbRightResult.status === 'fulfilled' ? dbRightResult.value : 'error';
+			roster.dbRight = settledDbRight(dbRightResult);
 
 			try {
 				const details = await listJoinStateDetails(cfg, roster.rows.map((r) => r.personId));
