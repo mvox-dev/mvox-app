@@ -2,6 +2,7 @@
 <script lang="ts">
 	import ListOfStuff from '$lib/components/ListOfStuff.svelte';
 	import { reportProblem } from '$lib/problems/reportProblem';
+	import { writeOwner } from '$lib/problems/writeOwner';
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
 	import { selectedCollectiveIdentityStore } from '$lib/collectives/store';
@@ -100,14 +101,14 @@
 	/** Re-reads the list; true only when `rows` now holds a fresh server read, which is what
 	 *  lets the reorder alert claim to show the order the server holds. */
 	async function refreshRows(cfg: { db: string; token: string }, g: number): Promise<boolean> {
+		const owner = writeOwner(cfg);
 		try {
 			const list = await listLinks(cfg);
 			if (selected?.db !== cfg.db || g !== routeLoad.generation) return false;
 			rows = list;
 			return true;
 		} catch (e) {
-			if (selected?.db !== cfg.db || g !== routeLoad.generation) return false;
-			reportProblem({ area: 'links', action: 'loading the links', error: e });
+			reportProblem({ area: 'links', action: 'loading the links', owner, error: e });
 			return false;
 		}
 	}
@@ -126,6 +127,7 @@
 		const description = addDescription.trim() ? addDescription : null;
 		const maxOrder = rows.reduce((max, r) => Math.max(max, r.displayOrder ?? 0), 0);
 		const g = routeLoad.generation;
+		const owner = writeOwner(cfg);
 		writeError = null;
 		try {
 			await createLink(cfg, {
@@ -140,8 +142,8 @@
 			addDescription = '';
 			await refreshRows(cfg, g);
 		} catch (e) {
+			reportProblem({ area: 'links', action: 'creating a link', owner, error: e });
 			if (g !== routeLoad.generation) return;
-			console.error('links: create failed', e);
 			// The draft is left as typed so the retry has something to resubmit.
 			writeError = 'create';
 		}
@@ -172,6 +174,7 @@
 		if (!name || !/\S/.test(editUrl)) return;
 		const description = editDescription.trim() ? editDescription : null;
 		const g = routeLoad.generation;
+		const owner = writeOwner(cfg);
 		writeError = null;
 		try {
 			await updateLink(cfg, id, { name, url: normalizeUrl(editUrl, page.url.host), description });
@@ -179,8 +182,8 @@
 			cancelEdit();
 			await refreshRows(cfg, g);
 		} catch (e) {
+			reportProblem({ area: 'links', action: 'updating a link', owner, error: e });
 			if (g !== routeLoad.generation) return;
-			console.error('links: update failed', e);
 			writeError = 'update';
 		}
 	}
@@ -190,14 +193,15 @@
 		if (!currentCfg) return;
 		const cfg = cfgFor(currentCfg.db);
 		const g = routeLoad.generation;
+		const owner = writeOwner(cfg);
 		writeError = null;
 		try {
 			await deleteLink(cfg, id);
 			if (g !== routeLoad.generation) return;
 			await refreshRows(cfg, g);
 		} catch (e) {
+			reportProblem({ area: 'links', action: 'removing a link', owner, error: e });
 			if (g !== routeLoad.generation) return;
-			console.error('links: remove failed', e);
 			writeError = 'remove';
 		}
 	}
@@ -210,6 +214,7 @@
 		if (!currentCfg) return;
 		const cfg = cfgFor(currentCfg.db);
 		const g = routeLoad.generation;
+		const owner = writeOwner(cfg);
 		const newOrder = rows.map((r) => r.id);
 		const [movedId] = newOrder.splice(from, 1);
 		newOrder.splice(to, 0, movedId);
@@ -223,8 +228,8 @@
 			if (g !== routeLoad.generation) return;
 			reorderStatus = m.links_reorder_saved();
 		} catch (e) {
+			reportProblem({ area: 'links', action: 'reordering the links', owner, error: e });
 			if (g !== routeLoad.generation) return;
-			console.error('links: reorder failed', e);
 			// The renumber is sequential and can fail half-applied, so only a re-read can say what
 			// landed; awaited before the alert, so the alert and the re-enabled arrows land together.
 			const reread = await refreshRows(cfg, g);

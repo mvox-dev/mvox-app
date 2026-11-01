@@ -3,9 +3,21 @@ import { entuFetch } from '$lib/entu/request';
 import { overwriteEntityValues, type OverwriteEntry } from '$lib/entu/replaceProperty';
 import { resolveTypeId } from '$lib/seasons/entuSeasons';
 import type { EntuCfg } from '$lib/entu/cfg';
+import { isAuthExpiredError } from '$lib/entu/auth-expired';
 import { postEntity } from '$lib/entity/entityCreateShared';
 
 export { renumberDisplayOrder as reorderLinks } from '$lib/sections/sectionTreeWrites';
+
+// Names the update step that failed, keeping the cause; an expired session passes through.
+async function inStep<T>(step: string, run: () => Promise<T>): Promise<T> {
+	try {
+		return await run();
+	} catch (e) {
+		if (isAuthExpiredError(e)) throw e;
+		const why = e instanceof Error ? e.message : String(e);
+		throw new Error(`updateLink ${step} failed: ${why}`, { cause: e });
+	}
+}
 
 function hasNonWhitespace(s: string): boolean {
 	return /\S/.test(s);
@@ -97,17 +109,19 @@ export async function updateLink(
 		throw new Error('updateLink: url must not be empty');
 	}
 
-	const getRes = await entuFetch(
-		cfg.db,
-		`entity/${linkId}?props=name,url,description`,
-		cfg.token,
-		{},
-		fetchImpl
-	);
-	if (!getRes.ok) throw new Error(`updateLink lookup failed: HTTP ${getRes.status}`);
-	const body = (await getRes.json()) as {
-		entity?: { name?: FieldValue[]; url?: FieldValue[]; description?: FieldValue[] };
-	};
+	const body = await inStep('lookup', async () => {
+		const getRes = await entuFetch(
+			cfg.db,
+			`entity/${linkId}?props=name,url,description`,
+			cfg.token,
+			{},
+			fetchImpl
+		);
+		if (!getRes.ok) throw new Error(`HTTP ${getRes.status}`);
+		return (await getRes.json()) as {
+			entity?: { name?: FieldValue[]; url?: FieldValue[]; description?: FieldValue[] };
+		};
+	});
 	const existingName = body.entity?.name ?? [];
 	const existingUrl = body.entity?.url ?? [];
 	const existingDescription = body.entity?.description ?? [];
@@ -122,18 +136,20 @@ export async function updateLink(
 			existing: existingDescription
 		});
 	}
-	await overwriteEntityValues(cfg, linkId, entries, fetchImpl, 'updateLink');
+	await inStep('overwrite', () => overwriteEntityValues(cfg, linkId, entries, fetchImpl, 'request'));
 
 	// A cleared description is deleted by property id, strictly after the POST.
 	if (!fields.description && existingDescription[0]) {
-		const delRes = await entuFetch(
-			cfg.db,
-			`property/${existingDescription[0]._id}`,
-			cfg.token,
-			{ method: 'DELETE' },
-			fetchImpl
-		);
-		if (!delRes.ok) throw new Error(`updateLink delete failed: HTTP ${delRes.status}`);
+		await inStep('delete', async () => {
+			const delRes = await entuFetch(
+				cfg.db,
+				`property/${existingDescription[0]._id}`,
+				cfg.token,
+				{ method: 'DELETE' },
+				fetchImpl
+			);
+			if (!delRes.ok) throw new Error(`HTTP ${delRes.status}`);
+		});
 	}
 }
 

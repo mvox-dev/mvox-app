@@ -4,6 +4,7 @@ import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { createLink, deleteLink, reorderLinks, updateLink } from './linkActions';
 import { renumberDisplayOrder } from '$lib/sections/sectionTreeWrites';
 import { SectionReparentPartialError } from '$lib/sections/sectionErrors';
+import { AuthExpiredError, isAuthExpiredError } from '$lib/entu/auth-expired';
 import { json, testCfg, type Call } from '$lib/testing/entuFetchKit';
 
 function partialShape(err: unknown) {
@@ -296,6 +297,41 @@ describe('updateLink — whole-field edit via the atomic overwrite (#256 done-wh
 			{ _id: 'pv-url', type: 'url', string: 'x' }
 		]);
 		expect(calls[2].url).toContain('/testdb/property/pv-name-2');
+	});
+
+	describe.each([
+		['lookup', 'GET', {}],
+		['overwrite', 'POST', {}],
+		['delete', 'DELETE', { description: [{ _id: 'pv-desc' }] }]
+	] as Array<[string, string, Parameters<typeof makeUpdateFetchMock>[0]]>)('a failure at the %s step', (step, method, existing) => {
+		const fail = (how: 'status' | 'throw') =>
+			vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+				if ((init?.method ?? 'GET') !== method) return makeUpdateFetchMock(existing)(url, init);
+				if (how === 'throw') return Promise.reject(new TypeError('Failed to fetch'));
+				return Promise.resolve(json({}, 500));
+			});
+		const run = (fetchImpl: ReturnType<typeof vi.fn>) =>
+			updateLink(cfg, 'l-1', { name: 'A', url: 'x', description: null }, fetchImpl as typeof fetch);
+
+		it('names the step when Entu answers with a failing status', async () => {
+			await expect(run(fail('status'))).rejects.toThrow(
+				new RegExp(`^updateLink ${step} failed: .*500`)
+			);
+		});
+
+		it('names the step on a network throw and keeps the cause', async () => {
+			const err = await run(fail('throw')).catch((e: unknown) => e);
+			expect((err as Error).message).toMatch(new RegExp(`^updateLink ${step} failed: .*Failed to fetch`));
+			expect(((err as Error).cause as Error).name).toBe('TypeError');
+		});
+	});
+
+	it('an expired session at any step stays an auth-expired error, not a step failure', async () => {
+		const fetchImpl = vi.fn().mockRejectedValue(new AuthExpiredError());
+		const err = await updateLink(cfg, 'l-1', { name: 'A', url: 'x', description: null }, fetchImpl).catch(
+			(e: unknown) => e
+		);
+		expect(isAuthExpiredError(err)).toBe(true);
 	});
 
 	it('empty name or empty url throws WITHOUT any fetch', async () => {
