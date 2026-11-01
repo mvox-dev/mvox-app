@@ -1,5 +1,33 @@
 [
   {
+    "number": 1063,
+    "title": "A landing page covers a member's everyday needs, with one door into the current app",
+    "state": "open",
+    "stateReason": null,
+    "labels": [
+      {
+        "name": "in process",
+        "color": "95ea29"
+      },
+      {
+        "name": "ready",
+        "color": "0e8a16"
+      },
+      {
+        "name": "task",
+        "color": "1d76db"
+      }
+    ],
+    "body": "### Slugline\n\nAvaleht katab liikme igapäevased vajadused\n\n### Lead\n\nPärast sisselogimist näeb liige ühel lehel järgmist proovi, oma vastamata kutseid, praegu õpitavaid teoseid ja lingid. Kõik muu on ühe nupu taga.",
+    "closedAt": null,
+    "updatedAt": "2026-11-01T11:38:45Z",
+    "htmlUrl": "http://forge/mvox/mvox-app/issues/1063",
+    "subIssues": [],
+    "issueType": null,
+    "statusSince": "2026-11-01T11:38:43Z",
+    "researchMs": 180000
+  },
+  {
     "number": 1052,
     "title": "The app says when a newer version is available and updates on Refresh",
     "state": "closed",
