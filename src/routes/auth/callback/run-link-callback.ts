@@ -11,17 +11,25 @@ import { entuFetch } from '$lib/entu/request';
 import { cfgFor } from '$lib/entu/cfg';
 import type { CallbackOutcome } from './run-callback-exchange';
 import { reportProblem } from '$lib/problems/reportProblem';
+import type { CollectiveIdentity } from '$lib/collectives/store';
+
+const AREA = 'link callback';
 
 const SAME_IDENTITY_NOOP: CallbackOutcome = {
 	ok: true,
 	redirectTo: '/profile?link_noop=same_identity'
 };
 
-const INVALID_STATE: CallbackOutcome = {
-	ok: false,
-	redirectTo: '/profile?link_error=invalid',
-	error: 'link_state_invalid'
-};
+// Linking errors report (the person is signed in); one callback run per attempt, one report.
+function linkError(
+	code: string,
+	error: string,
+	owner: CollectiveIdentity | undefined,
+	reason: string = code
+): CallbackOutcome {
+	reportProblem({ area: AREA, action: 'linking another account', reason, owner });
+	return { ok: false, redirectTo: `/profile?link_error=${code}`, error };
+}
 
 export async function runLinkCallbackExchange(
 	key: string,
@@ -30,7 +38,13 @@ export async function runLinkCallbackExchange(
 	// The initiation always writes both; without either there is no tripwire, so fail loudly.
 	const invite = state.invite;
 	const linkPersonId = state.linkPersonId;
-	if (!invite || !linkPersonId) return INVALID_STATE;
+	if (!invite || !linkPersonId) {
+		// No person to file under: this fresh page load selects a collective only after discovery.
+		hydrateAuth();
+		await hydrateCollectives();
+		return linkError('invalid', 'link_state_invalid', undefined);
+	}
+	const owner = { db: invite.db, personId: linkPersonId };
 
 	const result = await exchangeSessionWithInvite({
 		sessionToken: key,
@@ -41,26 +55,23 @@ export async function runLinkCallbackExchange(
 
 	if (result.status === 'dead') {
 		// Nothing persisted: the issued JWT carries no accounts claim.
-		return { ok: false, redirectTo: '/profile?link_error=dead', error: 'link_dead' };
+		return linkError('dead', 'link_dead', owner);
 	}
 	if (result.status === 'failed') {
 		// Retry is real: a fresh CTA click mints a fresh self-invite.
-		return { ok: false, redirectTo: '/profile?link_error=failed', error: 'link_failed' };
+		return linkError('failed', 'link_failed', owner);
 	}
 	if (result.status === 'conflict') {
 		// Same person on both sides: already linked to them, not taken by another member.
 		if (result.existingPersonId === linkPersonId) {
-			return {
-				ok: false,
-				redirectTo: '/profile?link_error=already_linked',
-				error: 'link_already_linked'
-			};
+			return linkError('already_linked', 'link_already_linked', owner);
 		}
 		// Bound to a different person: persisting it would swap who is signed in.
-		return { ok: false, redirectTo: '/profile?link_error=conflict', error: 'link_conflict' };
+		return linkError('conflict', 'link_conflict', owner);
 	}
 	if (result.status === 'unexpected') {
-		return { ok: false, redirectTo: '/profile?link_error=unexpected', error: 'link_unexpected' };
+		const reason = `unexpected: ${result.detail}`;
+		return linkError('unexpected', 'link_unexpected', owner, reason);
 	}
 
 	try {
@@ -72,7 +83,8 @@ export async function runLinkCallbackExchange(
 		setLastProvider(state.provider);
 		if (!existingToken) setToken(result.token);
 		hydrateAuth();
-	} catch {
+	} catch (e) {
+		reportProblem({ area: AREA, action: 'saving the linked sign-in', error: e, owner });
 		return {
 			ok: false,
 			redirectTo: '/profile?link_error=persist_failed',
@@ -108,16 +120,14 @@ export async function runLinkCallbackExchange(
 					fetch
 				);
 				if (!deleteRes.ok) {
-					console.warn(
-						'run-link-callback: same-identity duplicate DELETE failed, status',
-						deleteRes.status
-					);
+					const action = 'removing a duplicate linked account';
+					reportProblem({ area: AREA, action, reason: `status ${deleteRes.status}`, owner });
 				}
 				return SAME_IDENTITY_NOOP;
 			}
 		} catch (e) {
 			const action = 're-reading the linked accounts';
-			reportProblem({ area: 'link callback', action, error: e });
+			reportProblem({ area: AREA, action, error: e, owner });
 		}
 	}
 

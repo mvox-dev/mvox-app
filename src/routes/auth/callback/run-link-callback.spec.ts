@@ -393,28 +393,31 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 		expect(hydrateCollectivesMock).toHaveBeenCalledTimes(1);
 	});
 
-	it('a rights-refused DELETE (any non-2xx) logs a console.warn with the status and still reports the no-op — never fails the sign-in', async () => {
-		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-		try {
-			exchangeInviteMock.mockResolvedValue(REDEEMED);
-			const fetchMock = stubFetch({
-				entries: [
-					PRE_EXISTING_ENTRY,
-					{ _id: 'eu-9', string: 'me@example.com', provider: 'google' }
-				],
-				deleteStatus: 403
-			});
+	it('a rights-refused DELETE (any non-2xx) reports its status and still shows the no-op — never fails the sign-in', async () => {
+		reportProblem.mockReset();
+		exchangeInviteMock.mockResolvedValue(REDEEMED);
+		const fetchMock = stubFetch({
+			entries: [
+				PRE_EXISTING_ENTRY,
+				{ _id: 'eu-9', string: 'me@example.com', provider: 'google' }
+			],
+			deleteStatus: 403
+		});
 
-			const outcome = await runLinkCallbackExchange('key1', snapshotState());
+		const outcome = await runLinkCallbackExchange('key1', snapshotState());
 
-			expect(outcome).toEqual({ ok: true, redirectTo: '/profile?link_noop=same_identity' });
-			expect(deleteCalls(fetchMock)).toHaveLength(1);
-			expect(warnSpy).toHaveBeenCalled();
-			const warned = warnSpy.mock.calls.map((c) => c.join(' ')).join(' ');
-			expect(warned).toContain('403');
-		} finally {
-			warnSpy.mockRestore();
-		}
+		expect(outcome).toEqual({ ok: true, redirectTo: '/profile?link_noop=same_identity' });
+		expect(deleteCalls(fetchMock)).toHaveLength(1);
+		expect(reportProblem.mock.calls).toEqual([
+			[
+				{
+					area: 'link callback',
+					action: 'removing a duplicate linked account',
+					reason: 'status 403',
+					owner: { db: 'sampledb', personId: 'person-me' }
+				}
+			]
+		]);
 	});
 
 	it('a failed re-read is reported and the sign-in still succeeds (#756)', async () => {
@@ -427,7 +430,14 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 
 		expect(outcome.ok).toBe(true);
 		expect(reportProblem.mock.calls).toEqual([
-			[{ area: 'link callback', action: 're-reading the linked accounts', error: boom }]
+			[
+				{
+					area: 'link callback',
+					action: 're-reading the linked accounts',
+					error: boom,
+					owner: { db: 'sampledb', personId: 'person-me' }
+				}
+			]
 		]);
 	});
 
