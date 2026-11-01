@@ -1,5 +1,24 @@
 [
   {
+    "number": 1066,
+    "title": "A collective link cannot run script",
+    "state": "open",
+    "stateReason": null,
+    "labels": [
+      {
+        "name": "bug",
+        "color": "d73a4a"
+      }
+    ],
+    "body": "### Slugline\n\nKollektiivi link ei saa käivitada skripti\n\n### Lead\n\nLingina saab salvestada ja avada ainult veebiaadressi (http või https). Muu aadress lükatakse tagasi ja sellest antakse teada.",
+    "closedAt": null,
+    "updatedAt": "2026-11-01T14:41:57Z",
+    "htmlUrl": "http://forge/mvox/mvox-app/issues/1066",
+    "subIssues": [],
+    "issueType": null,
+    "researchMs": null
+  },
+  {
     "number": 1063,
     "title": "A landing page covers a member's everyday needs, with one door into the current app",
     "state": "open",
@@ -20,7 +39,7 @@
     ],
     "body": "### Slugline\n\nAvaleht katab liikme igapäevased vajadused\n\n### Lead\n\nPärast sisselogimist näeb liige ühel lehel järgmist proovi, oma vastamata kutseid, praegu õpitavaid teoseid ja lingid. Kõik muu on ühe nupu taga.",
     "closedAt": null,
-    "updatedAt": "2026-11-01T13:53:29Z",
+    "updatedAt": "2026-11-01T14:41:57Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1063",
     "subIssues": [],
     "issueType": null,
