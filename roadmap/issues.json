@@ -8,22 +8,7 @@
       {
         "name": "bug",
         "color": "d73a4a"
-      }
-    ],
-    "body": "### Slugline\n\nKollektiivi link ei saa käivitada skripti\n\n### Lead\n\nLingina saab salvestada ja avada ainult veebiaadressi (http või https). Muu aadress lükatakse tagasi ja sellest antakse teada.",
-    "closedAt": null,
-    "updatedAt": "2026-11-01T14:41:57Z",
-    "htmlUrl": "http://forge/mvox/mvox-app/issues/1066",
-    "subIssues": [],
-    "issueType": null,
-    "researchMs": null
-  },
-  {
-    "number": 1063,
-    "title": "A landing page covers a member's everyday needs, with one door into the current app",
-    "state": "open",
-    "stateReason": null,
-    "labels": [
+      },
       {
         "name": "in process",
         "color": "95ea29"
@@ -31,20 +16,37 @@
       {
         "name": "ready",
         "color": "0e8a16"
-      },
+      }
+    ],
+    "body": "### Slugline\n\nKollektiivi link ei saa käivitada skripti\n\n### Lead\n\nLingina saab salvestada ja avada ainult veebiaadressi, e-posti aadressi või telefoninumbrit. Muu aadress lükatakse tagasi ja sellest antakse teada.",
+    "closedAt": null,
+    "updatedAt": "2026-11-01T15:54:01Z",
+    "htmlUrl": "http://forge/mvox/mvox-app/issues/1066",
+    "subIssues": [],
+    "issueType": null,
+    "statusSince": "2026-11-01T15:18:34Z",
+    "researchMs": null
+  },
+  {
+    "number": 1063,
+    "title": "A landing page covers a member's everyday needs, with one door into the current app",
+    "state": "closed",
+    "stateReason": null,
+    "labels": [
       {
         "name": "task",
         "color": "1d76db"
       }
     ],
     "body": "### Slugline\n\nAvaleht katab liikme igapäevased vajadused\n\n### Lead\n\nPärast sisselogimist näeb liige ühel lehel järgmist proovi, oma vastamata kutseid, praegu õpitavaid teoseid ja lingid. Kõik muu on ühe nupu taga.",
-    "closedAt": null,
-    "updatedAt": "2026-11-01T14:41:57Z",
+    "closedAt": "2026-11-01T15:14:15Z",
+    "updatedAt": "2026-11-01T16:00:45Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1063",
     "subIssues": [],
     "issueType": null,
-    "statusSince": "2026-11-01T11:38:43Z",
-    "researchMs": 180000
+    "researchMs": 180000,
+    "buildMs": 12932000,
+    "reviewMs": null
   },
   {
     "number": 1052,
@@ -59,7 +61,7 @@
     ],
     "body": "### Slugline\n\nRakendus ütleb, kui uuem versioon on olemas, ja uuendab nupuvajutusega\n\n### Lead\n\nKui seadmes töötab vanem versioon kui serveris, näeb kasutaja teadet \"Uuem versioon on olemas\" ja nuppu Värskenda, mis toob uue versiooni.",
     "closedAt": "2026-10-31T19:58:42Z",
-    "updatedAt": "2026-10-31T20:02:01Z",
+    "updatedAt": "2026-11-01T15:14:56Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1052",
     "subIssues": [],
     "issueType": null,
