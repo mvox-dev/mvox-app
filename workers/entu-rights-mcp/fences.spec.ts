@@ -109,7 +109,7 @@ describe('package.json: at most a generator scripts entry', () => {
 	});
 
 	// Additions beyond the generator: check:workers, check:sw (#353), test:roadmap (#413),
-	// test:changed (#504) and check:services (#1009), each commissioned outside this slice.
+	// test:changed (#504), check:services (#1009), work-order:dry/live (#417 work orders, #1068).
 	it('every baseline script survives unchanged in name, and additions are exactly the bundle generator + the workers typecheck gate + the service-worker typecheck gate + the roadmap deploy gate + the related-spec iteration run + the services typecheck gate', () => {
 		const keys = Object.keys(pkg().scripts);
 		for (const k of BASELINE_SCRIPTS) {
@@ -122,7 +122,9 @@ describe('package.json: at most a generator scripts entry', () => {
 			'check:workers',
 			'mcp:bundle',
 			'test:changed',
-			'test:roadmap'
+			'test:roadmap',
+			'work-order:dry',
+			'work-order:live'
 		]);
 	});
 });

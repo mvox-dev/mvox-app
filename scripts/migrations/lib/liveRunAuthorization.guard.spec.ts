@@ -13,6 +13,7 @@ const CREDE_MUTATING_SCRIPTS = [
 	'grant-294-joosep-owner-crede-2026-09-09.ts',
 	'probes/remedy-369-crede-self-editor-grant-2026-09-15.ts',
 	'probes/remedy-445-duplicate-rights-values-crede-2026-09-22.ts',
+	'run-work-order.ts',
 	'seed-178-crede-members-2026-08-27.ts',
 	'seed-182-crede-sections-2026-08-27.ts',
 	'seed-184-crede-members-menu-2026-08-27.ts',

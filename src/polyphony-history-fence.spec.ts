@@ -52,7 +52,9 @@ export const ALLOWED_SCOPED_LINE_PATTERNS: ReadonlyArray<{
 	line: RegExp;
 }> = [
 	{ path: /^docs\/architecture\//, line: /20\d{2}-\d{2}-\d{2}/ },
-	{ path: /^teams\/mvox-dev\/roster\.json$/, line: /"origin":/ }
+	{ path: /^teams\/mvox-dev\/roster\.json$/, line: /"origin":/ },
+	// The work-order runner refuses the frozen db by name (#407, #1068).
+	{ path: /^scripts\/migrations\/lib\/work-order(\.spec)?\.ts$/, line: /frozen/i }
 ];
 
 const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
