@@ -7,6 +7,8 @@
 	import { cfgFor } from '$lib/entu/cfg';
 	import { generateIntervalDates } from '$lib/events/recurrence';
 	import { resolveDbEntityOrLog } from '$lib/collective/resolveDbEntityOrLog';
+	import { reportProblem } from '$lib/problems/reportProblem';
+	import { writeOwner } from '$lib/problems/writeOwner';
 	import { tallinnLocalToUtcIso, tallinnWallClockParts } from '$lib/preferences/timeFormat';
 	import type { ConvertEventToSeriesInput } from '$lib/events/eventConvert';
 	import type { Collective } from '$lib/collectives/types';
@@ -152,6 +154,7 @@
 		const seasonId = detail.seasonId;
 		const eventId = detail.id;
 		const g = generation();
+		const owner = writeOwner(cfg);
 
 		eventConvertSubmitting = true;
 		try {
@@ -167,11 +170,10 @@
 				occurrences = resume.remaining;
 				created = total - occurrences.length;
 			} else {
-				const resolvedDbEntityId = await resolveDbEntityOrLog(
-					cfg,
-					{ area: 'event detail', action: 'event conversion' },
-					selected.personId
-				);
+				const resolvedDbEntityId = await resolveDbEntityOrLog(cfg, {
+					area: 'event',
+					action: 'converting the event to a series'
+				});
 				if (!resolvedDbEntityId) {
 					if (g === generation())
 						setEventConvertError(
@@ -197,13 +199,13 @@
 					seriesId = result.seriesId;
 					eventType = result.eventType;
 				} catch (e) {
-					console.error('event detail: event conversion failed', eventId, e);
+					const refusal = eventConvertRefusalMessage(e);
+					if (!refusal) {
+						reportProblem({ area: 'event', action: 'converting the event to a series', error: e, owner });
+					}
 					if (g === generation()) {
 						const step = eventConvertStepOf(e);
-						setEventConvertError(
-							eventConvertRefusalMessage(e) ?? (() => m.event_convert_failed({ step })),
-							null
-						);
+						setEventConvertError(refusal ?? (() => m.event_convert_failed({ step })), null);
 					}
 					return;
 				}
@@ -237,7 +239,8 @@
 					});
 					created += 1;
 				} catch (e) {
-					console.error('event detail: generating a converted series occurrence failed', seriesId, e);
+					const action = 'creating an occurrence of the converted series';
+					reportProblem({ area: 'event', action, error: e, owner });
 					eventConvertProgress = null;
 					if (g !== generation()) return;
 					eventConvertResume = {

@@ -1,46 +1,73 @@
+// @vitest-environment happy-dom
+// A lookup that fails or finds no database entity keeps one report, under the write's collective.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 vi.mock('$lib/collective/databaseEntity', async () =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule()
 );
 
 import { resolveDbEntityOrLog } from './resolveDbEntityOrLog';
 import { testCfg } from '$lib/testing/entuFetchKit';
+import { keptProblems, useKeptProblems } from '$lib/testing/keptProblems';
 import { resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
-const CFG = testCfg('sampledb', 't');
-const LABEL = { area: 'agenda', action: 'event create' };
+useKeptProblems();
+
+const A = { db: 'org-a', name: 'Org A', personId: 'person-a' };
+const B = { db: 'org-b', name: 'Org B', personId: 'person-b' };
+const CFG = testCfg(A.db, 't');
+const LABEL = { area: 'agenda', action: 'creating an event' };
+const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
 
 describe('resolveDbEntityOrLog', () => {
-	let errorSpy: ReturnType<typeof vi.spyOn>;
 	beforeEach(() => {
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		signIn({ collectives: [A, B], selected: B.db });
+	});
+	afterEach(() => {
 		resolveDatabaseEntityIdMock.mockReset();
-		errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		vi.restoreAllMocks();
+		resetAppState();
 	});
-	afterEach(() => errorSpy.mockRestore());
 
-	it('returns the resolved id and logs nothing', async () => {
+	it('returns the resolved id and keeps nothing', async () => {
 		resolveDatabaseEntityIdMock.mockResolvedValue('db-entity-1');
-		expect(await resolveDbEntityOrLog(CFG, LABEL, 'person-1')).toBe('db-entity-1');
+		expect(await resolveDbEntityOrLog(CFG, LABEL)).toBe('db-entity-1');
 		expect(resolveDatabaseEntityIdMock.mock.calls).toEqual([[CFG]]);
-		expect(errorSpy.mock.calls).toEqual([]);
+		await settle();
+		expect(await keptProblems(A)).toEqual([]);
 	});
 
-	it('returns null and logs the error when the lookup throws', async () => {
-		const failure = new Error('HTTP 500');
-		resolveDatabaseEntityIdMock.mockRejectedValue(failure);
-		expect(await resolveDbEntityOrLog(CFG, LABEL, 'person-1')).toBeNull();
-		expect(errorSpy.mock.calls).toEqual([
-			['agenda: resolving the database entity for event create failed', failure]
-		]);
+	it('the lookup throws: null, and one report under the collective written to', async () => {
+		resolveDatabaseEntityIdMock.mockRejectedValue(new Error('HTTP 500'));
+		expect(await resolveDbEntityOrLog(CFG, LABEL)).toBeNull();
+		await vi.waitFor(async () =>
+			expect(await keptProblems(A)).toEqual([
+				{ area: 'agenda', action: 'resolving the database entity for creating an event', detail: 'Error: HTTP 500' }
+			])
+		);
+		expect(await keptProblems(B)).toEqual([]);
 	});
 
-	it('returns null and logs the person when no database entity is readable', async () => {
+	it('no database entity is visible: null, and one report with the reason', async () => {
 		resolveDatabaseEntityIdMock.mockResolvedValue(null);
-		const label = { area: 'event detail', action: 'event conversion' };
-		expect(await resolveDbEntityOrLog(CFG, label, 'person-1')).toBeNull();
-		expect(errorSpy.mock.calls).toEqual([
-			['event detail: event conversion with no resolvable database entity', 'person-1']
-		]);
+		expect(await resolveDbEntityOrLog(CFG, LABEL)).toBeNull();
+		await vi.waitFor(async () =>
+			expect(await keptProblems(A)).toEqual([
+				{
+					area: 'agenda',
+					action: 'resolving the database entity for creating an event',
+					detail: 'no database entity is visible in this collective'
+				}
+			])
+		);
+		expect(await keptProblems(B)).toEqual([]);
 	});
 });
+
+// (*MVOX:Josquin*)

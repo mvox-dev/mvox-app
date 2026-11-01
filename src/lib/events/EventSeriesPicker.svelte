@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { reportProblem } from '$lib/problems/reportProblem';
+	import { writeOwner } from '$lib/problems/writeOwner';
 	import FormError from '$lib/components/FormError.svelte';
 	import { tick } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
@@ -117,6 +118,8 @@
 		series.error = null;
 		series.status = '';
 		const cfg = cfgFor(selected.db);
+		const owner = writeOwner(cfg);
+		const action = newId === '' ? 'taking the event out of its series' : 'moving the event to another series';
 		try {
 			if (newId === '') {
 				await actions.unassignEventSeries(cfg, evId);
@@ -131,8 +134,8 @@
 			series.pending = false;
 			series.status = m.event_detail_series_saved();
 		} catch (err) {
+			reportProblem({ area: 'event', action, error: err, owner });
 			if (g !== generation()) return;
-			console.error('event detail: series write failed', evId, err);
 			series.armedTarget = null;
 			series.previewDefaults = null;
 			series.pending = false;

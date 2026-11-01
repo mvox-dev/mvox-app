@@ -5,6 +5,8 @@ import { cfgFor } from '$lib/entu/cfg';
 import type { CreateEventSeriesInput, createEvent, createEventSeries } from '$lib/entity/entityCreate';
 import type { RepeatPattern } from '$lib/events/recurrence';
 import { resolveDbEntityOrLog } from '$lib/collective/resolveDbEntityOrLog';
+import { reportProblem } from '$lib/problems/reportProblem';
+import { writeOwner } from '$lib/problems/writeOwner';
 import { tallinnLocalToUtcIso } from '$lib/preferences/timeFormat';
 import type {
 	SeriesCreateErrorField,
@@ -75,13 +77,15 @@ export async function runSeriesCreate(run: SeriesCreateRun): Promise<void> {
 
 	const current = run.selected();
 	if (!current || !seasonId) {
-		console.error('agenda: series create submitted with no selected collective/season');
+		const reason = 'submitted with no selected collective or season';
+		reportProblem({ area: 'agenda', action: 'creating a series', reason });
 		run.setError(m.series_create_failed, null);
 		return;
 	}
 	const cfg = cfgFor(current.db);
 	const panelSeasonId = run.manageableSeasonId;
 	const runDb = cfg.db;
+	const owner = writeOwner(cfg);
 	const dbChanged = (): boolean => run.selected()?.db !== runDb;
 	const runForm: SeriesCreateFormSnapshot = resume?.form ?? {
 		...form,
@@ -95,11 +99,7 @@ export async function runSeriesCreate(run: SeriesCreateRun): Promise<void> {
 
 	run.setRunning(runDb);
 	try {
-		const dbEntityId = await resolveDbEntityOrLog(
-			cfg,
-			{ area: 'agenda', action: 'series create' },
-			current.personId
-		);
+		const dbEntityId = await resolveDbEntityOrLog(cfg, { area: 'agenda', action: 'creating a series' });
 		if (!dbEntityId) {
 			if (!dbChanged()) run.setError(m.series_create_failed, null);
 			return;
@@ -129,7 +129,7 @@ export async function runSeriesCreate(run: SeriesCreateRun): Promise<void> {
 			try {
 				seriesId = await seams.createEventSeries(cfg, seriesInput);
 			} catch (e) {
-				console.error('agenda: series create failed', e);
+				reportProblem({ area: 'agenda', action: 'creating a series', error: e, owner });
 				if (!dbChanged()) run.setError(m.series_create_failed, null);
 				return;
 			}
@@ -156,11 +156,11 @@ export async function runSeriesCreate(run: SeriesCreateRun): Promise<void> {
 				});
 				created += 1;
 			} catch (e) {
+				reportProblem({ area: 'agenda', action: 'creating a series occurrence', error: e, owner });
 				if (dbChanged()) {
 					recordStop(seriesId, i);
 					return;
 				}
-				console.error('agenda: bulk event create failed', e);
 				run.setProgress(null);
 				recordStop(seriesId, i);
 				run.setError(() => m.series_create_bulk_failed({ created, total }), null);

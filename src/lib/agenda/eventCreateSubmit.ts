@@ -36,7 +36,7 @@ export interface EventCreateRun {
 export async function runEventCreate(run: EventCreateRun): Promise<void> {
 	const { form, seams } = run;
 	await runCreateSubmitShell({
-		action: 'event create',
+		action: 'creating an event',
 		failed: m.event_create_failed,
 		selected: run.selected,
 		setError: run.setError,

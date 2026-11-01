@@ -1,4 +1,6 @@
 import { m } from '$lib/paraglide/messages.js';
+import type { CollectiveIdentity } from '$lib/collectives/store';
+import { reportProblem } from '$lib/problems/reportProblem';
 import { classifyDeleteFailure, type DeleteFailure } from '$lib/seasons/deleteErrors';
 
 export interface SeasonManageDeleteError extends DeleteFailure {
@@ -47,19 +49,19 @@ export interface SeasonManageDeleteSlot {
 	whileCurrent(): () => boolean;
 }
 
-const DELETE_LOG_NAME = { season: 'season', series: 'event series' } as const;
+const DELETED = { season: 'a season', series: 'an event series' } as const;
 
 export function runSeasonManageDelete<T>({
 	slot,
 	rowId,
-	logId,
+	owner,
 	list,
 	call,
 	onDone
 }: {
 	slot: SeasonManageDeleteSlot;
 	rowId: string;
-	logId: string;
+	owner: CollectiveIdentity | null;
 	list: 'series' | 'season';
 	call: (onProgress: (current: number, total: number) => void) => Promise<T>;
 	onDone: (result: T) => void;
@@ -75,11 +77,12 @@ export function runSeasonManageDelete<T>({
 			if (isDeleteCurrent()) onDone(result);
 		})
 		.catch((e) => {
-			console.error(`agenda: deleting ${DELETE_LOG_NAME[list]} failed`, logId, e);
+			reportProblem({ area: 'agenda', action: `deleting ${DELETED[list]}`, error: e, owner });
 			if (isDeleteCurrent()) slot.error = seasonManageDeleteFailure(list, e);
 		})
 		.finally(() => {
+			if (!isDeleteCurrent()) return;
 			slot.pendingId = null;
-			if (isDeleteCurrent()) slot.progress = null;
+			slot.progress = null;
 		});
 }

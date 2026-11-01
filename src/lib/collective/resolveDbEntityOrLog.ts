@@ -2,6 +2,7 @@
 import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
 import type { EntuCfg } from '$lib/entu/cfg';
 import { reportProblem } from '$lib/problems/reportProblem';
+import { writeOwner } from '$lib/problems/writeOwner';
 
 export interface DbEntityLogLabel {
 	area: string;
@@ -10,19 +11,19 @@ export interface DbEntityLogLabel {
 
 export async function resolveDbEntityOrLog(
 	cfg: EntuCfg,
-	label: DbEntityLogLabel,
-	personId: string | null
+	label: DbEntityLogLabel
 ): Promise<string | null> {
+	const owner = writeOwner(cfg);
+	const problem = { area: label.area, action: `resolving the database entity for ${label.action}`, owner };
 	let dbEntityId: string | null;
 	try {
 		dbEntityId = await resolveDatabaseEntityId(cfg);
 	} catch (e) {
-		const action = `resolving the database entity for ${label.action}`;
-		reportProblem({ area: label.area, action, error: e });
+		reportProblem({ ...problem, error: e });
 		return null;
 	}
 	if (!dbEntityId) {
-		console.error(`${label.area}: ${label.action} with no resolvable database entity`, personId);
+		reportProblem({ ...problem, reason: 'no database entity is visible in this collective' });
 		return null;
 	}
 	return dbEntityId;

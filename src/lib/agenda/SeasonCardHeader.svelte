@@ -1,6 +1,7 @@
 <!-- #641 — the season card's rows and the open season's title row; #917: a delete on each row. -->
 <script lang="ts">
 	import { reportProblem } from '$lib/problems/reportProblem';
+	import { writeOwner } from '$lib/problems/writeOwner';
 	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
@@ -115,7 +116,7 @@
 		runSeasonManageDelete({
 			slot: seasonManageDeleteSlot,
 			rowId: seasonDeleteRowId(seasonId),
-			logId: seasonId,
+			owner: writeOwner(cfg),
 			list: 'season',
 			call: (onProgress) => apiDeleteSeason(cfg, seasonId, undefined, { onProgress }),
 			onDone: () => {

@@ -3,6 +3,8 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
+	import { reportProblem } from '$lib/problems/reportProblem';
+	import { writeOwner } from '$lib/problems/writeOwner';
 	import { isoDateFormatter } from '$lib/preferences/timeFormat';
 	import type * as SeasonManage from '$lib/seasons/seasonManage';
 	import type { SeasonEditableField } from '$lib/seasons/seasonManage';
@@ -137,6 +139,7 @@
 		const cfg = cfgFor(selected.db);
 		const seasonId = manageableSeasonId;
 		const isSwitchCurrent = switchCurrent();
+		const owner = writeOwner(cfg);
 		clearSeasonFieldError(field);
 		seasonEditStatus = '';
 		seasonEditPending = { ...seasonEditPending, [field]: true };
@@ -148,8 +151,8 @@
 				seasonEditStatus = m.season_manage_saved();
 			})
 			.catch((e) => {
+				reportProblem({ area: 'agenda', action: `saving the season field ${field}`, error: e, owner });
 				if (!isSwitchCurrent()) return;
-				console.error('agenda: season field save failed', field, e);
 				seasonEditPending = { ...seasonEditPending, [field]: false };
 				applySeasonFieldLocally(field, before);
 				seasonEditErrors = { ...seasonEditErrors, [field]: 'save' };

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { reportProblem } from '$lib/problems/reportProblem';
+	import { writeOwner } from '$lib/problems/writeOwner';
 	import FormError from '$lib/components/FormError.svelte';
 	import PartialNotice from '$lib/components/PartialNotice.svelte';
 	import { m } from '$lib/paraglide/messages.js';
@@ -112,7 +113,7 @@
 		runSeasonManageDelete({
 			slot: seasonManageDeleteSlot,
 			rowId: series.id,
-			logId: series.id,
+			owner: writeOwner(cfg),
 			list: 'series',
 			call: (onProgress) => apiDeleteEventSeries(cfg, series.id, undefined, { onProgress }),
 			onDone: (deletedOccurrences) => {

@@ -372,7 +372,14 @@
 					generation={() => routeLoad.generation}
 					{actions}
 				/>
-				<EventDangerZone {detail} {selected} {isEditor} {isOffline} {actions} />
+				<EventDangerZone
+					{detail}
+					{selected}
+					{isEditor}
+					{isOffline}
+					generation={() => routeLoad.generation}
+					{actions}
+				/>
 			</div>
 		{/if}
 	</div>

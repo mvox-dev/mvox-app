@@ -3,6 +3,8 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor, type EntuCfg } from '$lib/entu/cfg';
+	import { reportProblem } from '$lib/problems/reportProblem';
+	import { writeOwner } from '$lib/problems/writeOwner';
 	import ConductorChip from '$lib/agenda/ConductorChip.svelte';
 	import RosterPersonSelect from '$lib/roster/RosterPersonSelect.svelte';
 	import type { RosterRow } from '$lib/roster/rosterData';
@@ -76,7 +78,7 @@
 	);
 
 	function runConductorWrite(
-		verb: 'add' | 'remove',
+		verb: 'adding' | 'removing',
 		personId: string,
 		nextIds: string[],
 		revert: () => string[],
@@ -86,6 +88,7 @@
 		const cfg = cfgFor(selected.db);
 		const seasonId = manageableSeasonId;
 		const isSwitchCurrent = switchCurrent();
+		const owner = writeOwner(cfg);
 		seasonManageConductorError = false;
 		seasonManageConductorStatus = '';
 		seasonManageConductorPending = true;
@@ -97,8 +100,8 @@
 				seasonManageConductorStatus = m.season_manage_conductor_saved();
 			})
 			.catch((e) => {
+				reportProblem({ area: 'agenda', action: `${verb} a season conductor`, error: e, owner });
 				if (!isSwitchCurrent()) return;
-				console.error(`agenda: ${verb} season conductor failed`, personId, e);
 				seasonManageConductorIds = revert();
 				seasonManageConductorError = true;
 				seasonManageConductorPending = false;
@@ -111,7 +114,7 @@
 		const personId = selection.id;
 		if (seasonManageConductorIds.includes(personId)) return;
 		runConductorWrite(
-			'add',
+			'adding',
 			personId,
 			[...seasonManageConductorIds, personId],
 			() => seasonManageConductorIds.filter((id) => id !== personId),
@@ -126,7 +129,7 @@
 			...seasonManageConductorIds.slice(0, index),
 			...seasonManageConductorIds.slice(index + 1)
 		];
-		runConductorWrite('remove', personId, nextIds, () => before, apiRemoveSeasonConductor);
+		runConductorWrite('removing', personId, nextIds, () => before, apiRemoveSeasonConductor);
 	}
 </script>
 

@@ -17,11 +17,10 @@ export interface SeasonCreateRun {
 export async function runSeasonCreate(run: SeasonCreateRun): Promise<void> {
 	const { form } = run;
 	await runCreateSubmitShell({
-		action: 'season create',
+		action: 'creating a season',
 		failed: m.season_create_failed,
 		selected: run.selected,
 		setError: run.setError,
-		logArgs: [form.name],
 		create: (cfg, dbEntityId) =>
 			run.seams.createSeason(cfg, {
 				name: form.name,

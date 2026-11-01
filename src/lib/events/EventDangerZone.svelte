@@ -10,18 +10,22 @@
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions } from '$lib/events/eventPageState';
 	import { focusTestIdAfterRender } from '$lib/a11y/focusable';
+	import { reportProblem } from '$lib/problems/reportProblem';
+	import { writeOwner } from '$lib/problems/writeOwner';
 
 	let {
 		detail,
 		selected,
 		isEditor,
 		isOffline,
+		generation,
 		actions
 	}: {
 		detail: EventDetail;
 		selected: Collective | null;
 		isEditor: boolean;
 		isOffline: boolean;
+		generation: () => number;
 		actions: EventActions;
 	} = $props();
 
@@ -48,12 +52,14 @@
 		deletePending = true;
 		deleteError = null;
 		const cfg = cfgFor(selected.db);
-		const evId = detail.id;
+		const owner = writeOwner(cfg);
+		const g = generation();
 		try {
-			await actions.deleteEvent(cfg, evId);
-			goto('/');
+			await actions.deleteEvent(cfg, detail.id);
+			if (g === generation()) goto('/');
 		} catch (e) {
-			console.error('event detail: delete failed', evId, e);
+			reportProblem({ area: 'event', action: 'deleting the event', error: e, owner });
+			if (g !== generation()) return;
 			deleteError = classifyDeleteFailure('event', e);
 			deletePending = false;
 		}
