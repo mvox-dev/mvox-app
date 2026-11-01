@@ -3,6 +3,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { selectedCollectiveIdentityStore } from '$lib/collectives/store';
+import { resetReportedLinks } from '$lib/links/reportUnsafeLink';
 import { getProblemLog, resetProblemLog, setProblemOwner } from '$lib/problems/problemLog';
 
 // Puts back only the indexedDB it replaced, so a spec's own global stubs outlive each case.
@@ -12,6 +13,7 @@ export function useKeptProblems(): void {
 		before = Object.getOwnPropertyDescriptor(globalThis, 'indexedDB');
 		Object.defineProperty(globalThis, 'indexedDB', { value: new IDBFactory(), configurable: true, writable: true });
 		resetProblemLog();
+		resetReportedLinks();
 		setProblemOwner(selectedCollectiveIdentityStore);
 	});
 	afterEach(() => {

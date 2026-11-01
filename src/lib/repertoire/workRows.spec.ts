@@ -203,7 +203,7 @@ describe('buildWorkRows — external link scheme filter', () => {
 	];
 	const hostileSources = collectSources(works, hostileEditions, []);
 
-	it('keeps only http(s) urls on a program row — javascript:/data:/garbage are dropped', () => {
+	it('keeps only allowed urls on a program row — javascript:/data:/garbage are dropped', () => {
 		const rows = buildWorkRows(
 			{
 				source: 'program',
@@ -217,7 +217,7 @@ describe('buildWorkRows — external link scheme filter', () => {
 		]);
 	});
 
-	it('keeps only http(s) urls on a repertoire row too', () => {
+	it('keeps only allowed urls on a repertoire row too', () => {
 		const rows = buildWorkRows(
 			{
 				source: 'repertoire',
@@ -229,6 +229,27 @@ describe('buildWorkRows — external link scheme filter', () => {
 			'https://imslp.org/wiki/Spem_in_alium',
 			'http://example.org/score'
 		]);
+	});
+});
+
+describe('buildWorkRows — mailto, tel and own paths are allowed work links', () => {
+	it('keeps mailto:, tel: and a leading-slash path', () => {
+		const edition: Edition = {
+			id: 'ed-m',
+			name: 'Mixed',
+			publisher: '',
+			workId: 'work-1',
+			externalLinks: ['mailto:a@b.ee', 'tel:+3725551234', '/library', 'ftp://x.ee/y'],
+			files: []
+		};
+		const rows = buildWorkRows(
+			{
+				source: 'program',
+				items: [{ id: 'pi-m', editionId: 'ed-m', ordinal: 1, notes: '', name: 'Mixed' }]
+			},
+			collectSources(works, [edition], [])
+		);
+		expect(rows[0].externalLinks).toEqual(['mailto:a@b.ee', 'tel:+3725551234', '/library']);
 	});
 });
 

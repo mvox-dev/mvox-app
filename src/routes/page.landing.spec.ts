@@ -322,6 +322,43 @@ describe('#1063 — "now learning", links', () => {
 		]);
 	});
 
+	it('#1066 — a stored javascript:/data: link is a plain chip with no href, reported once', async () => {
+		r.listLinks.mockResolvedValue([
+			...LINKS,
+			{ id: 'l3', name: 'Evil', url: 'javascript:alert(1)', description: null, displayOrder: 3 },
+			{ id: 'l4', name: 'Blob', url: 'data:text/html,hi', description: null, displayOrder: 4 },
+			{ id: 'l5', name: 'Mail', url: 'mailto:a@b.ee', description: null, displayOrder: 5 },
+			{ id: 'l6', name: 'Old', url: 'example.com/x', description: null, displayOrder: 6 }
+		]);
+		const c = await renderLanding();
+		const section = q(c, 'landing-links')!;
+		expect([...section.querySelectorAll('a')].map(text)).toEqual(['Drive', 'Chat', 'Mail', 'Old']);
+		expect(section.querySelectorAll('a')[3].getAttribute('href')).toBe('https://example.com/x');
+		expect(text(section)).toContain('Evil');
+		expect(text(section)).toContain('Blob');
+		expect(section.innerHTML).not.toMatch(/javascript:|data:text/i);
+		await waitFor(async () =>
+			expect(await keptProblems()).toEqual([
+				{ area: 'landing', action: 'showing a link', detail: 'link l3 uses scheme javascript' },
+				{ area: 'landing', action: 'showing a link', detail: 'link l4 uses scheme data' }
+			])
+		);
+	});
+
+	it('#1066 — coming back to the landing files no second report for the same link', async () => {
+		r.listLinks.mockResolvedValue([
+			...LINKS,
+			{ id: 'l3', name: 'Evil', url: 'javascript:alert(1)', description: null, displayOrder: 3 }
+		]);
+		const first = render(Page);
+		await waitFor(async () => expect(await keptProblems()).toHaveLength(1));
+		first.unmount();
+		const c = await renderLanding();
+		await new Promise((res) => setTimeout(res, 50));
+		expect(q(c, 'landing-links')).not.toBeNull();
+		expect(await keptProblems()).toHaveLength(1);
+	});
+
 	it('when the name read fails, the profile link says "Profile" and it reports once', async () => {
 		r.readInitials.mockRejectedValue(new Error('listMyProfiles failed: 500'));
 		const c = await renderLanding();

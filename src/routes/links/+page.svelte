@@ -11,6 +11,7 @@
 	import { linkControls, type LinkControls } from '$lib/links/linkRights';
 	import { createLink, updateLink, reorderLinks, deleteLink } from '$lib/links/linkActions';
 	import { normalizeUrl } from '$lib/links/normalizeUrl';
+	import { safeLinkUrl } from '$lib/links/safeLinkUrl';
 	import { cfgFor } from '$lib/entu/cfg';
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
@@ -49,7 +50,7 @@
 	// still shows the pre-write order and must not claim to be the server's.
 	let reorderError = $state<'confirmed' | 'stale' | null>(null);
 	// One slot is enough: the three forms never write concurrently on this page.
-	let writeError = $state<'create' | 'update' | 'remove' | null>(null);
+	let writeError = $state<'create' | 'update' | 'remove' | 'url' | null>(null);
 
 	function resetDrafts(): void {
 		addName = '';
@@ -124,6 +125,12 @@
 		const name = addName.trim();
 		// Non-empty is the only check: a stricter URL rule would refuse valid share links (#256).
 		if (!name || !/\S/.test(addUrl)) return;
+		const url = normalizeUrl(addUrl, page.url.host);
+		// Refused before any write; the draft stays as typed.
+		if (!safeLinkUrl(url)) {
+			writeError = 'url';
+			return;
+		}
 		const description = addDescription.trim() ? addDescription : null;
 		const maxOrder = rows.reduce((max, r) => Math.max(max, r.displayOrder ?? 0), 0);
 		const g = routeLoad.generation;
@@ -132,7 +139,7 @@
 		try {
 			await createLink(cfg, {
 				name,
-				url: normalizeUrl(addUrl, page.url.host),
+				url,
 				description,
 				displayOrder: maxOrder + 1
 			});
@@ -172,12 +179,17 @@
 		const cfg = cfgFor(currentCfg.db);
 		const name = editName.trim();
 		if (!name || !/\S/.test(editUrl)) return;
+		const url = normalizeUrl(editUrl, page.url.host);
+		if (!safeLinkUrl(url)) {
+			writeError = 'url';
+			return;
+		}
 		const description = editDescription.trim() ? editDescription : null;
 		const g = routeLoad.generation;
 		const owner = writeOwner(cfg);
 		writeError = null;
 		try {
-			await updateLink(cfg, id, { name, url: normalizeUrl(editUrl, page.url.host), description });
+			await updateLink(cfg, id, { name, url, description });
 			if (g !== routeLoad.generation) return;
 			cancelEdit();
 			await refreshRows(cfg, g);
@@ -277,11 +289,13 @@
 			{#if writeError}
 				<!-- Failure only: for explicit-submit forms success is self-evident. -->
 				<p data-testid="links-write-error" role="alert" class="text-sm text-danger">
-					{writeError === 'create'
-						? m.links_create_failed()
-						: writeError === 'update'
-							? m.links_update_failed()
-							: m.links_remove_failed()}
+					{writeError === 'url'
+						? m.links_url_scheme_refused()
+						: writeError === 'create'
+							? m.links_create_failed()
+							: writeError === 'update'
+								? m.links_update_failed()
+								: m.links_remove_failed()}
 				</p>
 			{/if}
 

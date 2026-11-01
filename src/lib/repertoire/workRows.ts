@@ -1,4 +1,5 @@
 // Joins each event's repertoire refs with work/edition/copy details, read once per agenda.
+import { safeLinkUrl } from '$lib/links/safeLinkUrl';
 import type { EntuCfg } from '$lib/entu/cfg';
 import {
 	listWorks,
@@ -44,17 +45,10 @@ function pickFile(edition: Edition | undefined): EditionFile | undefined {
 	return pdf ?? edition.files[0];
 }
 
-// external_link is free text bound into an href Svelte does not sanitize: only http(s)
-// survives, and a bad value is dropped rather than rendered.
+// external_link is free text bound into an href Svelte does not sanitize: a bad value is
+// dropped rather than rendered.
 function safeExternalLinks(links: string[]): string[] {
-	return links.filter((v) => {
-		try {
-			const { protocol } = new URL(v);
-			return protocol === 'http:' || protocol === 'https:';
-		} catch {
-			return false;
-		}
-	});
+	return links.filter(safeLinkUrl);
 }
 
 const KNOWN_STATUSES = new Set<string>([

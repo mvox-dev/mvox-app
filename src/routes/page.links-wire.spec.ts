@@ -114,7 +114,7 @@ describe('#256 integration — the page drives the REAL read module', () => {
 		const hrefs = rowEls(container).map((r) =>
 			r.querySelector('[data-testid="links-row-url"]')?.getAttribute('href')
 		);
-		expect(hrefs).toEqual(['https://f.io/GCkGMr5J', 'example.com/x']);
+		expect(hrefs).toEqual(['https://f.io/GCkGMr5J', 'https://example.com/x']);
 	});
 });
 

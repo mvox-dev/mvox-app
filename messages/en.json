@@ -717,6 +717,7 @@
 	"links_create_failed": "Couldn't create the link. Try again.",
 	"links_update_failed": "Couldn't update the link. Try again.",
 	"links_remove_failed": "Couldn't remove the link. Try again.",
+	"links_url_scheme_refused": "Only web, mail and phone links (http, https, mailto, tel) can be saved.",
 	"downloads_title": "Downloaded parts",
 	"downloads_loading": "Loading…",
 	"downloads_load_error": "Couldn't load your downloads.",

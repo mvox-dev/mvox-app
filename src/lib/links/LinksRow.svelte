@@ -1,8 +1,11 @@
 <!-- One saved link: its anchor and the controls its rights allow, or its in-situ edit form. -->
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { LinkRow } from '$lib/links/linkData';
 	import type { LinkControls } from '$lib/links/linkRights';
+	import { linkHref } from '$lib/links/safeLinkUrl';
+	import { reportUnsafeLink } from '$lib/links/reportUnsafeLink';
 
 	interface Props {
 		row: LinkRow;
@@ -41,6 +44,12 @@
 		onedit,
 		onremove
 	}: Props = $props();
+
+	const href = $derived(linkHref(row.url));
+	// Once per row as it first shows (the list keys rows by id), not per re-render.
+	$effect(() => {
+		if (href === null) untrack(() => reportUnsafeLink('links', row));
+	});
 </script>
 
 <li data-testid="links-row" class="flex flex-col gap-1 border-b border-ink-5 py-2">
@@ -92,14 +101,18 @@
 			</button>
 		</div>
 	{:else}
-		<a
-			data-testid="links-row-url"
-			href={row.url}
-			target="_blank"
-			rel="noopener noreferrer"
-		>
+		{#if href !== null}
+			<a
+				data-testid="links-row-url"
+				{href}
+				target="_blank"
+				rel="noopener noreferrer"
+			>
+				<span data-testid="links-row-name">{row.name}</span>
+			</a>
+		{:else}
 			<span data-testid="links-row-name">{row.name}</span>
-		</a>
+		{/if}
 		{#if row.description}
 			<p data-testid="links-row-description" class="text-sm text-ink-70">
 				{row.description}

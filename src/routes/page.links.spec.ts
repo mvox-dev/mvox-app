@@ -67,7 +67,7 @@ describe('#256 — the list members read: stable order, real anchors, urls verba
 		expect(rowNames(container)).toEqual(['Salvestused', 'Scores', 'Website']);
 	});
 
-	it('each row carries a REAL anchor: href is the stored string VERBATIM (a schemeless url stays schemeless — no https:// prepended), target=_blank, rel has noopener AND noreferrer', async () => {
+	it('each row carries a REAL anchor: href is the stored string, a stored schemeless url gets https:// (#1066), target=_blank, rel has noopener AND noreferrer', async () => {
 		const { container } = await renderReady('not-editor');
 		const anchors = rowEls(container).map((r) =>
 			r.querySelector<HTMLAnchorElement>('[data-testid="links-row-url"]')
@@ -75,7 +75,7 @@ describe('#256 — the list members read: stable order, real anchors, urls verba
 		expect(anchors.map((a) => a?.tagName)).toEqual(['A', 'A', 'A']);
 		expect(anchors.map((a) => a?.getAttribute('href'))).toEqual([
 			'https://f.io/GCkGMr5J',
-			'example.com/x',
+			'https://example.com/x',
 			'https://crede.ee'
 		]);
 		for (const a of anchors) {
