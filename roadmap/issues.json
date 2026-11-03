@@ -6,17 +6,26 @@
     "stateReason": null,
     "labels": [
       {
+        "name": "in process",
+        "color": "95ea29"
+      },
+      {
+        "name": "ready",
+        "color": "0e8a16"
+      },
+      {
         "name": "task",
         "color": "1d76db"
       }
     ],
     "body": "### Slugline\n\nTööjärjekord saab lisada Entusse uue kirjetüübi\n\n### Lead\n\nMeeskond saab Entusse uue kirjetüübi lisada ainult tööjärjekorra kaudu, Mihkli loal, nagu muud muudatused päris andmetes.",
     "closedAt": null,
-    "updatedAt": "2026-11-03T17:35:41Z",
+    "updatedAt": "2026-11-03T18:43:31Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1071",
     "subIssues": [],
     "issueType": null,
-    "researchMs": null
+    "statusSince": "2026-11-03T18:43:30Z",
+    "researchMs": 257000
   },
   {
     "number": 1069,
@@ -39,7 +48,7 @@
     ],
     "body": "### Slugline\n\nNoodimärkmed jõuavad Entusse ja teise seadmesse\n\n### Lead\n\nLaulja märkmed noodil salvestatakse Entusse. Kui ta avab sama partii teises seadmes, on märkmed seal ja noot avaneb samalt lehelt ja suurenduselt.",
     "closedAt": null,
-    "updatedAt": "2026-11-03T17:35:41Z",
+    "updatedAt": "2026-11-03T18:10:39Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1069",
     "subIssues": [],
     "issueType": null,
