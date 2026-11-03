@@ -1,5 +1,33 @@
 [
   {
+    "number": 1069,
+    "title": "A singer's marks on a part sync through Entu",
+    "state": "open",
+    "stateReason": null,
+    "labels": [
+      {
+        "name": "in process",
+        "color": "95ea29"
+      },
+      {
+        "name": "ready",
+        "color": "0e8a16"
+      },
+      {
+        "name": "task",
+        "color": "1d76db"
+      }
+    ],
+    "body": "### Slugline\n\nNoodimärkmed jõuavad Entusse ja teise seadmesse\n\n### Lead\n\nLaulja märkmed noodil salvestatakse Entusse. Kui ta avab sama partii teises seadmes, on märkmed seal ja noot avaneb samalt lehelt ja suurenduselt.",
+    "closedAt": null,
+    "updatedAt": "2026-11-03T16:35:37Z",
+    "htmlUrl": "http://forge/mvox/mvox-app/issues/1069",
+    "subIssues": [],
+    "issueType": null,
+    "statusSince": "2026-11-03T16:35:37Z",
+    "researchMs": 439000
+  },
+  {
     "number": 1066,
     "title": "A collective link cannot run script",
     "state": "closed",
@@ -4359,7 +4387,7 @@
     "labels": [],
     "body": "### Slugline\n\nIlma levita näitab äpp viimati nähtud andmeid\n\n### Lead\n\nProovisaalis levi pole, ja praegu jääb laulja siis ainult allalaaditud partiide lehe peale. Edaspidi näitab äpp võrguta seda, mida ta viimati nägi — ainult lugemiseks ja kellaajaga.",
     "closedAt": "2026-09-28T20:27:36Z",
-    "updatedAt": "2026-09-28T20:27:50Z",
+    "updatedAt": "2026-11-03T16:34:11Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/434",
     "subIssues": [],
     "issueType": "Task",
@@ -4594,7 +4622,7 @@
         "labels": [],
         "body": "### Slugline\n\nÜks joonistuskomponent, üks salvestusviis: jooned\n\n### Lead\n\nSama pliiats tagasiside pildil ja noodil. Salvestatakse jooned, mitte pilt — vaatamine joonistab samad jooned uuesti.",
         "closedAt": "2026-09-27T21:25:09Z",
-        "updatedAt": "2026-09-27T21:25:20Z",
+        "updatedAt": "2026-11-03T16:21:13Z",
         "htmlUrl": "http://forge/mvox/mvox-app/issues/394",
         "subIssues": [],
         "issueType": "Task",
@@ -5382,7 +5410,7 @@
     "labels": [],
     "body": "### Slugline\n\nNoodid kaasas ka ilma levita: failibaidid vahemällu enne proovi\n\n### Lead\n\nAllkirjastatud link elab 60 sekundit, nii et võrguta ei avane ükski PDF. Vahemälu hoiab baite, mitte linke.",
     "closedAt": "2026-09-19T03:09:37Z",
-    "updatedAt": "2026-09-19T03:09:37Z",
+    "updatedAt": "2026-11-03T16:21:13Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/334",
     "subIssues": [
       {
@@ -5398,7 +5426,7 @@
         ],
         "body": "### Slugline\n\nFailibaidid jäävad seadmesse: teine avamine ei küsi võrku\n\n### Lead\n\nAllkirjastatud link elab 60 sekundit, nii et hoiule läheb fail ise, mitte link. Pluss kontroll, et asendatud faili ei serveeritaks igavesti vanana.",
         "closedAt": "2026-09-12T17:07:45Z",
-        "updatedAt": "2026-10-31T19:58:43Z",
+        "updatedAt": "2026-11-03T16:21:13Z",
         "htmlUrl": "http://forge/mvox/mvox-app/issues/343",
         "subIssues": [],
         "issueType": null,
@@ -5531,7 +5559,7 @@
     "labels": [],
     "body": "### Slugline\n\nNoodile joonistamine: kihid lauljale, alusfail puutumata\n\n### Lead\n\nLaulja avab partii PDF-i täisekraanil ja teeb märkmeid. Kihid kuuluvad lauljale, mitte väljaandele. Vaatamine ja joonistamine elavad rakenduses.",
     "closedAt": null,
-    "updatedAt": "2026-10-06T22:44:42Z",
+    "updatedAt": "2026-11-03T16:25:05Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/333",
     "subIssues": [
       {
@@ -5542,7 +5570,7 @@
         "labels": [],
         "body": "### Slugline\n\nLaulja loeb partiid täisekraanil, ka ilma levita\n\n### Lead\n\nPartii avaneb täisekraanil, lehte keerab nurgapuudutus. Joonistamist siin veel ei ole.",
         "closedAt": "2026-09-20T09:37:06Z",
-        "updatedAt": "2026-09-20T09:41:15Z",
+        "updatedAt": "2026-11-03T16:21:13Z",
         "htmlUrl": "http://forge/mvox/mvox-app/issues/427",
         "subIssues": [],
         "issueType": "Task",
@@ -5574,7 +5602,7 @@
         "labels": [],
         "body": "### Slugline\n\nNoodimärkmed jäävad seadmesse alles\n\n### Lead\n\nLaulja märkmed salvestatakse seadmesse lehe kaupa. Kui ta rakenduse sulgeb ja uuesti avab, on märkmed alles, ka ilma levita.",
         "closedAt": "2026-10-06T22:43:55Z",
-        "updatedAt": "2026-10-14T15:45:20Z",
+        "updatedAt": "2026-11-03T16:25:05Z",
         "htmlUrl": "http://forge/mvox/mvox-app/issues/616",
         "subIssues": [],
         "issueType": "Task",
