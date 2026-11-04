@@ -12,7 +12,7 @@
     ],
     "body": "### Slugline\n\nTööjärjekord saab lisada Entusse uue kirjetüübi\n\n### Lead\n\nMeeskond saab Entusse uue kirjetüübi lisada ainult tööjärjekorra kaudu, Mihkli loal, nagu muud muudatused päris andmetes.",
     "closedAt": "2026-11-04T15:00:00Z",
-    "updatedAt": "2026-11-04T15:00:25Z",
+    "updatedAt": "2026-11-04T15:00:32Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1071",
     "subIssues": [],
     "issueType": null,
@@ -23,30 +23,23 @@
   {
     "number": 1069,
     "title": "A singer's marks on a part sync through Entu",
-    "state": "open",
+    "state": "closed",
     "stateReason": null,
     "labels": [
-      {
-        "name": "in process",
-        "color": "95ea29"
-      },
-      {
-        "name": "ready",
-        "color": "0e8a16"
-      },
       {
         "name": "task",
         "color": "1d76db"
       }
     ],
     "body": "### Slugline\n\nNoodimärkmed jõuavad Entusse ja teise seadmesse\n\n### Lead\n\nLaulja märkmed noodil salvestatakse Entusse. Kui ta avab sama partii teises seadmes, on märkmed seal ja noot avaneb samalt lehelt ja suurenduselt.",
-    "closedAt": null,
-    "updatedAt": "2026-11-04T15:00:02Z",
+    "closedAt": "2026-11-04T15:35:40Z",
+    "updatedAt": "2026-11-04T16:01:00Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1069",
     "subIssues": [],
     "issueType": null,
-    "statusSince": "2026-11-03T16:35:37Z",
-    "researchMs": 439000
+    "researchMs": 439000,
+    "buildMs": 82803000,
+    "reviewMs": null
   },
   {
     "number": 1066,
@@ -124,7 +117,7 @@
     ],
     "body": "### Slugline\n\nIga kasutajale näidatud viga saadab probleemiteate\n\n### Lead\n\nKui rakendus näitab kasutajale viga, saab meeskond sellest probleemiteate koos veaga. Kasutaja näeb sama teadet nagu praegu.",
     "closedAt": "2026-11-01T07:35:07Z",
-    "updatedAt": "2026-11-01T08:01:50Z",
+    "updatedAt": "2026-11-04T15:36:08Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1049",
     "subIssues": [],
     "issueType": null,
@@ -4408,7 +4401,7 @@
     "labels": [],
     "body": "### Slugline\n\nIlma levita näitab äpp viimati nähtud andmeid\n\n### Lead\n\nProovisaalis levi pole, ja praegu jääb laulja siis ainult allalaaditud partiide lehe peale. Edaspidi näitab äpp võrguta seda, mida ta viimati nägi — ainult lugemiseks ja kellaajaga.",
     "closedAt": "2026-09-28T20:27:36Z",
-    "updatedAt": "2026-11-03T17:34:37Z",
+    "updatedAt": "2026-11-04T15:35:41Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/434",
     "subIssues": [],
     "issueType": "Task",
@@ -5623,7 +5616,7 @@
         "labels": [],
         "body": "### Slugline\n\nNoodimärkmed jäävad seadmesse alles\n\n### Lead\n\nLaulja märkmed salvestatakse seadmesse lehe kaupa. Kui ta rakenduse sulgeb ja uuesti avab, on märkmed alles, ka ilma levita.",
         "closedAt": "2026-10-06T22:43:55Z",
-        "updatedAt": "2026-11-03T17:34:37Z",
+        "updatedAt": "2026-11-04T15:36:08Z",
         "htmlUrl": "http://forge/mvox/mvox-app/issues/616",
         "subIssues": [],
         "issueType": "Task",
@@ -12437,7 +12430,7 @@
     ],
     "body": null,
     "closedAt": "2026-08-05T22:41:18Z",
-    "updatedAt": "2026-08-07T10:36:28Z",
+    "updatedAt": "2026-11-04T15:36:08Z",
     "htmlUrl": "http://forge/mvox/mvox-app/issues/1",
     "subIssues": [
       {
