@@ -45,10 +45,7 @@ vi.mock('$lib/files/appLabelStore', () => ({
 		remove: async () => {}
 	})
 }));
-vi.mock('$lib/strokes/inkStore', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/strokes/inkStore')>()),
-	getInkStore: () => inkStore
-}));
+vi.mock('$lib/strokes/appInk', () => ({ getInkStore: () => inkStore }));
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );

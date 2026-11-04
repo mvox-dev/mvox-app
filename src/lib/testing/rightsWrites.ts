@@ -23,7 +23,9 @@ export const RIGHTS_WRITES_REGISTER: readonly RightsWrite[] = [
 	{ file: 'src/lib/invite/inviteCreate.ts', fn: 'createInvite', write: '_editor' },
 	{ file: 'src/lib/profile/profileData.ts', fn: 'createProfile', write: '_inheritrights' },
 	{ file: 'src/lib/profile/profileData.ts', fn: 'createProfile', write: '_sharing' },
-	{ file: 'src/lib/profile/profileData.ts', fn: 'createProfile', write: '_owner' }
+	{ file: 'src/lib/profile/profileData.ts', fn: 'createProfile', write: '_owner' },
+	{ file: 'src/lib/strokes/inkLayerData.ts', fn: 'createInkLayer', write: '_inheritrights' },
+	{ file: 'src/lib/strokes/inkLayerData.ts', fn: 'createInkLayer', write: '_sharing' }
 ];
 
 const SOURCE_FILE = /\.(ts|svelte)$/;

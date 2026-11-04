@@ -303,9 +303,11 @@ and joins them; writes go to the oldest.
 | `page_ink`  | text      | no       | multi-value, one value per page: JSON `{page, v, strokes: [{id, stroke}], erased: [ids]}` (`src/lib/strokes/inkLog.ts`). A write reads that page's value, joins (strokes by id, tombstones by id) and replaces that one value. Entu does not document a text size limit |
 | `last_page` | number    | no       | the page she was on; with two layers the value Entu stored last wins, by its `created.at` |
 
-Not provisioned yet: the crede landing is its own work order
-(`scripts/migrations/seed-1069-ink-layer-type-crede-2026-11-03.ts`, dry run by
-default). No zoom is saved: the app has no in-app zoom.
+Provisioned on crede 2026-11-04 by the work order
+`2026-11-04-add-ink-layer-type` (op `add-entity-type`,
+[mvox-app#1071](https://github.com/mvox-dev/mvox-app/issues/1071)); its ledger is
+`scripts/migrations/seed-results/crede-instance/work-order-2026-11-04-add-ink-layer-type-live-2026-11-04T15-02-54-222Z.json`.
+No zoom is saved: the app has no in-app zoom.
 
 **mvox app extension**: not part of the canonical v4E schema.
 
@@ -349,7 +351,7 @@ The app calls Entu directly, in the authenticated user's rights by default.
 | `admin_member_record`   | domain                            | domain (asserted)   | `person`, `name` ONLY — `phone`/`email`/`birthdate`/`id_code` never leave the private bucket, per-property, regardless of the type/instance tier |
 | `link`                  | domain                            | matches database     | name, url, description, display_order — nothing private on this type          |
 | `feedback`              | domain (intended; not yet provisioned — verify at the #395 live run) | domain (asserted, explicit) | screenshot, doodle_layer, description, metadata, issue_url — nothing private on this type |
-| `ink_layer`             | domain (intended; not yet provisioned) | private, own grants (asserted, explicit) | none: every field is private |
+| `ink_layer`             | domain (provisioned 2026-11-04, work order `2026-11-04-add-ink-layer-type`) | private, own grants (asserted, explicit) | none: every field is private |
 
 Note on the "Type `_sharing`" column: the salvaged v4E draft literal declared
 `schedule_item.sharing = 'public'` (design-time aspiration). A live read-only

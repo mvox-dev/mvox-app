@@ -2,7 +2,7 @@
 	import { reportProblem } from '$lib/problems/reportProblem';
 	// The fullscreen part viewer (#427): bytes via openFileBytes, identity from the JWT alone so a
 	// cold offline start works, corner taps turn pages (#333). The fence forbids store and wire
-	// writes here: her ink goes to src/lib/strokes/inkStore, and recordPartLabel only names bytes.
+	// writes here: her ink and page go to src/lib/strokes, and recordPartLabel only names bytes.
 	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
@@ -18,7 +18,7 @@
 	import { createTapTracker, type TapTracker } from '$lib/parts/tapZone';
 	import DownloadLink from './DownloadLink.svelte';
 	import PageInk from '$lib/strokes/PageInk.svelte';
-	import { getInkStore } from '$lib/strokes/inkStore';
+	import { getInkStore } from '$lib/strokes/appInk';
 	import { createPartInk } from '$lib/strokes/partInk.svelte';
 	import { DEFAULT_PENS } from '$lib/strokes/strokes';
 
@@ -33,7 +33,7 @@
 	let rootEl = $state<HTMLDivElement | undefined>(undefined);
 	let pageSize = $state<{ width: number; height: number } | null>(null);
 
-	// Her marks, per page (#615), read from and saved on the device (#616).
+	// Her marks, per page (#615), on the device (#616) and synced with Entu, as is her page (#1069).
 	let penOn = $state(false);
 	let penId = $state(DEFAULT_PENS[0].id);
 	let marksHidden = $state(false);
@@ -77,6 +77,7 @@
 		const clamped = Math.min(Math.max(target, 1), numPages);
 		if (clamped === currentPage) return;
 		currentPage = clamped;
+		ink.turn(clamped);
 	}
 
 	function next(): void {
@@ -193,7 +194,7 @@
 					source = { url: result.url, db: identity.db, personId: identity.personId };
 					pdf = doc;
 					numPages = doc.numPages;
-					currentPage = 1;
+					currentPage = ink.landing;
 					status = 'ready';
 					// The #353 label, written only for the deliveries that left a stored copy.
 					if (label) {
@@ -221,6 +222,11 @@
 			opened = null;
 			source = null;
 		};
+	});
+
+	// Her page from Entu arrives after the part shows; it moves her only until she turns herself.
+	$effect(() => {
+		if (status === 'ready') currentPage = ink.landing;
 	});
 
 	// The canvas exists only once status is 'ready', so rendering is its own effect.

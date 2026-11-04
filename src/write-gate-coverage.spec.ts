@@ -41,10 +41,15 @@ function resolveModule(specifier: string, fromFile: string): string | null {
 }
 
 const WRITING = writingExports(LIB_MODULES, resolveModule);
-// Feedback is the one write that skips the gate: offline it waits on the device and is sent
-// later (#611 body, Mihkel 2026-10-01). The exception names the file and its two seams.
+// Feedback (#611 body, Mihkel 2026-10-01) and a part's ink (#1069) skip the gate: offline they
+// wait on the device and are sent later. Each exception names the file and its seams.
 const GATE_EXCEPTIONS: Record<string, string[]> = {
-	'src/routes/+layout.svelte': ['$lib/feedback/feedbackEditor.svelte', '$lib/feedback/sendFeedback']
+	'src/routes/+layout.svelte': [
+		'$lib/feedback/feedbackEditor.svelte',
+		'$lib/feedback/sendFeedback',
+		'$lib/strokes/appInk'
+	],
+	'src/routes/part/[fileId]/+page.svelte': ['$lib/strokes/appInk']
 };
 
 // The pill reads the gate for its data callers; they say why, checked below (#809).
@@ -241,7 +246,7 @@ describe('#434 — every write surface reads the write gate', () => {
 		}
 	});
 
-	it("the feedback exception still names real write seams, so it cannot outlive them (#611)", () => {
+	it("the feedback and ink exceptions still name real write seams, so they cannot outlive them", () => {
 		for (const seams of Object.values(GATE_EXCEPTIONS)) {
 			for (const seam of seams) expect(WRITE_SEAMS, seam).toContain(seam);
 		}

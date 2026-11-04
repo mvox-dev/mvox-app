@@ -4,6 +4,7 @@
 	import { install401Recovery } from '$lib/auth/install-401-recovery';
 	import { startUpdateForcing } from '$lib/sw/swUpdate';
 	import { startSendingSavedFeedback } from '$lib/feedback/sendFeedback';
+	import { startSyncingInk } from '$lib/strokes/appInk';
 	import { selectedCollectiveIdentityStore } from '$lib/collectives/store';
 	import { setProblemOwner } from '$lib/problems/problemLog';
 
@@ -13,6 +14,8 @@
 	startUpdateForcing();
 
 	startSendingSavedFeedback();
+
+	startSyncingInk();
 
 	setProblemOwner(selectedCollectiveIdentityStore);
 </script>

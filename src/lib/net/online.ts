@@ -1,6 +1,6 @@
 // The one online/offline signal every write control reads; online.spec.ts pins it as sole reader.
 
-// Nothing is queued offline, except feedback, which waits on the device (#611, Mihkel 2026-10-01).
+// Queued offline, waiting on the device: only feedback (#611) and a part's ink and page (#1069).
 import { derived, readable, type Readable } from 'svelte/store';
 import { clearReadFellBackToCache, readFellBackToCache } from './cacheFallback';
 

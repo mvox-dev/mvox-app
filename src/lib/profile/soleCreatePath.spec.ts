@@ -10,7 +10,8 @@ const EXEMPT = [
 	'lib/invite/inviteCreate.ts',
 	'lib/sections/sectionActions.ts',
 	'lib/links/linkActions.ts',
-	'lib/testing/rightsWrites.ts'
+	'lib/testing/rightsWrites.ts',
+	'lib/strokes/inkLayerData.ts'
 ];
 
 describe('isSoleCreatePathViolation (guard predicate)', () => {
@@ -79,13 +80,14 @@ describe('T4.7/#27 — the visibility-move modules compose on the sole create pa
 		});
 	}
 
-	it("the allowlist is still exactly the T4.4/T4.5/#264-item-6/#256 entries — T4.7 added NO new create site", () => {
+	it("the allowlist is still exactly the T4.4/T4.5/#264-item-6/#256/#1069 entries — T4.7 added NO new create site", () => {
 		expect(EXEMPT).toEqual([
 			'lib/profile/profileData.ts',
 			'lib/invite/inviteCreate.ts',
 			'lib/sections/sectionActions.ts',
 			'lib/links/linkActions.ts',
-			'lib/testing/rightsWrites.ts'
+			'lib/testing/rightsWrites.ts',
+			'lib/strokes/inkLayerData.ts'
 		]);
 	});
 });

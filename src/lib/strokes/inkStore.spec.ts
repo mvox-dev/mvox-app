@@ -1,7 +1,8 @@
 // Her ink on a part, kept on the device per (db, person, file, page); an erase is a tombstone.
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
-import { createInkStore, liveInk, type InkPage } from './inkStore';
+import { createInkStore, liveInk, type InkLog, type InkPage } from './inkStore';
+import { joinLogs } from './inkLog';
 import type { Stroke, StrokeData } from './strokes';
 
 const AT: InkPage = { db: 'sampledb', personId: 'person-p', fileId: 'file-score', page: 1 };
@@ -107,6 +108,45 @@ describe('#616 — the ink store', () => {
 		const log = await store.load(AT);
 		expect(log.strokes.map((s) => s.stroke)).toEqual([RED, BLACK]);
 		expect(log.erased).toEqual([log.strokes[0].id]);
+	});
+});
+
+describe('#1069 — two devices\' logs join', () => {
+	const log = (strokes: InkLog['strokes'], erased: string[] = []): InkLog => ({ v: 1, strokes, erased });
+	const a = { id: 'a', stroke: RED };
+	const b = { id: 'b', stroke: BLACK };
+	const c = { id: 'c', stroke: RED };
+
+	it('every stroke of both is kept once, and every tombstone of both', () => {
+		const joined = joinLogs(log([a, b], ['a']), log([a, c], ['c']));
+		expect(joined).toEqual({ v: 1, strokes: [a, b, c], erased: ['a', 'c'] });
+		expect(liveInk(joined)).toEqual(ink(BLACK));
+	});
+
+	it('an erase on one device takes out the stroke the other still shows', () => {
+		expect(liveInk(joinLogs(log([a, b]), log([a, b], ['b'])))).toEqual(ink(RED));
+	});
+
+	it('joining is the same in either order, and joining a log with itself changes nothing', () => {
+		const one = log([a, b], ['a']);
+		const two = log([c], ['b']);
+		expect(liveInk(joinLogs(one, two))).toEqual(liveInk(joinLogs(two, one)));
+		expect(joinLogs(one, one)).toEqual(one);
+		expect(joinLogs()).toEqual(log([]));
+	});
+
+	it('the device joins a log from elsewhere into what it holds, and a later save keeps it', async () => {
+		const device = new IDBFactory();
+		const store = createInkStore(device);
+		await store.save(AT, ink(RED));
+		const [mine] = (await store.load(AT)).strokes;
+
+		const joined = await store.merge(AT, log([{ id: 'from-b', stroke: BLACK }]));
+		expect(joined.strokes).toEqual([mine, { id: 'from-b', stroke: BLACK }]);
+		expect(await createInkStore(device).load(AT)).toEqual(joined);
+
+		await store.save(AT, ink(RED, BLACK));
+		expect(await store.load(AT)).toEqual(joined);
 	});
 });
 

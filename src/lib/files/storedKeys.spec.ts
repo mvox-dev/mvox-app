@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { createIdbAdapter } from './idbAdapter';
 import { createIdbLabelStore } from './labelIdbStore';
 import { createInkStore } from '$lib/strokes/inkStore';
+import { createInkSyncQueue } from '$lib/strokes/inkSyncQueue';
 import { createSavedFeedbackStore } from '$lib/feedback/savedFeedback';
 import { createProblemLog } from '$lib/problems/problemLog';
 import { readCachePut, setReadCacheFactory } from '$lib/entu/readCacheStore';
@@ -60,6 +61,19 @@ describe('stored keys stay byte-identical', () => {
 		expect(await storedKeys(factory, 'mvox-ink', 'pages')).toEqual([
 			'["sampledb","person-a","file-1#3"]'
 		]);
+	});
+
+	it('ink waiting for Entu: ["db","person","file#page"], ["db","person","file#place"]; her page: ["db","person","file"]', async () => {
+		const factory = new IDBFactory();
+		const queue = createInkSyncQueue(factory);
+		const part = { db: 'sampledb', personId: 'person-a', fileId: 'file-1' };
+		await queue.markInk({ ...part, page: 3 });
+		await queue.setPlace(part, 2);
+		expect(await storedKeys(factory, 'mvox-ink-sync', 'waiting')).toEqual([
+			'["sampledb","person-a","file-1#3"]',
+			'["sampledb","person-a","file-1#place"]'
+		]);
+		expect(await storedKeys(factory, 'mvox-ink-sync', 'places')).toEqual(['["sampledb","person-a","file-1"]']);
 	});
 
 	it('saved feedback: ["db","person","id"]', async () => {
