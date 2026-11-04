@@ -50,11 +50,18 @@ ops:
       type: photo                 # the property's type, ^[a-z][a-z0-9_]*$
       filesize: 0                 # required; null when the property has no size
       filetype: application/pdf   # optional
+  - op: add-entity-type
+    type: ink_layer               # a type in mvox-schema-extensions.ts, ^[a-z][a-z0-9_]*$
 ```
 
 Ids, a type and a size only. A filename or a free-text value can hold a person's name, and the
 order is committed, so `expect` takes neither; the runner also refuses any `@` in the file. The
 type is pinned to a plain name because it goes into the read URL.
+
+`add-entity-type` names one type from the schema of record and nothing else: its sharing, grants,
+parents and properties come from `scripts/migrations/lib/mvox-schema-extensions.ts`, its label and
+description from `scripts/migrations/lib/mvox-type-text.ts`, so the type has to be merged before
+the order can run. A type with `addFrom` is refused: the op does not wire it.
 
 The runner refuses, before any call to Entu:
 
@@ -62,7 +69,8 @@ The runner refuses, before any call to Entu:
 - no `go`, a `go` not from Mihkel, a `go.at` without a time, a blank quote;
 - on a live run only: a `go.at` in the future or older than 7 days (a stale go needs a new one);
 - `polyphony` (frozen since 2026-09-18, #407), or a db other than the one `MVOX_CREDE_DB` opens;
-- an unknown op, an id that is not 24 hex characters, an `expect` without `type` or `filesize`;
+- an unknown op, an id that is not 24 hex characters, an `expect` without `type` or `filesize`,
+  an `add-entity-type` with anything beside `type`;
 - a spent order: one that already has a `result`.
 
 A live run also refuses, before any call to Entu, unless:
@@ -83,6 +91,13 @@ A live run also refuses, before any call to Entu, unless:
   the run stops with nothing written.
 - Live, op by op: pre-check again, delete exactly that property, read the entity back. Still there
   is a failure. The first failure stops the run; the remaining ops are `not-run`.
+- `add-entity-type` pre-checks, reading only: the meta-types and every parent type resolve, and no
+  type by that name exists, not even part of one. Live, it creates the type-def, then each prop-def,
+  each with `_sharing` written; the type-def also gets `_inheritrights`. It then reads them back and
+  fails on any difference from the definition: exactly one type-def by the name, its `_sharing` and
+  `_inheritrights`, and for each prop-def its type, mandatory, list and `_sharing`, with none
+  missing or extra. Its result lists every id it created, also when it stopped half-way, so a failed
+  run says what to clean up by hand. Running it again on the same type is refused at pre-check.
 - Once a live run has reached the writes, it writes the ledger (sensitive, so to the gitignored
   `seed-results/crede-instance/`) and the order's `result`, even when an op failed, then exits
   non-zero on a failure. The result makes the order spent.
@@ -93,6 +108,6 @@ A live run also refuses, before any call to Entu, unless:
 
 One parser in `OP_PARSERS` (`lib/work-order.ts`) and one runner in `OP_RUNNERS`
 (`run-work-order.ts`): describe, pre-check, execute, post-check. Each new op is its own reviewed
-change. v1 has only `delete-property`.
+change. The ops are `delete-property` and `add-entity-type` (#1071).
 
 (*MVOX:Josquin*)

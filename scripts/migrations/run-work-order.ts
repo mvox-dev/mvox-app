@@ -15,10 +15,13 @@ import {
 	authorizedByFromGo,
 	parseWorkOrder,
 	withResult,
+	type CreatedId,
 	type DeletePropertyOp,
+	type OpRunner,
 	type WorkOrderOp,
 	type WorkOrderResult
 } from './lib/work-order';
+import { addEntityType } from './lib/add-entity-type';
 
 export interface RunWorkOrderDeps {
 	dryRun: boolean;
@@ -42,45 +45,46 @@ export function parseCliArgs(argv: string[]): { dryRun: boolean; orderPath: stri
 	return { dryRun: mode === '--dry', orderPath };
 }
 
-interface OpRunner<T extends WorkOrderOp> {
-	describe(op: T): string;
-	preCheck(cfg: EntuCfg, op: T, fetchImpl: typeof fetch): Promise<void>;
-	execute(cfg: EntuCfg, op: T, fetchImpl: typeof fetch): Promise<void>;
-	postCheck(cfg: EntuCfg, op: T, fetchImpl: typeof fetch): Promise<void>;
-}
-
 type OpOutcome = WorkOrderResult['ops'][number];
 
+// Each op narrows to its own runner; the mapped OP_RUNNERS type keeps the pairing sound.
+function runnerOf(op: WorkOrderOp): OpRunner<WorkOrderOp> {
+	return OP_RUNNERS[op.op] as OpRunner<WorkOrderOp>;
+}
+
 function where(index: number, op: WorkOrderOp): string {
-	return `ops[${index}] ${OP_RUNNERS[op.op].describe(op)}`;
+	return `ops[${index}] ${runnerOf(op).describe(op)}`;
 }
 
 async function preCheckAll(cfg: EntuCfg, ops: WorkOrderOp[], deps: RunWorkOrderDeps, log: (l: string) => void) {
 	for (const [index, op] of ops.entries()) {
 		log(`  ${where(index, op)}`);
 		try {
-			await OP_RUNNERS[op.op].preCheck(cfg, op, deps.fetchImpl);
+			await runnerOf(op).preCheck(cfg, op, deps.fetchImpl);
 		} catch (err) {
 			throw new Error(`${where(index, op)}: pre-check: ${errMsg(err)}`);
 		}
-		log(`  ops[${index}] pre-check ok`);
+		log(`  ops[${index}] pre-check ok; would write:`);
+		for (const line of runnerOf(op).plan(op)) log(`    ${line}`);
 	}
 }
 
 async function runOps(cfg: EntuCfg, ops: WorkOrderOp[], deps: RunWorkOrderDeps, log: (l: string) => void) {
-	const outcomes: OpOutcome[] = ops.map((op) => ({ op: op.op, property: op.property, outcome: 'not-run' }));
+	const outcomes: OpOutcome[] = ops.map((op) => ({ op: op.op, ...runnerOf(op).target(op), outcome: 'not-run' }));
 	for (const [index, op] of ops.entries()) {
-		const runner = OP_RUNNERS[op.op];
+		const runner = runnerOf(op);
+		const created: CreatedId[] = [];
+		const withCreated = () => (created.length > 0 ? { created } : {});
 		try {
 			await runner.preCheck(cfg, op, deps.fetchImpl);
-			await runner.execute(cfg, op, deps.fetchImpl);
+			await runner.execute(cfg, op, deps.fetchImpl, created);
 			await runner.postCheck(cfg, op, deps.fetchImpl);
 		} catch (err) {
 			const error = `${where(index, op)}: ${errMsg(err)}`;
-			outcomes[index] = { ...outcomes[index], outcome: 'failed', error };
+			outcomes[index] = { ...outcomes[index], ...withCreated(), outcome: 'failed', error };
 			return { outcomes, failure: new Error(error) };
 		}
-		outcomes[index] = { ...outcomes[index], outcome: 'deleted' };
+		outcomes[index] = { ...outcomes[index], ...withCreated(), outcome: runner.done };
 		log(`  ops[${index}] done, post-check ok`);
 	}
 	return { outcomes, failure: undefined };
@@ -149,6 +153,9 @@ async function readValues(cfg: EntuCfg, op: DeletePropertyOp, fetchImpl: typeof 
 // Errors name only what the order already holds: the live value may be personal data.
 const deleteProperty: OpRunner<DeletePropertyOp> = {
 	describe: (op) => `delete-property ${op.property} on ${op.entity} (${op.expect.type})`,
+	target: (op) => ({ property: op.property }),
+	done: 'deleted',
+	plan: (op) => [`DELETE property ${op.property}`],
 	async preCheck(cfg, op, fetchImpl) {
 		const value = (await readValues(cfg, op, fetchImpl)).find((v) => v._id === op.property);
 		if (!value) throw new Error(`property ${op.property} is not on entity ${op.entity} as '${op.expect.type}'`);
@@ -170,7 +177,8 @@ const deleteProperty: OpRunner<DeletePropertyOp> = {
 };
 
 const OP_RUNNERS: { [K in WorkOrderOp['op']]: OpRunner<Extract<WorkOrderOp, { op: K }>> } = {
-	'delete-property': deleteProperty
+	'delete-property': deleteProperty,
+	'add-entity-type': addEntityType
 };
 
 const isMainModule = process.argv[1] != null && import.meta.url === pathToFileURL(process.argv[1]).href;

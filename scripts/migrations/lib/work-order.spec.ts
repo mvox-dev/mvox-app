@@ -147,6 +147,25 @@ describe('parseWorkOrder refuses', () => {
 	});
 });
 
+describe('parseWorkOrder add-entity-type', () => {
+	const addOp = (lines: string[]) => orderText({ ops: ['ops:', '  - op: add-entity-type', ...lines].join('\n') });
+
+	it('takes a type name and nothing else', () => {
+		expect(parseWorkOrder(addOp(['    type: ink_layer']), NAME).ops).toEqual([
+			{ op: 'add-entity-type', type: 'ink_layer' }
+		]);
+	});
+
+	it.each([
+		['no type', [], 'ops[0].type'],
+		['a type that is not a plain name', ["    type: 'ink_layer&props=email'"], 'ops[0].type'],
+		['a definition inline: the schema of record holds it', ['    type: ink_layer', '    sharing: public'], 'ops[0].sharing'],
+		['a person in the text', ['    type: ink_layer', '    label: Jaan Tamm'], 'ops[0].label']
+	])('refuses %s', (_label, lines, message) => {
+		expect(() => parseWorkOrder(addOp(lines), NAME)).toThrow(message);
+	});
+});
+
 describe('authorizedByFromGo', () => {
 	it('names who, when and which order, from the go alone', () => {
 		const order = parseWorkOrder(orderText(), NAME);

@@ -269,12 +269,54 @@ create-and-read, not edited after the fact.
 **mvox app extension** — not part of the canonical v4E schema. No
 `entu/research` PR.
 
+### `ink_layer`
+
+A singer's own marks on one part: her ink per page and the page she was on.
+Commissioned [mvox-app#1069](https://github.com/mvox-dev/mvox-app/issues/1069),
+a slice of [mvox-app#333](https://github.com/mvox-dev/mvox-app/issues/333);
+PO-Approved by Gama on the issue, 2026-11-03.
+
+**Parent**: `person` (single, required). A person in two collectives has a
+layer in each, under that collective's person.
+
+**Created with her own key** (`creators: self`) through the one create path,
+`src/lib/strokes/inkLayerData.ts` `createInkLayer`. Entu makes the creator
+`_owner`; no other grant is written.
+
+**Private, its own grants** (the `profile` pattern): every instance gets
+`_inheritrights: false` and `_sharing: private`, and every field
+`_sharing: private`, each set explicitly. The type-def itself is `domain` and
+inherits rights, as `feedback` and `person` are on crede: members must read the
+type-def to resolve it, and it holds no marks. Without the `false`, everyone holding rights on her person
+would read her marks; without the instance `_sharing`, the layer would copy her
+person's level (ER-13). Who else may read a layer is Entu's grants alone; the
+app shows a layer only to the singer who owns it (Mihkel, #1069).
+
+**One per person per edition and file** is the app's find-then-create, not an
+Entu rule: two offline devices may each create one. The app reads every match
+and joins them; writes go to the oldest.
+
+| Property    | Type      | Required | Notes |
+| ----------- | --------- | -------- | ----- |
+| `edition`   | reference | yes      | the edition whose part she marked; read off the file (`GET property/{file}` names its entity) |
+| `file`      | string    | yes      | the part's `file` property id on the edition: a file is a value, not an entity |
+| `page_ink`  | text      | no       | multi-value, one value per page: JSON `{page, v, strokes: [{id, stroke}], erased: [ids]}` (`src/lib/strokes/inkLog.ts`). A write reads that page's value, joins (strokes by id, tombstones by id) and replaces that one value. Entu does not document a text size limit |
+| `last_page` | number    | no       | the page she was on; with two layers the value Entu stored last wins, by its `created.at` |
+
+Not provisioned yet: the crede landing is its own work order
+(`scripts/migrations/seed-1069-ink-layer-type-crede-2026-11-03.ts`, dry run by
+default). No zoom is saved: the app has no in-app zoom.
+
+**mvox app extension**: not part of the canonical v4E schema.
+
 ### Org tree (excerpt)
 
 ```
 collective database root (post-#161: organization retired)
         ├── member
         │     └── feedback          ← mvox extension, self-created, one per submission
+        ├── person
+        │     └── ink_layer         ← mvox extension, self-created, private, one per part
         ├── admin_member_record    ← mvox extension, one per person
         ├── link                   ← mvox extension, one collection per collective
         ├── roster_show_real_names  (property on the database entity itself, not a child type)
@@ -307,6 +349,7 @@ The app calls Entu directly, in the authenticated user's rights by default.
 | `admin_member_record`   | domain                            | domain (asserted)   | `person`, `name` ONLY — `phone`/`email`/`birthdate`/`id_code` never leave the private bucket, per-property, regardless of the type/instance tier |
 | `link`                  | domain                            | matches database     | name, url, description, display_order — nothing private on this type          |
 | `feedback`              | domain (intended; not yet provisioned — verify at the #395 live run) | domain (asserted, explicit) | screenshot, doodle_layer, description, metadata, issue_url — nothing private on this type |
+| `ink_layer`             | domain (intended; not yet provisioned) | private, own grants (asserted, explicit) | none: every field is private |
 
 Note on the "Type `_sharing`" column: the salvaged v4E draft literal declared
 `schedule_item.sharing = 'public'` (design-time aspiration). A live read-only

@@ -5,6 +5,7 @@
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/entu/cfg';
 import type { MvoxEntityDef, PropertySpec, Sharing } from './mvox-schema-extensions';
+import type { TypeText } from './mvox-type-text';
 
 function errMsg(err: unknown): string {
 	return err instanceof Error ? err.message : String(err);
@@ -65,6 +66,96 @@ export async function resolveTypeIdByName(
 	return id;
 }
 
+async function findIds(cfg: EntuCfg, query: string, what: string, fetchImpl: typeof fetch): Promise<string[]> {
+	const res = await entuFetch(cfg.db, `entity?${query}&props=_id&limit=100`, cfg.token, {}, fetchImpl);
+	if (!res.ok) throw new Error(`${what}: GET failed: ${res.status}`);
+	const body = (await res.json()) as { entities?: Array<{ _id: string }> };
+	return (body.entities ?? []).map((e) => e._id);
+}
+
+/** Every type-def by that name, read only: none, one, or a duplicate to refuse. */
+export function findTypeDefIds(
+	cfg: EntuCfg,
+	entityMetaTypeId: string,
+	typeName: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<string[]> {
+	const query = `_type.reference=${entityMetaTypeId}&name.string=${encodeURIComponent(typeName)}`;
+	return findIds(cfg, query, `findTypeDefIds('${typeName}')`, fetchImpl);
+}
+
+/** Every prop-def under a type-def, read only. */
+export function findPropDefIds(
+	cfg: EntuCfg,
+	propertyMetaTypeId: string,
+	parentTypeId: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<string[]> {
+	const query = `_type.reference=${propertyMetaTypeId}&_parent.reference=${parentTypeId}`;
+	return findIds(cfg, query, `findPropDefIds(${parentTypeId})`, fetchImpl);
+}
+
+async function postNew(cfg: EntuCfg, props: unknown[], what: string, fetchImpl: typeof fetch): Promise<string> {
+	const init = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(props) };
+	const res = await entuFetch(cfg.db, 'entity', cfg.token, init, fetchImpl);
+	if (!res.ok) {
+		const body = await res.text().catch(() => '');
+		throw new Error(`${what}: CREATE failed: ${res.status}${body ? ` — ${body.slice(0, 300)}` : ''}`);
+	}
+	const body = (await res.json()) as { _id?: string };
+	if (!body._id) throw new Error(`${what}: CREATE returned ${res.status} with no _id — apparent-success trap`);
+	return body._id;
+}
+
+export type TypeDefInput = Pick<MvoxEntityDef, 'name' | 'sharing' | 'inheritsRights'> & TypeText;
+
+/** POST one type-def with its text, `_sharing` and `_inheritrights`; no existence check. */
+export function createTypeDef(
+	cfg: EntuCfg,
+	entityMetaTypeId: string,
+	def: TypeDefInput,
+	fetchImpl: typeof fetch = fetch
+): Promise<string> {
+	const props = [
+		{ type: '_type', reference: entityMetaTypeId },
+		{ type: 'name', string: def.name },
+		{ type: 'label', language: 'en', string: def.labelEn },
+		{ type: 'label', language: 'et', string: def.labelEt },
+		{ type: 'description', language: 'en', string: def.descriptionEn },
+		{ type: 'description', language: 'et', string: def.descriptionEt },
+		{ type: '_inheritrights', boolean: def.inheritsRights },
+		{ type: '_sharing', string: def.sharing }
+	];
+	return postNew(cfg, props, `createTypeDef('${def.name}')`, fetchImpl);
+}
+
+/** POST one prop-def under its type-def, `prop.sharing` over the type's; no existence check. */
+export function createPropDef(
+	cfg: EntuCfg,
+	propertyMetaTypeId: string,
+	parentTypeId: string,
+	typeName: string,
+	sharing: Sharing,
+	prop: PropertySpec,
+	fetchImpl: typeof fetch = fetch
+): Promise<string> {
+	const props: Array<Record<string, unknown>> = [
+		{ type: '_type', reference: propertyMetaTypeId },
+		{ type: '_parent', reference: parentTypeId },
+		{ type: 'name', string: prop.name },
+		{ type: 'type', string: prop.type },
+		{ type: '_sharing', string: prop.sharing ?? sharing },
+		{ type: 'description', language: 'en', string: prop.descriptionEn },
+		{ type: 'description', language: 'et', string: prop.descriptionEt }
+	];
+	if (prop.required) props.push({ type: 'mandatory', boolean: true });
+	if (prop.ordinal !== undefined) props.push({ type: 'ordinal', number: prop.ordinal });
+	if (prop.table) props.push({ type: 'table', boolean: true });
+	if (prop.search) props.push({ type: 'search', boolean: true });
+	if (prop.list) props.push({ type: 'list', boolean: true });
+	return postNew(cfg, props, `createPropDef('${typeName}.${prop.name}')`, fetchImpl);
+}
+
 export type LedgerStep = {
 	action: 'ensure-type' | 'ensure-propdef' | 'ensure-add-from';
 	target: string;
@@ -79,12 +170,7 @@ export type LedgerStep = {
 export async function ensureEntityType(
 	cfg: EntuCfg,
 	entityMetaTypeId: string,
-	def: Pick<MvoxEntityDef, 'name' | 'sharing' | 'inheritsRights'> & {
-		labelEn: string;
-		labelEt: string;
-		descriptionEn: string;
-		descriptionEt: string;
-	},
+	def: TypeDefInput,
 	dryRun: boolean,
 	ledger: LedgerStep[],
 	fetchImpl: typeof fetch = fetch
@@ -109,40 +195,15 @@ export async function ensureEntityType(
 		return null;
 	}
 
-	const res = await entuFetch(
-		cfg.db,
-		'entity',
-		cfg.token,
-		{
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify([
-				{ type: '_type', reference: entityMetaTypeId },
-				{ type: 'name', string: def.name },
-				{ type: 'label', language: 'en', string: def.labelEn },
-				{ type: 'label', language: 'et', string: def.labelEt },
-				{ type: 'description', language: 'en', string: def.descriptionEn },
-				{ type: 'description', language: 'et', string: def.descriptionEt },
-				{ type: '_inheritrights', boolean: def.inheritsRights },
-				{ type: '_sharing', string: def.sharing }
-			])
-		},
-		fetchImpl
-	);
-	if (!res.ok) {
-		const body = await res.text().catch(() => '');
-		const msg = `ensureEntityType('${def.name}'): CREATE failed: ${res.status}${body ? ` — ${body.slice(0, 300)}` : ''}`;
-		ledger.push({ action: 'ensure-type', target: def.name, outcome: 'failed', error: msg });
-		throw new Error(msg);
+	let id: string;
+	try {
+		id = await createTypeDef(cfg, entityMetaTypeId, def, fetchImpl);
+	} catch (err) {
+		ledger.push({ action: 'ensure-type', target: def.name, outcome: 'failed', error: errMsg(err) });
+		throw err;
 	}
-	const body = (await res.json()) as { _id?: string };
-	if (!body._id) {
-		const msg = `ensureEntityType('${def.name}'): CREATE returned ${res.status} with no _id — apparent-success trap`;
-		ledger.push({ action: 'ensure-type', target: def.name, outcome: 'failed', error: msg });
-		throw new Error(msg);
-	}
-	ledger.push({ action: 'ensure-type', target: def.name, id: body._id, outcome: 'created', after: { sharing: def.sharing, inheritsRights: def.inheritsRights } });
-	return body._id;
+	ledger.push({ action: 'ensure-type', target: def.name, id, outcome: 'created', after: { sharing: def.sharing, inheritsRights: def.inheritsRights } });
+	return id;
 }
 
 /** Check-then-create one prop-def; `prop.sharing` overrides the type's. `_sharing` is always
@@ -180,42 +241,15 @@ export async function ensurePropDef(
 		return null;
 	}
 
-	const props: Array<Record<string, unknown>> = [
-		{ type: '_type', reference: propertyMetaTypeId },
-		{ type: '_parent', reference: parentTypeId },
-		{ type: 'name', string: prop.name },
-		{ type: 'type', string: prop.type },
-		{ type: '_sharing', string: effectiveSharing },
-		{ type: 'description', language: 'en', string: prop.descriptionEn },
-		{ type: 'description', language: 'et', string: prop.descriptionEt }
-	];
-	if (prop.required) props.push({ type: 'mandatory', boolean: true });
-	if (prop.ordinal !== undefined) props.push({ type: 'ordinal', number: prop.ordinal });
-	if (prop.table) props.push({ type: 'table', boolean: true });
-	if (prop.search) props.push({ type: 'search', boolean: true });
-	if (prop.list) props.push({ type: 'list', boolean: true });
-
-	const res = await entuFetch(
-		cfg.db,
-		'entity',
-		cfg.token,
-		{ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(props) },
-		fetchImpl
-	);
-	if (!res.ok) {
-		const body = await res.text().catch(() => '');
-		const msg = `ensurePropDef('${label}'): CREATE failed: ${res.status}${body ? ` — ${body.slice(0, 300)}` : ''}`;
-		ledger.push({ action: 'ensure-propdef', target: label, outcome: 'failed', error: msg });
-		throw new Error(msg);
+	let id: string;
+	try {
+		id = await createPropDef(cfg, propertyMetaTypeId, parentTypeId, typeName, sharing, prop, fetchImpl);
+	} catch (err) {
+		ledger.push({ action: 'ensure-propdef', target: label, outcome: 'failed', error: errMsg(err) });
+		throw err;
 	}
-	const body = (await res.json()) as { _id?: string };
-	if (!body._id) {
-		const msg = `ensurePropDef('${label}'): CREATE returned ${res.status} with no _id — apparent-success trap`;
-		ledger.push({ action: 'ensure-propdef', target: label, outcome: 'failed', error: msg });
-		throw new Error(msg);
-	}
-	ledger.push({ action: 'ensure-propdef', target: label, id: body._id, outcome: 'created', after: { type: prop.type, sharing: effectiveSharing, mandatory: prop.required ?? false } });
-	return body._id;
+	ledger.push({ action: 'ensure-propdef', target: label, id, outcome: 'created', after: { type: prop.type, sharing: effectiveSharing, mandatory: prop.required ?? false } });
+	return id;
 }
 
 /** Read back a prop-def's `_sharing`, throw on mismatch: a landed write may differ (#265). */

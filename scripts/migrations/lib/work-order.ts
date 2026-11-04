@@ -1,5 +1,6 @@
 // A work order: one live data change with Mihkel's go, as YAML (docs/architecture/work-orders.md).
 import { parseDocument, stringify, YAMLMap } from 'yaml';
+import type { EntuCfg } from '$lib/entu/cfg';
 
 export interface WorkOrderGo {
 	by: string;
@@ -15,7 +16,13 @@ export interface DeletePropertyOp {
 	expect: { type: string; filesize: number | null; filetype?: string };
 }
 
-export type WorkOrderOp = DeletePropertyOp;
+// The type's whole definition and text come from the schema of record, never from the order.
+export interface AddEntityTypeOp {
+	op: 'add-entity-type';
+	type: string;
+}
+
+export type WorkOrderOp = DeletePropertyOp | AddEntityTypeOp;
 
 export interface WorkOrder {
 	db: string;
@@ -25,11 +32,36 @@ export interface WorkOrder {
 	ops: WorkOrderOp[];
 }
 
+export interface CreatedId {
+	name: string;
+	id: string;
+}
+
+export interface WorkOrderOpResult {
+	op: string;
+	property?: string;
+	type?: string;
+	outcome: 'deleted' | 'created' | 'failed' | 'not-run';
+	created?: CreatedId[];
+	error?: string;
+}
+
 export interface WorkOrderResult {
 	ran_at: string;
 	outcome: 'done' | 'failed';
 	ledger: string;
-	ops: Array<{ op: string; property: string; outcome: 'deleted' | 'failed' | 'not-run'; error?: string }>;
+	ops: WorkOrderOpResult[];
+}
+
+// execute pushes each id it creates as it goes, so a failure mid-op still records them.
+export interface OpRunner<T extends WorkOrderOp> {
+	describe(op: T): string;
+	target(op: T): Pick<WorkOrderOpResult, 'property' | 'type'>;
+	done: 'deleted' | 'created';
+	plan(op: T): string[];
+	preCheck(cfg: EntuCfg, op: T, fetchImpl: typeof fetch): Promise<void>;
+	execute(cfg: EntuCfg, op: T, fetchImpl: typeof fetch, created: CreatedId[]): Promise<void>;
+	postCheck(cfg: EntuCfg, op: T, fetchImpl: typeof fetch): Promise<void>;
 }
 
 type Raw = Record<string, unknown>;
@@ -107,9 +139,17 @@ function parseDeleteProperty(raw: Raw, where: string): DeletePropertyOp {
 	};
 }
 
+function parseAddEntityType(raw: Raw, where: string): AddEntityTypeOp {
+	onlyKeys(raw, ['op', 'type'], where);
+	const type = text(raw, 'type', where);
+	if (!PROPERTY_TYPE_RE.test(type)) fail(`${where}type '${type}' must match ${PROPERTY_TYPE_RE}`);
+	return { op: 'add-entity-type', type };
+}
+
 // One entry per op; the runner keeps a matching entry that executes it.
 const OP_PARSERS: Record<string, (raw: Raw, where: string) => WorkOrderOp> = {
-	'delete-property': parseDeleteProperty
+	'delete-property': parseDeleteProperty,
+	'add-entity-type': parseAddEntityType
 };
 
 function parseOp(raw: unknown, index: number): WorkOrderOp {

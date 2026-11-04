@@ -375,4 +375,63 @@ export const feedback: MvoxEntityDef = {
 	commissionedBy: 'mvox-app#395'
 };
 
-// (*MVOX:Perotin*)
+
+// Type-def domain and inheriting, so members can resolve it; every field private; every instance
+// private with its own grants, the profile pattern (ER-1, ER-13). Ruling: Gama, mvox-app#1069.
+export const ink_layer: MvoxEntityDef = {
+	name: 'ink_layer',
+	blurb: "A singer's own marks on one part: her ink per page and the page she was on.",
+	sharing: 'domain',
+	inheritsRights: true,
+	parents: [{ entity: 'person', required: true, parentCard: '1', childCard: '0..N', verb: 'marks' }],
+	properties: [
+		{
+			name: 'edition',
+			type: 'reference',
+			required: true,
+			sharing: 'private',
+			descriptionEn: 'The edition whose part she marked.',
+			descriptionEt: 'Väljaanne, mille partiid ta märkis.',
+			ordinal: 1
+		},
+		{
+			name: 'file',
+			type: 'string',
+			required: true,
+			sharing: 'private',
+			note: "the part's `file` property id on the edition: a file is a value, not an entity",
+			descriptionEn: "The part's file: the id of the file value on the edition.",
+			descriptionEt: 'Partii fail: väljaande failiväärtuse id.',
+			ordinal: 2
+		},
+		{
+			name: 'page_ink',
+			type: 'text',
+			list: true,
+			sharing: 'private',
+			note: 'one value per page: JSON {page, v, strokes:[{id, stroke}], erased:[ids]} (src/lib/strokes/inkLog.ts)',
+			descriptionEn: 'Her ink on one page, as JSON; one value per page.',
+			descriptionEt: 'Tema märkmed ühel lehel JSON-vormingus; üks väärtus lehe kohta.',
+			ordinal: 3
+		},
+		{
+			name: 'last_page',
+			type: 'number',
+			sharing: 'private',
+			note: "the page she was on; the latest save wins by Entu's server time",
+			descriptionEn: 'The page she was on when she last turned a page.',
+			descriptionEt: 'Leht, millel ta viimati oli.',
+			ordinal: 4
+		}
+	],
+	creators: [{ kind: 'self' }],
+	notes: [
+		'mvox app extension — not part of the canonical v4E schema.',
+		'Created by the singer with her own key (`creators: self`): Entu grants the creator `_owner`; no extra grant. Who else may read it is Entu grants alone (Mihkel, #1069).',
+		'One per person per edition and file is an app-side find-then-create: two offline devices may each make one, and the app reads and joins every match, never dropping one.',
+		'Ink joins by stroke id; an erase is a tombstone id, so a page value only grows. Entu does not document a text size limit.'
+	],
+	commissionedBy: 'mvox-app#1069'
+};
+
+// (*MVOX:Perotin*) (*MVOX:Josquin*)

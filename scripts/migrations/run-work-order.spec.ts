@@ -51,12 +51,77 @@ function orderYaml(ops = [opYaml(ENTITY, PROPERTY)]): string {
 	].join('\n');
 }
 
+type Stored = Record<string, Array<Record<string, unknown>>>;
+
+// Type-defs and prop-defs as Entu holds them: property name -> values.
+interface TypeWorld {
+	entities: Map<string, Stored>;
+	posts: unknown[][];
+	failPost?: number;
+	onCreate?: (stored: Stored, world: TypeWorld) => void;
+}
+
 interface Wire {
 	calls: Array<{ method: string; url: string }>;
 	authKeys: string[];
 	values: Record<string, Array<Record<string, unknown>>>;
 	deleteStatus: number;
 	keepAfterDelete: boolean;
+	types: TypeWorld;
+}
+
+const META_ENTITY = '7a0000000000000000000e01';
+const META_PROPERTY = '7a0000000000000000000e02';
+const PERSON_TYPE = '7a0000000000000000000e03';
+
+function typeWorld(): TypeWorld {
+	const meta = (name: string): Stored => ({ _type: [{ string: 'entity', reference: META_ENTITY }], name: [{ string: name }] });
+	return {
+		entities: new Map([
+			[META_ENTITY, meta('entity')],
+			[META_PROPERTY, meta('property')],
+			[PERSON_TYPE, meta('person')]
+		]),
+		posts: []
+	};
+}
+
+function newId(world: TypeWorld): string {
+	return `7a00000000000000000001${world.entities.size.toString(16).padStart(2, '0')}`;
+}
+
+function matches(stored: Stored, params: URLSearchParams): boolean {
+	for (const [key, want] of params) {
+		if (key === 'props' || key === 'limit') continue;
+		const [prop, field] = key.split('.');
+		if (!(stored[prop] ?? []).some((v) => String(v[field]) === want)) return false;
+	}
+	return true;
+}
+
+function typeRoute(world: TypeWorld, method: string, url: URL, body: unknown): Response | undefined {
+	if (method === 'GET' && url.pathname.endsWith('/entity')) {
+		const found = [...world.entities].filter(([, stored]) => matches(stored, url.searchParams));
+		return json({ entities: found.slice(0, Number(url.searchParams.get('limit'))).map(([_id]) => ({ _id })) });
+	}
+	const one = /\/entity\/([0-9a-f]{24})$/.exec(url.pathname);
+	if (method === 'GET' && one && world.entities.has(one[1])) {
+		const stored = world.entities.get(one[1])!;
+		const props = (url.searchParams.get('props') ?? '').split(',');
+		return json({ entity: { _id: one[1], ...Object.fromEntries(props.filter((p) => p in stored).map((p) => [p, stored[p]])) } });
+	}
+	if (method === 'POST' && url.pathname.endsWith('/entity')) {
+		const props = body as Array<Record<string, unknown>>;
+		world.posts.push(props);
+		if (world.posts.length === world.failPost) return json({ error: 'boom' }, 500);
+		const stored: Stored = {};
+		for (const { type, ...value } of props) (stored[String(type)] ??= []).push(value);
+		const _id = newId(world);
+		world.entities.set(_id, stored);
+		world.onCreate?.(stored, world);
+		return json({ _id });
+	}
+	return undefined;
 }
 
 function fakeEntu(wire: Wire): typeof fetch {
@@ -73,6 +138,8 @@ function fakeEntu(wire: Wire): typeof fetch {
 			const photo = wire.values[read[1]];
 			return photo ? json({ entity: { _id: read[1], photo } }) : json({ error: 'not found' }, 404);
 		}
+		const typed = typeRoute(wire.types, method, new URL(url), init?.body ? JSON.parse(String(init.body)) : undefined);
+		if (typed) return typed;
 		const del = /\/property\/([0-9a-f]{24})$/.exec(url);
 		if (method === 'DELETE' && del) {
 			if (wire.deleteStatus === 200 && !wire.keepAfterDelete) {
@@ -151,7 +218,8 @@ beforeEach(() => {
 			[ENTITY_2]: [{ _id: PROPERTY_2, filename: 'two.pdf' }]
 		},
 		deleteStatus: 200,
-		keepAfterDelete: false
+		keepAfterDelete: false,
+		types: typeWorld()
 	};
 	lines = [];
 	writeLedgerMock.mockClear();
@@ -387,6 +455,147 @@ describe('a live run refuses, before any call to Entu', () => {
 		writeFileSync(path, orderYaml());
 		await run(true);
 		expect(lines.join('\n')).toContain('pre-check ok');
+	});
+});
+
+describe('add-entity-type', () => {
+	const addType = (type = 'ink_layer') => orderYaml(['  - op: add-entity-type', `    type: ${type}`]);
+	const PROPS = ['edition', 'file', 'page_ink', 'last_page'];
+	const field = (props: unknown[], type: string) =>
+		(props as Array<Record<string, unknown>>).filter((p) => p.type === type).map(({ type: _t, ...v }) => v);
+	const result = () => parse(readFileSync(path, 'utf-8')).result;
+
+	it('a dry run reads, prints each write it would make, and sends no write', async () => {
+		writeOrder(addType());
+		await run(true);
+		expect(wire.calls.filter((c) => c.method !== 'GET')).toEqual([]);
+		expect(wire.types.entities.size).toBe(3);
+		expect(readFileSync(path, 'utf-8')).toBe(addType());
+		expect(writeLedgerMock).not.toHaveBeenCalled();
+		const out = lines.join('\n');
+		expect(out).toContain('ops[0] add-entity-type ink_layer');
+		expect(out).toContain('type-def ink_layer: _sharing domain, _inheritrights true');
+		expect(out).toContain('prop-def ink_layer.edition: reference, mandatory, _sharing private');
+		expect(out).toContain('prop-def ink_layer.page_ink: text, list, _sharing private');
+		expect(out).toContain('prop-def ink_layer.last_page: number, _sharing private');
+	});
+
+	it('a live run creates the type and each property with explicit grants, and records their ids', async () => {
+		writeOrder(addType());
+		await run(false);
+		const [typePost, ...propPosts] = wire.types.posts;
+		expect(field(typePost, '_type')).toEqual([{ reference: META_ENTITY }]);
+		expect(field(typePost, 'name')).toEqual([{ string: 'ink_layer' }]);
+		expect(field(typePost, '_sharing')).toEqual([{ string: 'domain' }]);
+		expect(field(typePost, '_inheritrights')).toEqual([{ boolean: true }]);
+		expect(field(typePost, 'label')).toEqual([
+			{ language: 'en', string: 'Part marks' },
+			{ language: 'et', string: 'Partii märkmed' }
+		]);
+		const typeId = result().ops[0].created[0].id;
+		expect(propPosts.map((p) => field(p, 'name')[0].string)).toEqual(PROPS);
+		for (const p of propPosts) {
+			expect(field(p, '_type')).toEqual([{ reference: META_PROPERTY }]);
+			expect(field(p, '_parent')).toEqual([{ reference: typeId }]);
+			expect(field(p, '_sharing')).toEqual([{ string: 'private' }]);
+		}
+		expect(propPosts.map((p) => field(p, 'mandatory').length)).toEqual([1, 1, 0, 0]);
+		expect(propPosts.map((p) => field(p, 'list').length)).toEqual([0, 0, 1, 0]);
+
+		expect(result().outcome).toBe('done');
+		expect(result().ops).toEqual([
+			{
+				op: 'add-entity-type',
+				type: 'ink_layer',
+				outcome: 'created',
+				created: ['ink_layer', ...PROPS.map((p) => `ink_layer.${p}`)].map((name, i) => ({
+					name,
+					id: [...wire.types.entities.keys()][3 + i]
+				}))
+			}
+		]);
+	});
+
+	it.each([
+		['a type that already exists', () => wire.types.entities.set(newId(wire.types), { _type: [{ reference: META_ENTITY }], name: [{ string: 'ink_layer' }] }), "type 'ink_layer' already exists"],
+		['a parent type the db lacks', () => wire.types.entities.delete(PERSON_TYPE), "type 'person' not found"],
+		['a db without the property meta-type', () => wire.types.entities.delete(META_PROPERTY), '"property" meta-type not found']
+	])('pre-check refuses %s, before any write', async (_label, arrange, message) => {
+		arrange();
+		writeOrder(addType());
+		await expect(run(false)).rejects.toThrow(message);
+		expect(wire.types.posts).toEqual([]);
+		expect(writeLedgerMock).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		['a name not in the schema of record', 'no_such_type', "type 'no_such_type' is not in the schema of record"],
+		['a property addition, not a type', 'event_name', "type 'event_name' is not in the schema of record"],
+		['a type with add_from, which the op does not wire', 'schedule_item', "type 'schedule_item' has add_from"],
+		['a type with no label or description', 'feedback', "type 'feedback' has no label or description"]
+	])('a dry run refuses %s', async (_label, type, message) => {
+		writeOrder(addType(type));
+		await expect(run(true)).rejects.toThrow(message);
+	});
+
+	it.each([
+		[
+			'a property whose _sharing did not land',
+			(stored: Stored) => {
+				if (stored.name[0].string === 'page_ink') delete stored._sharing;
+			},
+			"ink_layer.page_ink _sharing is '(absent)', the definition says 'private'"
+		],
+		[
+			'a type-def that does not inherit rights',
+			(stored: Stored) => {
+				if (stored.name[0].string === 'ink_layer') stored._inheritrights = [{ boolean: false }];
+			},
+			"ink_layer _inheritrights is 'false', the definition says 'true'"
+		],
+		[
+			'a required property that is not mandatory',
+			(stored: Stored) => {
+				if (stored.name[0].string === 'file') delete stored.mandatory;
+			},
+			"ink_layer.file mandatory is 'false', the definition says 'true'"
+		],
+		[
+			'a property the definition does not have',
+			(stored: Stored, world: TypeWorld) => {
+				if (stored.name[0].string !== 'last_page') return;
+				world.entities.set(newId(world), { ...stored, name: [{ string: 'zoom' }] });
+			},
+			'ink_layer.zoom is not in the definition'
+		],
+		[
+			'a second type-def by the same name',
+			(stored: Stored, world: TypeWorld) => {
+				if (stored.name[0].string === 'ink_layer') world.entities.set(newId(world), { ...stored });
+			},
+			"2 type-defs named 'ink_layer'"
+		]
+	])('post-check catches %s, and the result keeps every id created', async (_label, onCreate, message) => {
+		wire.types.onCreate = onCreate;
+		writeOrder(addType());
+		await expect(run(false)).rejects.toThrow(message);
+		expect(result().outcome).toBe('failed');
+		expect(result().ops[0]).toMatchObject({ outcome: 'failed', error: expect.stringContaining(message) });
+		expect(result().ops[0].created.map((c: { name: string }) => c.name)).toEqual([
+			'ink_layer',
+			...PROPS.map((p) => `ink_layer.${p}`)
+		]);
+	});
+
+	it('a create that fails mid-op stops there and records what it had created', async () => {
+		wire.types.failPost = 3;
+		writeOrder(orderYaml(['  - op: add-entity-type', '    type: ink_layer', opYaml(ENTITY, PROPERTY)]));
+		await expect(run(false)).rejects.toThrow("createPropDef('ink_layer.file'): CREATE failed: 500");
+		expect(wire.types.posts).toHaveLength(3);
+		expect(deletes()).toEqual([]);
+		expect(result().ops.map((o: { outcome: string }) => o.outcome)).toEqual(['failed', 'not-run']);
+		expect(result().ops[0].created.map((c: { name: string }) => c.name)).toEqual(['ink_layer', 'ink_layer.edition']);
+		expect(result().ops[1]).toEqual({ op: 'delete-property', property: PROPERTY, outcome: 'not-run' });
 	});
 });
 
